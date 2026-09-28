@@ -1466,6 +1466,8 @@ public class StudioHdr
 	public int BoneFlags(int i) => boneFlags[i];
 	public int BoneParent(int i) => boneParent[i];
 	public MStudioBone Bone(int i) => studioHdr!.Bone(i);
+	public int NumBoneControllers() => studioHdr!.NumBoneControllers;
+	public ReadOnlySpan<byte> GetBoneTableSortedByName() => studioHdr!.GetBoneTableSortedByName();
 	/// <summary>
 	/// Forces a preload of all bones into class views!
 	/// </summary>
@@ -2229,6 +2231,8 @@ public class StudioHeader
 		=> Studio.ProduceArrayIdx(this, ref poseParamDescCache, NumLocalPoseParameters, LocalPoseParamIndex, i, MStudioPoseParamDesc.SIZEOF, Data, MStudioPoseParamDesc.FACTORY);
 
 	public int SurfacePropIndex;
+	string? surfacePropCache;
+	public string SurfaceProp() => Studio.ProduceASCIIString(ref surfacePropCache, Data.Span[SurfacePropIndex..]);
 	public int KeyValueIndex;
 	public int KeyValueSize;
 
@@ -2264,6 +2268,8 @@ public class StudioHeader
 	}
 
 	public int BoneTableByNameIndex;
+	public ReadOnlySpan<byte> GetBoneTableSortedByName() => Data.Span.Slice(BoneTableByNameIndex, NumBones);
+
 	public int VertexBase;
 	public int IndexBase;
 	public byte ConstDirectionalLightDot;

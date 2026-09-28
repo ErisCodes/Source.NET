@@ -839,6 +839,15 @@ public static class MathLib
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static void MatrixSetTranslation(in Vector3 inVec, ref Matrix3x4 outMatrix) => MatrixSetColumn(in inVec, 3, ref outMatrix);
+
+	public static void MatrixScaleByZero(ref Matrix3x4 outMatrix) {
+		for (int i = 0; i < 3; i++)
+			for (int j = 0; j < 4; j++)
+				outMatrix[i, j] = 0;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static ref float SubFloat(ref Vector3 a, int idx) {
 		ArgumentOutOfRangeException.ThrowIfNegative(idx);
 		ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(idx, 3);
@@ -1896,6 +1905,11 @@ public static class MathLib
 			return val >= B ? D : C;
 		double cVal = (val - A) / (B - A);
 		return C + (D - C) * SimpleSpline(cVal);
+	}
+	public static QAngle RandomAngle(float minVal, float maxVal) {
+		QAngle ret = new();
+		ret.Random(minVal, maxVal);
+		return ret;
 	}
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static void AngleVectors(in QAngle angles, out Vector3 forward) {
@@ -3167,6 +3181,48 @@ public static class MathLib
 		new(-0.587785f, -0.425325f, -0.688191f),
 		new(-0.688191f, -0.587785f, -0.425325f)
 	];
+
+	public static void Catmull_Rom_Spline(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float tSqr = t * t * 0.5f;
+		float tSqrSqr = t * tSqr;
+		t *= 0.5f;
+
+		output = default;
+
+		Vector3 a, b, c, d;
+
+		// matrix row 1
+		VectorScale(p1, -tSqrSqr, out a);       // 0.5 t^3 * [ (-1*p1) + ( 3*p2) + (-3*p3) + p4 ]
+		VectorScale(p2, tSqrSqr * 3, out b);
+		VectorScale(p3, tSqrSqr * -3, out c);
+		VectorScale(p4, tSqrSqr, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		// matrix row 2
+		VectorScale(p1, tSqr * 2, out a);       // 0.5 t^2 * [ ( 2*p1) + (-5*p2) + ( 4*p3) - p4 ]
+		VectorScale(p2, tSqr * -5, out b);
+		VectorScale(p3, tSqr * 4, out c);
+		VectorScale(p4, -tSqr, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		// matrix row 3
+		VectorScale(p1, -t, out a);             // 0.5 t * [ (-1*p1) + p3 ]
+		VectorScale(p3, t, out b);
+
+		output += a;
+		output += b;
+
+		// matrix row 4
+		output += p2;    // p2
+	}
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 16, Size = sizeof(float) * 4 * 3)]

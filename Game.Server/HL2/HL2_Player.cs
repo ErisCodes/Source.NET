@@ -12,7 +12,8 @@ namespace Game.Server.HL2;
 
 using FIELD = Source.FIELD<HL2_Player>;
 
-public class HL2_Player : BasePlayer
+[PrecacheRegister("player")]
+public class HL2_Player : BaseMultiplayerPlayer
 {
 	public static readonly SendTable DT_HL2_Player = new(DT_BasePlayer, [
 		SendPropDataTable(nameof(HL2Local), FIELD.OF(nameof(HL2Local)), HL2PlayerLocalData.DT_HL2Local, SendProxy_SendLocalDataTable),
@@ -395,8 +396,18 @@ public class HL2_Player : BasePlayer
 		throw new NotImplementedException();
 	}
 
-	Vector3 EyeDirection3D() {
-		throw new NotImplementedException();
+	public override Vector3 EyeDirection3D() {
+		Vector3 vecForward;
+
+		// Return the vehicle angles if we request them
+		if (GetVehicle() != null) {
+			CacheVehicleView();
+			EyeVectors(out vecForward);
+			return vecForward;
+		}
+
+		Source.Common.Mathematics.MathLib.AngleVectors(EyeAngles(), out vecForward);
+		return vecForward;
 	}
 
 	bool Weapon_Switch(BaseCombatWeapon weapon, int viewmodelindex) {

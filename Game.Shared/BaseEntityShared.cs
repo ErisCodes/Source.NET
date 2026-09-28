@@ -146,7 +146,7 @@ public partial class
 				CollisionProp().MarkSurroundingBoundsDirty();
 			else {
 #if CLIENT_DLL
-				// MarkRenderHandleDirty();
+				MarkRenderHandleDirty();
 				g_ClientShadowMgr.AddToDirtyShadowList(this);
 				g_ClientShadowMgr.MarkRenderToTextureShadowDirty(GetShadowHandle());
 #endif
@@ -298,6 +298,22 @@ public partial class
 			if (ThinkFunctions[i].NextThinkTick > 0)
 				return true;
 
+		return false;
+	}
+
+	public virtual bool ShouldCollide(CollisionGroup collisionGroup, Contents contentsMask) {
+		if (CollisionGroup == (int)Source.CollisionGroup.Debris) {
+			if ((contentsMask & Contents.Debris) == 0)
+				return false;
+		}
+		return true;
+	}
+
+	public virtual bool TestCollision(in Ray ray, Contents mask, ref Trace trace) {
+		return false;
+	}
+
+	public virtual bool TestHitboxes(in Ray ray, Contents contentsMask, ref Trace tr) {
 		return false;
 	}
 
@@ -589,7 +605,7 @@ public partial class
 		if (Effects != (int)effects) {
 			Effects = (int)effects;
 #if !CLIENT_DLL
-			// DispatchUpdateTransmitState();
+			DispatchUpdateTransmitState();
 #else
 			UpdateVisibility();
 #endif

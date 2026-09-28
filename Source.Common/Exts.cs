@@ -782,6 +782,34 @@ public static class StrTools
 				strcpy(output, input);
 		}
 	}
+	public static bool StripLastDir(Span<char> dirName) {
+		if (dirName[0] == '\0' || stricmp(dirName, "./") == 0 || stricmp(dirName, ".\\") == 0)
+			return false;
+
+		int len = (int)strlen(dirName);
+
+		Assert(len < dirName.Length);
+
+		if (IsPathSeparator(dirName[len - 1]))
+			len--;
+
+		while (len > 0) {
+			if (IsPathSeparator(dirName[len - 1])) {
+				dirName[len] = '\0';
+				FixSlashes(dirName);
+				return true;
+			}
+			len--;
+		}
+
+		if (len == 0) {
+			sprintf(dirName, ".%c").C(CORRECT_PATH_SEPARATOR);
+			return true;
+		}
+
+		return true;
+	}
+
 	public static void SetExtension(Span<char> path, ReadOnlySpan<char> extension) {
 		StripExtension(path, path);
 
@@ -1646,16 +1674,16 @@ public static class UnmanagedUtils
 
 		int wordLen = 0;
 		while (true) {
-			if (!buffer.IsValid())
-				break;
-
 			tokenBuf[wordLen] = c;
 			if (++wordLen == tokenBuf.Length) {
 				return tokenBuf.Length;
 			}
 
-			c = buffer.GetChar();
+			int next = buffer.Read();
+			if (next < 0)
+				break;
 
+			c = (char)next;
 
 			if (breaks.Contains(c) || c == '\"' || (c > '\0' && c <= ' ')) {
 				buffer.Seek(-1, SeekOrigin.Current);

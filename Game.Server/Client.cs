@@ -1,4 +1,4 @@
-﻿global using static Game.Server.GameServerClientGlobals;
+global using static Game.Server.GameServerClientGlobals;
 
 using Source;
 using Source.Common;
@@ -35,6 +35,45 @@ public static class GameServerClientGlobals
 				return ent;
 
 		return null;
+	}
+
+	public static void ClientCommand(BasePlayer? player, in TokenizedCommand args) {
+		ReadOnlySpan<char> cmd = args[0];
+
+		if (player == null)
+			return;
+
+		if (FStrEq(cmd, "killtarget")) {
+			// if (g_pDeveloper.GetBool() && sv_cheats.GetBool() && Util.IsCommandIssuedByServerAdmin())
+			// 	ConsoleKillTarget(player, args[1]);
+		}
+		else if (FStrEq(cmd, "demorestart")) {
+			// player.ForceClientDllUpdate();
+		}
+		else if (FStrEq(cmd, "fade"))
+			Util.ScreenFade(player, new(32, 63, 100, 200), 3, 3, FadeFlags.Out);
+		else if (FStrEq(cmd, "te")) {
+			if (sv_cheats.GetBool() && Util.IsCommandIssuedByServerAdmin()) {
+				if (FStrEq(args[1], "stop")) {
+					BaseEntity? ent = gEntList.FindEntityByClassname(null, "te_tester");
+					while (ent != null) {
+						BaseEntity? next = gEntList.FindEntityByClassname(ent, "te_tester");
+						Util.Remove(ent);
+						ent = next;
+					}
+				}
+				// else
+				// 	TempEntTester.Create(player.WorldSpaceCenter(), player.EyeAngles(), args[1], args[2]);
+			}
+		}
+		else {
+			if (!g_pGameRules.ClientCommand(player, args)) {
+				if (strlen(cmd) > 128)
+					Util.ClientPrint(player, Shared.HudPrint.Console, "Console command too long.\n");
+				else
+					Util.ClientPrint(player, Shared.HudPrint.Console, $"Unknown command: {cmd}\n");
+			}
+		}
 	}
 
 	public static void SetDebugBits(BasePlayer? player, ReadOnlySpan<char> name, DebugOverlayBits bit) {
@@ -142,7 +181,7 @@ public static class HostSV
 		BasePlayer? client;
 		nint j;
 		scoped ReadOnlySpan<char> p;
-		ReadOnlySpan<char> text = stackalloc char[256];
+		Span<char> text = stackalloc char[256];
 		Span<char> temp = stackalloc char[256];
 		ReadOnlySpan<char> say = "say";
 		ReadOnlySpan<char> sayTeam = "say_team";
@@ -205,14 +244,20 @@ public static class HostSV
 
 		if (!pszPrefix.IsStringEmpty) {
 			if (!pszLocation.IsStringEmpty)
-				text = $"{pszPrefix} {pszPlayerName} @ {pszLocation}: ";
+				sprintf(text, "%s %s @ %s: ").S(pszPrefix).S(pszPlayerName).S(pszLocation);
 			else
-				text = $"{pszPrefix} {pszPlayerName}: ";
+				sprintf(text, "%s %s: ").S(pszPrefix).S(pszPlayerName);
 		}
 		else
-			text = $"{pszPlayerName}: ";
+			sprintf(text, "%s: ").S(pszPlayerName);
 
-		text = $"{p.SliceNullTerminatedString()}\n";
+		j = text.Length - 2 - strlen(text);
+		if (strlen(p) > j)
+			p = p[..(int)j];
+
+		strcat(text, p);
+		strcat(text, "\n");
+		text = text.SliceNullTerminatedString();
 
 		// loop through all players
 		// Start with the first player.
@@ -240,8 +285,8 @@ public static class HostSV
 			// if (player != null && !client.CanHearAndReadChatFrom(player))
 			// continue;
 
-			// if (player != null && GetVoiceGameMgr()?.IsPlayerIgnoringPlayer(player->entindex(), i) ?? false)
-			// continue;
+			if (player != null && GetVoiceGameMgr() != null && GetVoiceGameMgr().IsPlayerIgnoringPlayer(player.EntIndex(), i))
+				continue;
 
 			SingleUserRecipientFilter user = new(client);
 			user.MakeReliable();
@@ -275,6 +320,7 @@ public static class HostSV
 		ReadOnlySpan<char> playerName = "Console";
 		ReadOnlySpan<char> playerTeam = "Console";
 		if (player != null) {
+			player.CheckChatText(text);
 			userid = player.GetUserID();
 			networkID = player.GetNetworkIDString();
 			playerName = player.GetPlayerName();

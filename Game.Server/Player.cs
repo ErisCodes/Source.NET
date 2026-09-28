@@ -480,6 +480,13 @@ public partial class BasePlayer : BaseCombatCharacter
 	public readonly PlayerState pl = new();
 	public readonly PlayerLocalData Local = new();
 
+	public ref AudioParams GetAudioParams() => ref Local.Audio;
+
+	// Used by env_soundscape_triggerable to manage when the player is touching multiple
+	// soundscape triggers simultaneously.
+	// The one at the HEAD of the list is always the current soundscape for the player.
+	public readonly List<EHANDLE> TriggerSoundscapeList = [];
+
 	public void SetBodyPitch(float pitch) {
 		if (BodyPitchPoseParam >= 0)
 			SetPoseParameter(BodyPitchPoseParam, pitch);
@@ -541,6 +548,20 @@ public partial class BasePlayer : BaseCombatCharacter
 	public InButtons AfButtonLast;
 	public InButtons AfButtonDisabled;
 	public InButtons AfButtonForced;
+
+	//-----------------------------------------------------------------------------
+	// Purpose: Strips off IN_xxx flags from the player's input
+	//-----------------------------------------------------------------------------
+	public void ForceButtons(InButtons buttons) {
+		AfButtonForced |= buttons;
+	}
+
+	//-----------------------------------------------------------------------------
+	// Purpose: Re-enables stripped IN_xxx flags to the player's input
+	//-----------------------------------------------------------------------------
+	public void UnforceButtons(InButtons buttons) {
+		AfButtonForced &= ~buttons;
+	}
 
 	public bool GamePaused;
 
@@ -795,18 +816,18 @@ public partial class BasePlayer : BaseCombatCharacter
 
 		// InitFogController();
 
-		// DmgTake = 0;
-		// DmgSave = 0;
-		// HUDDamage = -1;
+		DmgTake = 0;
+		DmgSave = 0;
+		HUDDamage = -1;
 		// DamageType = 0;
-		// PhysicsFlags = 0;
-		// DrownRestored = DrownDmg;
+		PhysicsFlags = 0;
+		DrownRestored = DrownDmg;
 
-		// SetFOV(this, 0);
+		SetFOV(this, 0);
 
-		// NextDecalTime = 0;
+		NextDecalTime = 0;
 
-		// GeigerDelay = gpGlobals.CurTime + 2.0f;
+		GeigerDelay = gpGlobals.CurTime + 2.0f;    // wait a few seconds until user-defined message registrations
 
 		// FieldOfView = 0.766;
 
@@ -828,7 +849,7 @@ public partial class BasePlayer : BaseCombatCharacter
 		// HackedGunPos = new Vector3(0, 32, 0);
 		// BonusChallenge;
 
-		// SetThink(null);
+		SetThink(null);
 
 		InitHUD = true;
 
@@ -842,7 +863,6 @@ public partial class BasePlayer : BaseCombatCharacter
 		InitVCollision(GetAbsOrigin(), GetAbsVelocity());
 	}
 
-	private void IncrementInterpolationFrame() => InterpolationFrame = (byte)((InterpolationFrame + 1) % NOINTERP_PARITY_MAX);
 
 	public TimeUnit_t GetDeathTime() => DeathTime;
 
@@ -929,6 +949,8 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	public bool CanSpeak() => true;
 
+	public virtual void CheckChatText(ReadOnlySpan<char> text) { }
+
 	int GetCommandContextCount() => CommandContext.Count;
 
 	CommandContext AllocCommandContext() {
@@ -990,18 +1012,43 @@ public partial class BasePlayer : BaseCombatCharacter
 		return simulationTicks;
 	}
 
+	static readonly ConVar sv_clockcorrection_msecs = new("sv_clockcorrection_msecs", "60", 0, "The server tries to keep each player's m_nTickBase withing this many msecs of the server absolute tickcount");
+	static readonly ConVar sv_playerperfhistorycount = new("sv_playerperfhistorycount", "60", 0, "Number of samples to maintain in player perf history", 1.0, 128.0);
+
 	void AdjustPlayerTimeBase(int simulationTicks) {
 		Assert(simulationTicks >= 0);
 		if (simulationTicks < 0)
 			return;
 
-		// todo
+		PlayerSimInfo? pi = null;
+		if (sv_playerperfhistorycount.GetInt() > 0) {
+			while (VecPlayerSimInfo.Count > sv_playerperfhistorycount.GetInt())
+				VecPlayerSimInfo.RemoveAt(0);
+
+			pi = new();
+			VecPlayerSimInfo.Add(pi);
+		}
 
 		if (gpGlobals.MaxClients == 1)
-			TickBase = (int)(gpGlobals.TickCount + simulationTicks + gpGlobals.SimTicksThisFrame);
+			TickBase = (int)(gpGlobals.TickCount - simulationTicks + gpGlobals.SimTicksThisFrame);
 		else {
+			float correctionSeconds = Math.Clamp(sv_clockcorrection_msecs.GetFloat() / 1000.0f, 0.0f, 1.0f);
+			int correctionTicks = TIME_TO_TICKS(correctionSeconds);
 
+			int idealFinalTick = (int)(gpGlobals.TickCount + correctionTicks);
+			int estimatedFinalTick = (int)(TickBase + simulationTicks);
+
+			int too_fast_limit = idealFinalTick + correctionTicks;
+			int too_slow_limit = idealFinalTick - correctionTicks;
+
+			if (estimatedFinalTick > too_fast_limit || estimatedFinalTick < too_slow_limit) {
+				int correctedTick = (int)(idealFinalTick - simulationTicks + gpGlobals.SimTicksThisFrame);
+				pi?.TicksCorrected = correctionTicks;
+				TickBase = correctedTick;
+			}
 		}
+
+		pi?.FinalSimulationTime = TICKS_TO_TIME(TickBase + simulationTicks + gpGlobals.SimTicksThisFrame);
 	}
 
 	bool IsUserCmdDataValid(UserCmd cmd) {
@@ -1017,9 +1064,9 @@ public partial class BasePlayer : BaseCombatCharacter
 		pl.FixAngle = (int)FixAngle.Absolute;
 	}
 
-	UserCmd GetLastUserCommand() => LastCmd; // todo BotCmd
+	public UserCmd GetLastUserCommand() => LastCmd; // todo BotCmd
 
-	void SetLastUserCommand(UserCmd cmd) => LastCmd = cmd;
+	public void SetLastUserCommand(UserCmd cmd) => LastCmd = cmd;
 
 	static ConVar sv_usercmd_custom_random_seed = new("1", FCvar.Cheat, "When enabled server will populate an additional random seed independent of the client");
 
@@ -1226,7 +1273,7 @@ public partial class BasePlayer : BaseCombatCharacter
 		MoveHelperServer.s_MoveHelperServer.SetHost(null);
 	}
 
-	private void SetTimeBase(double timeBase) => TickBase = TIME_TO_TICKS(timeBase);
+	public void SetTimeBase(double timeBase) => TickBase = TIME_TO_TICKS(timeBase);
 
 	private class UserCmdRef
 	{
@@ -1304,9 +1351,45 @@ public partial class BasePlayer : BaseCombatCharacter
 	public bool IsDisconnecting() => Connected == PlayerConnectedState.Disconnecting;
 	public bool IsSuitEquipped() => Local.WearingSuit;
 
+	public virtual void ChangeTeam(int teamNum, bool autoTeam = false, bool silent = false, bool autoBalance = false) {
+		if (GetGlobalTeam(teamNum) == null) {
+			Warning($"CBasePlayer::ChangeTeam( {teamNum} ) - invalid team index.\n");
+			return;
+		}
+
+		if (teamNum == GetTeamNumber())
+			return;
+
+		IGameEvent? ev = gameeventmanager.CreateEvent("player_team");
+		if (ev != null) {
+			ev.SetInt("userid", GetUserID());
+			ev.SetInt("team", teamNum);
+			ev.SetInt("oldteam", GetTeamNumber());
+			ev.SetInt("disconnect", IsDisconnecting() ? 1 : 0);
+			ev.SetInt("autoteam", autoTeam ? 1 : 0);
+			ev.SetInt("silent", silent ? 1 : 0);
+			ev.SetString("name", GetPlayerName());
+
+			gameeventmanager.FireEvent(ev);
+		}
+
+		GetTeam()?.RemovePlayer(this);
+
+		if (teamNum != 0)
+			GetGlobalTeam(teamNum)!.AddPlayer(this);
+
+		base.ChangeTeam(teamNum);
+	}
+
+	public override Vector3 GetSmoothedVelocity() {
+		if (IsInAVehicle())
+			return GetVehicle()!.GetVehicleEnt()!.GetSmoothedVelocity();
+		return SmoothedVelocity;
+	}
+
 	const float SMOOTHING_FACTOR = 0.9f;
 	public virtual void PostThink() {
-		// SmoothedVelocity = SmoothedVelocity * SMOOTHING_FACTOR + GetAbsVelocity() * (1 - SMOOTHING_FACTOR);
+		SmoothedVelocity = SmoothedVelocity * SMOOTHING_FACTOR + GetAbsVelocity() * (1 - SMOOTHING_FACTOR);
 
 		if (!g_fGameOver /*&& !PlayerLocked*/) {
 			if (IsAlive()) {
@@ -1315,7 +1398,7 @@ public partial class BasePlayer : BaseCombatCharacter
 				else
 					SetCollisionBounds(VEC_HULL_MIN, VEC_HULL_MAX);
 
-				// if (UseEntity != null) {
+				// if (UseEntity.Get() != null) {
 				// 	if (UseEntity.OnControls(this) && (!GetActiveWeapon() || GetActiveWeapon()->IsEffectActive(EF_NODRAW) || (GetActiveWeapon()->GetActivity() == ACT_VM_HOLSTER)))
 				// 		UseEntity.Use(this, this, USE_SET, 2);
 				// 	else
@@ -1344,7 +1427,7 @@ public partial class BasePlayer : BaseCombatCharacter
 			if (GetSequence() == -1)
 				SetSequence(0);
 
-			// StudioFrameAdvance();
+			StudioFrameAdvance();
 			// DispatchAnimEvents(this);
 			SetSimulationTime(gpGlobals.CurTime);
 			// Weapon_FrameUpdate();
@@ -1418,6 +1501,66 @@ public partial class BasePlayer : BaseCombatCharacter
 		PhysicsController.Update(GetAbsOrigin(), GetAbsVelocity(), (float)gpGlobals.FrameTime, onground, ground!);
 	}
 
+	public float GeigerRange = 1000;     // range to nearest radiation source
+	public TimeUnit_t GeigerDelay;      // delay per update of range msg to client
+	public int GeigerRangePrev = 1000;
+
+	const float GEIGERDELAY = 0.25f;
+
+	public void UpdateGeigerCounter() {
+		byte range;
+
+		// delay per update ie: don't flood net with these msgs
+		if (gpGlobals.CurTime < GeigerDelay)
+			return;
+
+		GeigerDelay = gpGlobals.CurTime + GEIGERDELAY;
+
+		// send range to radition source to client
+		range = (byte)Math.Clamp((int)MathF.Floor(GeigerRange / 4), 0, 255);
+
+		// This is to make sure you aren't driven crazy by geiger while in the airboat
+		if (IsInAVehicle())
+			range = (byte)Math.Clamp((int)range * 4, 0, 255);
+
+		if (range != GeigerRangePrev) {
+			GeigerRangePrev = range;
+
+			SingleUserRecipientFilter user = new(this);
+			user.MakeReliable();
+			UserMessageBegin(user, "Geiger");
+			MessageWriteByte(range);
+			MessageEnd();
+		}
+
+		// reset counter and semaphore
+		if (random.RandomInt(0, 3) == 0)
+			GeigerRange = 1000;
+	}
+
+	public void CheckSuitUpdate() {
+		// Ignore suit updates if no suit
+		if (!IsSuitEquipped())
+			return;
+
+		// if in range of radiation source, ping geiger counter
+		UpdateGeigerCounter();
+
+		if (g_pGameRules.IsMultiplayer()) {
+			// don't bother updating HEV voice in multiplayer.
+			return;
+		}
+	}
+
+	public void NotifyNearbyRadiationSource(float range) {
+		// if player's current geiger counter range is larger
+		// than range to this trigger hurt, reset player's
+		// geiger counter range
+
+		if (GeigerRange >= range)
+			GeigerRange = range;
+	}
+
 	public virtual void PreThink() {
 		if (g_fGameOver /*|| PlayerLocked*/)
 			return;
@@ -1432,7 +1575,7 @@ public partial class BasePlayer : BaseCombatCharacter
 
 		UpdateClientData();
 		// CheckTimeBasedDamage();
-		// CheckSuitUpdate();
+		CheckSuitUpdate();
 
 		// if (GetObserverMode() > Shared.ObserverMode.FreezeCam)
 		// 	CheckObserverSettings();
@@ -1489,10 +1632,6 @@ public partial class BasePlayer : BaseCombatCharacter
 	internal bool IsDead() {
 		// throw new NotImplementedException();
 		return false;// todo
-	}
-
-	internal void Teleport(Vector3 origin, QAngle angles, Vector3 vec3_origin) {
-		throw new NotImplementedException();
 	}
 
 	public virtual void ForceDropOfCarriedPhysObjects(BaseEntity? ground) { }
