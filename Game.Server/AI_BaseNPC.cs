@@ -189,6 +189,10 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public AI_Squad? Squad;
 	public string? SquadName;
 
+	public override bool IsNPC() => true;
+
+	public override Mask PhysicsSolidMaskForEntity() => Mask.NPCSolid;
+
 	public override void Precache() => throw new NotImplementedException();
 
 	public virtual int SelectSchedule() => throw new NotImplementedException();

@@ -691,6 +691,34 @@ namespace Game.Server
 			// todo
 		}
 
+		public int PhysicsClipVelocity(in Vector3 inVec, in Vector3 normal, out Vector3 outVec, float overbounce) {
+			float backoff;
+			float change;
+			float angle;
+			int i, blocked;
+
+			blocked = 0;
+
+			angle = normal[2];
+
+			if (angle > 0)
+				blocked |= 1;
+			if (angle == 0)
+				blocked |= 2;
+
+			backoff = Vector3.Dot(inVec, normal) * overbounce;
+
+			outVec = default;
+			for (i = 0; i < 3; i++) {
+				change = normal[i] * backoff;
+				outVec[i] = inVec[i] - change;
+				if (outVec[i] > -GameMovement.STOP_EPSILON && outVec[i] < GameMovement.STOP_EPSILON)
+					outVec[i] = 0;
+			}
+
+			return blocked;
+		}
+
 		public void PhysicsCheckVelocity() {
 			Vector3 origin = GetAbsOrigin();
 			Vector3 vecAbsVelocity = GetAbsVelocity();

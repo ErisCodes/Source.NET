@@ -295,6 +295,13 @@ public static partial class Util
 		// todo: visualize
 	}
 
+	public static void TraceLineFilterEntity(BaseEntity entity, in Vector3 absStart, in Vector3 absEnd, Mask mask, CollisionGroup collisionGroup, out Trace ptr) {
+		TraceFilterEntity traceFilter = new(entity, collisionGroup);
+		Ray ray = default;
+		ray.Init(absStart, absEnd);
+		enginetrace.TraceRay(ray, mask, ref traceFilter, out ptr);
+	}
+
 	public static void TraceLine(in Vector3 absStart, in Vector3 absEnd, Mask mask, IHandleEntity? ignore, CollisionGroup collisionGroup, out Trace ptr) {
 		Ray ray = default;
 		ray.Init(absStart, absEnd);

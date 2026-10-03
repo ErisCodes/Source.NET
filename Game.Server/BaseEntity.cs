@@ -839,6 +839,28 @@ public partial class BaseEntity : IServerEntity
 		return false;
 	}
 
+	public bool IsStandable() {
+		if ((GetSolidFlags() & SolidFlags.NotStandable) != 0)
+			return false;
+
+		if (GetSolid() == SolidType.BSP || GetSolid() == SolidType.VPhysics || GetSolid() == SolidType.BBox)
+			return true;
+
+		return IsBSPModel();
+	}
+
+	public virtual bool CanStandOn(BaseEntity? surface) => (surface != null && !surface.IsStandable()) ? false : true;
+
+	float GroundChangeTime;
+	public void SetGroundChangeTime(float time) => GroundChangeTime = time;
+	public float GetGroundChangeTime() => GroundChangeTime;
+
+	public bool IsEdictFree() => Edict()!.IsFree();
+
+	public virtual DamageType GetDamageType() => DamageType.Generic;
+
+	public virtual Mask PhysicsSolidMaskForEntity() => Mask.Solid;
+
 	public bool IsViewable() {
 		if (IsEffectActive(EntityEffects.NoDraw))
 			return false;
