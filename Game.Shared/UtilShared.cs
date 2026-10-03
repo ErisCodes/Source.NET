@@ -27,6 +27,7 @@ namespace Game;
 public static partial class Util_Globals
 {
 	public static readonly ConVar developer = new("developer", "0", 0, "Set developer message level"); // developer mode
+	public static readonly ConVar r_visualizetraces = new("r_visualizetraces", "0", FCvar.Cheat);
 
 	public static int SeedFileLineHash(int seedvalue, ReadOnlySpan<char> sharedname, int additionalSeed) {
 		CRC32_t retval = default;

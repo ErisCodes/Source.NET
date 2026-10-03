@@ -36,6 +36,13 @@ public class AI_BehaviorHost_AI_BaseNPC : AI_BaseNPC, IBehaviorBackBridge
 		return base.SelectSchedule();
 	}
 
+	public override bool ShouldPlayerAvoid() {
+		if (CurBehavior != null)
+			return CurBehavior.BridgeShouldPlayerAvoid();
+
+		return base.ShouldPlayerAvoid();
+	}
+
 	public virtual void OnChangeRunningBehavior(AI_BehaviorBase? oldBehavior, AI_BehaviorBase? newBehavior) { }
 
 	protected void AddBehavior(AI_BehaviorBase behavior) {

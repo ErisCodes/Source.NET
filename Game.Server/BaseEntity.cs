@@ -2836,6 +2836,10 @@ public partial class BaseEntity : IServerEntity
 	}
 	public bool IsWorld() => EntIndex() == 0;
 
+	public TimeUnit_t NavIgnoreUntilTime;
+
+	public bool IsNavIgnored() => gpGlobals.CurTime <= NavIgnoreUntilTime;
+
 	public virtual void StartTouch(BaseEntity? other) {
 		// notify parent
 		GetMoveParent()?.StartTouch(other);

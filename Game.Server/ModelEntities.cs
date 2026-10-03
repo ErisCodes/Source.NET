@@ -7,5 +7,6 @@ using System.Threading.Tasks;
 namespace Game.Server;
 
 public class FuncBrush : BaseEntity {
-
+	public string? ExcludedClass;
+	public bool InvertExclusion;
 }

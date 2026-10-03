@@ -8,6 +8,8 @@ using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
 
+using Source.Common.Physics;
+
 using System.Diagnostics;
 using System.Numerics;
 
@@ -54,6 +56,8 @@ public static class AI_BaseNPCGlobals
 	public const int AI_SLEEP_FLAGS_NONE = 0x00000000;
 	public const int AI_SLEEP_FLAG_AUTO_PVS = 0x00000001;
 	public const int AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS = 0x00000002;
+
+	public static readonly ConVar ai_test_moveprobe_ignoresmall = new("ai_test_moveprobe_ignoresmall", "0");
 
 	public static readonly ConVar ai_strong_optimizations = new("ai_strong_optimizations", "0");
 	public static bool AIStrongOpt() => ai_strong_optimizations.GetBool();
@@ -215,6 +219,8 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public int IdealSchedule;
 	public AI_ScheduleBits ConditionsPreIgnore;
 	public AI_ScheduleBits InverseIgnoreConditions;
+	public bool InAScript;
+	public TimeUnit_t SceneTime;
 
 	public override bool IsNPC() => true;
 
@@ -227,6 +233,13 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public virtual AI_ClassScheduleIdSpace GetClassScheduleIdSpace() => ClassScheduleIdSpace;
 
 	public static AI_GlobalScheduleNamespace GetSchedulingSymbols() => SchedulingSymbols;
+
+	public NPC_STATE GetState() => NPCState;
+
+	public bool IsInAScript() => InAScript;
+	public void SetInAScript(bool script) => InAScript = script;
+
+	public bool IsInLockedScene() => SceneTime > gpGlobals.CurTime;
 
 	public void Forget(int memory) => Memory &= ~memory;
 	public bool HasMemory(int memory) => (Memory & memory) != 0;
@@ -312,6 +325,37 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		ClearCondition((int)SCOND_t.COND_WEAPON_PLAYER_IN_SPREAD);
 		ClearCondition((int)SCOND_t.COND_WEAPON_PLAYER_NEAR_TARGET);
 		ClearCondition((int)SCOND_t.COND_WEAPON_SIGHT_OCCLUDED);
+	}
+
+	public virtual bool IsNavigationUrgent() => throw new NotImplementedException();
+
+	public virtual bool ShouldProbeCollideAgainstEntity(BaseEntity entity) {
+		if (entity.GetMoveType() == Source.MoveType.VPhysics) {
+			if (ai_test_moveprobe_ignoresmall.GetBool() && IsNavigationUrgent()) {
+				IPhysicsObject physics = entity.VPhysicsGetObject()!;
+
+				if (physics.IsMoveable() && physics.GetMass() < 40.0)
+					return false;
+			}
+		}
+
+		return true;
+	}
+
+	public virtual bool ShouldPlayerAvoid() {
+		if (GetState() == NPC_STATE.NPC_STATE_SCRIPT)
+			return true;
+
+		if (IsInAScript())
+			return true;
+
+		if (IsInLockedScene() == true)
+			return true;
+
+		if (HasSpawnFlags(SF_NPC_ALTCOLLISION))
+			return true;
+
+		return false;
 	}
 
 	public virtual int SelectSchedule() => throw new NotImplementedException();

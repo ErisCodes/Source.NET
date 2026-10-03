@@ -34,6 +34,8 @@ public abstract class AI_BehaviorBase : AI_Component
 
 	public int BridgeSelectSchedule() => throw new NotImplementedException();
 
+	public bool BridgeShouldPlayerAvoid() => throw new NotImplementedException();
+
 	public virtual void GatherConditions() {
 		Assert(BackBridge != null);
 
