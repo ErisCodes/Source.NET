@@ -34,4 +34,53 @@ public class BaseFlex : BaseAnimatingOverlay {
 	public Vector3 Lean;
 	[NetworkName("m_vecShift")]
 	public Vector3 Shift;
+
+	public override void SetModel(ReadOnlySpan<char> modelName) {
+		base.SetModel(modelName);
+
+		for (LocalFlexController i = 0; i < GetNumFlexControllers(); i++)
+			SetFlexWeight(i, 0.0f);
+	}
+
+	public void SetFlexWeight(LocalFlexController index, float value) {
+		if (index >= 0 && index < GetNumFlexControllers()) {
+			StudioHdr? studioHdr = GetModelPtr();
+			if (studioHdr == null)
+				return;
+
+			MStudioFlexController flexcontroller = studioHdr.FlexController(index);
+
+			if (flexcontroller.Max != flexcontroller.Min) {
+				value = (value - flexcontroller.Min) / (flexcontroller.Max - flexcontroller.Min);
+				value = Math.Clamp(value, 0.0f, 1.0f);
+			}
+
+			FlexWeight[(int)index] = value;
+		}
+	}
+
+	public float GetFlexWeight(LocalFlexController index) {
+		if (index >= 0 && index < GetNumFlexControllers()) {
+			StudioHdr? studioHdr = GetModelPtr();
+			if (studioHdr == null)
+				return 0;
+
+			MStudioFlexController flexcontroller = studioHdr.FlexController(index);
+
+			if (flexcontroller.Max != flexcontroller.Min)
+				return FlexWeight[(int)index] * (flexcontroller.Max - flexcontroller.Min) + flexcontroller.Min;
+
+			return FlexWeight[(int)index];
+		}
+		return 0.0f;
+	}
+
+	public LocalFlexController FindFlexController(ReadOnlySpan<char> name) {
+		for (LocalFlexController i = 0; i < GetNumFlexControllers(); i++) {
+			if (stricmp(GetFlexControllerName(i), name) == 0)
+				return i;
+		}
+
+		return 0;
+	}
 }

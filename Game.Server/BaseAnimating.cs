@@ -219,6 +219,34 @@ public class BaseAnimating : BaseEntity
 	public void ResetActivityIndexes() => throw new NotImplementedException();
 	public void ResetEventIndexes() => throw new NotImplementedException();
 
+	public LocalFlexController GetNumFlexControllers() {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return 0;
+
+		return studioHdr.NumFlexControllers();
+	}
+
+	public string? GetFlexControllerName(LocalFlexController flexController) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return null;
+
+		MStudioFlexController flexcontroller = studioHdr.FlexController(flexController);
+
+		return flexcontroller.Name();
+	}
+
+	public string? GetFlexControllerType(LocalFlexController flexController) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return null;
+
+		MStudioFlexController flexcontroller = studioHdr.FlexController(flexController);
+
+		return flexcontroller.Type();
+	}
+
 	public Activity LookupActivity(ReadOnlySpan<char> label) {
 		return Animation.LookupActivity(GetModelPtr(), label);
 	}

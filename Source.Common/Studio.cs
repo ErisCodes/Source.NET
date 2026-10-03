@@ -1245,6 +1245,41 @@ public class MStudioPoseParamDesc
 	}
 }
 
+public enum LocalFlexController
+{
+	DummyFlexController = 0x7fffffff
+}
+
+public class MStudioFlexController
+{
+	public const int SIZEOF = 20;
+	public static MStudioFlexController FACTORY(object caller, Memory<byte> data) => new(data);
+
+	public Memory<byte> Data;
+
+	public int TypeIndex;
+	public string? typeCache;
+	public string Type() => Studio.ProduceASCIIString(ref typeCache, Data.Span[TypeIndex..]);
+
+	public int NameIndex;
+	public string? nameCache;
+	public string Name() => Studio.ProduceASCIIString(ref nameCache, Data.Span[NameIndex..]);
+
+	public int LocalToGlobal;
+	public float Min;
+	public float Max;
+
+	public MStudioFlexController(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(Data.Span);
+		br.Read(out TypeIndex);
+		br.Read(out NameIndex);
+		br.Read(out LocalToGlobal);
+		br.Read(out Min);
+		br.Read(out Max);
+	}
+}
+
 [Flags]
 public enum StudioMotionFlags
 {
@@ -1669,6 +1704,9 @@ public class StudioHdr
 			studioHdr.SetActivityListVersion(version);
 		}
 	}
+
+	public LocalFlexController NumFlexControllers() => (LocalFlexController)studioHdr!.NumFlexControllers;
+	public MStudioFlexController FlexController(LocalFlexController i) => studioHdr!.FlexController(i);
 
 	public MStudioBoneController BoneController(int i) => studioHdr!.BoneController(i);
 
@@ -2270,6 +2308,11 @@ public class StudioHeader
 
 	public int NumFlexControllers;
 	public int FlexControllerIndex;
+	MStudioFlexController[]? flexControllerCache;
+	public MStudioFlexController FlexController(LocalFlexController i) {
+		Assert(NumFlexControllers == 0 || (i >= 0 && (int)i < NumFlexControllers));
+		return Studio.ProduceArrayIdx(this, ref flexControllerCache, NumFlexControllers, FlexControllerIndex, (int)i, MStudioFlexController.SIZEOF, Data, MStudioFlexController.FACTORY);
+	}
 
 	public int NumFlexRules;
 	public int FlexRuleIndex;
