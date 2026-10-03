@@ -76,6 +76,10 @@ public class GameRulesRegister
 		g_StringTableGameRules = networkstringtable.CreateStringTable(GAMERULES_STRINGTABLE_NAME, 1);
 	}
 
+	public static void ResetNetworkStringTables_GameRules() {
+		g_StringTableGameRules = null;
+	}
+
 	public static void CreateGameRulesObject(ReadOnlySpan<char> className) {
 		// Delete the old game rules object.
 		g_pGameRules = null!;

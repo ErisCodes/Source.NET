@@ -956,7 +956,22 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 
 	public void GMOD_SendToClient(int client, ReadOnlySpan<byte> data, int dataBits) {
-		throw new NotImplementedException();
+		GameClient? cl = sv.Client(client);
+		if (cl == null) {
+			Msg("Not sending to null client.\n");
+			return;
+		}
+
+		if (cl.IsFakeClient()) {
+			DevMsg($"Not sending to fake client '{cl.GetClientName()}'.\n");
+			return;
+		}
+
+		SVC_GMod_ServerToClient msg = new();
+		msg.SetReliable(true);
+		msg.ReadPayload(new bf_read(data.ToArray(), data.Length), dataBits);
+		cl.SendNetMsg(msg, false);
+		cl.GetNetChannel().Transmit(false);
 	}
 
 	public void GMOD_RawServerCommand(ReadOnlySpan<char> command) {

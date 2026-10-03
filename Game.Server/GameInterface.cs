@@ -389,6 +389,16 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 		throw new NotImplementedException();
 	}
 
+	public void GMOD_OnStringTablesRemoved() {
+		// todo: g_pStringTableParticleEffectNames, g_pStringTableEffectDispatch, g_pStringTableVguiScreen, g_pStringTableMaterials, g_pStringTableClientSideChoreoScenes = null
+		GameRulesRegister.ResetNetworkStringTables_GameRules();
+#if GMOD_DLL
+		Game.Server.GarrysMod.NetworkString.Reset();
+		// todo: NetworkVarNames::Reset
+		Game.Server.GarrysMod.GModDataPack.DataPack().Reset();
+#endif
+	}
+
 	public void InvalidateMdlCache() {
 		throw new NotImplementedException();
 	}
@@ -686,11 +696,7 @@ public class ServerGameClients : IServerGameClients
 	public static int CommandClientIndex = 0;
 	public void SetCommandClient(int index) => CommandClientIndex = index;
 
-	public void GMOD_SentClientStringTables(IClient client) {
-		INetChannel netchan = client.GetNetChannel()!;
-		SVC_GMod_ServerToClient msg = new SVC_GMod_ServerToClient(GModMessageType.RequestLuaFiles);
-		netchan.SendNetMsg(msg);
-	}
+	public void GMOD_SentClientStringTables(int userID) => Game.Server.GarrysMod.GModDataPack.DataPack().SendFileRequestRequest(userID);
 
 	public void GMOD_ReceiveClientMessage(int userID, Edict player, bf_read msg, int bits) {
 		int type = msg.ReadByte();
@@ -701,7 +707,7 @@ public class ServerGameClients : IServerGameClients
 
 		int dataBits = bits - 8;
 		if (type == (int)GModMessageType.LuaFile) {
-			// todo: DataPack().OnFilesRequested(userID, msg, dataBits);
+			Game.Server.GarrysMod.GModDataPack.DataPack().OnFilesRequested(userID, msg, dataBits);
 			return;
 		}
 
@@ -752,9 +758,7 @@ public class ServerGameClients : IServerGameClients
 		LuaNet.g_NetIncoming = null;
 	}
 
-	public void GMOD_ClientConnected(int userID) {
-		throw new NotImplementedException();
-	}
+	public void GMOD_ClientConnected(int userID) => Game.Server.GarrysMod.GModDataPack.DataPack().OnClientConnected(userID);
 }
 
 public class ServerGameEnts : IServerGameEnts

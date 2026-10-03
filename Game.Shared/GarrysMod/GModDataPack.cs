@@ -4,10 +4,9 @@ using Source.Common.Engine;
 using Source.Common.GarrysMod;
 using Source.Common.GarrysMod.Lua;
 using Source.Common.Hashing;
-#if CLIENT_DLL
 using Source.Common;
 using Source.Common.Filesystem;
-#endif
+using Source.Common.Bitbuffers;
 
 using System.Security.Cryptography;
 using System.Text;
@@ -145,7 +144,7 @@ public class GModDataPack : IGModDataPack
 		return compressed;
 	}
 
-	static string GetCachePath(ReadOnlySpan<byte> hash) => "cache/lua/" + SHA256Value.FromBytes(hash).ToString() + ".lua";
+	static string GetCachePath(ReadOnlySpan<byte> hash) => "cache/lua/" + SHA256Value.FromBytes(hash).ToString()[..0x28] + ".lua";
 
 	static bool ReadCache(byte[] hash, out byte[]? data) {
 		data = null;
@@ -222,9 +221,85 @@ public class GModDataPack : IGModDataPack
 		}
 	}
 #else
+	readonly int[] RequestCount = new int[0x80];
+
 	public void Initialize() {
 		Table = networkstringtable.CreateStringTable("client_lua_files", IsSingleplayer() ? 0x8000 : 0x2000, 0, 0);
 		Table.AddString(true, "paths");
+	}
+
+	public void OnClientConnected(int client) => RequestCount[client] = 0;
+
+	public void SendFileRequestRequest(int client) {
+		RequestCount[client]++;
+		ReadOnlySpan<byte> data = [(byte)GModMessageType.RequestLuaFiles];
+		engine.GMOD_SendToClient(client, data, data.Length << 3);
+	}
+
+	public void OnFilesRequested(int client, bf_read msg, int bits) {
+		if (RequestCount[client] <= 0)
+			return;
+
+		RequestCount[client]--;
+		if ((bits & 0xF) != 0)
+			return;
+
+		int count = bits / 16;
+		if (count > Table!.GetNumStrings())
+			return;
+
+		List<int> requested = [];
+		HashSet<int> seen = [];
+		for (int i = 0; i < count; i++) {
+			int index = (int)msg.ReadUBitLong(16);
+			if (index == 0 || index >= Table.GetNumStrings())
+				continue;
+			if (seen.Add(index))
+				requested.Add(index);
+		}
+
+		foreach (int index in requested)
+			SendFileToClient(client, index);
+	}
+
+	public void SendFileToClient(int client, int index) {
+		if (index < 0 || index >= Table!.GetNumStrings()) {
+			DevWarning($"Client requesting crazy file number ({index})\n");
+			return;
+		}
+
+		string name = new(Table.GetString(index));
+		LuaFile? file = get.LuaShared()!.GetCache(name);
+		if (file == null) {
+			DevWarning($"Client requested file but doesn't exist! {name}\n");
+			return;
+		}
+
+		if (file.Compressed.Length == 0) {
+			byte[] contents = new byte[file.Contents.Length + 1];
+			file.Contents.CopyTo(contents, 0);
+
+			using MemoryStream compressed = new();
+			compressed.Write(GetHashFromString(contents), 0, 0x20);
+			bool success = Bootil.Compression.LZMA.Compress(contents, compressed, 5, 0x10000);
+			file.Compressed = compressed.ToArray();
+			if (!success) {
+				DevWarning($"Couldn't compress file '{name}' before sending to client\n");
+				return;
+			}
+		}
+
+		if (file.Compressed.Length > 0x10000) {
+			Warning($"Refusing to send file '{name}', its too large! ({Bootil.String.Format.Memory((ulong)file.Compressed.Length)}, 64KB max)\n");
+			return;
+		}
+
+		byte[] data = new byte[3 + file.Compressed.Length];
+		data[0] = (byte)GModMessageType.LuaFile;
+		data[1] = (byte)index;
+		data[2] = (byte)(index >> 8);
+		file.Compressed.CopyTo(data, 3);
+		engine.GMOD_SendToClient(client, data, data.Length << 3);
 	}
 #endif
 
@@ -413,13 +488,150 @@ public class GModDataPack : IGModDataPack
 
 		return cvar.FindVar("sv_cheats")!.GetInt() == 0 && GarrysMod.sv_allowcslua.GetInt() == 0;
 	}
+
+	static void CleanUpPath(ref string path) {
+		Bootil.String.Util.TrimLeft(ref path, "/\\");
+		if (Bootil.String.Test.StartsWith(path, "addons/")) {
+			int pos = path[7..].IndexOf('/');
+			if (pos != -1)
+				path = path[(pos + 8)..];
+		}
+
+		if (Bootil.String.Test.StartsWith(path, "workshop/"))
+			path = path[9..];
+
+		if (Bootil.String.Test.StartsWith(path, "lua/"))
+			path = path[4..];
+
+		if (Bootil.String.Test.StartsWith(path, "gamemodes/"))
+			path = path[10..];
+	}
+
+	public bool IsValidDirectory(ReadOnlySpan<char> name) {
+		string dir = new(name);
+		string paths = new(GetClientSearchPaths().SliceNullTerminatedString());
+		Bootil.String.Lower(ref paths);
+
+		foreach (string tok in paths.Split(';', StringSplitOptions.RemoveEmptyEntries)) {
+			string path = tok;
+			Bootil.String.File.FixSlashes(ref path, "\\", "/");
+			CleanUpPath(ref path);
+			if (Bootil.String.Test.StartsWith(path, dir))
+				return true;
+		}
+
+		for (int i = 0; i < Table!.GetNumStrings(); i++) {
+			string path = new(Table.GetString(i));
+			Bootil.String.File.StripFilename(ref path);
+			CleanUpPath(ref path);
+			if (Bootil.String.Test.StartsWith(path, dir))
+				return true;
+		}
+
+		return false;
+	}
+
+	static bool ContainsResult(List<LuaFindResult> output, string name) {
+		foreach (LuaFindResult result in output) {
+			if (result.FileName == name)
+				return true;
+		}
+		return false;
+	}
+
+	public void FindInDatatable(ReadOnlySpan<char> wildcard, List<LuaFindResult> output, bool fullPath) {
+		if (Table == null)
+			return;
+
+		if (IsSingleplayer()) {
+			string list = "";
+			int count = 0;
+			for (; count < 0x400; count++) {
+				int index = Table.FindStringIndex($"singleplayer_files{count}");
+				if (index == INetworkStringTable.INVALID_STRING_INDEX)
+					break;
+
+				byte[]? data = Table.GetStringUserData(index);
+				list += data == null ? "" : Encoding.UTF8.GetString(data);
+			}
+
+			if (count == 0) {
+				Warning("Couldn't find singleplayer file list?\n");
+				return;
+			}
+
+			HashSet<string> seen = [];
+			ReadOnlySpan<char> found = filesystem.FindFirstEx(wildcard, "lcl", out FileFindHandle_t handle);
+			while (!found.IsEmpty) {
+				string fileName = new(found);
+				string key = ":" + fileName + ":";
+				Bootil.String.Lower(ref key);
+				if (fileName[0] != '.' && !seen.Contains(fileName) && (list.Contains(key, StringComparison.Ordinal) || filesystem.FindIsDirectory(handle))) {
+					output.Add(new() { FileName = fileName, IsFolder = filesystem.FindIsDirectory(handle) });
+					seen.Add(fileName);
+				}
+				found = filesystem.FindNext(handle);
+			}
+			filesystem.FindClose(handle);
+			return;
+		}
+
+		string search = new(wildcard);
+		Bootil.String.Lower(ref search);
+		Bootil.String.File.FixSlashes(ref search, "\\", "/");
+
+		string paths = new(GetClientSearchPaths().SliceNullTerminatedString());
+		Bootil.String.Lower(ref paths);
+
+		string dir = search;
+		Bootil.String.File.StripFilename(ref dir);
+		string pattern = search[dir.Length..];
+
+		foreach (string tok in paths.Split(';', StringSplitOptions.RemoveEmptyEntries)) {
+			string path = tok;
+			Bootil.String.File.FixSlashes(ref path, "\\", "/");
+			Bootil.String.Util.TrimLeft(ref path, "/\\");
+
+			string prefix = path + dir;
+			string full = path + search;
+			for (int i = 0; i < Table.GetNumStrings(); i++) {
+				string entry = new(Table.GetString(i));
+				if (entry.Length < search.Length || !Bootil.String.Test.Wildcard(full, entry) || !Bootil.String.Test.StartsWith(entry, prefix))
+					continue;
+
+				entry = entry[prefix.Length..];
+				int pos = entry.IndexOf('/');
+				if (pos == -1)
+					pos = entry.IndexOf('\\');
+
+				if (pos != -1) {
+					entry = entry[..pos];
+					if (!Bootil.String.Test.Wildcard(pattern, entry) || ContainsResult(output, entry))
+						continue;
+
+					output.Add(new() { FileName = entry, IsFolder = true });
+					continue;
+				}
+
+				if (!Bootil.String.Test.Wildcard(pattern, entry) || ContainsResult(output, entry))
+					continue;
+
+				if (fullPath) {
+					entry = new(Table.GetString(i));
+					Bootil.String.File.FixSlashes(ref entry, "\\", "/");
+				}
+
+				output.Add(new() { FileName = entry, IsFolder = false });
+			}
+		}
+	}
 #else
 	public string? GetFromDatatable(ReadOnlySpan<char> name) => throw new NotImplementedException();
 	public byte[] GetHashFromDatatable(ReadOnlySpan<char> name) => throw new NotImplementedException();
 	public string? FindFileInDatatable(ReadOnlySpan<char> path, bool unk, bool isGamePath) => throw new NotImplementedException();
 	public bool IsLocalLuaBlocked() => throw new NotImplementedException();
-#endif
 	public void FindInDatatable(ReadOnlySpan<char> wildcard, List<LuaFindResult> output, bool unk) => throw new NotImplementedException();
 	public bool IsValidDirectory(ReadOnlySpan<char> name) => throw new NotImplementedException();
+#endif
 }
 #endif

@@ -677,6 +677,7 @@ public abstract class BaseServer : IServer
 		if (StringTables != null) {
 			StringTables.RemoveAllTables();
 			StringTables = null;
+			serverGameDLL?.GMOD_OnStringTablesRemoved();
 		}
 
 		InstanceBaselineTable = null;
@@ -1169,6 +1170,8 @@ public abstract class BaseServer : IServer
 
 		if (netchan != null && !netchan.IsLoopback())
 			ConMsg($"Client \"{client.GetClientName()}\" connected ({netchan.GetAddress()}).\n");
+
+		serverGameClients.GMOD_ClientConnected(client.GetPlayerSlot());
 
 		return client;
 	}
