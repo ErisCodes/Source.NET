@@ -487,4 +487,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public ImageFormat GetNullTextureFormat() => ImageFormat.Unknown;
 	public void TurnOnToneMapping() { }
 	public void SetToneMappingScaleLinear(in Vector3 scale) { }
+	public void AddReleaseFunc(Action func) { }
+
+	public void RemoveReleaseFunc(Action func) { }
 }
