@@ -57,6 +57,8 @@ public static class AI_BaseNPCGlobals
 	public const int AI_SLEEP_FLAG_AUTO_PVS = 0x00000001;
 	public const int AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS = 0x00000002;
 
+	public const string PLAYER_SQUADNAME = "player_squad";
+
 	public static readonly ConVar ai_test_moveprobe_ignoresmall = new("ai_test_moveprobe_ignoresmall", "0");
 
 	public static readonly ConVar ai_strong_optimizations = new("ai_strong_optimizations", "0");
@@ -213,6 +215,8 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public static readonly AI_ClassScheduleIdSpace ClassScheduleIdSpace = new(true);
 	public static readonly AI_GlobalScheduleNamespace SchedulingSymbols = new();
 
+	public static string? PlayerSquad;
+
 	public bool IsUsingSmallHullValue;
 	public bool CheckContacts;
 	public Vector3 DefaultEyeOffset;
@@ -227,6 +231,29 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public bool CrouchDesired;
 	public bool InAScript;
 	public TimeUnit_t SceneTime;
+	public TimeUnit_t LastAttackTime;
+	public TimeUnit_t LastDamageTime;
+
+	public AI_BaseNPC() {
+		Schedule = null;
+		IdealSchedule = SCHED_NONE;
+
+		Capability = 0;
+
+		SetHullType(Hull_t.HULL_HUMAN);
+
+		LastDamageTime = 0;
+		LastAttackTime = 0;
+		SpawnEquipment = null;
+
+		Squad = null;
+
+		IsUsingSmallHullValue = true;
+
+		SetInAScript(false);
+
+		SetCollisionGroup(Source.CollisionGroup.NPC);
+	}
 
 	public override void PostConstructor(ReadOnlySpan<char> classname) {
 		base.PostConstructor(classname);
@@ -237,7 +264,25 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public override Mask PhysicsSolidMaskForEntity() => Mask.NPCSolid;
 
-	public override void Precache() => throw new NotImplementedException();
+	public override void Precache() {
+		PlayerSquad = PLAYER_SQUADNAME;
+
+		if (SpawnEquipment != null && SpawnEquipment != "0")
+			Util.PrecacheOther(SpawnEquipment);
+
+		if (!LoadedSchedules()) {
+			DevMsg($"ERROR: Rejecting spawn of {GetDebugName()} as error in NPC's schedules.\n");
+			Util.Remove(this);
+			return;
+		}
+
+		PrecacheScriptSound("AI_BaseNPC.SwishSound");
+		PrecacheScriptSound("AI_BaseNPC.BodyDrop_Heavy");
+		PrecacheScriptSound("AI_BaseNPC.BodyDrop_Light");
+		PrecacheScriptSound("AI_BaseNPC.SentenceStop");
+
+		base.Precache();
+	}
 
 	public virtual bool LoadedSchedules() => true;
 
