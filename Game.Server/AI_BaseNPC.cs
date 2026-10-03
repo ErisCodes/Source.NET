@@ -131,7 +131,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public static readonly SendTable DT_AI_BaseNPC = new(DT_BaseCombatCharacter, [
 		SendPropInt(FIELD.OF(nameof(LifeState)), 3, PropFlags.Unsigned),
 		SendPropBool(FIELD.OF(nameof(PerformAvoidance))),
-		SendPropBool(FIELD.OF(nameof(IsMoving))),
+		SendPropBool(FIELD.OF(nameof(IsMovingValue))),
 		SendPropBool(FIELD.OF(nameof(FadeCorpse))),
 		SendPropInt(FIELD.OF(nameof(DeathPose)), 12),
 		SendPropInt(FIELD.OF(nameof(DeathFrame)), 5),
@@ -142,7 +142,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	[NetworkName("m_bPerformAvoidance")]
 	public bool PerformAvoidance;
 	[NetworkName("m_bIsMoving")]
-	public bool IsMoving;
+	public bool IsMovingValue;
 	[NetworkName("m_bFadeCorpse")]
 	public bool FadeCorpse;
 	[NetworkName("m_iDeathPose")]
@@ -224,10 +224,16 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public static AI_GlobalScheduleNamespace GetSchedulingSymbols() => SchedulingSymbols;
 
+	public bool HasMemory(int memory) => (Memory & memory) != 0;
+
 	public bool IsUsingSmallHull() => IsUsingSmallHullValue;
 
 	public ref readonly Vector3 GetHullMins() => ref NAI_Hull.Mins(GetHullType());
 	public ref readonly Vector3 GetHullMaxs() => ref NAI_Hull.Maxs(GetHullType());
+
+	public bool IsMoving() => GetNavigator()!.IsGoalSet();
+
+	public virtual float CalcYawSpeed() => -1.0f;
 
 	public void SetTaskStatus(TaskStatus_e status) => ScheduleState.TaskStatus = status;
 

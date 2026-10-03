@@ -39,7 +39,32 @@ public class AI_BlendedMotor : AI_Motor
 
 	public float GetMoveScriptTotalTime() => throw new NotImplementedException();
 
-	public float OverrideMaxYawSpeed(Activity activity) => throw new NotImplementedException();
+	public float OverrideMaxYawSpeed(Activity activity) {
+		if (IsYawLocked())
+			return 0.0f;
+
+		switch (activity) {
+			case Activity.ACT_TURN_LEFT:
+			case Activity.ACT_TURN_RIGHT:
+				return 45;
+			default:
+				if (GetOuter()!.IsMoving())
+					return 15;
+				return 45;
+		}
+	}
+
+	public override void RecalculateYawSpeed() {
+		if (IsYawLocked()) {
+			SetYawSpeed(0.0f);
+			return;
+		}
+
+		if (GetOuter()!.HasMemory(bits_MEMORY_TURNING))
+			return;
+
+		SetYawSpeed(CalcYawSpeed());
+	}
 
 	public bool DeceleratingToGoal;
 
