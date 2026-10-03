@@ -214,6 +214,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public static readonly AI_GlobalScheduleNamespace SchedulingSymbols = new();
 
 	public bool IsUsingSmallHullValue;
+	public bool CheckContacts;
 	public Vector3 DefaultEyeOffset;
 	public AIScheduleState_t ScheduleState;
 	public AI_Schedule? Schedule;
@@ -1068,7 +1069,22 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public void SetGoalEnt(BaseEntity? goalEnt) => GoalEnt.Set(goalEnt);
 
-	public void SetDefaultEyeOffset() => throw new NotImplementedException();
+	public void SetDefaultEyeOffset() {
+		if (GetModelPtr() != null) {
+			Animation.GetEyePosition(GetModelPtr(), ref DefaultEyeOffset);
+
+			if (DefaultEyeOffset == vec3_origin) {
+				if (Classify() != Class_T.None)
+					DevMsg($"WARNING: {GetClassname()}({GetModelName()}) has no eye offset in .qc!\n");
+				DefaultEyeOffset = WorldAlignMins() + WorldAlignMaxs();
+				DefaultEyeOffset *= 0.75f;
+			}
+		}
+		else
+			DefaultEyeOffset = vec3_origin;
+
+		SetViewOffset(DefaultEyeOffset);
+	}
 
 	public virtual int CapabilitiesGet() {
 		int capability = Capability;
@@ -1105,7 +1121,30 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public void SetDeathPose(int deathPose) => DeathPose = deathPose;
 	public void SetDeathPoseFrame(int deathPoseFrame) => DeathFrame = deathPoseFrame;
 
-	public void SetupVPhysicsHull() => throw new NotImplementedException();
+	public void SetupVPhysicsHull() {
+		if (GetMoveType() == Source.MoveType.VPhysics || GetMoveType() == Source.MoveType.None)
+			return;
+
+		if (VPhysicsGetObject() != null) {
+			VPhysicsGetObject()!.EnableCollisions(false);
+			VPhysicsDestroyObject();
+		}
+		VPhysicsInitShadow(true, false);
+		IPhysicsObject? physObj = VPhysicsGetObject();
+		if (physObj != null) {
+			float mass = BoneSetup.Studio_GetMass(GetModelPtr());
+			if (mass > 0)
+				physObj.SetMass(mass);
+#if DEBUG
+			else
+				DevMsg($"Warning: {GetModelName()} has no physical mass\n");
+#endif
+			IPhysicsShadowController controller = physObj.GetShadowController();
+			float avgsize = (WorldAlignSize().X + WorldAlignSize().Y) * 0.5f;
+			controller.SetTeleportDistance(avgsize * 0.5f);
+			CheckContacts = true;
+		}
+	}
 
 	public virtual bool InitSquad() {
 		if (Squad == null && (CapabilitiesGet() & (int)Capability_t.bits_CAP_SQUAD) != 0) {

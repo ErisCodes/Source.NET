@@ -1740,6 +1740,10 @@ public class StudioHdr
 
 	public MStudioBoneController BoneController(int i) => studioHdr!.BoneController(i);
 
+	public float Mass() => studioHdr!.Mass;
+
+	public Vector3 EyePosition() => studioHdr!.EyePosition;
+
 	public MStudioAnimDesc Animdesc(int i) {
 		if (vModel == null)
 			return this.studioHdr!.LocalAnimdesc(i);

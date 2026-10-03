@@ -257,6 +257,15 @@ static Animation(){
 		studiohdr.SetActivityListVersion(ActivityList.Version - 1);
 	}
 
+	public static void GetEyePosition(StudioHdr? studiohdr, ref Vector3 eyePosition) {
+		if (studiohdr == null) {
+			Warning("GetEyePosition() Can't get pstudiohdr ptr!\n");
+			return;
+		}
+
+		eyePosition = studiohdr.EyePosition();
+	}
+
 	public static void VerifySequenceIndex(StudioHdr? studiohdr) {
 		if (studiohdr == null)
 			return;

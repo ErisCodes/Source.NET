@@ -1440,6 +1440,11 @@ public ref struct BoneSetup
 		return ctlValue * (boneController.End - boneController.Start) + boneController.Start;
 	}
 
+	public static float Studio_GetMass(StudioHdr? studioHdr) {
+		if (studioHdr == null) return 1.0f;
+		return studioHdr.Mass();
+	}
+
 	public void CalcAutoplaySequences(Span<Vector3> pos, Span<Quaternion> q, TimeUnit_t realTime, object? ikContext) {
 		int count = studioHdr.GetAutoplayList(out Span<short> pList);
 		for (int i = 0; i < count; i++) {
