@@ -1705,6 +1705,36 @@ public class StudioHdr
 		}
 	}
 
+	public int GetEventListVersion() {
+		if (vModel == null)
+			return studioHdr!.EventsIndexed;
+
+		int version = studioHdr!.EventsIndexed;
+
+		int i;
+		for (i = 1; i < vModel.Group.Count; i++) {
+			StudioHeader studioHdr = GroupStudioHdr(i)!;
+			Assert(studioHdr != null);
+			version = Math.Min(version, studioHdr.EventsIndexed);
+		}
+
+		return version;
+	}
+
+	public void SetEventListVersion(int version) {
+		studioHdr!.EventsIndexed = version;
+
+		if (vModel == null)
+			return;
+
+		int i;
+		for (i = 1; i < vModel.Group.Count; i++) {
+			StudioHeader studioHdr = GroupStudioHdr(i)!;
+			Assert(studioHdr != null);
+			studioHdr.EventsIndexed = version;
+		}
+	}
+
 	public LocalFlexController NumFlexControllers() => (LocalFlexController)studioHdr!.NumFlexControllers;
 	public MStudioFlexController FlexController(LocalFlexController i) => studioHdr!.FlexController(i);
 

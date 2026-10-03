@@ -243,6 +243,20 @@ static Animation(){
 
 		studiohdr.SetActivityListVersion(ActivityList.Version);
 	}
+	public static void ResetEventIndexes(StudioHdr? studiohdr) {
+		if (studiohdr == null)
+			return;
+
+		studiohdr.SetEventListVersion(EventList.g_EventListVersion - 1);
+	}
+
+	public static void ResetActivityIndexes(StudioHdr? studiohdr) {
+		if (studiohdr == null)
+			return;
+
+		studiohdr.SetActivityListVersion(ActivityList.Version - 1);
+	}
+
 	public static void VerifySequenceIndex(StudioHdr? studiohdr) {
 		if (studiohdr == null)
 			return;

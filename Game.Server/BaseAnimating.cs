@@ -216,8 +216,15 @@ public class BaseAnimating : BaseEntity
 		return BoneSetup.Studio_GetController(model, controller, EncodedController[controller]);
 	}
 
-	public void ResetActivityIndexes() => throw new NotImplementedException();
-	public void ResetEventIndexes() => throw new NotImplementedException();
+	public void ResetActivityIndexes() {
+		Assert(GetModelPtr() != null);
+		Animation.ResetActivityIndexes(GetModelPtr());
+	}
+
+	public void ResetEventIndexes() {
+		Assert(GetModelPtr() != null);
+		Animation.ResetEventIndexes(GetModelPtr());
+	}
 
 	public LocalFlexController GetNumFlexControllers() {
 		StudioHdr? studioHdr = GetModelPtr();
