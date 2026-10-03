@@ -3,22 +3,21 @@ using Source.GUI.Controls;
 
 namespace Game.Client.GarrysMod;
 
-public static class LuaVGUI
+public static partial class LuaVGUI
 {
+	[LuaClass(typeof(Panel), NullError = "Tried to use a NULL Panel!")]
 	public static readonly LuaClass PanelClass = new("Panel", LuaType.Panel, null, null);
 
-	static readonly LuaLibrary vgui = new("vgui");
+	[LuaLibrary]
+	static readonly LuaLibrary LL_Factory_vgui = new("vgui");
 
-	static LuaVGUI() {
-		vgui.Add(new() { Name = "Create", Function = Create });
-		// vgui.Add(new() { Name = "GetAll", Function = GetAll });
-		// vgui.Add(new() { Name = "CursorVisible", Function = CursorVisible });
-		// vgui.Add(new() { Name = "IsHoveringWorld", Function = IsHoveringWorld });
-		// vgui.Add(new() { Name = "GetWorldPanel", Function = GetWorldPanel });
-		// vgui.Add(new() { Name = "FocusedHasParent", Function = FocusedHasParent });
-		// vgui.Add(new() { Name = "GetKeyboardFocus", Function = GetKeyboardFocus });
-		// vgui.Add(new() { Name = "GetHoveredPanel", Function = GetHoveredPanel });
-	}
+	// todo: GetAll
+	// todo: CursorVisible
+	// todo: IsHoveringWorld
+	// todo: GetWorldPanel
+	// todo: FocusedHasParent
+	// todo: GetKeyboardFocus
+	// todo: GetHoveredPanel
 
 	public static ILuaObject? GetLuaTable(Panel panel) {
 		ILuaObject? table = panel.LuaTable;
@@ -38,53 +37,9 @@ public static class LuaVGUI
 		return table;
 	}
 
-	public static void PushToLua(Panel panel, LuaClass luaClass) {
-		if (panel.LuaObject != null && panel.LuaObject.isNil()) {
-			Warning("Panel object is fucked - might be using an older Lua interface.. why wasn't it cleared??\n");
-			ClearLuaReferences(panel);
-		}
-
-		if (panel.LuaObject != null) {
-			if (panel.LuaObject.GetType() == LuaType.Panel) {
-				panel.LuaObject.Push();
-				return;
-			}
-			Warning("NOT A PANEL!!!\n");
-		}
-
-		if (panel.LuaHandle)
-			g_Lua!.ReleaseUserTypeObject(panel);
-		panel.LuaHandle = true;
-		luaClass.Push(panel);
-		panel.LuaObject = new LuaObject(-1, LuaType.None);
-	}
-
-	public static void ClearLuaReferences(Panel panel) {
-		panel.LuaThink?.UnReference();
-		panel.LuaThink = null;
-		panel.LuaPaint?.UnReference();
-		panel.LuaPaint = null;
-		panel.LuaPaintOver?.UnReference();
-		panel.LuaPaintOver = null;
-		panel.LuaAnimationThink?.UnReference();
-		panel.LuaAnimationThink = null;
-		panel.LuaOnChildRemoved?.UnReference();
-		panel.LuaOnChildRemoved = null;
-		panel.LuaOnChildAdded?.UnReference();
-		panel.LuaOnChildAdded = null;
-		if (panel.LuaHandle) {
-			g_Lua!.ReleaseUserTypeObject(panel);
-			panel.LuaHandle = false;
-		}
-		panel.LuaTable?.UnReference();
-		panel.LuaTable = null;
-		panel.LuaObject?.UnReference();
-		panel.LuaObject = null;
-	}
-
 	public static void Push_Panel(Panel? panel) {
 		if (panel != null)
-			PushToLua(panel, PanelClass);
+			panel.PushLua(g_Lua!, PanelClass.Type);
 		else
 			g_Lua!.PushNil();
 	}
@@ -154,7 +109,8 @@ public static class LuaVGUI
 		return null;
 	}
 
-	public static int Create(ILuaInterface lua) {
+	[LuaFunction]
+	static int Create(ILuaInterface lua) {
 		string className = lua.CheckString(1);
 		Panel? panel = CreateControl(className);
 		if (panel == null) {

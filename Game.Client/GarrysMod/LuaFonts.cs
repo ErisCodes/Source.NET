@@ -30,11 +30,6 @@ public static class LuaFonts
 	}
 
 	public static void CreateFont(ReadOnlySpan<char> name, ReadOnlySpan<char> fontName, bool extended = false, float size = 13, float weight = 500, float blurSize = 0, float scanlines = 0, bool antialias = true, bool underline = false, bool italic = false, bool strikeout = false, bool symbol = false, bool rotary = false, bool shadow = false, bool additive = false, bool outline = false) {
-		if (strlen(name) >= 32) {
-			// todo: lua arg error "font name is too long"
-			return;
-		}
-
 		if (IsLuaFont(fontName)) {
 			DevWarning($"Tried to create font '{name}' from a game font '{fontName}', not supported!\n");
 			fontName = "Tahoma";
@@ -93,7 +88,7 @@ public static class LuaFonts
 		Fonts[key] = font;
 
 		if (!Surface.SetFontGlyphSet(font.Handle!, font.Font, (int)font.Size, font.Weight, font.BlurSize, font.Scanlines, font.Flags)) {
-			// todo: lua Msg($"Failed to create font '{font.Name}' from '{font.Font}'!\n")
+			g_Lua!.Msg($"Failed to create font '{font.Name}' from '{font.Font}'!\n");
 			return;
 		}
 

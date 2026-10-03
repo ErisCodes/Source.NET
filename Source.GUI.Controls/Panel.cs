@@ -1481,6 +1481,56 @@ public class Panel : IPanel
 	public ILuaObject? LuaOnChildRemoved;
 	public ILuaObject? LuaOnChildAdded;
 	public bool LuaHandle;
+#if GMOD_DLL
+	public bool RunningOnRemove;
+	public ILuaInterface? Lua;
+
+	public void PushLua(ILuaInterface lua, LuaType type) {
+		if (LuaObject != null && LuaObject.isNil()) {
+			Warning("Panel object is fucked - might be using an older Lua interface.. why wasn't it cleared??\n");
+			ClearLuaReferences();
+		}
+
+		if (LuaObject != null) {
+			if (LuaObject.GetType() == LuaType.Panel) {
+				LuaObject.Push();
+				return;
+			}
+			Warning("NOT A PANEL!!!\n");
+		}
+
+		Lua = lua;
+		if (LuaHandle)
+			lua.ReleaseUserTypeObject(this);
+		LuaHandle = true;
+		lua.PushObjectUserType(this, type);
+		LuaObject = lua.CreateObject();
+		LuaObject.SetFromStack(-1);
+	}
+
+	public void ClearLuaReferences() {
+		LuaThink?.UnReference();
+		LuaThink = null;
+		LuaPaint?.UnReference();
+		LuaPaint = null;
+		LuaPaintOver?.UnReference();
+		LuaPaintOver = null;
+		LuaAnimationThink?.UnReference();
+		LuaAnimationThink = null;
+		LuaOnChildRemoved?.UnReference();
+		LuaOnChildRemoved = null;
+		LuaOnChildAdded?.UnReference();
+		LuaOnChildAdded = null;
+		if (LuaHandle) {
+			Lua!.ReleaseUserTypeObject(this);
+			LuaHandle = false;
+		}
+		LuaTable?.UnReference();
+		LuaTable = null;
+		LuaObject?.UnReference();
+		LuaObject = null;
+	}
+#endif
 
 	public virtual bool HasLuaTable() => LuaTable != null;
 
@@ -2589,6 +2639,21 @@ public class Panel : IPanel
 
 	public bool Disposed() => IsMarkedForDeletion();
 	public virtual void Dispose() {
+#if GMOD_DLL
+		RunningOnRemove = true;
+		if (Lua != null && LuaTable != null && !LuaTable.isNil()) {
+			LuaTable.Push();
+			Lua.GetField(-1, "OnRemove");
+			Lua.Remove(-2);
+			if (Lua.GetType(-1) == LuaType.Function) {
+				PushLua(Lua, LuaType.Panel);
+				Lua.CallInternalNoReturns(1);
+			}
+			else
+				Lua.Pop(1);
+		}
+		RunningOnRemove = false;
+#endif
 		Flags &= ~PanelFlags.AutoDeleteEnabled;
 		Flags |= PanelFlags.MarkedForDeletion;
 
@@ -2601,6 +2666,9 @@ public class Panel : IPanel
 				child.SetParent(null);
 		}
 
+#if GMOD_DLL
+		ClearLuaReferences();
+#endif
 		GC.SuppressFinalize(this);
 	}
 

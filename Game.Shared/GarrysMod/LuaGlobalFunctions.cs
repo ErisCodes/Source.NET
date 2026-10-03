@@ -33,6 +33,14 @@ public static partial class LuaGlobalFunctions
 			g_Lua!.Require(name);
 	}
 
+#if CLIENT_DLL
+	[LuaGlobal]
+	static int LocalPlayer(ILuaInterface lua) {
+		LuaEntity.Push_Entity(C_BasePlayer.GetLocalPlayer());
+		return 1;
+	}
+#endif
+
 	static string ToStringArgs(LuaObject tostring, int top, string error) {
 		string str = "";
 		for (int i = 1; i <= top; i++) {
