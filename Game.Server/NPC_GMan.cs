@@ -4,6 +4,7 @@ using Source;
 
 namespace Game.Server;
 
+[LinkEntityToClass("npc_gman")]
 public class NPC_GMan : AI_PlayerAlly
 {
 	public override Class_T Classify() {
