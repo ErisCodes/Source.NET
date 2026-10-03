@@ -16,6 +16,51 @@ public static class AI_UtilsGlobals
 	public static string? g_iszFuncBrushClassname;
 }
 
+public class AI_MoveMonitor
+{
+	const float NO_MARK = -1;
+
+	public AI_MoveMonitor() {
+		Mark = Vector3.Zero;
+		MarkTolerance = NO_MARK;
+	}
+
+	public void SetMark(BaseEntity? entity, float tolerance) {
+		if (entity != null) {
+			Mark = entity.GetAbsOrigin();
+			MarkTolerance = tolerance;
+		}
+	}
+
+	public void ClearMark() => MarkTolerance = NO_MARK;
+
+	public bool IsMarkSet() => MarkTolerance != NO_MARK;
+
+	public bool TargetMoved(BaseEntity? entity) {
+		if (IsMarkSet() && entity != null) {
+			float distance = (Mark - entity.GetAbsOrigin()).Length();
+			if (distance > MarkTolerance)
+				return true;
+		}
+		return false;
+	}
+
+	public bool TargetMoved2D(BaseEntity? entity) {
+		if (IsMarkSet() && entity != null) {
+			Vector3 origin = entity.GetAbsOrigin();
+			float distance = new Vector2(Mark.X - origin.X, Mark.Y - origin.Y).Length();
+			if (distance > MarkTolerance)
+				return true;
+		}
+		return false;
+	}
+
+	public Vector3 GetMarkPos() => Mark;
+
+	Vector3 Mark;
+	float MarkTolerance;
+}
+
 public struct TraceFilterNav : ITraceFilter
 {
 	public TraceFilterNav(AI_BaseNPC prober, bool ignoreTransientEntities, IHandleEntity? passedict, CollisionGroup collisionGroup, bool allowPlayerAvoid = true) {

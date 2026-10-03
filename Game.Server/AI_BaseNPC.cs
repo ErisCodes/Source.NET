@@ -220,11 +220,17 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public bool IsUsingSmallHullValue;
 	public bool CheckContacts;
 	public Vector3 DefaultEyeOffset;
+	public Vector3 CommandGoal;
+	public readonly AI_MoveMonitor CommandMoveMonitor = new();
 	public AIScheduleState_t ScheduleState;
 	public AI_Schedule? Schedule;
 	public int IdealSchedule;
 	public AI_ScheduleBits ConditionsPreIgnore;
 	public AI_ScheduleBits InverseIgnoreConditions;
+	public TimeUnit_t TimeEnemyAcquired;
+	public float LastShootAccuracy;
+	public int TotalShots;
+	public int TotalHits;
 	public Activity TranslatedActivity;
 	public bool Crouching;
 	public bool ForceCrouch;
@@ -1092,7 +1098,10 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual bool IsWaitingToRappel() => false;
 
-	public virtual void ClearCommandGoal() => throw new NotImplementedException();
+	public virtual void ClearCommandGoal() {
+		CommandGoal = vec3_invalid;
+		CommandMoveMonitor.ClearMark();
+	}
 
 	public void ClearSchedule(string? reason) {
 		if (reason != null && (DebugOverlays & DebugOverlayBits.TaskText) != 0)
@@ -1113,7 +1122,26 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public BaseEntity? GetEnemy() => Enemy.Get();
 
-	public void SetEnemy(BaseEntity? enemy, bool setCondNewEnemy = true) => throw new NotImplementedException();
+	public void SetEnemy(BaseEntity? enemy, bool setCondNewEnemy = true) {
+		if (Enemy.Get() != enemy) {
+			ClearAttackConditions();
+			VacateStrategySlot();
+			GiveUpOnDeadEnemyTimer.Stop();
+
+			if (enemy != null && setCondNewEnemy)
+				SetCondition((int)SCOND_t.COND_NEW_ENEMY);
+		}
+
+		Enemy.Set(enemy);
+		TimeEnemyAcquired = gpGlobals.CurTime;
+
+		LastShootAccuracy = -1;
+		TotalShots = 0;
+		TotalHits = 0;
+
+		if (enemy == null)
+			ClearCondition((int)SCOND_t.COND_NEW_ENEMY);
+	}
 
 	public BaseEntity? GetGoalEnt() => GoalEnt.Get();
 
