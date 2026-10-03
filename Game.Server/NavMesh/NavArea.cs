@@ -199,8 +199,8 @@ public partial class NavArea : NavAreaCriticalData
 	static Color SelectedSetBorderColor = new(100, 100, 0, 255);
 	static Color DragSelectionSetBorderColor = new(50, 50, 50, 255);
 
-	static ConVar nav_selected_set_color = new("255 255 200 96", FCvar.Cheat, "Color used to draw the selected set background while editing.", 0, 0, SelectedSetColorChaged);
-	static ConVar nav_selected_set_border_color = new("100 100 0 255", FCvar.Cheat, "Color used to draw the selected set borders while editing.", 0, 0, SelectedSetColorChaged);
+	static ConVar nav_selected_set_color = new("255 255 200 96", FCvar.Cheat, "Color used to draw the selected set background while editing.", callback: SelectedSetColorChaged);
+	static ConVar nav_selected_set_border_color = new("100 100 0 255", FCvar.Cheat, "Color used to draw the selected set borders while editing.", callback: SelectedSetColorChaged);
 
 	static void SelectedSetColorChaged(IConVar var, in ConVarChangeContext ctx) {
 		ConVarRef colorVar = new(var.GetName());
