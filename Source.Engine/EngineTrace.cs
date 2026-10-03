@@ -636,7 +636,11 @@ public class EngineTraceServer : EngineTrace
 		}
 
 		IHandleEntity? handleEntity = collideable.GetEntityHandle();
-		// TODO: Static props have logic here but no static prop manager yet
-		trace.EntHandle = handleEntity;
+		if (!StaticPropMgr().IsStaticProp(handleEntity))
+			trace.EntHandle = handleEntity;
+		else {
+			trace.EntHandle = sv.Edicts![0].GetIServerEntity();
+			trace.HitBox = StaticPropMgr().GetStaticPropIndex(handleEntity) + 1;
+		}
 	}
 }
