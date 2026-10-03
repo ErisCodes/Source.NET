@@ -14,7 +14,7 @@ public class BaseAnimatingOverlay : BaseAnimating
 {
 	public const int MAX_OVERLAYS = 15;
 
-	static readonly ConVar ai_sequence_debug = new("ai_sequence_debug", "0");
+	internal static readonly ConVar ai_sequence_debug = new("ai_sequence_debug", "0");
 
 	public static readonly SendTable DT_OverlayVars = new(nameof(DT_OverlayVars), [
 		SendPropList(FIELD.OF(nameof(AnimOverlay)), MAX_OVERLAYS, SendPropDataTable(null, AnimationLayerRef.DT_Animationlayer))

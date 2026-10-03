@@ -166,6 +166,10 @@ public class BaseAnimating : BaseEntity
 
 	public bool ComputeHitboxSurroundingBox(out Vector3 vecWorldMins, out Vector3 vecWorldMaxs) => throw new NotImplementedException();
 
+	public virtual void InitBoneControllers() => throw new NotImplementedException();
+	public void ResetActivityIndexes() => throw new NotImplementedException();
+	public void ResetEventIndexes() => throw new NotImplementedException();
+
 	public Activity LookupActivity(ReadOnlySpan<char> label) {
 		return Animation.LookupActivity(GetModelPtr(), label);
 	}

@@ -10,6 +10,40 @@ namespace Game.Server;
 
 using FIELD = Source.FIELD<BaseCombatCharacter>;
 
+public enum Capability_t
+{
+	bits_CAP_MOVE_GROUND = 0x00000001,
+	bits_CAP_MOVE_JUMP = 0x00000002,
+	bits_CAP_MOVE_FLY = 0x00000004,
+	bits_CAP_MOVE_CLIMB = 0x00000008,
+	bits_CAP_MOVE_SWIM = 0x00000010,
+	bits_CAP_MOVE_CRAWL = 0x00000020,
+	bits_CAP_MOVE_SHOOT = 0x00000040,
+	bits_CAP_SKIP_NAV_GROUND_CHECK = 0x00000080,
+	bits_CAP_USE = 0x00000100,
+	bits_CAP_AUTO_DOORS = 0x00000400,
+	bits_CAP_OPEN_DOORS = 0x00000800,
+	bits_CAP_TURN_HEAD = 0x00001000,
+	bits_CAP_WEAPON_RANGE_ATTACK1 = 0x00002000,
+	bits_CAP_WEAPON_RANGE_ATTACK2 = 0x00004000,
+	bits_CAP_WEAPON_MELEE_ATTACK1 = 0x00008000,
+	bits_CAP_WEAPON_MELEE_ATTACK2 = 0x00010000,
+	bits_CAP_INNATE_RANGE_ATTACK1 = 0x00020000,
+	bits_CAP_INNATE_RANGE_ATTACK2 = 0x00040000,
+	bits_CAP_INNATE_MELEE_ATTACK1 = 0x00080000,
+	bits_CAP_INNATE_MELEE_ATTACK2 = 0x00100000,
+	bits_CAP_USE_WEAPONS = 0x00200000,
+	bits_CAP_ANIMATEDFACE = 0x00800000,
+	bits_CAP_USE_SHOT_REGULATOR = 0x01000000,
+	bits_CAP_FRIENDLY_DMG_IMMUNE = 0x02000000,
+	bits_CAP_SQUAD = 0x04000000,
+	bits_CAP_DUCK = 0x08000000,
+	bits_CAP_NO_HIT_PLAYER = 0x10000000,
+	bits_CAP_AIM_GUN = 0x20000000,
+	bits_CAP_NO_HIT_SQUADMATES = 0x40000000,
+	bits_CAP_SIMPLE_RADIUS_DAMAGE = unchecked((int)0x80000000),
+}
+
 [NetworkName("CBaseCombatCharacter")]
 public partial class BaseCombatCharacter : BaseFlex
 {
@@ -89,6 +123,11 @@ public partial class BaseCombatCharacter : BaseFlex
 	public void ClearLastKnownArea() {
 		// TODO
 	}
+
+	public string? RelationshipString;
+
+	public BaseCombatWeapon? Weapon_Create(ReadOnlySpan<char> weaponName) => throw new NotImplementedException();
+	public virtual void Weapon_Equip(BaseCombatWeapon weapon) => throw new NotImplementedException();
 
 	public int WeaponCount() => MAX_WEAPONS;
 	public BaseCombatWeapon? GetWeapon(int i) => MyWeapons[i].Get();

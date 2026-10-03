@@ -1918,6 +1918,13 @@ public partial class BaseEntity : IServerEntity
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public bool IsEFlagSet(EFL mask) => (eflags & mask) != 0;
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public EFL GetEFlags() => eflags;
 
+	public void SetBlocksLOS(bool blocksLOS) {
+		if (blocksLOS)
+			RemoveEFlags(EFL.DontBlockLOS);
+		else
+			AddEFlags(EFL.DontBlockLOS);
+	}
+
 	public Vector3 AbsVelocity;
 	public QAngle AngVelocity;
 

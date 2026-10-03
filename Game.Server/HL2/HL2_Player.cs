@@ -350,7 +350,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 		throw new NotImplementedException();
 	}
 
-	void Weapon_Equip(BaseCombatWeapon weapon) { }
+	public override void Weapon_Equip(BaseCombatWeapon weapon) { }
 
 	bool BumpWeapon(BaseCombatWeapon weapon) {
 		throw new NotImplementedException();
