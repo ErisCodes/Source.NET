@@ -8,5 +8,7 @@ public class AI_Senses : AI_Component
 
 	public void SetDistLook(float distLook) => LookDist = distLook;
 
+	public bool CanHearSound(ref WorldSoundInstance sound) => throw new NotImplementedException();
+
 	public float LookDist;
 }

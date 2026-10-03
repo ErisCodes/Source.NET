@@ -2836,9 +2836,31 @@ public partial class BaseEntity : IServerEntity
 	}
 	public bool IsWorld() => EntIndex() == 0;
 
+	public virtual bool FVisible(BaseEntity entity) => throw new NotImplementedException();
+
 	public TimeUnit_t NavIgnoreUntilTime;
 
 	public bool IsNavIgnored() => gpGlobals.CurTime <= NavIgnoreUntilTime;
+
+	public BasePlayer? AI_GetClosestPlayer() {
+		Vector3 pos = GetAbsOrigin();
+		float closestDistSqr = float.MaxValue;
+		BasePlayer? closest = null;
+
+		for (int i = 1; i <= gpGlobals.MaxClients; i++) {
+			BasePlayer? player = Util.PlayerByIndex(i);
+			if (player == null)
+				continue;
+
+			float distSqr = (player.GetAbsOrigin() - pos).LengthSquared();
+			if (distSqr < closestDistSqr) {
+				closestDistSqr = distSqr;
+				closest = player;
+			}
+		}
+
+		return closest;
+	}
 
 	public virtual void StartTouch(BaseEntity? other) {
 		// notify parent

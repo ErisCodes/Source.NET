@@ -6,12 +6,14 @@ using Source;
 using Source.Common;
 using Source.Common.Commands;
 using Source.Common.Engine;
+using Source.Common.Mathematics;
 using Source.Common.Formats.BSP;
 
 using Source.Common.Physics;
 
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Game.Server;
 
@@ -59,10 +61,77 @@ public static class AI_BaseNPCGlobals
 
 	public const string PLAYER_SQUADNAME = "player_squad";
 
+	public const int bits_debugDisableAI = 0x00000001;
+	public const int bits_debugStepAI = 0x00000002;
+
+	public static readonly ConVar ai_show_think_tolerance = new("ai_show_think_tolerance", "0");
+	public static readonly ConVar ai_debug_think_ticks = new("ai_debug_think_ticks", "0");
+	public static readonly ConVar ai_debug_doors = new("ai_debug_doors", "0");
+
+	public static readonly ConVar ai_rebalance_thinks = new("ai_rebalance_thinks", "1");
+	public static readonly ConVar ai_use_efficiency = new("ai_use_efficiency", "1");
+	public static readonly ConVar ai_use_frame_think_limits = new("ai_use_frame_think_limits", "1");
+	public static readonly ConVar ai_default_efficient = new("ai_default_efficient", "0");
+	public static readonly ConVar ai_efficiency_override = new("ai_efficiency_override", "0");
+	public static readonly ConVar ai_debug_efficiency = new("ai_debug_efficiency", "0");
+	public static readonly ConVar ai_frametime_limit = new("ai_frametime_limit", "50", FCvar.None, "frametime limit for min efficiency AIE_NORMAL (in sec's).");
+
+	public static readonly ConVar ai_use_think_optimizations = new("ai_use_think_optimizations", "1");
+
 	public static readonly ConVar ai_test_moveprobe_ignoresmall = new("ai_test_moveprobe_ignoresmall", "0");
 
 	public static readonly ConVar ai_strong_optimizations = new("ai_strong_optimizations", "0");
 	public static bool AIStrongOpt() => ai_strong_optimizations.GetBool();
+
+	public static readonly ConVar ai_debug_avoidancebounds = new("ai_debug_avoidancebounds", "0");
+
+	public static readonly ConVar g_DisableAI = new("ai_disabled", "0", FCvar.Notify);
+
+	public static bool ShouldUseEfficiency() => ai_use_think_optimizations.GetBool() && ai_use_efficiency.GetBool();
+	public static bool ShouldUseFrameThinkLimits() => ai_use_think_optimizations.GetBool() && ai_use_frame_think_limits.GetBool();
+	public static bool ShouldRebalanceThinks() => ai_use_think_optimizations.GetBool() && ai_rebalance_thinks.GetBool();
+	public static bool ShouldDefaultEfficient() => ai_use_think_optimizations.GetBool() && ai_default_efficient.GetBool();
+
+	public static readonly AI_Manager g_AI_Manager = new();
+
+	public static readonly Stopwatch g_AIRunTimer = new();
+
+	public static float g_NpcTimeThisFrame;
+	public static TimeUnit_t g_StartTimeCurThink;
+
+	public static bool AIIsDebuggingDoors(AI_BaseNPC npc) => throw new NotImplementedException();
+}
+
+public class AI_Manager
+{
+	public const int MAX_AIS = 256;
+
+	public AI_Manager() {
+		AIs.EnsureCapacity(MAX_AIS);
+	}
+
+	public List<AI_BaseNPC> AccessAIs() => AIs;
+
+	public int NumAIs() => AIs.Count;
+
+	public void AddAI(AI_BaseNPC ai) => AIs.Add(ai);
+
+	public void RemoveAI(AI_BaseNPC ai) {
+		int i = AIs.IndexOf(ai);
+
+		if (i != -1) {
+			AIs[i] = AIs[^1];
+			AIs.RemoveAt(AIs.Count - 1);
+		}
+	}
+
+	readonly List<AI_BaseNPC> AIs = [];
+}
+
+public enum AI_MoveEfficiency_t
+{
+	AIME_NORMAL,
+	AIME_EFFICIENT,
 }
 
 public struct AIScheduleState_t
@@ -76,6 +145,15 @@ public struct AIScheduleState_t
 	public bool TaskRanAutomovement;
 	public bool TaskUpdatedYaw;
 	public bool ScheduleWasInterrupted;
+}
+
+public struct AIRebalanceInfo_t
+{
+	public AI_BaseNPC NPC;
+	public int NextThinkTick;
+	public bool InPVS;
+	public float DotPlayer;
+	public float DistPlayer;
 }
 
 public enum AI_Efficiency_t
@@ -212,10 +290,17 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public AI_Squad? Squad;
 	public string? SquadName;
 
+	public static int DebugBits = 0;
+	public static int DebugPauseIndex = -1;
+
 	public static readonly AI_ClassScheduleIdSpace ClassScheduleIdSpace = new(true);
 	public static readonly AI_GlobalScheduleNamespace SchedulingSymbols = new();
 
 	public static string? PlayerSquad;
+
+	public static int NextThinkRebalanceTick;
+
+	public static readonly SimpleSimTimer AnyUpdateEnemyPosTimer = new();
 
 	public bool IsUsingSmallHullValue;
 	public bool CheckContacts;
@@ -237,8 +322,21 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public bool CrouchDesired;
 	public bool InAScript;
 	public TimeUnit_t SceneTime;
+	public AI_MoveEfficiency_t MoveEfficiency;
+	public TimeUnit_t NextDecisionTime;
+	public float WakeRadius;
+	public bool InChoreo;
+	public bool UsingStandardThinkTime;
+	public long FrameBlocked;
+	public new int LastThinkTick;
 	public TimeUnit_t LastAttackTime;
 	public TimeUnit_t LastDamageTime;
+	public float InteractionYaw;
+	public readonly EHANDLE OpeningDoor = new();
+	public int DebugCurIndex;
+	public bool PlayerAvoidState;
+
+	static readonly BASEPTR CallNPCThinkPtr = static self => ((AI_BaseNPC)self).CallNPCThink();
 
 	public AI_BaseNPC() {
 		Schedule = null;
@@ -258,12 +356,29 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		SetInAScript(false);
 
+		g_AI_Manager.AddAI(this);
+
+		if (g_AI_Manager.NumAIs() == 1) {
+			AnyUpdateEnemyPosTimer.Force();
+			TimeLastSpawn = -1;
+			SpawnedThisFrame = 0;
+			NextThinkRebalanceTick = 0;
+		}
+
+		FrameBlocked = -1;
+		InChoreo = true;
+
 		SetCollisionGroup(Source.CollisionGroup.NPC);
 	}
 
 	public override void PostConstructor(ReadOnlySpan<char> classname) {
 		base.PostConstructor(classname);
 		CreateComponents();
+	}
+
+	public override void UpdateOnRemove() {
+		g_AI_Manager.RemoveAI(this);
+		base.UpdateOnRemove();
 	}
 
 	public override bool IsNPC() => true;
@@ -306,6 +421,18 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public void Forget(int memory) => Memory &= ~memory;
 	public bool HasMemory(int memory) => (Memory & memory) != 0;
 
+	public TimeUnit_t GetLastAttackTime() => LastAttackTime;
+	public TimeUnit_t GetLastDamageTime() => LastDamageTime;
+
+	public AI_Efficiency_t GetEfficiency() => Efficiency;
+	public AI_MoveEfficiency_t GetMoveEfficiency() => MoveEfficiency;
+	public void SetMoveEfficiency(AI_MoveEfficiency_t efficiency) => MoveEfficiency = efficiency;
+
+	public bool IsFlaggedEfficient() => HasSpawnFlags(SF_NPC_START_EFFICIENT);
+
+	public void RemoveSleepFlags(int flags) => SleepFlags &= ~flags;
+	public bool HasSleepFlags(int flags) => (SleepFlags & flags) == flags;
+
 	public bool IsUsingSmallHull() => IsUsingSmallHullValue;
 
 	public ref readonly Vector3 GetHullMins() => ref NAI_Hull.Mins(GetHullType());
@@ -316,6 +443,8 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public bool IsMoving() => GetNavigator()!.IsGoalSet();
 
 	public virtual float CalcYawSpeed() => -1.0f;
+
+	public virtual float HearingSensitivity() => 1.0f;
 
 	public void SetTaskStatus(TaskStatus_e status) => ScheduleState.TaskStatus = status;
 
@@ -681,7 +810,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		InitSquad();
 
-		SetThink(CallNPCThink);
+		ThinkSet(CallNPCThinkPtr, 0, default);
 
 		if (TimeLastSpawn != gpGlobals.CurTime) {
 			SpawnedThisFrame = 0;
@@ -1235,5 +1364,707 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return Squad != null;
 	}
 
-	public void CallNPCThink() => throw new NotImplementedException();
+	public bool CanThinkRebalance() {
+		if (FnThink != CallNPCThinkPtr)
+			return false;
+
+		if (InChoreo)
+			return false;
+
+		if (NPCState == NPC_STATE.NPC_STATE_DEAD)
+			return false;
+
+		if (GetSleepState() != AI_SleepState_t.AISS_AWAKE)
+			return false;
+
+		if (!UsingStandardThinkTime)
+			return false;
+
+		return true;
+	}
+
+	static int ThinkRebalanceCompare(AIRebalanceInfo_t left, AIRebalanceInfo_t right) {
+		int baseCompare = left.NextThinkTick - right.NextThinkTick;
+		if (baseCompare != 0)
+			return baseCompare;
+
+		if (!left.InPVS && !right.InPVS)
+			return 0;
+
+		if (!left.InPVS)
+			return 1;
+
+		if (!right.InPVS)
+			return -1;
+
+		if (left.DotPlayer < 0 && right.DotPlayer < 0)
+			return 0;
+
+		if (left.DotPlayer < 0)
+			return 1;
+
+		if (right.DotPlayer < 0)
+			return -1;
+
+		const float NEAR_PLAYER = 50 * 12;
+
+		if (left.DistPlayer < NEAR_PLAYER && right.DistPlayer >= NEAR_PLAYER)
+			return -1;
+
+		if (right.DistPlayer < NEAR_PLAYER && left.DistPlayer >= NEAR_PLAYER)
+			return 1;
+
+		if (left.DotPlayer > right.DotPlayer)
+			return -1;
+
+		if (left.DotPlayer < right.DotPlayer)
+			return 1;
+
+		return 0;
+	}
+
+	static long RebalancePrevTick;
+	static int RebalanceThinksInTick;
+	static int RebalanceRebalanceableThinksInTick;
+	static readonly List<AIRebalanceInfo_t> rebalanceCandidates = new(16);
+
+	public void RebalanceThinks() {
+		bool debugThinkTicks = ai_debug_think_ticks.GetBool();
+		if (debugThinkTicks) {
+			if (gpGlobals.TickCount != RebalancePrevTick) {
+				DevMsg($"NPC per tick is {RebalanceRebalanceableThinksInTick} [{RebalanceThinksInTick}] (tick {RebalancePrevTick}, frame {gpGlobals.FrameCount})\n");
+				RebalancePrevTick = gpGlobals.TickCount;
+				RebalanceThinksInTick = 0;
+				RebalanceRebalanceableThinksInTick = 0;
+			}
+			RebalanceThinksInTick++;
+			if (CanThinkRebalance())
+				RebalanceRebalanceableThinksInTick++;
+		}
+
+		if (ShouldRebalanceThinks() && gpGlobals.TickCount >= NextThinkRebalanceTick) {
+			NextThinkRebalanceTick = (int)gpGlobals.TickCount + TIME_TO_TICKS(RandomFloat(3, 5));
+
+			int i;
+
+			BasePlayer? player = AI_GetClosestPlayer();
+			Vector3 playerForward = default;
+			Vector3 playerEyePosition = default;
+
+			if (player != null)
+				player.EyePositionAndVectors(out playerEyePosition, out playerForward, out _, out _);
+
+			int ticksPer10Hz = TIME_TO_TICKS(.1);
+			long minTickRebalance = gpGlobals.TickCount - 1;
+			long maxTickRebalance = gpGlobals.TickCount + ticksPer10Hz;
+
+			for (i = 0; i < g_AI_Manager.NumAIs(); i++) {
+				AI_BaseNPC candidate = g_AI_Manager.AccessAIs()[i];
+				if (candidate.CanThinkRebalance() &&
+					(candidate.GetNextThinkTick() >= minTickRebalance &&
+					candidate.GetNextThinkTick() < maxTickRebalance)) {
+					AIRebalanceInfo_t info = default;
+
+					info.NPC = candidate;
+					info.NextThinkTick = (int)candidate.GetNextThinkTick();
+
+					if (candidate.IsFlaggedEfficient())
+						info.InPVS = false;
+					else if (player != null) {
+						Vector3 toCandidate = candidate.EyePosition() - playerEyePosition;
+						info.InPVS = Util.FindClientInPVS(candidate.Edict()) != null;
+						info.DistPlayer = MathLib.VectorNormalize(ref toCandidate);
+						info.DotPlayer = Vector3.Dot(playerForward, toCandidate);
+					}
+					else {
+						info.InPVS = true;
+						info.DotPlayer = 1;
+						info.DistPlayer = 0;
+					}
+
+					rebalanceCandidates.Add(info);
+				}
+				else if (debugThinkTicks)
+					DevMsg($"   Ignoring {candidate.GetNextThinkTick()}\n");
+			}
+
+			if (rebalanceCandidates.Count != 0) {
+				rebalanceCandidates.Sort(ThinkRebalanceCompare);
+
+				int maxThinkersPerTick = (int)MathF.Ceiling((float)(rebalanceCandidates.Count + 1) / (float)ticksPer10Hz);
+
+				long curTickDistributing = Math.Min(gpGlobals.TickCount, rebalanceCandidates[0].NextThinkTick);
+				int remainingThinksToDistribute = maxThinkersPerTick - 1;
+
+				if (debugThinkTicks) {
+					DevMsg($"Rebalance {rebalanceCandidates.Count + 1}!\n");
+					DevMsg($"   Distributing {curTickDistributing}\n");
+				}
+
+				for (i = 0; i < rebalanceCandidates.Count; i++) {
+					if (remainingThinksToDistribute == 0 || rebalanceCandidates[i].NextThinkTick > curTickDistributing) {
+						if (rebalanceCandidates[i].NextThinkTick <= curTickDistributing)
+							curTickDistributing = curTickDistributing + 1;
+						else
+							curTickDistributing = rebalanceCandidates[i].NextThinkTick;
+
+						if (debugThinkTicks)
+							DevMsg($"   Distributing {curTickDistributing}\n");
+
+						remainingThinksToDistribute = maxThinkersPerTick;
+					}
+
+					if (rebalanceCandidates[i].NPC.GetNextThinkTick() != curTickDistributing) {
+						if (debugThinkTicks)
+							DevMsg($"      Bumping {rebalanceCandidates[i].NPC.GetNextThinkTick()} to {curTickDistributing}\n");
+
+						rebalanceCandidates[i].NPC.SetNextThink(TICKS_TO_TIME((int)curTickDistributing));
+					}
+					else if (debugThinkTicks)
+						DevMsg($"      Leaving {rebalanceCandidates[i].NPC.GetNextThinkTick()}\n");
+
+					remainingThinksToDistribute--;
+				}
+			}
+
+			rebalanceCandidates.Clear();
+
+			if (debugThinkTicks) {
+				DevMsg("New distribution is:\n");
+				for (i = 0; i < g_AI_Manager.NumAIs(); i++)
+					DevMsg($"   {g_AI_Manager.AccessAIs()[i].GetNextThinkTick()}\n");
+			}
+
+			Assert(GetNextThinkTick() == TICK_NEVER_THINK);
+		}
+	}
+
+	static long PreNPCThinkPrevFrame = -1;
+	static float PreNPCThinkFrameTimeLimit = float.MaxValue;
+	static ConVar? PreNPCThinkHostTimescale;
+
+	public bool PreNPCThink() {
+		if (PreNPCThinkFrameTimeLimit == float.MaxValue)
+			PreNPCThinkHostTimescale = cvar.FindVar("host_timescale");
+
+		bool useThinkLimits = !InChoreo && ShouldUseFrameThinkLimits();
+
+#if DEBUG
+		const float NPC_THINK_LIMIT = 30.0f / 1000.0f;
+#else
+		const float NPC_THINK_LIMIT = 10.0f / 1000.0f;
+#endif
+
+		g_StartTimeCurThink = 0;
+
+		if (useThinkLimits) {
+			if (FrameBlocked == gpGlobals.FrameCount) {
+				SetNextThink(gpGlobals.CurTime);
+				return false;
+			}
+			else if (gpGlobals.FrameCount != PreNPCThinkPrevFrame) {
+				float timescale = PreNPCThinkHostTimescale!.GetFloat();
+				if (timescale < 1)
+					timescale = 1;
+
+				PreNPCThinkPrevFrame = gpGlobals.FrameCount;
+				PreNPCThinkFrameTimeLimit = NPC_THINK_LIMIT * timescale;
+				g_NpcTimeThisFrame = 0;
+			}
+			else {
+				if (g_NpcTimeThisFrame > NPC_THINK_LIMIT) {
+					TimeUnit_t timeSinceLastRealThink = gpGlobals.CurTime - LastRealThinkTime;
+					if (timeSinceLastRealThink <= .25) {
+						FrameBlocked = gpGlobals.FrameCount;
+						SetNextThink(gpGlobals.CurTime);
+						return false;
+					}
+				}
+			}
+
+			g_StartTimeCurThink = engine.Time();
+
+			FrameBlocked = -1;
+			LastThinkTick = TIME_TO_TICKS(LastRealThinkTime);
+		}
+
+		return true;
+	}
+
+	public void PostNPCThink() {
+		if (g_StartTimeCurThink != 0.0)
+			g_NpcTimeThisFrame += (float)(engine.Time() - g_StartTimeCurThink);
+	}
+
+	public void CallNPCThink() {
+		RebalanceThinks();
+
+		UsingStandardThinkTime = false;
+
+		if (!PreNPCThink())
+			return;
+
+		NPCThink();
+
+		LastRealThinkTime = gpGlobals.CurTime;
+
+		PostNPCThink();
+	}
+
+	public bool CheckPVSCondition() {
+		bool inPVS = (Util.FindClientInPVS(Edict()) != null) || (Util.ClientPVSIsExpanded() && Util.FindClientInVisibilityPVS(Edict()) != null);
+
+		if (inPVS)
+			SetCondition((int)SCOND_t.COND_IN_PVS);
+		else
+			ClearCondition((int)SCOND_t.COND_IN_PVS);
+
+		return inPVS;
+	}
+
+	public void CheckPhysicsContacts() => throw new NotImplementedException();
+
+	public void Wake(bool fireOutput = true) => throw new NotImplementedException();
+
+	public void UpdateSleepState(bool inPVS) {
+		if (GetSleepState() > AI_SleepState_t.AISS_AWAKE) {
+			BasePlayer? localPlayer = AI_GetClosestPlayer();
+			if (localPlayer == null) {
+				Wake();
+				return;
+			}
+
+			if (WakeRadius > .1 && (localPlayer.GetFlags() & EntityFlags.NoTarget) == 0 && (localPlayer.GetAbsOrigin() - GetAbsOrigin()).LengthSquared() <= WakeRadius * WakeRadius)
+				Wake();
+			else if (GetSleepState() == AI_SleepState_t.AISS_WAITING_FOR_PVS) {
+				if (inPVS)
+					Wake();
+			}
+			else if (GetSleepState() == AI_SleepState_t.AISS_WAITING_FOR_THREAT) {
+				if (HasCondition((int)SCOND_t.COND_LIGHT_DAMAGE) || HasCondition((int)SCOND_t.COND_HEAVY_DAMAGE))
+					Wake();
+				else {
+					if (inPVS) {
+						for (int i = 1; i <= gpGlobals.MaxClients; i++) {
+							BasePlayer? player = Util.PlayerByIndex(i);
+							if (player != null && (player.GetFlags() & EntityFlags.NoTarget) == 0 && player.FVisible(this))
+								Wake();
+						}
+					}
+
+					if ((GetSoundInterests() & (int)SoundInstanceType.Danger) != 0 && !HasSpawnFlags(SF_NPC_WAIT_TILL_SEEN)) {
+						int sound = SoundEnt.ActiveList();
+
+						while (sound != SOUNDLIST_EMPTY) {
+							ref WorldSoundInstance currentSound = ref SoundEnt.SoundPointerForIndex(sound);
+							Assert(!Unsafe.IsNullRef(ref currentSound));
+
+							if ((currentSound.SoundType() & SoundInstanceType.Danger) != 0 &&
+								 GetSenses()!.CanHearSound(ref currentSound) &&
+								 SoundIsVisible(ref currentSound)) {
+								Wake();
+								break;
+							}
+
+							sound = currentSound.NextSound();
+						}
+					}
+				}
+			}
+		}
+		else {
+			if (!IsInAScript() && NPCState != NPC_STATE.NPC_STATE_SCRIPT) {
+				if (HasSleepFlags(AI_SLEEP_FLAG_AUTO_PVS)) {
+					if (!HasCondition((int)SCOND_t.COND_IN_PVS)) {
+						SetSleepState(AI_SleepState_t.AISS_WAITING_FOR_PVS);
+						Sleep();
+					}
+				}
+				if (HasSleepFlags(AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS)) {
+					if (HasCondition((int)SCOND_t.COND_IN_PVS)) {
+						AddSleepFlags(AI_SLEEP_FLAG_AUTO_PVS);
+						RemoveSleepFlags(AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS);
+					}
+				}
+			}
+		}
+	}
+
+	public bool SoundIsVisible(ref WorldSoundInstance sound) => throw new NotImplementedException();
+
+	static Vector3 UpdateEfficiencyPlayerEyePosition;
+	static Vector3 UpdateEfficiencyPlayerForward;
+	static long UpdateEfficiencyPrevFrame = -1;
+
+	static readonly AI_Efficiency_t[] EfficiencyMappings = [
+		AI_Efficiency_t.AIE_NORMAL,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_VERY_EFFICIENT,
+		AI_Efficiency_t.AIE_VERY_EFFICIENT,
+		AI_Efficiency_t.AIE_SUPER_EFFICIENT,
+		AI_Efficiency_t.AIE_SUPER_EFFICIENT,
+
+		AI_Efficiency_t.AIE_NORMAL,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_NORMAL,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_VERY_EFFICIENT,
+		AI_Efficiency_t.AIE_SUPER_EFFICIENT,
+
+		AI_Efficiency_t.AIE_NORMAL,
+		AI_Efficiency_t.AIE_NORMAL,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_NORMAL,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_NORMAL,
+		AI_Efficiency_t.AIE_EFFICIENT,
+		AI_Efficiency_t.AIE_VERY_EFFICIENT,
+	];
+
+	static readonly int[] EfficiencyStateBase = [0, 9, 18];
+
+	public void UpdateEfficiency(bool inPVS) {
+		if (GetSleepState() != AI_SleepState_t.AISS_AWAKE) {
+			SetEfficiency(AI_Efficiency_t.AIE_DORMANT);
+			return;
+		}
+
+		InChoreo = GetState() == NPC_STATE.NPC_STATE_SCRIPT || IsCurSchedule(SCHED_SCENE_GENERIC, false);
+
+		if (!ShouldUseEfficiency()) {
+			SetEfficiency(AI_Efficiency_t.AIE_NORMAL);
+			SetMoveEfficiency(AI_MoveEfficiency_t.AIME_NORMAL);
+			return;
+		}
+
+		BasePlayer? player = AI_GetClosestPlayer();
+		if (gpGlobals.FrameCount != UpdateEfficiencyPrevFrame) {
+			UpdateEfficiencyPrevFrame = gpGlobals.FrameCount;
+			if (player != null)
+				player.EyePositionAndVectors(out UpdateEfficiencyPlayerEyePosition, out UpdateEfficiencyPlayerForward, out _, out _);
+		}
+
+		Vector3 toNPC = GetAbsOrigin() - UpdateEfficiencyPlayerEyePosition;
+		float playerDist = MathLib.VectorNormalize(ref toNPC);
+		bool playerFacing;
+
+		bool clientPVSExpanded = Util.ClientPVSIsExpanded();
+
+		if (player != null)
+			playerFacing = clientPVSExpanded || (inPVS && Vector3.Dot(UpdateEfficiencyPlayerForward, toNPC) > 0);
+		else {
+			playerDist = 0;
+			playerFacing = true;
+		}
+
+		bool inVisibilityPVS = clientPVSExpanded && Util.FindClientInVisibilityPVS(Edict()) != null;
+
+		if ((inPVS && (playerFacing || playerDist < 25 * 12)) || clientPVSExpanded)
+			SetMoveEfficiency(AI_MoveEfficiency_t.AIME_NORMAL);
+		else
+			SetMoveEfficiency(AI_MoveEfficiency_t.AIME_EFFICIENT);
+
+		if (ai_efficiency_override.GetInt() > (int)AI_Efficiency_t.AIE_NORMAL && ai_efficiency_override.GetInt() <= (int)AI_Efficiency_t.AIE_DORMANT) {
+			SetEfficiency((AI_Efficiency_t)ai_efficiency_override.GetInt());
+			return;
+		}
+
+		if (gpGlobals.CurTime - GetLastAttackTime() < .15) {
+			SetEfficiency(AI_Efficiency_t.AIE_NORMAL);
+			return;
+		}
+
+		bool framerateOk = gpGlobals.FrameTime < ai_frametime_limit.GetFloat();
+
+		if (ForceConditionsGather ||
+			 gpGlobals.CurTime - GetLastAttackTime() < .2 ||
+			 gpGlobals.CurTime - LastDamageTime < .2 ||
+			 (GetState() < NPC_STATE.NPC_STATE_IDLE || GetState() > NPC_STATE.NPC_STATE_SCRIPT) ||
+			 ((inPVS || inVisibilityPVS) &&
+			   ((GetTask() != null && !TaskIsRunning()) ||
+				 GetTaskInterrupt() > 0 ||
+				 InChoreo))) {
+			SetEfficiency(framerateOk ? AI_Efficiency_t.AIE_NORMAL : AI_Efficiency_t.AIE_EFFICIENT);
+			return;
+		}
+
+		AI_Efficiency_t minEfficiency;
+
+		if (!ShouldDefaultEfficient())
+			minEfficiency = framerateOk ? AI_Efficiency_t.AIE_NORMAL : AI_Efficiency_t.AIE_EFFICIENT;
+		else
+			minEfficiency = framerateOk ? AI_Efficiency_t.AIE_EFFICIENT : AI_Efficiency_t.AIE_VERY_EFFICIENT;
+
+		bool potentialDanger = false;
+
+		if ((GetSoundInterests() & (int)SoundInstanceType.Danger) != 0) {
+			int sound = SoundEnt.ActiveList();
+
+			while (sound != SOUNDLIST_EMPTY) {
+				ref WorldSoundInstance currentSound = ref SoundEnt.SoundPointerForIndex(sound);
+
+				float hearingSensitivity = HearingSensitivity();
+				Vector3 earPosition = EarPosition();
+
+				if (!Unsafe.IsNullRef(ref currentSound) && (SoundInstanceType.Danger & currentSound.SoundType()) != 0) {
+					float hearDistanceSq = currentSound.Volume() * hearingSensitivity;
+					hearDistanceSq *= hearDistanceSq;
+					if (Vector3.DistanceSquared(currentSound.GetSoundOrigin(), earPosition) <= hearDistanceSq) {
+						potentialDanger = true;
+						break;
+					}
+				}
+
+				sound = currentSound.NextSound();
+			}
+		}
+
+		if (potentialDanger) {
+			SetEfficiency(minEfficiency);
+			return;
+		}
+
+		if (player == null) {
+			SetEfficiency(minEfficiency);
+			return;
+		}
+
+		const int DIST_NEAR = 0;
+		const int DIST_MID = 1;
+		const int DIST_FAR = 2;
+
+		int range;
+		if (inPVS) {
+			if (playerDist < 15 * 12) {
+				SetEfficiency(minEfficiency);
+				return;
+			}
+
+			range = (playerDist < 50 * 12) ? DIST_NEAR :
+					(playerDist < 200 * 12) ? DIST_MID : DIST_FAR;
+		}
+		else {
+			range = (playerDist < 25 * 12) ? DIST_NEAR :
+					(playerDist < 100 * 12) ? DIST_MID : DIST_FAR;
+		}
+
+		NPC_STATE state = GetState();
+		if (state == NPC_STATE.NPC_STATE_SCRIPT)
+			state = NPC_STATE.NPC_STATE_ALERT;
+
+		const int NOT_FACING_OFFSET = 3;
+		const int NO_PVS_OFFSET = 6;
+
+		int stateOffset = EfficiencyStateBase[state - NPC_STATE.NPC_STATE_IDLE];
+		int facingOffset = (!inPVS || playerFacing) ? 0 : NOT_FACING_OFFSET;
+		int pvsOffset = inPVS ? 0 : NO_PVS_OFFSET;
+		int mapping = stateOffset + pvsOffset + facingOffset + range;
+
+		Assert(mapping < EfficiencyMappings.Length);
+
+		AI_Efficiency_t efficiency = EfficiencyMappings[mapping];
+
+		AI_Efficiency_t maxEfficiency = AI_Efficiency_t.AIE_SUPER_EFFICIENT;
+		if (inVisibilityPVS && state >= NPC_STATE.NPC_STATE_ALERT)
+			maxEfficiency = AI_Efficiency_t.AIE_EFFICIENT;
+		else if (inVisibilityPVS || HasCondition((int)SCOND_t.COND_SEE_PLAYER))
+			maxEfficiency = AI_Efficiency_t.AIE_VERY_EFFICIENT;
+
+		SetEfficiency((AI_Efficiency_t)Math.Clamp((int)efficiency, (int)minEfficiency, (int)maxEfficiency));
+	}
+
+	public void GetPlayerAvoidBounds(out Vector3 mins, out Vector3 maxs) {
+		mins = WorldAlignMins();
+		maxs = WorldAlignMaxs();
+	}
+
+	public void SetPlayerAvoidState() {
+		bool shouldPlayerAvoid = false;
+
+		Animation.GetSequenceLinearMotion(GetModelPtr(), GetSequence(), GetPoseParameterArray(), out Vector3 nothing);
+		bool isMoving = IsMoving() || nothing != vec3_origin;
+
+		if (PerformAvoidance || (ShouldPlayerAvoid() && isMoving)) {
+			GetPlayerAvoidBounds(out Vector3 mins, out Vector3 maxs);
+
+			BasePlayer? localPlayer = AI_GetClosestPlayer();
+			if (localPlayer != null) {
+				shouldPlayerAvoid = CollisionUtils.IsBoxIntersectingBox(GetAbsOrigin() + mins, GetAbsOrigin() + maxs,
+					localPlayer.GetAbsOrigin() + localPlayer.WorldAlignMins(), localPlayer.GetAbsOrigin() + localPlayer.WorldAlignMaxs());
+			}
+
+			if (ai_debug_avoidancebounds.GetBool()) {
+				int red = shouldPlayerAvoid ? 255 : 0;
+
+				DebugOverlay.Box(GetAbsOrigin(), mins, maxs, red, 0, 255, 64, 0.1f);
+			}
+		}
+
+		PlayerAvoidState = ShouldPlayerAvoid();
+		PerformAvoidance = shouldPlayerAvoid;
+
+		if (GetCollisionGroup() == Source.CollisionGroup.NPC || GetCollisionGroup() == Source.CollisionGroup.NPCActor) {
+			if (PerformAvoidance == true)
+				SetCollisionGroup(Source.CollisionGroup.NPCActor);
+			else
+				SetCollisionGroup(Source.CollisionGroup.NPC);
+		}
+	}
+
+	public bool PreThink() {
+		if (g_DisableAI.GetBool()) {
+			SetActivity(Activity.ACT_IDLE);
+			return false;
+		}
+
+		if ((DebugBits & bits_debugDisableAI) != 0 || !AI_NetworkManager.NetworksLoaded()) {
+			SetActivity(Activity.ACT_IDLE);
+			return false;
+		}
+
+		if ((DebugBits & bits_debugStepAI) != 0) {
+			if (DebugCurIndex >= DebugPauseIndex) {
+				if (!GetNavigator()!.IsGoalActive())
+					PlaybackRate = 0;
+				return false;
+			}
+			else
+				PlaybackRate = 1;
+		}
+
+		if (OpeningDoor.Get() != null && AIIsDebuggingDoors(this))
+			DebugOverlay.Line(EyePosition(), OpeningDoor.Get()!.WorldSpaceCenter(), 255, 255, 255, false, .1f);
+
+		return true;
+	}
+
+	public virtual void RunAI() => throw new NotImplementedException();
+	public virtual bool AutoMovement(BaseEntity? target = null) => throw new NotImplementedException();
+	public virtual void PostRun() => throw new NotImplementedException();
+	public virtual void PerformMovement() => throw new NotImplementedException();
+	public virtual void PostMovement() => throw new NotImplementedException();
+
+	static readonly float[] g_DecisionIntervals = [
+		.1f,
+		.2f,
+		.4f,
+		.6f,
+	];
+
+	static readonly string[] ppszEfficiencies = [
+		"AIE_NORMAL",
+		"AIE_EFFICIENT",
+		"AIE_VERY_EFFICIENT",
+		"AIE_SUPER_EFFICIENT",
+		"AIE_DORMANT",
+	];
+
+	static readonly string[] ppszMoveEfficiencies = [
+		"AIME_NORMAL",
+		"AIME_EFFICIENT",
+	];
+
+	public virtual void NPCThink() {
+		if (CheckContacts)
+			CheckPhysicsContacts();
+
+		Assert(!(NPCState == NPC_STATE.NPC_STATE_DEAD && LifeState == (int)Source.LifeState.Alive));
+
+		SetNextThink(TICK_NEVER_THINK);
+
+		bool inPVS = CheckPVSCondition();
+
+		UpdateSleepState(inPVS);
+
+		bool ranDecision = false;
+
+		if (GetEfficiency() < AI_Efficiency_t.AIE_DORMANT && GetSleepState() == AI_SleepState_t.AISS_AWAKE) {
+			float thinkLimit = ai_show_think_tolerance.GetFloat();
+
+			if (thinkLimit > 0)
+				g_AIRunTimer.Restart();
+
+			if (g_pAINetworkManager != null && g_pAINetworkManager.IsInitialized()) {
+				SetPlayerAvoidState();
+
+				if (PreThink()) {
+					if (NextDecisionTime <= gpGlobals.CurTime) {
+						ranDecision = true;
+						ScheduleState.TaskRanAutomovement = false;
+						ScheduleState.TaskUpdatedYaw = false;
+						RunAI();
+					}
+					else {
+						if (ScheduleState.TaskRanAutomovement)
+							AutoMovement();
+						if (ScheduleState.TaskUpdatedYaw)
+							GetMotor()!.UpdateYaw();
+					}
+
+					PostRun();
+
+					PerformMovement();
+
+					IsMovingValue = IsMoving();
+
+					PostMovement();
+
+					SetSimulationTime(gpGlobals.CurTime);
+				}
+				else {
+					PostRun();
+					IsMovingValue = IsMoving();
+					PostMovement();
+					SetSimulationTime(gpGlobals.CurTime);
+					TimeLastMovement = float.MaxValue;
+				}
+			}
+
+			if (thinkLimit > 0) {
+				g_AIRunTimer.Stop();
+
+				float thinkTime = (float)g_AIRunTimer.Elapsed.TotalMilliseconds;
+
+				if (thinkTime > thinkLimit) {
+					int color = (int)MathLib.RemapVal(thinkTime, thinkLimit, thinkLimit * 3, 96.0f, 255.0f);
+					if (color > 255)
+						color = 255;
+					else if (color < 96)
+						color = 96;
+
+					Vector3 vecPoint = EyePosition() + new Vector3(0, 0, 12);
+					MathLib.AngleVectors(GetAbsAngles(), out _, out Vector3 right, out _);
+					DebugOverlay.Line(vecPoint, vecPoint + new Vector3(0, 0, 64), color, 0, 0, false, 1.0f);
+					DebugOverlay.Line(vecPoint, vecPoint + new Vector3(0, 0, 16) + right * 16, color, 0, 0, false, 1.0f);
+					DebugOverlay.Line(vecPoint, vecPoint + new Vector3(0, 0, 16) - right * 16, color, 0, 0, false, 1.0f);
+				}
+			}
+		}
+
+		UsingStandardThinkTime = GetNextThinkTick() == TICK_NEVER_THINK;
+
+		UpdateEfficiency(inPVS);
+
+		if (UsingStandardThinkTime) {
+			if (ai_debug_efficiency.GetBool())
+				DevMsg($"Eff: {ppszEfficiencies[(int)GetEfficiency()]}, Move: {ppszMoveEfficiencies[(int)GetMoveEfficiency()]}\n");
+
+			if (ranDecision)
+				NextDecisionTime = gpGlobals.CurTime + g_DecisionIntervals[(int)GetEfficiency()];
+
+			if (GetMoveEfficiency() == AI_MoveEfficiency_t.AIME_NORMAL || GetEfficiency() == AI_Efficiency_t.AIE_NORMAL)
+				SetNextThink(gpGlobals.CurTime + .1);
+			else
+				SetNextThink(gpGlobals.CurTime + .2);
+		}
+		else
+			NextDecisionTime = 0;
+	}
 }
