@@ -1965,7 +1965,7 @@ public partial class BaseEntity : IServerEntity
 
 	public Edict Edict() => NetworkProp().Edict();
 
-	public void PostConstructor(ReadOnlySpan<char> classname) {
+	public virtual void PostConstructor(ReadOnlySpan<char> classname) {
 		if (!classname.IsEmpty)
 			SetClassname(classname);
 

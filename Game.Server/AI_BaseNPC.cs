@@ -228,6 +228,11 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public bool InAScript;
 	public TimeUnit_t SceneTime;
 
+	public override void PostConstructor(ReadOnlySpan<char> classname) {
+		base.PostConstructor(classname);
+		CreateComponents();
+	}
+
 	public override bool IsNPC() => true;
 
 	public override Mask PhysicsSolidMaskForEntity() => Mask.NPCSolid;
