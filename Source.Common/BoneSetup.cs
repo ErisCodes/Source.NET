@@ -1392,6 +1392,58 @@ public ref struct BoneSetup
 		}
 	}
 
+	public static void Studio_BuildMatrices(StudioHdr studioHdr, in QAngle angles, in Vector3 origin, ReadOnlySpan<Vector3> pos, ReadOnlySpan<Quaternion> q, int iBone, float flScale, Span<Matrix3x4> bonetoworld, int boneMask) {
+		int i, j;
+
+		Span<int> chain = stackalloc int[Studio.MAXSTUDIOBONES];
+		int chainlength = 0;
+
+		if (iBone < -1 || iBone >= studioHdr.NumBones())
+			iBone = 0;
+
+		if (iBone == -1) {
+			chainlength = studioHdr.NumBones();
+			for (i = 0; i < studioHdr.NumBones(); i++)
+				chain[chainlength - i - 1] = i;
+		}
+		else {
+			i = iBone;
+			while (i != -1) {
+				chain[chainlength++] = i;
+				i = studioHdr.BoneParent(i);
+			}
+		}
+
+		MathLib.AngleMatrix(angles, origin, out Matrix3x4 rotationmatrix);
+
+		if (flScale < 1.0f - FLT_EPSILON || flScale > 1.0f + FLT_EPSILON) {
+			MathLib.MatrixGetColumn(rotationmatrix, 3, out Vector3 vecOffset);
+			vecOffset -= origin;
+			vecOffset *= flScale;
+			vecOffset += origin;
+			MathLib.MatrixSetColumn(vecOffset, 3, ref rotationmatrix);
+
+			for (int row = 0; row < 3; row++) {
+				Span<float> r = rotationmatrix[row];
+				r[0] *= flScale;
+				r[1] *= flScale;
+				r[2] *= flScale;
+			}
+		}
+
+		for (j = chainlength - 1; j >= 0; j--) {
+			i = chain[j];
+			if ((studioHdr.BoneFlags(i) & boneMask) != 0) {
+				MathLib.QuaternionMatrix(q[i], pos[i], out Matrix3x4 bonematrix);
+
+				if (studioHdr.BoneParent(i) == -1)
+					MathLib.ConcatTransforms(rotationmatrix, bonematrix, out bonetoworld[i]);
+				else
+					MathLib.ConcatTransforms(bonetoworld[studioHdr.BoneParent(i)], bonematrix, out bonetoworld[i]);
+			}
+		}
+	}
+
 	public static int Studio_FindAttachment(StudioHdr hdr, ReadOnlySpan<char> attachmentName) {
 		if (hdr != null && hdr.SequencesAvailable()) {
 			for (int i = 0; i < hdr.GetNumAttachments(); i++) {
