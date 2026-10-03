@@ -55,6 +55,19 @@ public static class AI_BaseNPCGlobals
 	public const int AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS = 0x00000002;
 }
 
+public struct AIScheduleState_t
+{
+	public int CurTask;
+	public TaskStatus_e TaskStatus;
+	public float TimeStarted;
+	public float TimeCurTaskStarted;
+	public int TaskFailureCode;
+	public int TaskInterrupt;
+	public bool TaskRanAutomovement;
+	public bool TaskUpdatedYaw;
+	public bool ScheduleWasInterrupted;
+}
+
 public enum AI_Efficiency_t
 {
 	AIE_NORMAL,
@@ -189,7 +202,15 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public AI_Squad? Squad;
 	public string? SquadName;
 
+	public static readonly AI_ClassScheduleIdSpace ClassScheduleIdSpace = new(true);
+	public static readonly AI_GlobalScheduleNamespace SchedulingSymbols = new();
+
 	public bool IsUsingSmallHullValue;
+	public AIScheduleState_t ScheduleState;
+	public AI_Schedule? Schedule;
+	public int IdealSchedule;
+	public AI_ScheduleBits ConditionsPreIgnore;
+	public AI_ScheduleBits InverseIgnoreConditions;
 
 	public override bool IsNPC() => true;
 
@@ -197,10 +218,90 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public override void Precache() => throw new NotImplementedException();
 
+	public virtual bool LoadedSchedules() => true;
+
+	public virtual AI_ClassScheduleIdSpace GetClassScheduleIdSpace() => ClassScheduleIdSpace;
+
+	public static AI_GlobalScheduleNamespace GetSchedulingSymbols() => SchedulingSymbols;
+
 	public bool IsUsingSmallHull() => IsUsingSmallHullValue;
 
 	public ref readonly Vector3 GetHullMins() => ref NAI_Hull.Mins(GetHullType());
 	public ref readonly Vector3 GetHullMaxs() => ref NAI_Hull.Maxs(GetHullType());
+
+	public void SetTaskStatus(TaskStatus_e status) => ScheduleState.TaskStatus = status;
+
+	public void ResetScheduleCurTaskIndex() {
+		ScheduleState.CurTask = 0;
+		ScheduleState.TaskInterrupt = 0;
+		ScheduleState.TaskRanAutomovement = false;
+		ScheduleState.TaskUpdatedYaw = false;
+	}
+
+	public AI_Schedule? GetCurSchedule() => Schedule;
+
+	public bool IsCurSchedule(int schedId, bool ideal = true) {
+		if (Schedule == null)
+			return schedId == SCHED_NONE || schedId == AI_RemapToGlobal(SCHED_NONE);
+
+		schedId = AI_IdIsLocal(schedId) ? GetClassScheduleIdSpace().ScheduleLocalToGlobal(schedId) : schedId;
+		if (ideal)
+			return schedId == IdealSchedule;
+
+		return Schedule.GetId() == schedId;
+	}
+
+	public Task_t? GetTask() => throw new NotImplementedException();
+	public bool TaskIsRunning() => throw new NotImplementedException();
+	public int GetTaskInterrupt() => throw new NotImplementedException();
+
+	int InterruptFromCondition(int condition) => AI_RemapFromGlobal(AI_IdIsLocal(condition) ? GetClassScheduleIdSpace().ConditionLocalToGlobal(condition) : condition);
+
+	public virtual void SetCondition(int condition) {
+		int interrupt = InterruptFromCondition(condition);
+
+		if (interrupt == -1) {
+			Assert(false);
+			return;
+		}
+
+		Conditions.Set(interrupt);
+	}
+
+	public bool HasCondition(int condition) {
+		int interrupt = InterruptFromCondition(condition);
+
+		if (interrupt == -1) {
+			Assert(false);
+			return false;
+		}
+
+		bool ret = Conditions.IsBitSet(interrupt);
+		return ret;
+	}
+
+	public void ClearCondition(int condition) {
+		int interrupt = InterruptFromCondition(condition);
+
+		if (interrupt == -1) {
+			Assert(false);
+			return;
+		}
+
+		Conditions.Clear(interrupt);
+	}
+
+	public void ClearAttackConditions() {
+		ClearCondition((int)SCOND_t.COND_CAN_RANGE_ATTACK1);
+		ClearCondition((int)SCOND_t.COND_CAN_RANGE_ATTACK2);
+		ClearCondition((int)SCOND_t.COND_CAN_MELEE_ATTACK1);
+		ClearCondition((int)SCOND_t.COND_CAN_MELEE_ATTACK2);
+		ClearCondition((int)SCOND_t.COND_WEAPON_HAS_LOS);
+		ClearCondition((int)SCOND_t.COND_WEAPON_BLOCKED_BY_FRIEND);
+		ClearCondition((int)SCOND_t.COND_WEAPON_PLAYER_IN_SPREAD);
+		ClearCondition((int)SCOND_t.COND_WEAPON_PLAYER_NEAR_TARGET);
+		ClearCondition((int)SCOND_t.COND_WEAPON_SIGHT_OCCLUDED);
+	}
 
 	public virtual int SelectSchedule() => throw new NotImplementedException();
 
@@ -587,7 +688,18 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual void ClearCommandGoal() => throw new NotImplementedException();
 
-	public void ClearSchedule(string? reason) => throw new NotImplementedException();
+	public void ClearSchedule(string? reason) {
+		if (reason != null && (DebugOverlays & DebugOverlayBits.TaskText) != 0)
+			DevMsg($"  Schedule cleared: {reason}\n");
+
+		ScheduleState.TimeCurTaskStarted = ScheduleState.TimeStarted = 0;
+		ScheduleState.ScheduleWasInterrupted = true;
+		SetTaskStatus(TaskStatus_e.TASKSTATUS_NEW);
+		IdealSchedule = SCHED_NONE;
+		Schedule = null;
+		ResetScheduleCurTaskIndex();
+		InverseIgnoreConditions.SetAll();
+	}
 
 	public virtual bool SetSchedule(int localScheduleID) => throw new NotImplementedException();
 
