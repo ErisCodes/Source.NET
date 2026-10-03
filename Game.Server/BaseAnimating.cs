@@ -166,7 +166,56 @@ public class BaseAnimating : BaseEntity
 
 	public bool ComputeHitboxSurroundingBox(out Vector3 vecWorldMins, out Vector3 vecWorldMaxs) => throw new NotImplementedException();
 
-	public virtual void InitBoneControllers() => throw new NotImplementedException();
+	public const int NUM_POSEPAREMETERS = 24;
+	public const int NUM_BONECTRLS = 4;
+
+	public virtual void InitBoneControllers() {
+		int i;
+
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return;
+
+		int boneControllerCount = studioHdr.NumBoneControllers();
+		if (boneControllerCount > NUM_BONECTRLS) {
+			boneControllerCount = NUM_BONECTRLS;
+#if DEBUG
+			Warning($"Model {studioHdr.Name()} has too many bone controllers! (Max {NUM_BONECTRLS} allowed)\n");
+#endif
+		}
+
+		for (i = 0; i < boneControllerCount; i++)
+			SetBoneController(i, 0.0f);
+
+		Assert(studioHdr.SequencesAvailable());
+
+		if (studioHdr.SequencesAvailable()) {
+			for (i = 0; i < studioHdr.GetNumPoseParameters(); i++)
+				SetPoseParameter(i, 0.0f);
+		}
+	}
+
+	public float SetBoneController(int controller, float value) {
+		Assert(GetModelPtr() != null);
+
+		StudioHdr? model = GetModelPtr();
+
+		Assert(controller >= 0 && controller < NUM_BONECTRLS);
+
+		float retVal = BoneSetup.Studio_SetController(model, controller, value, out float newValue);
+		EncodedController[controller] = newValue;
+
+		return retVal;
+	}
+
+	public float GetBoneController(int controller) {
+		Assert(GetModelPtr() != null);
+
+		StudioHdr? model = GetModelPtr();
+
+		return BoneSetup.Studio_GetController(model, controller, EncodedController[controller]);
+	}
+
 	public void ResetActivityIndexes() => throw new NotImplementedException();
 	public void ResetEventIndexes() => throw new NotImplementedException();
 

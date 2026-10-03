@@ -1376,6 +1376,70 @@ public ref struct BoneSetup
 		return ctlValue * (PoseParam.End - PoseParam.Start) + PoseParam.Start;
 	}
 
+	static MStudioBoneController? FindController(StudioHdr studioHdr, int controller) {
+		for (int i = 0; i < studioHdr.NumBoneControllers(); i++) {
+			if (studioHdr.BoneController(i).InputField == controller)
+				return studioHdr.BoneController(i);
+		}
+
+		return null;
+	}
+
+	public static float Studio_SetController(StudioHdr? studioHdr, int controller, float value, out float ctlValue) {
+		if (studioHdr == null) {
+			ctlValue = default;
+			return value;
+		}
+
+		MStudioBoneController? boneController = FindController(studioHdr, controller);
+		if (boneController == null) {
+			ctlValue = 0;
+			return value;
+		}
+
+		if ((boneController.Type & (StudioMotionFlags.XR | StudioMotionFlags.YR | StudioMotionFlags.ZR)) != 0) {
+			if (boneController.End < boneController.Start)
+				value = -value;
+
+			if (boneController.Start + 359.0 >= boneController.End) {
+				if (value > ((boneController.Start + boneController.End) / 2.0) + 180)
+					value = value - 360;
+				if (value < ((boneController.Start + boneController.End) / 2.0) - 180)
+					value = value + 360;
+			}
+			else {
+				if (value > 360)
+					value = (float)(value - (int)(value / 360.0) * 360.0);
+				else if (value < 0)
+					value = (float)(value + (int)((value / -360.0) + 1) * 360.0);
+			}
+		}
+
+		ctlValue = (value - boneController.Start) / (boneController.End - boneController.Start);
+		if (ctlValue < 0) ctlValue = 0;
+		if (ctlValue > 1) ctlValue = 1;
+
+		float returnVal = (float)((1.0 - ctlValue) * boneController.Start + ctlValue * boneController.End);
+
+		if ((boneController.Type & (StudioMotionFlags.XR | StudioMotionFlags.YR | StudioMotionFlags.ZR)) != 0 &&
+			boneController.End < boneController.Start) {
+			returnVal *= -1;
+		}
+
+		return returnVal;
+	}
+
+	public static float Studio_GetController(StudioHdr? studioHdr, int controller, float ctlValue) {
+		if (studioHdr == null)
+			return 0.0f;
+
+		MStudioBoneController? boneController = FindController(studioHdr, controller);
+		if (boneController == null)
+			return 0;
+
+		return ctlValue * (boneController.End - boneController.Start) + boneController.Start;
+	}
+
 	public void CalcAutoplaySequences(Span<Vector3> pos, Span<Quaternion> q, TimeUnit_t realTime, object? ikContext) {
 		int count = studioHdr.GetAutoplayList(out Span<short> pList);
 		for (int i = 0; i < count; i++) {

@@ -1244,6 +1244,57 @@ public class MStudioPoseParamDesc
 		br.Read(out Loop);
 	}
 }
+
+[Flags]
+public enum StudioMotionFlags
+{
+	X = 0x00000001,
+	Y = 0x00000002,
+	Z = 0x00000004,
+	XR = 0x00000008,
+	YR = 0x00000010,
+	ZR = 0x00000020,
+
+	LX = 0x00000040,
+	LY = 0x00000080,
+	LZ = 0x00000100,
+	LXR = 0x00000200,
+	LYR = 0x00000400,
+	LZR = 0x00000800,
+
+	Linear = 0x00001000,
+
+	Types = 0x0003FFFF,
+	RLoop = 0x00040000
+}
+
+public class MStudioBoneController
+{
+	public const int SIZEOF = 56;
+	public static MStudioBoneController FACTORY(object caller, Memory<byte> data) => new(data);
+
+	public Memory<byte> Data;
+
+	public int Bone;
+	private int type;
+	public StudioMotionFlags Type => (StudioMotionFlags)type;
+	public float Start;
+	public float End;
+	public int Rest;
+	public int InputField;
+
+	public MStudioBoneController(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(Data.Span);
+		br.Read(out Bone);
+		br.Read(out type);
+		br.Read(out Start);
+		br.Read(out End);
+		br.Read(out Rest);
+		br.Read(out InputField);
+	}
+}
+
 public enum StudioAutolayerFlags
 {
 	Post = 0x0010,
@@ -1618,6 +1669,8 @@ public class StudioHdr
 			studioHdr.SetActivityListVersion(version);
 		}
 	}
+
+	public MStudioBoneController BoneController(int i) => studioHdr!.BoneController(i);
 
 	public MStudioAnimDesc Animdesc(int i) {
 		if (vModel == null)
@@ -2087,6 +2140,9 @@ public class StudioHeader
 
 	public int NumBoneControllers;
 	public int BoneControllerIndex;
+	MStudioBoneController[]? boneControllerCache;
+	public MStudioBoneController BoneController(int i)
+		=> Studio.ProduceArrayIdx(this, ref boneControllerCache, NumBoneControllers, BoneControllerIndex, i, MStudioBoneController.SIZEOF, Data, MStudioBoneController.FACTORY);
 
 	public int NumHitboxSets;
 	public int HitboxSetIndex;
