@@ -150,6 +150,29 @@ public partial class BaseCombatCharacter : BaseFlex
 	public Hull_t GetHullType() => Hull;
 	public void SetHullType(Hull_t hullType) => Hull = hullType;
 
+	public virtual Activity Weapon_TranslateActivity(Activity baseAct, ref bool required) {
+		Activity translated = baseAct;
+
+		if (ActiveWeapon.Get() != null)
+			translated = ActiveWeapon.Get()!.ActivityOverride(baseAct, ref required);
+		else
+			required = false;
+
+		return translated;
+	}
+
+	public virtual Activity NPC_TranslateActivity(Activity baseAct) => baseAct;
+
+	public void Weapon_SetActivity(Activity newActivity, float duration) {
+		if (ActiveWeapon.Get() != null)
+			ActiveWeapon.Get()!.SetActivity(newActivity, duration);
+	}
+
+	public virtual void Weapon_FrameUpdate() {
+		if (ActiveWeapon.Get() != null)
+			ActiveWeapon.Get()!.Operator_FrameUpdate(this);
+	}
+
 	public BaseCombatWeapon? Weapon_Create(ReadOnlySpan<char> weaponName) => throw new NotImplementedException();
 	public virtual void Weapon_Equip(BaseCombatWeapon weapon) => throw new NotImplementedException();
 

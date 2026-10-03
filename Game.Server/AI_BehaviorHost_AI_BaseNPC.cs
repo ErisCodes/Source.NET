@@ -36,11 +36,24 @@ public class AI_BehaviorHost_AI_BaseNPC : AI_BaseNPC, IBehaviorBackBridge
 		return base.SelectSchedule();
 	}
 
+	public override Activity NPC_TranslateActivity(Activity activity) {
+		if (CurBehavior != null)
+			return CurBehavior.BridgeNPC_TranslateActivity(activity);
+		return base.NPC_TranslateActivity(activity);
+	}
+
 	public override bool ShouldPlayerAvoid() {
 		if (CurBehavior != null)
 			return CurBehavior.BridgeShouldPlayerAvoid();
 
 		return base.ShouldPlayerAvoid();
+	}
+
+	public override bool IsCrouching() {
+		if (CurBehavior != null)
+			return CurBehavior.BridgeIsCrouching();
+
+		return base.IsCrouching();
 	}
 
 	public virtual void OnChangeRunningBehavior(AI_BehaviorBase? oldBehavior, AI_BehaviorBase? newBehavior) { }

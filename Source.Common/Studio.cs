@@ -1949,8 +1949,25 @@ public class StudioHdr
 			}
 		}
 
+		public int NumSequencesForActivity(int forActivity) {
+			if (SequenceTuples == null)
+				return 0;
+
+			if (ActToSeqHash.TryGetValue(forActivity, out HashValueType entry))
+				return entry.Count;
+			else
+				return 0;
+		}
+
 		public SequenceTuple[]? SequenceTuples;
 		public readonly Dictionary<int, HashValueType> ActToSeqHash = [];
+	}
+
+	public bool HaveSequenceForActivity(int activity) {
+		if (!ActivityToSequence.IsInitialized())
+			ActivityToSequence.Initialize(this);
+
+		return ActivityToSequence.NumSequencesForActivity(activity) > 0;
 	}
 
 

@@ -1117,6 +1117,7 @@ public partial class
 		Assert(vm.ViewModelIndex() == nViewModelIndex);
 		vm.SendViewModelMatchingSequence(sequence);
 	}
+	public virtual void SetActivity(Activity act, float duration) => throw new NotImplementedException();
 	public void SetActivity(Activity activity) => Activity = activity;
 	public bool SendWeaponAnim(Activity act) {
 		return SetIdealActivity((Activity)act);

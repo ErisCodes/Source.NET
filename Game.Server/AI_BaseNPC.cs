@@ -214,11 +214,16 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public static readonly AI_GlobalScheduleNamespace SchedulingSymbols = new();
 
 	public bool IsUsingSmallHullValue;
+	public Vector3 DefaultEyeOffset;
 	public AIScheduleState_t ScheduleState;
 	public AI_Schedule? Schedule;
 	public int IdealSchedule;
 	public AI_ScheduleBits ConditionsPreIgnore;
 	public AI_ScheduleBits InverseIgnoreConditions;
+	public Activity TranslatedActivity;
+	public bool Crouching;
+	public bool ForceCrouch;
+	public bool CrouchDesired;
 	public bool InAScript;
 	public TimeUnit_t SceneTime;
 
@@ -248,6 +253,8 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public ref readonly Vector3 GetHullMins() => ref NAI_Hull.Mins(GetHullType());
 	public ref readonly Vector3 GetHullMaxs() => ref NAI_Hull.Maxs(GetHullType());
+
+	public virtual Vector3 GetCrouchEyeOffset() => new(0, 0, 40);
 
 	public bool IsMoving() => GetNavigator()!.IsGoalSet();
 
@@ -357,6 +364,59 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		return false;
 	}
+
+	public virtual bool IsCrouching() => (CapabilitiesGet() & (int)Capability_t.bits_CAP_DUCK) != 0 && Crouching;
+
+	public virtual bool Stand() {
+		if (ForceCrouch)
+			return false;
+
+		Crouching = false;
+		DesireStand();
+		return true;
+	}
+
+	public void DesireStand() => CrouchDesired = false;
+
+	public virtual void OnChangeActivity(Activity newActivity) {
+		if (newActivity == Activity.ACT_RUN ||
+			 newActivity == Activity.ACT_RUN_AIM ||
+			 newActivity == Activity.ACT_WALK) {
+			Stand();
+		}
+	}
+
+	public static bool IsActivityMovementPhased(Activity activity) {
+		switch (activity) {
+			case Activity.ACT_WALK:
+			case Activity.ACT_WALK_AIM:
+			case Activity.ACT_WALK_CROUCH:
+			case Activity.ACT_WALK_CROUCH_AIM:
+			case Activity.ACT_RUN:
+			case Activity.ACT_RUN_AIM:
+			case Activity.ACT_RUN_CROUCH:
+			case Activity.ACT_RUN_CROUCH_AIM:
+			case Activity.ACT_RUN_PROTECTED:
+				return true;
+		}
+		return false;
+	}
+
+	public bool HaveSequenceForActivity(Activity activity) => GetModelPtr() != null && GetModelPtr()!.HaveSequenceForActivity((int)activity);
+
+	public virtual Vector3 EyeOffset(Activity activity) {
+		if ((CapabilitiesGet() & (int)Capability_t.bits_CAP_DUCK) != 0) {
+			if (IsCrouchedActivity(activity))
+				return GetCrouchEyeOffset();
+		}
+
+		if (IsCrouching())
+			return GetCrouchEyeOffset();
+
+		return DefaultEyeOffset * GetModelScale();
+	}
+
+	public virtual bool IsCrouchedActivity(Activity activity) => throw new NotImplementedException();
 
 	public override void AddEntityRelationship(BaseEntity entity, Disposition_t disposition, int priority) {
 		base.AddEntityRelationship(entity, disposition, priority);
@@ -741,8 +801,180 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		ResolveActivityToSequence(IdealActivity, ref IdealSequence, ref IdealTranslatedActivity, ref IdealWeaponActivity);
 	}
 
-	public void ResolveActivityToSequence(Activity newActivity, ref int sequence, ref Activity translatedActivity, ref Activity weaponActivity) => throw new NotImplementedException();
-	public void SetActivityAndSequence(Activity newActivity, int sequence, Activity translatedActivity, Activity weaponActivity) => throw new NotImplementedException();
+	public override Activity NPC_TranslateActivity(Activity newActivity) {
+		Assert(newActivity != Activity.ACT_INVALID);
+
+		if (newActivity == Activity.ACT_RANGE_ATTACK1) {
+			if (IsCrouching())
+				newActivity = Activity.ACT_RANGE_ATTACK1_LOW;
+		}
+		else if (newActivity == Activity.ACT_RELOAD) {
+			if (IsCrouching())
+				newActivity = Activity.ACT_RELOAD_LOW;
+		}
+		else if (newActivity == Activity.ACT_IDLE) {
+			if (IsCrouching())
+				newActivity = Activity.ACT_CROUCHIDLE;
+		}
+		else if (newActivity == Activity.ACT_IDLE_ANGRY_SMG1) {
+			if (IsCrouching())
+				newActivity = Activity.ACT_RANGE_AIM_LOW;
+		}
+
+		if ((CapabilitiesGet() & (int)Capability_t.bits_CAP_DUCK) != 0) {
+			if (newActivity == Activity.ACT_RELOAD)
+				return GetReloadActivity(GetHintNode());
+			else if ((newActivity == Activity.ACT_COVER) ||
+					 (newActivity == Activity.ACT_IDLE && HasMemory(bits_MEMORY_INCOVER))) {
+				Activity coverActivity = GetCoverActivity(GetHintNode());
+				if (SelectWeightedSequence(coverActivity) == StudioHdr.ACTIVITY_NOT_AVAILABLE)
+					coverActivity = Activity.ACT_IDLE;
+
+				return coverActivity;
+			}
+		}
+		return newActivity;
+	}
+
+	public AI_Hint? GetHintNode() => HintNode.Get();
+
+	public virtual Activity GetReloadActivity(AI_Hint? hint) => throw new NotImplementedException();
+	public virtual Activity GetCoverActivity(AI_Hint? hint) => throw new NotImplementedException();
+
+	static readonly List<Activity> sUniqueActivities = [];
+
+	public Activity TranslateActivity(Activity idealActivity, out Activity idealWeaponActivityOut) {
+		const int MAX_TRIES = 5;
+		int count = 0;
+
+		bool idealWeaponRequired = false;
+		Activity idealWeaponActivity;
+		Activity baseTranslation;
+		bool weaponRequired = false;
+		Activity weaponTranslation;
+		Activity last;
+		Activity current;
+
+		idealWeaponActivity = Weapon_TranslateActivity(idealActivity, ref idealWeaponRequired);
+		idealWeaponActivityOut = idealWeaponActivity;
+
+		baseTranslation = idealActivity;
+		weaponTranslation = idealActivity;
+		last = idealActivity;
+		while (count++ < MAX_TRIES) {
+			current = NPC_TranslateActivity(last);
+			if (current != last)
+				baseTranslation = current;
+
+			weaponTranslation = Weapon_TranslateActivity(current, ref weaponRequired);
+
+			if (weaponTranslation == last)
+				break;
+
+			last = weaponTranslation;
+		}
+		AssertMsg(count < MAX_TRIES, "Circular activity translation!");
+
+		if (last == Activity.ACT_SCRIPT_CUSTOM_MOVE)
+			return Activity.ACT_SCRIPT_CUSTOM_MOVE;
+
+		if (HaveSequenceForActivity(weaponTranslation))
+			return weaponTranslation;
+
+		if (weaponRequired) {
+			if (!sUniqueActivities.Contains(weaponTranslation)) {
+				DevWarning($"{GetClassname()} missing activity \"{GetActivityName(weaponTranslation)}\" needed by weapon\"{GetActiveWeapon()!.GetClassname()}\"\n");
+
+				sUniqueActivities.Add(weaponTranslation);
+			}
+		}
+
+		if (baseTranslation != weaponTranslation && HaveSequenceForActivity(baseTranslation))
+			return baseTranslation;
+
+		if (idealWeaponActivity != baseTranslation && HaveSequenceForActivity(idealWeaponActivity))
+			return idealActivity;
+
+		if (idealActivity != idealWeaponActivity && HaveSequenceForActivity(idealActivity))
+			return idealActivity;
+
+		Assert(!HaveSequenceForActivity(idealActivity));
+		if (idealActivity == Activity.ACT_RUN)
+			idealActivity = Activity.ACT_WALK;
+		else if (idealActivity == Activity.ACT_WALK)
+			idealActivity = Activity.ACT_RUN;
+
+		return idealActivity;
+	}
+
+	public virtual int GetScriptCustomMoveSequence() => throw new NotImplementedException();
+
+	static AI_BaseNPC? ResolveLastWarn;
+	static Activity ResolveLastWarnActivity;
+	static TimeUnit_t ResolveTimeLastWarn;
+
+	public void ResolveActivityToSequence(Activity newActivity, ref int sequence, ref Activity translatedActivity, ref Activity weaponActivity) {
+		sequence = StudioHdr.ACTIVITY_NOT_AVAILABLE;
+
+		translatedActivity = TranslateActivity(newActivity, out weaponActivity);
+
+		if (newActivity == Activity.ACT_SCRIPT_CUSTOM_MOVE)
+			sequence = GetScriptCustomMoveSequence();
+		else {
+			sequence = SelectWeightedSequence(translatedActivity);
+
+			if (sequence == StudioHdr.ACTIVITY_NOT_AVAILABLE && translatedActivity == Activity.ACT_WALK)
+				sequence = SelectWeightedSequence(Activity.ACT_WALK_RIFLE);
+
+			if (sequence == StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+				if ((ResolveLastWarn != this && ResolveLastWarnActivity != translatedActivity) || gpGlobals.CurTime - ResolveTimeLastWarn > 5.0) {
+					DevWarning($"{GetClassname()}:{GetDebugName()}:{GetModelName()} has no sequence for act:{ActivityList.NameForIndex(translatedActivity)}\n");
+					ResolveLastWarn = this;
+					ResolveLastWarnActivity = translatedActivity;
+					ResolveTimeLastWarn = gpGlobals.CurTime;
+				}
+
+				if (translatedActivity == Activity.ACT_RUN) {
+					translatedActivity = Activity.ACT_WALK;
+					sequence = SelectWeightedSequence(translatedActivity);
+				}
+			}
+		}
+
+		if (sequence == (int)Activity.ACT_INVALID)
+			sequence = 0;
+	}
+
+	public void SetActivityAndSequence(Activity newActivity, int sequence, Activity translatedActivity, Activity weaponActivity) {
+		TranslatedActivity = translatedActivity;
+
+		if (ai_sequence_debug.GetBool() == true && (DebugOverlays & DebugOverlayBits.NPCSelected) != 0) {
+			DevMsg($"SetActivityAndSequence : {GetClassname()}: {GetActivityName(GetActivity())}:{Animation.GetSequenceName(GetModelPtr(), GetSequence())} -> {GetActivityName(newActivity)}:{Animation.GetSequenceName(GetModelPtr(), sequence)} / {GetActivityName(translatedActivity)}:{GetActivityName(weaponActivity)}\n");
+		}
+
+		if (sequence > StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+			if (GetSequence() != sequence || !SequenceLoops) {
+				if (!IsActivityMovementPhased(Activity) ||
+					!IsActivityMovementPhased(newActivity)) {
+					SetCycle(0);
+				}
+			}
+
+			ResetSequence(sequence);
+			Weapon_SetActivity(weaponActivity, (float)SequenceDuration(sequence));
+		}
+		else
+			ResetSequence(0);
+
+		SetViewOffset(EyeOffset(TranslatedActivity));
+
+		if (Activity != newActivity)
+			OnChangeActivity(newActivity);
+
+		Activity = newActivity;
+
+		GetMotor()!.RecalculateYawSpeed();
+	}
 
 	public virtual bool CreateComponents() {
 		Senses = CreateSenses();
@@ -838,7 +1070,12 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public void SetDefaultEyeOffset() => throw new NotImplementedException();
 
-	public virtual int CapabilitiesGet() => throw new NotImplementedException();
+	public virtual int CapabilitiesGet() {
+		int capability = Capability;
+		if (GetActiveWeapon() != null)
+			capability |= GetActiveWeapon()!.CapabilitiesGet();
+		return capability;
+	}
 
 	public void NPCUse(BaseEntity? activator, BaseEntity? caller, UseType useType, float value) {
 		return;

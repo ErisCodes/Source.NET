@@ -1,5 +1,7 @@
 global using static Game.Server.AI_BehaviorGlobals;
 
+using Game.Shared;
+
 namespace Game.Server;
 
 public static class AI_BehaviorGlobals
@@ -34,6 +36,8 @@ public abstract class AI_BehaviorBase : AI_Component
 
 	public int BridgeSelectSchedule() => throw new NotImplementedException();
 
+	public Activity BridgeNPC_TranslateActivity(Activity activity) => throw new NotImplementedException();
+	public bool BridgeIsCrouching() => throw new NotImplementedException();
 	public bool BridgeShouldPlayerAvoid() => throw new NotImplementedException();
 
 	public virtual void GatherConditions() {
