@@ -1,9 +1,16 @@
+global using static Game.Server.SceneEntityGlobals;
+
 using Source.Common;
 using Source;
 
 namespace Game.Server;
 
 using FIELD = FIELD<SceneEntity>;
+
+public static class SceneEntityGlobals
+{
+	public static void PrecacheInstancedScene(ReadOnlySpan<char> scene) => throw new NotImplementedException();
+}
 
 [NetworkName("CSceneEntity")]
 public class SceneEntity : BaseEntity
