@@ -31,6 +31,20 @@ public struct LightPos
 	public float Dot;
 }
 
+public struct EyeballState
+{
+	public MStudioEyeball? Eyeball;
+
+	public Matrix3x4 Mat;
+
+	public Vector3 Org;
+	public Vector3 Forward;
+	public Vector3 Right;
+	public Vector3 Up;
+
+	public Vector3 Cornea;
+}
+
 [EngineComponent]
 public unsafe class StudioRender
 {
@@ -164,11 +178,69 @@ public unsafe class StudioRender
 
 	MStudioModel? SubModel;
 
+	readonly EyeballState[] EyeballStates = new EyeballState[16];
+
+	private void ComputeEyelidStateFACS(MStudioModel subModel) {
+		for (int j = 0; j < subModel.NumEyeballs; j++)
+			R_StudioEyeballPosition(subModel.Eyeball(j), ref EyeballStates[j]);
+	}
+
+	private void R_StudioEyeballPosition(MStudioEyeball eyeball, ref EyeballState state) {
+		state.Eyeball = eyeball;
+
+		Vector3 tmp = eyeball.Org;
+		tmp.X += pRC!.Config.EyeShiftX * MathF.Sign(tmp.X);
+		tmp.Y += pRC.Config.EyeShiftY * MathF.Sign(tmp.Y);
+		tmp.Z += pRC.Config.EyeShiftZ * MathF.Sign(tmp.Z);
+
+		MathLib.VectorTransform(in tmp, in pBoneToWorld[eyeball.Bone], out state.Org);
+		MathLib.VectorRotate(in eyeball.Up, in pBoneToWorld[eyeball.Bone], out state.Up);
+
+		state.Forward = pRC.ViewTarget - state.Org;
+		MathLib.VectorNormalize(ref state.Forward);
+
+		if (!pRC.Config.EyeMove) {
+			MathLib.VectorRotate(in eyeball.Forward, in pBoneToWorld[eyeball.Bone], out state.Forward);
+			state.Forward *= -1;
+		}
+
+		state.Right = Vector3.Cross(state.Forward, state.Up);
+		MathLib.VectorNormalize(ref state.Right);
+
+		float dz = eyeball.ZOffset;
+
+		state.Forward += (eyeball.ZOffset + dz) * state.Right;
+
+		MathLib.VectorNormalize(ref state.Forward);
+		state.Right = Vector3.Cross(state.Forward, state.Up);
+		MathLib.VectorNormalize(ref state.Right);
+
+		state.Up = Vector3.Cross(state.Right, state.Forward);
+		MathLib.VectorNormalize(ref state.Up);
+
+		float scale = (1.0f / eyeball.IrisScale) + pRC.Config.EyeSize;
+
+		if (scale > 0)
+			scale = 1.0f / scale;
+
+		state.Mat.M00 = state.Right.X * -scale;
+		state.Mat.M01 = state.Right.Y * -scale;
+		state.Mat.M02 = state.Right.Z * -scale;
+		state.Mat.M10 = state.Up.X * -scale;
+		state.Mat.M11 = state.Up.Y * -scale;
+		state.Mat.M12 = state.Up.Z * -scale;
+
+		state.Mat.M03 = -Vector3.Dot(state.Org, new Vector3(state.Mat.M00, state.Mat.M01, state.Mat.M02)) + 0.5f;
+		state.Mat.M13 = -Vector3.Dot(state.Org, new Vector3(state.Mat.M10, state.Mat.M11, state.Mat.M12)) + 0.5f;
+	}
+
 	private int R_StudioRenderFinal(IMatRenderContext renderContext, int skin, int bodyPartCount, BodyPartInfo[] pBodyPartInfo, object? clientEntity, Span<IMaterial> materials, Span<int> materialFlags, int boneMask, int lod, Span<ColorMeshInfo> colorMeshes) {
 		int numTrianglesRendered = 0;
 
 		for (int i = 0; i < bodyPartCount; i++) {
 			SubModel = pBodyPartInfo[i].SubModel;
+
+			ComputeEyelidStateFACS(SubModel!);
 
 			// TODO: Flex controller stuff
 			numTrianglesRendered += R_StudioDrawPoints(renderContext, skin, clientEntity, materials, materialFlags, boneMask, lod, colorMeshes);
@@ -216,7 +288,7 @@ public unsafe class StudioRender
 			// the normal static/dynamic methods due to optimization reasons
 			switch (pmesh.MaterialType) {
 				case 1:
-					// numTrianglesRendered += R_StudioDrawEyeball(renderContext, pmesh, pMeshData, lighting, pMaterial, lod);
+					numTrianglesRendered += R_StudioDrawEyeball(renderContext, pmesh, pMeshData, lighting, pMaterial, lod);
 					break;
 				default:
 					numTrianglesRendered += R_StudioDrawMesh(renderContext, pmesh, pMeshData, lighting, pMaterial, colorMeshes, lod);
@@ -228,6 +300,111 @@ public unsafe class StudioRender
 		renderContext.SetNumBoneWeights(0);
 
 		return numTrianglesRendered;
+	}
+
+	static TokenCache eyeOriginCache;
+	static TokenCache eyeUpCache;
+	static TokenCache irisUCache;
+	static TokenCache irisVCache;
+	static TokenCache glintUCache;
+	static TokenCache glintVCache;
+
+	private void SetEyeMaterialVars(IMaterial? material, MStudioEyeball eyeball, in Vector3 eyeOrigin, in Matrix3x4 irisTransform, in Matrix3x4 glintTransform) {
+		if (material == null)
+			return;
+
+		IMaterialVar? var = material.FindVarFast("$eyeorigin", ref eyeOriginCache);
+		if (var != null)
+			var.SetVecValue(in eyeOrigin);
+
+		var = material.FindVarFast("$eyeup", ref eyeUpCache);
+		if (var != null)
+			var.SetVecValue(in eyeball.Up);
+
+		var = material.FindVarFast("$irisu", ref irisUCache);
+		if (var != null)
+			var.SetVecValue(irisTransform.M00, irisTransform.M01, irisTransform.M02, irisTransform.M03);
+
+		var = material.FindVarFast("$irisv", ref irisVCache);
+		if (var != null)
+			var.SetVecValue(irisTransform.M10, irisTransform.M11, irisTransform.M12, irisTransform.M13);
+
+		var = material.FindVarFast("$glintu", ref glintUCache);
+		if (var != null)
+			var.SetVecValue(glintTransform.M00, glintTransform.M01, glintTransform.M02, glintTransform.M03);
+
+		var = material.FindVarFast("$glintv", ref glintVCache);
+		if (var != null)
+			var.SetVecValue(glintTransform.M10, glintTransform.M11, glintTransform.M12, glintTransform.M13);
+	}
+
+	private static void ComputeGlintTextureProjection(in EyeballState state, in Vector3 vright, in Vector3 vup, out Matrix3x4 mat) {
+		float scale = 1.0f / (state.Eyeball!.Radius * 2);
+		mat = default;
+		mat.M00 = vright.X * scale;
+		mat.M01 = vright.Y * scale;
+		mat.M02 = vright.Z * scale;
+		mat.M10 = vup.X * scale;
+		mat.M11 = vup.Y * scale;
+		mat.M12 = vup.Z * scale;
+
+		mat.M03 = -Vector3.Dot(state.Org, new Vector3(mat.M00, mat.M01, mat.M02)) + 0.5f;
+		mat.M13 = -Vector3.Dot(state.Org, new Vector3(mat.M10, mat.M11, mat.M12)) + 0.5f;
+	}
+
+	private int R_StudioDrawEyeball(IMatRenderContext renderContext, MStudioMesh pmesh, StudioMeshData pMeshData, StudioModelLighting lighting, IMaterial pMaterial, int lod) {
+		if (!pRC!.Config.Eyes)
+			return 0;
+
+		MStudioMeshVertexData? vertData = GetFatVertexData(pmesh, StudioHdr!);
+		if (vertData == null)
+			return 0;
+
+		int j;
+		int numTrianglesRendered = 0;
+
+		bool isDeltaFlexed = false;
+		bool isHardwareSkinnedData = false;
+		bool isFlexed = false;
+		for (j = 0; j < pMeshData.NumGroup; ++j) {
+			StudioMeshGroup pGroup = pMeshData.MeshGroup![j];
+
+			if ((pGroup.Flags & StudioMeshGroupFlags.IsDeltaFlexed) != 0)
+				isDeltaFlexed = true;
+
+			if ((pGroup.Flags & StudioMeshGroupFlags.IsFlexed) != 0)
+				isFlexed = true;
+
+			if ((pGroup.Flags & StudioMeshGroupFlags.IsHWSkinned) != 0)
+				isHardwareSkinnedData = true;
+		}
+
+		bool flexStatic = isDeltaFlexed;
+		bool shouldHardwareSkin = isHardwareSkinnedData && (!isFlexed || flexStatic) &&
+			(lighting != StudioModelLighting.Software) && !pRC.Config.SoftwareSkin;
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.LoadIdentity();
+
+		MStudioEyeball eyeball = SubModel!.Eyeball(pmesh.MaterialParam);
+
+		MathLib.VectorTransform(in eyeball.Org, in pBoneToWorld[eyeball.Bone], out Vector3 org);
+
+		ComputeGlintTextureProjection(in EyeballStates[pmesh.MaterialParam], in pRC.ViewRight, in pRC.ViewUp, out Matrix3x4 glintMat);
+
+		if (!pRC.Config.Wireframe)
+			SetEyeMaterialVars(pMaterial, eyeball, in org, in EyeballStates[pmesh.MaterialParam].Mat, in glintMat);
+
+		if (shouldHardwareSkin) {
+			for (j = 0; j < pMeshData.NumGroup; ++j) {
+				StudioMeshGroup pGroup = pMeshData.MeshGroup![j];
+				numTrianglesRendered += R_StudioDrawStaticMesh(renderContext, pmesh, pGroup, lighting, pRC.AlphaMod, pMaterial, lod, default);
+			}
+
+			return numTrianglesRendered;
+		}
+
+		throw new NotImplementedException();
 	}
 
 	private int R_StudioDrawMesh(IMatRenderContext renderContext, MStudioMesh pmesh, StudioMeshData pMeshData, StudioModelLighting lighting, IMaterial pMaterial, Span<ColorMeshInfo> colorMeshes, int lod) {
