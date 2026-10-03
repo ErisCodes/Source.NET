@@ -420,7 +420,7 @@ public class BaseAnimating : BaseEntity
 
 	public bool GetAttachment(int attachment, out Matrix3x4 attachmentToWorld) {
 		StudioHdr? studioHdr = GetModelPtr();
-		if (studioHdr != null) {
+		if (studioHdr == null) {
 			MathLib.MatrixCopy(EntityToWorldTransform(), out attachmentToWorld);
 			AssertMsg(false, "BaseAnimating.GetAttachment: model missing");
 			return false;
