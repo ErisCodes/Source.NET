@@ -12,6 +12,7 @@ public static class AI_NavigatorGlobals
 public class AI_Navigator : AI_Component, IAI_MovementSink
 {
 	public AI_Navigator(AI_BaseNPC? outer) : base(outer) {
+		Path = new AI_Path();
 		AINetwork = null;
 		Motor = null;
 		MoveProbe = null;
@@ -30,9 +31,21 @@ public class AI_Navigator : AI_Component, IAI_MovementSink
 
 	public bool ClearGoal() => throw new NotImplementedException();
 
+	public Activity GetMovementActivity() => GetPath().GetMovementActivity();
+
+	public Activity GetArrivalActivity() => GetPath().GetArrivalActivity();
+
+	public bool IsGoalSet() => GetPath().GoalType() != GoalType_t.GOALTYPE_NONE;
+
+	public bool IsGoalActive() => GetPath() != null && !GetPath().IsEmpty();
+
+	public AI_Path GetPath() => Path;
+
 	public AI_Motor? Motor;
 	public AI_MoveProbe? MoveProbe;
 	public AI_LocalNavigator? LocalNavigator;
 	public AI_Network? AINetwork;
 	public bool ValidateActivitySpeed;
+
+	readonly AI_Path Path;
 }
