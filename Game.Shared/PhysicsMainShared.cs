@@ -691,7 +691,42 @@ namespace Game.Server
 		}
 
 		public void PhysicsCheckVelocity() {
-			throw new NotImplementedException();
+			Vector3 origin = GetAbsOrigin();
+			Vector3 vecAbsVelocity = GetAbsVelocity();
+
+			bool reset = false;
+			for (int i = 0; i < 3; i++) {
+				if (float.IsNaN(vecAbsVelocity[i])) {
+					Msg($"Got a NaN velocity on {GetClassname()}\n");
+					vecAbsVelocity[i] = 0;
+					reset = true;
+				}
+				if (float.IsNaN(origin[i])) {
+					Msg($"Got a NaN origin on {GetClassname()}\n");
+					origin[i] = 0;
+					reset = true;
+				}
+
+				if (vecAbsVelocity[i] > sv_maxvelocity.GetFloat()) {
+#if DEBUG
+					DevWarning(2, $"Got a velocity too high on {GetClassname()}\n");
+#endif
+					vecAbsVelocity[i] = sv_maxvelocity.GetFloat();
+					reset = true;
+				}
+				else if (vecAbsVelocity[i] < -sv_maxvelocity.GetFloat()) {
+#if DEBUG
+					DevWarning(2, $"Got a velocity too low on {GetClassname()}\n");
+#endif
+					vecAbsVelocity[i] = -sv_maxvelocity.GetFloat();
+					reset = true;
+				}
+			}
+
+			if (reset) {
+				SetAbsOrigin(origin);
+				SetAbsVelocity(vecAbsVelocity);
+			}
 		}
 
 		private bool PhysicsCheckWater() {
