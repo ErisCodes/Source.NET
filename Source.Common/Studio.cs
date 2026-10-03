@@ -1022,7 +1022,7 @@ public class MStudioAnimDesc
 
 		Memory<byte> animBlock = Studiohdr().GetAnimBlock(block);
 		if (!animBlock.IsEmpty)
-			return CacheOffBlockIndex(0, index, animBlock);
+			return CacheOffBlockIndex(block, index, animBlock);
 
 		return null;
 	}
