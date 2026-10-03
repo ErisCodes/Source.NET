@@ -375,22 +375,47 @@ public class BaseAnimating : BaseEntity
 		return pcache;
 	}
 
-	private void SetupBones(Span<Matrix3x4> bonetoworld, int boneMask) {
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// REALLY important todo, I am just already porting a lot in this commit, don't really want to deal with it right now
+	public bool IsRagdoll() => RenderFX == (byte)RenderFx.Ragdoll;
+
+	public virtual void GetSkeleton(StudioHdr? studioHdr, Span<Vector3> pos, Span<Quaternion> q, int boneMask) {
+		if (studioHdr == null) {
+			AssertMsg(false, "BaseAnimating.GetSkeleton() without a model");
+			return;
+		}
+
+		BoneSetup boneSetup = new(studioHdr, boneMask, PoseParameter);
+		boneSetup.InitPose(pos, q);
+
+		boneSetup.AccumulatePose(pos, q, GetSequence(), GetCycle(), 1.0f, gpGlobals.CurTime, null);
+
+		if (!IsRagdoll())
+			boneSetup.CalcAutoplaySequences(pos, q, gpGlobals.CurTime, null);
+	}
+
+	public virtual void SetupBones(Span<Matrix3x4> boneToWorld, int boneMask) {
+		Assert(GetModelPtr() != null);
+
+		StudioHdr? studioHdr = GetModelPtr();
+
+		if (studioHdr == null) {
+			AssertMsg(false, "BaseAnimating.GetSkeleton() without a model");
+			return;
+		}
+
+		Assert(!IsEFlagSet(EFL.SettingUpBones));
+
+		AddEFlags(EFL.SettingUpBones);
+
+		Span<Vector3> pos = stackalloc Vector3[Studio.MAXSTUDIOBONES];
+		Span<Quaternion> q = stackalloc Quaternion[Studio.MAXSTUDIOBONES];
+
+		Vector3 adjOrigin = GetAbsOrigin();
+
+		GetSkeleton(studioHdr, pos, q, boneMask);
+
+		BoneSetup.Studio_BuildMatrices(studioHdr, GetAbsAngles(), adjOrigin, pos, q, -1, GetModelScale(), boneToWorld, boneMask);
+
+		RemoveEFlags(EFL.SettingUpBones);
 	}
 
 	public int LookupAttachment(ReadOnlySpan<char> name) {
