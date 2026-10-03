@@ -186,6 +186,38 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public AI_TacticalServices? TacticalServices;
 	public AI_MoveAndShootOverlay MoveAndShootOverlay = new();
 
+	public AI_Squad? Squad;
+	public string? SquadName;
+
+	public override void Precache() => throw new NotImplementedException();
+
+	public virtual int SelectSchedule() => throw new NotImplementedException();
+
+	public virtual void GatherConditions() => throw new NotImplementedException();
+
+	public virtual AI_BehaviorBase? GetRunningBehavior() => null;
+
+	public int CapabilitiesAdd(int capability) {
+		Capability |= capability;
+
+		return Capability;
+	}
+
+	public void SetHullSizeNormal(bool force = false) => throw new NotImplementedException();
+
+	public virtual int GetSoundInterests() {
+		return (int)(SoundInstanceType.World | SoundInstanceType.Combat | SoundInstanceType.Player | SoundInstanceType.PlayerVehicle |
+			SoundInstanceType.BulletImpact);
+	}
+
+	public virtual float MaxYawSpeed() {
+		return 45;
+	}
+
+	public virtual float GetTimeToNavGoal() => throw new NotImplementedException();
+
+	public void VacateStrategySlot() => throw new NotImplementedException();
+
 	public virtual bool CreateVPhysics() {
 		if (IsAlive() && VPhysicsGetObject() == null)
 			SetupVPhysicsHull();
@@ -580,7 +612,16 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public void SetupVPhysicsHull() => throw new NotImplementedException();
 
-	public virtual bool InitSquad() => throw new NotImplementedException();
+	public virtual bool InitSquad() {
+		if (Squad == null && (CapabilitiesGet() & (int)Capability_t.bits_CAP_SQUAD) != 0) {
+			if (SquadName == null)
+				DevMsg(2, $"Found {GetClassname()} that isn't in a squad\n");
+			else
+				throw new NotImplementedException();
+		}
+
+		return Squad != null;
+	}
 
 	public void CallNPCThink() => throw new NotImplementedException();
 }

@@ -44,6 +44,15 @@ public enum Capability_t
 	bits_CAP_SIMPLE_RADIUS_DAMAGE = unchecked((int)0x80000000),
 }
 
+public enum Disposition_t
+{
+	D_ER,
+	D_HT,
+	D_FR,
+	D_LI,
+	D_NU
+}
+
 [NetworkName("CBaseCombatCharacter")]
 public partial class BaseCombatCharacter : BaseFlex
 {
@@ -125,6 +134,16 @@ public partial class BaseCombatCharacter : BaseFlex
 	}
 
 	public string? RelationshipString;
+
+	public Hull_t Hull;
+	public float FieldOfView;
+
+	public virtual Disposition_t IRelationType(BaseEntity? target) => throw new NotImplementedException();
+
+	public void SetImpactEnergyScale(float scale) => ImpactEnergyScale = scale;
+
+	public Hull_t GetHullType() => Hull;
+	public void SetHullType(Hull_t hullType) => Hull = hullType;
 
 	public BaseCombatWeapon? Weapon_Create(ReadOnlySpan<char> weaponName) => throw new NotImplementedException();
 	public virtual void Weapon_Equip(BaseCombatWeapon weapon) => throw new NotImplementedException();

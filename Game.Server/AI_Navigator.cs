@@ -16,7 +16,10 @@ public class AI_Navigator : AI_Component, IAI_MovementSink
 		Motor = null;
 		MoveProbe = null;
 		LocalNavigator = null;
+		ValidateActivitySpeed = true;
 	}
+
+	public void SetValidateActivitySpeed(bool validateActivitySpeed) => ValidateActivitySpeed = validateActivitySpeed;
 
 	public virtual void Init(AI_Network? network) {
 		Motor = GetOuter()!.GetMotor();
@@ -31,4 +34,5 @@ public class AI_Navigator : AI_Component, IAI_MovementSink
 	public AI_MoveProbe? MoveProbe;
 	public AI_LocalNavigator? LocalNavigator;
 	public AI_Network? AINetwork;
+	public bool ValidateActivitySpeed;
 }
