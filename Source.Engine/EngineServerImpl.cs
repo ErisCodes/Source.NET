@@ -90,7 +90,21 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 
 	public bool CheckOriginInPVS(in Vector3 org, ReadOnlySpan<byte> checkpvs) {
-		throw new NotImplementedException();
+		int clusterIndex = CM.LeafCluster(CM.PointLeafnum(org));
+
+		if (clusterIndex < 0)
+			return false;
+
+		int offset = clusterIndex >> 3;
+		if (offset > checkpvs.Length) {
+			Sys.Error($"CheckOriginInPVS:  cluster would read past end of pvs data ({offset}:{checkpvs.Length})\n");
+			return false;
+		}
+
+		if ((checkpvs[offset] & (1 << (clusterIndex & 7))) == 0)
+			return false;
+
+		return true;
 	}
 
 	public void CleanUpEntityClusterList(ref PVSInfo pvsInfo) {
