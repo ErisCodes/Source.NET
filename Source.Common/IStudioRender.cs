@@ -51,6 +51,7 @@ public struct StudioRenderConfig {
 	public float EyeShiftY;
 	public float EyeShiftZ;
 	public float EyeSize;
+	public float EyeGlintPixelWidthLODThreshold;
 	public int MaxDecalsPerModel;
 	public int DrawEntities;
 	public int Skin;
@@ -95,6 +96,7 @@ public struct DrawModelResults {
 public interface IStudioRender {
 	void BeginFrame();
 	void EndFrame();
+	void UpdateConfig(in StudioRenderConfig config);
 	bool LoadModel(StudioHeader studioHDR, Memory<byte> vtxData, StudioHWData hardwareData);
 	void UnloadModel(StudioHWData hardwareData);
 

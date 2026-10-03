@@ -53,6 +53,8 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 		throw new NotImplementedException();
 	}
 
+	public void UpdateConfig(in StudioRenderConfig config) => RC.Config = config;
+
 	public int GetMaterialList(StudioHeader studioHDR, Span<IMaterial> materials) {
 		AssertMsg(studioHDR != null, "Don't ignore this assert! StudioRenderContext.GetMaterialList() has null studioHDR.");
 

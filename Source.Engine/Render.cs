@@ -91,7 +91,7 @@ public partial class Render(
 			GLRLight.PushDlights();
 		}
 
-		// UpdateStudioRenderConfig();
+		ModelRender.UpdateStudioRenderConfig();
 		studioRender.BeginFrame();
 
 		FrameCount++;
