@@ -375,7 +375,16 @@ public abstract class EngineTrace : IEngineTrace
 	}
 
 	public void SweepCollideable<Filter>(ICollideable? collide, in Vector3 absStart, in Vector3 absEnd, in QAngle angles, Mask mask, scoped ref Filter traceFilter, ref Trace trace) where Filter : struct, ITraceFilter {
-		throw new NotImplementedException();
+		Matrix3x4? oldRoot = RootMoveParent;
+		Ray ray = default;
+		Assert(angles == vec3_angle);
+		if (((SolidFlags)collide!.GetSolidFlags() & SolidFlags.RootParentAligned) != 0) {
+			ref readonly Matrix3x4 rootParentToWorld = ref collide.GetRootParentToWorldTransform();
+			RootMoveParent = Unsafe.IsNullRef(in rootParentToWorld) ? null : rootParentToWorld;
+		}
+		ray.Init(absStart, absEnd, collide.OBBMins(), collide.OBBMaxs());
+		TraceRay(ray, mask, ref traceFilter, out trace);
+		RootMoveParent = oldRoot;
 	}
 
 	protected abstract int SpatialPartitionMask();
