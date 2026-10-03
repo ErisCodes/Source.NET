@@ -209,6 +209,26 @@ public static partial class Util
 		trace.FractionLeftSolid = 0;
 	}
 
+	public static int DropToFloor(BaseEntity entity, Mask mask) {
+		entity.SetGroundEntity(null);
+
+		TraceEntity(entity, entity.GetAbsOrigin(), entity.GetAbsOrigin() - new Vector3(0, 0, 256), mask, out Trace trace);
+
+		if (trace.AllSolid)
+			return -1;
+
+		if (trace.Fraction == 1)
+			return 0;
+
+		entity.SetAbsOrigin(trace.EndPos);
+		entity.SetGroundEntity(trace.Ent);
+#if GMOD_DLL
+		entity.VPhysicsGetObject()?.SetPosition(trace.EndPos, entity.GetAbsAngles(), true);
+#endif
+
+		return 1;
+	}
+
 	public static void EmitAmbientSound(int entindex, in Vector3 vecOrigin, ReadOnlySpan<char> samp, float vol, Source.Common.Audio.SoundLevel soundlevel, int fFlags, int pitch, TimeUnit_t soundtime = 0.0f) => EmitAmbientSound(entindex, vecOrigin, samp, vol, soundlevel, fFlags, pitch, soundtime, out _);
 
 	public static void EmitAmbientSound(int entindex, in Vector3 vecOrigin, ReadOnlySpan<char> samp, float vol, Source.Common.Audio.SoundLevel soundlevel, int fFlags, int pitch, TimeUnit_t soundtime, out TimeUnit_t duration) {

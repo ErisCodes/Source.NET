@@ -468,9 +468,9 @@ public static class BaseEntity_ConCommands
 			player.EyeVectors(out Vector3 forward);
 			Util.TraceLine(player.EyePosition(), player.EyePosition() + forward * MAX_TRACE_LENGTH, Mask.Solid, player, CollisionGroup.None, out Trace tr);
 			if (tr.Fraction != 1.0) {
-				// tr.EndPos.Z += 12;
-				// entity.Teleport(tr.EndPos, null, null);
-				// Util.DropToFloor(entity, Mask.Solid);
+				tr.EndPos.Z += 12;
+				entity.Teleport(tr.EndPos, null, null);
+				Util.DropToFloor(entity, Mask.Solid);
 			}
 
 			entity.Activate();
