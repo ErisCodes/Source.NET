@@ -7,11 +7,12 @@ namespace Game.Client.GarrysMod;
 namespace Game.Server.GarrysMod;
 #endif
 
-public class LuaLibraryFunction
+public unsafe class LuaLibraryFunction
 {
 	public string? Name;
 	// public string? Unknown1;
 	public CFunc? Function;
+	public delegate* unmanaged[Cdecl]<nint, int> NativeFunction;
 }
 
 public class LuaLibrary(string name) : LuaUser
@@ -24,10 +25,22 @@ public class LuaLibrary(string name) : LuaUser
 		SetUsingLua(true);
 	}
 
+	public unsafe LuaLibraryFunction Add(string name, delegate* unmanaged[Cdecl]<nint, int> function) {
+		LuaLibraryFunction func = new() { Name = name, NativeFunction = function };
+		Add(func);
+		return func;
+	}
+
 	public override void InitLibraries(ILuaInterface lua) {
 		LuaTable table = new(Name, 0);
-		for (int i = 0; i < Functions.Count; i++)
-			table.SetMember(Functions[i].Name, Functions[i].Function!);
+		for (int i = 0; i < Functions.Count; i++) {
+			unsafe {
+				if (Functions[i].NativeFunction != null)
+					table.SetMember(Functions[i].Name, Functions[i].NativeFunction);
+				else
+					table.SetMember(Functions[i].Name, Functions[i].Function!);
+			}
+		}
 		table.UnReference();
 	}
 }
@@ -44,9 +57,21 @@ public class LuaGlobalLibrary() : LuaLibrary("GLOBAL")
 		return func;
 	}
 
+	public static new unsafe LuaLibraryFunction Add(string name, delegate* unmanaged[Cdecl]<nint, int> function) {
+		LuaLibraryFunction func = new() { Name = name, NativeFunction = function };
+		GetGlobalLuaLibraryFactory().Add(func);
+		return func;
+	}
+
 	public override void InitLibraries(ILuaInterface lua) {
-		for (int i = 0; i < Functions.Count; i++)
-			lua.Global().SetMember(Functions[i].Name, Functions[i].Function!);
+		for (int i = 0; i < Functions.Count; i++) {
+			unsafe {
+				if (Functions[i].NativeFunction != null)
+					lua.Global().SetMember(Functions[i].Name, Functions[i].NativeFunction);
+				else
+					lua.Global().SetMember(Functions[i].Name, Functions[i].Function!);
+			}
+		}
 	}
 }
 #endif

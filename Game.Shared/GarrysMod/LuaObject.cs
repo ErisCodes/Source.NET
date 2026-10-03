@@ -194,6 +194,13 @@ public class LuaObject : ILuaObject
 		g_Lua.SetMember(this, name);
 	}
 
+	public unsafe void SetMember(ReadOnlySpan<char> name, delegate* unmanaged[Cdecl]<nint, int> f) {
+		if (!isTable())
+			return;
+		g_Lua!.PushCFunction(f);
+		g_Lua.SetMember(this, name);
+	}
+
 	public void SetMember(ReadOnlySpan<char> name, int val) {
 		if (!isTable())
 			return;

@@ -8,31 +8,10 @@ namespace Game.Client.GarrysMod;
 namespace Game.Server.GarrysMod;
 #endif
 
-public static class LuaConVar
+public static partial class LuaConVar
 {
+	[LuaClass(typeof(ConVar), NullError = "Tried to use a NULL ConVar!")]
 	public static readonly LuaClass LC_ConVar = new("ConVar", LuaType.ConVar, null, null);
-
-	static readonly LuaClassFunction ConVar___tostring__Factory = LC_ConVar.Add("__tostring", ConVar____tostring);
-	static readonly LuaClassFunction ConVar_GetName__Factory = LC_ConVar.Add("GetName", ConVar__GetName);
-	static readonly LuaClassFunction ConVar_GetDefault__Factory = LC_ConVar.Add("GetDefault", ConVar__GetDefault);
-	static readonly LuaClassFunction ConVar_GetHelpText__Factory = LC_ConVar.Add("GetHelpText", ConVar__GetHelpText);
-	static readonly LuaClassFunction ConVar_GetString__Factory = LC_ConVar.Add("GetString", ConVar__GetString);
-	static readonly LuaClassFunction ConVar_GetFloat__Factory = LC_ConVar.Add("GetFloat", ConVar__GetFloat);
-	static readonly LuaClassFunction ConVar_GetInt__Factory = LC_ConVar.Add("GetInt", ConVar__GetInt);
-	static readonly LuaClassFunction ConVar_GetBool__Factory = LC_ConVar.Add("GetBool", ConVar__GetBool);
-	static readonly LuaClassFunction ConVar_SetString__Factory = LC_ConVar.Add("SetString", ConVar__SetString);
-	static readonly LuaClassFunction ConVar_SetFloat__Factory = LC_ConVar.Add("SetFloat", ConVar__SetFloat);
-	static readonly LuaClassFunction ConVar_SetInt__Factory = LC_ConVar.Add("SetInt", ConVar__SetInt);
-	static readonly LuaClassFunction ConVar_SetBool__Factory = LC_ConVar.Add("SetBool", ConVar__SetBool);
-	static readonly LuaClassFunction ConVar_GetFlags__Factory = LC_ConVar.Add("GetFlags", ConVar__GetFlags);
-	static readonly LuaClassFunction ConVar_IsFlagSet__Factory = LC_ConVar.Add("IsFlagSet", ConVar__IsFlagSet);
-	static readonly LuaClassFunction ConVar_Revert__Factory = LC_ConVar.Add("Revert", ConVar__Revert);
-	static readonly LuaClassFunction ConVar_GetMax__Factory = LC_ConVar.Add("GetMax", ConVar__GetMax);
-	static readonly LuaClassFunction ConVar_GetMin__Factory = LC_ConVar.Add("GetMin", ConVar__GetMin);
-
-	static readonly LuaLibraryFunction worker__GLobal__GetConVar_Internal = LuaGlobalLibrary.Add("GetConVar_Internal", GetConVar_Internal);
-	static readonly LuaLibraryFunction worker__GLobal__CreateConVar = LuaGlobalLibrary.Add("CreateConVar", CreateConVar);
-	static readonly LuaLibraryFunction worker__GLobal__ConVarExists = LuaGlobalLibrary.Add("ConVarExists", ConVarExists);
 
 	static readonly string[] s_BannedInfo = [
 		"rcon_password",
@@ -45,8 +24,6 @@ public static class LuaConVar
 	];
 
 	public static void Push_ConVar(ConVar? convar) => LC_ConVar.Push(convar);
-
-	static ConVar? Get_ConVar(int stackPos) => (ConVar?)LC_ConVar.Get(stackPos);
 
 	static void CheckLuaConVar(ConVar convar) {
 #if CLIENT_DLL
@@ -89,191 +66,88 @@ public static class LuaConVar
 		return true;
 	}
 
-	static int ConVar____tostring(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null) {
-			g_Lua!.PushString("ConVar [NULL]");
-			return 1;
-		}
+	[LuaMethod]
+	static string ConVar____tostring(ConVar? convar) {
+		if (convar == null)
+			return "ConVar [NULL]";
 
 		string str = $"ConVar [{convar.GetName()}]";
-		g_Lua!.PushString(str.Length > 0x1FF ? str[..0x1FF] : str);
-		return 1;
+		return str.Length > 0x1FF ? str[..0x1FF] : str;
 	}
 
-	static int ConVar__GetName(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
+	[LuaMethod]
+	static string ConVar__GetName(ConVar convar) => convar.GetName();
 
-		g_Lua!.PushString(convar.GetName());
-		return 1;
-	}
+	[LuaMethod]
+	static string ConVar__GetDefault(ConVar convar) => convar.GetDefault();
 
-	static int ConVar__GetDefault(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
+	[LuaMethod]
+	static string ConVar__GetHelpText(ConVar convar) => convar.GetHelpText() ?? "";
 
-		g_Lua!.PushString(convar.GetDefault());
-		return 1;
-	}
-
-	static int ConVar__GetHelpText(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
-
-		g_Lua!.PushString(convar.GetHelpText());
-		return 1;
-	}
-
-	static int ConVar__GetString(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
-
+	[LuaMethod]
+	static string ConVar__GetString(ConVar convar) {
 		if ((convar.GetFlags() & FCvar.NeverAsString) != 0)
-			g_Lua!.PushString("FCVAR_NEVER_AS_STRING");
-		else
-			g_Lua!.PushString(convar.GetString());
-		return 1;
+			return "FCVAR_NEVER_AS_STRING";
+		return convar.GetString();
 	}
 
-	static int ConVar__GetFloat(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
+	[LuaMethod]
+	static float ConVar__GetFloat(ConVar convar) => convar.GetFloat();
 
-		g_Lua!.PushNumber(convar.GetFloat());
-		return 1;
-	}
+	[LuaMethod]
+	static int ConVar__GetInt(ConVar convar) => convar.GetInt();
 
-	static int ConVar__GetInt(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
+	[LuaMethod]
+	static bool ConVar__GetBool(ConVar convar) => convar.GetInt() != 0;
 
-		g_Lua!.PushNumber(convar.GetInt());
-		return 1;
-	}
+	[LuaMethod]
+	static void ConVar__SetString([LuaValidate(nameof(CheckLuaConVar))] ConVar convar, string value) => convar.SetValue(value);
 
-	static int ConVar__GetBool(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
+	[LuaMethod]
+	static void ConVar__SetFloat([LuaValidate(nameof(CheckLuaConVar))] ConVar convar, float value) => convar.SetValue(value);
 
-		g_Lua!.PushBool(convar.GetInt() != 0);
-		return 1;
-	}
+	[LuaMethod]
+	static void ConVar__SetInt([LuaValidate(nameof(CheckLuaConVar))] ConVar convar, int value) => convar.SetValue(value);
 
-	static int ConVar__SetString(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
+	[LuaMethod]
+	static void ConVar__SetBool([LuaValidate(nameof(CheckLuaConVar))] ConVar convar, [LuaGet] bool value) => convar.SetValue(value ? 1 : 0);
 
-		CheckLuaConVar(convar);
-		convar.SetValue(g_Lua!.CheckString(2));
-		return 0;
-	}
+	[LuaMethod]
+	static int ConVar__GetFlags(ConVar convar) => (int)convar.GetFlags();
 
-	static int ConVar__SetFloat(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
+	[LuaMethod]
+	static bool ConVar__IsFlagSet(ConVar convar, int flag) => ((int)convar.GetFlags() & flag) != 0;
 
-		CheckLuaConVar(convar);
-		convar.SetValue((float)g_Lua!.CheckNumber(2));
-		return 0;
-	}
+	[LuaMethod]
+	static void ConVar__Revert([LuaValidate(nameof(CheckLuaConVar))] ConVar convar) => convar.Revert();
 
-	static int ConVar__SetInt(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
-
-		CheckLuaConVar(convar);
-		convar.SetValue(LuaHelper.cvttsd2si(g_Lua!.CheckNumber(2)));
-		return 0;
-	}
-
-	static int ConVar__SetBool(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
-
-		CheckLuaConVar(convar);
-		convar.SetValue(g_Lua!.GetBool(2) ? 1 : 0);
-		return 0;
-	}
-
-	static int ConVar__GetFlags(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
-
-		g_Lua!.PushNumber((int)convar.GetFlags());
-		return 1;
-	}
-
-	static int ConVar__IsFlagSet(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
-
-		int flag = LuaHelper.cvttsd2si(g_Lua!.CheckNumber(2));
-		g_Lua.PushBool(((int)convar.GetFlags() & flag) != 0);
-		return 1;
-	}
-
-	static int ConVar__Revert(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
-
-		CheckLuaConVar(convar);
-		convar.Revert();
-		return 0;
-	}
-
-	static int ConVar__GetMax(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
-
+	[LuaMethod]
+	static float? ConVar__GetMax(ConVar convar) {
 		if (!convar.GetMax(out double max))
-			return 0;
-
-		g_Lua!.PushNumber((float)max);
-		return 1;
+			return null;
+		return (float)max;
 	}
 
-	static int ConVar__GetMin(ILuaInterface lua) {
-		ConVar? convar = Get_ConVar(1);
-		if (convar == null)
-			g_Lua!.Error("Tried to use a NULL ConVar!");
-
+	[LuaMethod]
+	static float? ConVar__GetMin(ConVar convar) {
 		if (!convar.GetMin(out double min))
-			return 0;
-
-		g_Lua!.PushNumber((float)min);
-		return 1;
+			return null;
+		return (float)min;
 	}
 
-	static int ConVarExists(ILuaInterface lua) {
-		if (stricmp(g_Lua!.CheckString(1), "maxplayers") == 0) {
-			g_Lua.PushBool(true);
-			return 1;
-		}
+	[LuaGlobal]
+	static ConVar? GetConVar_Internal(string name) {
+		if (!IsAllowedToGetConvarInfo(name) || stricmp("con_logfile", name) == 0)
+			return null;
 
-		ConVar? convar = cvar.FindVar(g_Lua.CheckString(1));
-		if (ShouldPushConVar(convar))
-			g_Lua.PushBool(convar != null);
-		else
-			g_Lua.PushBool(false);
-		return 1;
+		ConVar? convar = cvar.FindVar(name);
+		if (convar == null || !ShouldPushConVar(convar))
+			return null;
+
+		return convar;
 	}
 
+	[LuaGlobal]
 	static int CreateConVar(ILuaInterface lua) {
 		string name = g_Lua!.CheckString(1);
 		if (!IsAllowedToGetConvarInfo(name) || LuaConCommands.ConCommand_IsBlocked(name) != null) {
@@ -345,17 +219,15 @@ public static class LuaConVar
 		return 1;
 	}
 
-	static int GetConVar_Internal(ILuaInterface lua) {
-		string name = g_Lua!.CheckString(1);
-		if (!IsAllowedToGetConvarInfo(name) || stricmp("con_logfile", name) == 0)
-			return 0;
+	[LuaGlobal]
+	static bool ConVarExists(string name) {
+		if (stricmp(name, "maxplayers") == 0)
+			return true;
 
 		ConVar? convar = cvar.FindVar(name);
-		if (convar == null || !ShouldPushConVar(convar))
-			return 0;
-
-		Push_ConVar(convar);
-		return 1;
+		if (ShouldPushConVar(convar))
+			return convar != null;
+		return false;
 	}
 }
 #endif

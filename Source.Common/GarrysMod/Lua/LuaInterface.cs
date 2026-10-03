@@ -23,6 +23,7 @@ public interface ILuaInterface : ILuaBase
 	ILuaObject GetObject(int index);
 	void PushLuaObject(ILuaObject? obj);
 	void PushLuaFunction(CFunc func);
+	int HandleException(Exception e);
 	[DoesNotReturn] void LuaError(ReadOnlySpan<char> err, int index);
 	[DoesNotReturn] void TypeError(ReadOnlySpan<char> name, int index);
 	void CallInternal(int args, int rets);

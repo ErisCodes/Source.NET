@@ -24,6 +24,7 @@ public interface ILuaObject
 	void SetMember(ReadOnlySpan<char> name, bool val);
 	void SetMember(ReadOnlySpan<char> name, ReadOnlySpan<char> val);
 	void SetMember(ReadOnlySpan<char> name, CFunc f);
+	unsafe void SetMember(ReadOnlySpan<char> name, delegate* unmanaged[Cdecl]<nint, int> f);
 
 	bool GetMemberBool(ReadOnlySpan<char> name, bool b = true);
 	int GetMemberInt(ReadOnlySpan<char> name, int i = 0);

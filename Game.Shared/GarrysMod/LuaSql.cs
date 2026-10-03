@@ -9,18 +9,10 @@ namespace Game.Client.GarrysMod;
 namespace Game.Server.GarrysMod;
 #endif
 
-public static class LuaSql
+public static partial class LuaSql
 {
+	[LuaLibrary]
 	static readonly LuaLibrary LL_Factory_sql = new("sql");
-
-	static LuaLibraryFunction Add(string name, CFunc function) {
-		LuaLibraryFunction func = new() { Name = name, Function = function };
-		LL_Factory_sql.Add(func);
-		return func;
-	}
-
-	static readonly LuaLibraryFunction fectory__sql__Query = Add("Query", Query);
-	static readonly LuaLibraryFunction fectory__sql__QueryTyped = Add("QueryTyped", QueryTyped);
 
 	static sqlite3? pDatabase;
 	static int iResultCount;
@@ -74,6 +66,7 @@ public static class LuaSql
 		return 1;
 	}
 
+	[LuaFunction]
 	static int Query(ILuaInterface lua) {
 		string query = g_Lua!.CheckString(1);
 		if (pDatabase == null)
@@ -107,6 +100,7 @@ public static class LuaSql
 		return ret;
 	}
 
+	[LuaFunction]
 	static int QueryTyped(ILuaInterface lua) {
 		string query = g_Lua!.CheckString(1);
 		if (pDatabase == null)

@@ -9,10 +9,8 @@ namespace Game.Client.GarrysMod;
 namespace Game.Server.GarrysMod;
 #endif
 
-public static class LuaConCommands
+public static partial class LuaConCommands
 {
-	static readonly LuaLibraryFunction worker__GLobal__AddConsoleCommand = LuaGlobalLibrary.Add("AddConsoleCommand", AddConsoleCommand);
-	static readonly LuaLibraryFunction worker__GLobal__AddCSLuaFile = LuaGlobalLibrary.Add("AddCSLuaFile", AddCSLuaFile);
 
 	static readonly string[] s_BannedConvars = [
 		"crosshair_setup",
@@ -493,6 +491,37 @@ public static class LuaConCommands
 		return commands;
 	}
 
+	static bool IsValidConsoleNameLite(ReadOnlySpan<char> name) {
+		foreach (char c in name) {
+			if (c == ';' || c <= ' ')
+				return false;
+		}
+		return true;
+	}
+
+	[LuaGlobal]
+	static int AddConsoleCommand(ILuaInterface lua) {
+		string name = g_Lua!.CheckString(1);
+		if (ConCommand_IsBlocked(name) != null && stricmp(name, "lua_cookieclear") != 0) {
+			g_Lua.ErrorFromLua($"AddConsoleCommand: Command name is blocked! ({name})");
+			return 0;
+		}
+
+		if (!IsValidConsoleNameLite(name)) {
+			g_Lua.ErrorFromLua($"AddConsoleCommand: Invalid command name! ({name})");
+			return 0;
+		}
+
+		if (cvar.FindCommandBase(name) != null)
+			return 0;
+
+		string help = g_Lua.CheckStringOpt(2, null);
+		int flags = g_Lua.GetFlags(3);
+		g_Lua.CreateConCommand(name, help, flags, LuaConCommand, LuaConCommandAutocomplete);
+		return 0;
+	}
+
+	[LuaGlobal]
 	static int AddCSLuaFile(ILuaInterface lua) {
 #if GAME_DLL
 		g_Lua!.GetCurrentFile(out string current);
@@ -512,35 +541,6 @@ public static class LuaConCommands
 		if (luaFile != null && luaFile.Source.Length == 0)
 			luaFile.Source = current;
 #endif
-		return 0;
-	}
-
-	static bool IsValidConsoleNameLite(ReadOnlySpan<char> name) {
-		foreach (char c in name) {
-			if (c == ';' || c <= ' ')
-				return false;
-		}
-		return true;
-	}
-
-	static int AddConsoleCommand(ILuaInterface lua) {
-		string name = g_Lua!.CheckString(1);
-		if (ConCommand_IsBlocked(name) != null && stricmp(name, "lua_cookieclear") != 0) {
-			g_Lua.ErrorFromLua($"AddConsoleCommand: Command name is blocked! ({name})");
-			return 0;
-		}
-
-		if (!IsValidConsoleNameLite(name)) {
-			g_Lua.ErrorFromLua($"AddConsoleCommand: Invalid command name! ({name})");
-			return 0;
-		}
-
-		if (cvar.FindCommandBase(name) != null)
-			return 0;
-
-		string help = g_Lua.CheckStringOpt(2, null);
-		int flags = g_Lua.GetFlags(3);
-		g_Lua.CreateConCommand(name, help, flags, LuaConCommand, LuaConCommandAutocomplete);
 		return 0;
 	}
 }

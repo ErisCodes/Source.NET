@@ -7,41 +7,20 @@ namespace Game.Client.GarrysMod;
 namespace Game.Server.GarrysMod;
 #endif
 
-public static class LuaUtil
+public static partial class LuaUtil
 {
+	[LuaLibrary]
 	static readonly LuaLibrary LL_Factory_util = new("util");
 
-	static LuaLibraryFunction Add(string name, CFunc function) {
-		LuaLibraryFunction func = new() { Name = name, Function = function };
-		LL_Factory_util.Add(func);
-		return func;
-	}
+	[LuaFunction]
+	static string? NetworkIDToString(int id) => NetworkString.Convert(id);
 
-	static readonly LuaLibraryFunction fectory__util__NetworkIDToString = Add("NetworkIDToString", NetworkIDToString);
-	static readonly LuaLibraryFunction fectory__util__NetworkStringToID = Add("NetworkStringToID", NetworkStringToID);
-#if GAME_DLL
-	static readonly LuaLibraryFunction fectory__util__AddNetworkString = Add("AddNetworkString", AddNetworkString);
-#endif
-
-	static int NetworkIDToString(ILuaInterface lua) {
-		string? str = NetworkString.Convert(LuaHelper.cvttsd2si(g_Lua!.CheckNumber(1)));
-		if (str == null)
-			return 0;
-
-		g_Lua.PushString(str);
-		return 1;
-	}
-
-	static int NetworkStringToID(ILuaInterface lua) {
-		g_Lua!.PushNumber(NetworkString.Get(g_Lua.CheckString(1)));
-		return 1;
-	}
+	[LuaFunction]
+	static int NetworkStringToID(string name) => NetworkString.Get(name);
 
 #if GAME_DLL
-	static int AddNetworkString(ILuaInterface lua) {
-		g_Lua!.PushNumber(NetworkString.Add(g_Lua.CheckString(1)));
-		return 1;
-	}
+	[LuaFunction]
+	static int AddNetworkString(string name) => NetworkString.Add(name);
 #endif
 }
 #endif

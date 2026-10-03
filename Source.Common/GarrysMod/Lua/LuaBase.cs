@@ -58,6 +58,7 @@ public interface ILuaBase
 	void PushNumber(double val);
 	void PushBool(bool val);
 	void PushCFunction(CFunc val);
+	unsafe void PushCFunction(delegate* unmanaged[Cdecl]<nint, int> val);
 	void PushCClosure(CFunc val, int vars);
 	void PushUserdata(nint userdata);
 	int ReferenceCreate();

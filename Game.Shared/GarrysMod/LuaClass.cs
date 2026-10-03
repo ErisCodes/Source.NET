@@ -7,11 +7,12 @@ namespace Game.Client.GarrysMod;
 namespace Game.Server.GarrysMod;
 #endif
 
-public class LuaClassFunction
+public unsafe class LuaClassFunction
 {
 	public string? Name;
 	public string? Unknown1;
 	public CFunc? Function;
+	public delegate* unmanaged[Cdecl]<nint, int> NativeFunction;
 	public int Unknown2;
 }
 
@@ -69,6 +70,12 @@ public class LuaClass
 		return func;
 	}
 
+	public unsafe LuaClassFunction Add(string name, delegate* unmanaged[Cdecl]<nint, int> function) {
+		LuaClassFunction func = new() { Name = name, NativeFunction = function };
+		Add(func);
+		return func;
+	}
+
 	public void Push(object? data) {
 		if (!MetaTable.isTable())
 			Error("CLuaClass::Push - Not Table!");
@@ -104,8 +111,14 @@ public class LuaClass
 		if (DerivedFrom == null)
 			MetaTable.SetMember("__index", MetaTable);
 
-		for (int i = 0; i < Functions!.Count; i++)
-			MetaTable.SetMember(Functions[i].Name, Functions[i].Function!);
+		for (int i = 0; i < Functions!.Count; i++) {
+			unsafe {
+				if (Functions[i].NativeFunction != null)
+					MetaTable.SetMember(Functions[i].Name, Functions[i].NativeFunction);
+				else
+					MetaTable.SetMember(Functions[i].Name, Functions[i].Function!);
+			}
+		}
 
 		InitFn?.Invoke();
 	}

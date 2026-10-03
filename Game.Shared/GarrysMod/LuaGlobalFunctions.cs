@@ -14,35 +14,9 @@ namespace Game.Client.GarrysMod;
 namespace Game.Server.GarrysMod;
 #endif
 
-public static class LuaGlobalFunctions
+public static partial class LuaGlobalFunctions
 {
-	static readonly LuaLibraryFunction worker__GLobal__include = LuaGlobalLibrary.Add("include", include);
-	static readonly LuaLibraryFunction worker__GLobal__require = LuaGlobalLibrary.Add("require", require);
-	static readonly LuaLibraryFunction worker__GLobal__Msg = LuaGlobalLibrary.Add("Msg", Msg);
-	static readonly LuaLibraryFunction worker__GLobal__MsgC = LuaGlobalLibrary.Add("MsgC", MsgC);
-	static readonly LuaLibraryFunction worker__GLobal__MsgN = LuaGlobalLibrary.Add("MsgN", MsgN);
-	static readonly LuaLibraryFunction worker__GLobal__ErrorNoHalt = LuaGlobalLibrary.Add("ErrorNoHalt", ErrorNoHalt);
-	static readonly LuaLibraryFunction worker__GLobal__RegisterMetaTable = LuaGlobalLibrary.Add("RegisterMetaTable", RegisterMetaTable);
-	static readonly LuaLibraryFunction worker__GLobal__FindMetaTable = LuaGlobalLibrary.Add("FindMetaTable", FindMetaTable);
-	static readonly LuaLibraryFunction worker__GLobal__TypeID = LuaGlobalLibrary.Add("TypeID", TypeID);
-	static readonly LuaLibraryFunction worker__GLobal__isbool = LuaGlobalLibrary.Add("isbool", isbool);
-	static readonly LuaLibraryFunction worker__GLobal__isnumber = LuaGlobalLibrary.Add("isnumber", isnumber);
-	static readonly LuaLibraryFunction worker__GLobal__isstring = LuaGlobalLibrary.Add("isstring", isstring);
-	static readonly LuaLibraryFunction worker__GLobal__istable = LuaGlobalLibrary.Add("istable", istable);
-	static readonly LuaLibraryFunction worker__GLobal__isfunction = LuaGlobalLibrary.Add("isfunction", isfunction);
-	static readonly LuaLibraryFunction worker__GLobal__isentity = LuaGlobalLibrary.Add("isentity", isentity);
-	static readonly LuaLibraryFunction worker__GLobal__isvector = LuaGlobalLibrary.Add("isvector", isvector);
-	static readonly LuaLibraryFunction worker__GLobal__isangle = LuaGlobalLibrary.Add("isangle", isangle);
-	static readonly LuaLibraryFunction worker__GLobal__ispanel = LuaGlobalLibrary.Add("ispanel", ispanel);
-	static readonly LuaLibraryFunction worker__GLobal__ismatrix = LuaGlobalLibrary.Add("ismatrix", ismatrix);
-	static readonly LuaLibraryFunction worker__GLobal__CurTime = LuaGlobalLibrary.Add("CurTime", CurTime);
-	static readonly LuaLibraryFunction worker__GLobal__UnPredictedCurTime = LuaGlobalLibrary.Add("UnPredictedCurTime", UnPredictedCurTime);
-	static readonly LuaLibraryFunction worker__GLobal__RealTime = LuaGlobalLibrary.Add("RealTime", RealTime);
-	static readonly LuaLibraryFunction worker__GLobal__FrameTime = LuaGlobalLibrary.Add("FrameTime", FrameTime);
-	static readonly LuaLibraryFunction worker__GLobal__FrameNumber = LuaGlobalLibrary.Add("FrameNumber", FrameNumber);
-	static readonly LuaLibraryFunction worker__GLobal__SysTime = LuaGlobalLibrary.Add("SysTime", SysTime);
-	static readonly LuaLibraryFunction worker__GLobal__VGUIFrameTime = LuaGlobalLibrary.Add("VGUIFrameTime", VGUIFrameTime);
-
+	[LuaGlobal]
 	static int include(ILuaInterface lua) {
 		string file = g_Lua!.CheckString(1).ToString();
 		Bootil.String.Lower(ref file);
@@ -52,12 +26,11 @@ public static class LuaGlobalFunctions
 		return g_Lua.Top() - top;
 	}
 
-	static int require(ILuaInterface lua) {
-		string name = g_Lua!.CheckString(1).ToString();
+	[LuaGlobal]
+	static void require(string name) {
 		Bootil.String.Lower(ref name);
 		if (name != "timer") // Wow wtf
-			g_Lua.Require(name);
-		return 0;
+			g_Lua!.Require(name);
 	}
 
 	static string ToStringArgs(LuaObject tostring, int top, string error) {
@@ -72,22 +45,12 @@ public static class LuaGlobalFunctions
 		return str;
 	}
 
+	[LuaGlobal]
 	static int Msg(ILuaInterface lua) {
 		int top = g_Lua!.Top();
 		LuaObject tostring = new();
 		g_Lua.Global().GetMember("tostring", tostring);
 		string str = ToStringArgs(tostring, top, "Msg tostring ERROR");
-		g_Lua.Msg(str);
-		tostring.UnReference();
-		return 0;
-	}
-
-	static int MsgN(ILuaInterface lua) {
-		int top = g_Lua!.Top();
-		LuaObject tostring = new();
-		g_Lua.Global().GetMember("tostring", tostring);
-		string str = ToStringArgs(tostring, top, "MsgN tostring ERROR");
-		str += "\n";
 		g_Lua.Msg(str);
 		tostring.UnReference();
 		return 0;
@@ -100,6 +63,7 @@ public static class LuaGlobalFunctions
 		(byte)(int)obj.GetMemberFloat("a", 255.0f)
 	);
 
+	[LuaGlobal]
 	static int MsgC(ILuaInterface lua) {
 		int top = g_Lua!.Top();
 		Color color = new(0, 200, 255, 255);
@@ -134,6 +98,19 @@ public static class LuaGlobalFunctions
 		return 0;
 	}
 
+	[LuaGlobal]
+	static int MsgN(ILuaInterface lua) {
+		int top = g_Lua!.Top();
+		LuaObject tostring = new();
+		g_Lua.Global().GetMember("tostring", tostring);
+		string str = ToStringArgs(tostring, top, "MsgN tostring ERROR");
+		str += "\n";
+		g_Lua.Msg(str);
+		tostring.UnReference();
+		return 0;
+	}
+
+	[LuaGlobal]
 	static int ErrorNoHalt(ILuaInterface lua) {
 		int top = g_Lua!.Top();
 		LuaObject tostring = new();
@@ -165,6 +142,7 @@ public static class LuaGlobalFunctions
 		return 0;
 	}
 
+	[LuaGlobal]
 	static int RegisterMetaTable(ILuaInterface lua) {
 		LuaObject table = new(2, LuaType.None);
 		if (!table.isTable())
@@ -175,6 +153,7 @@ public static class LuaGlobalFunctions
 		return 0;
 	}
 
+	[LuaGlobal]
 	static int FindMetaTable(ILuaInterface lua) {
 		ILuaObject? meta = g_Lua!.GetMetaTableObject(g_Lua.CheckString(1), -1);
 		if (meta == null)
@@ -183,6 +162,7 @@ public static class LuaGlobalFunctions
 		return 1;
 	}
 
+	[LuaGlobal]
 	static int TypeID(ILuaInterface lua) {
 		g_Lua!.PushNumber((int)g_Lua.GetType(1));
 		return 1;
@@ -193,64 +173,54 @@ public static class LuaGlobalFunctions
 		return 1;
 	}
 
-	static int isbool(ILuaInterface lua) => IsType(LuaType.Bool);
-	static int isnumber(ILuaInterface lua) => IsType(LuaType.Number);
-	static int isstring(ILuaInterface lua) => IsType(LuaType.String);
-	static int istable(ILuaInterface lua) => IsType(LuaType.Table);
-	static int isfunction(ILuaInterface lua) => IsType(LuaType.Function);
-	static int isentity(ILuaInterface lua) => IsType(LuaType.Entity);
-	static int isvector(ILuaInterface lua) => IsType(LuaType.Vector);
-	static int isangle(ILuaInterface lua) => IsType(LuaType.Angle);
-	static int ispanel(ILuaInterface lua) => IsType(LuaType.Panel);
-	static int ismatrix(ILuaInterface lua) => IsType(LuaType.Matrix);
+	[LuaGlobal] static int isbool(ILuaInterface lua) => IsType(LuaType.Bool);
+	[LuaGlobal] static int isnumber(ILuaInterface lua) => IsType(LuaType.Number);
+	[LuaGlobal] static int isstring(ILuaInterface lua) => IsType(LuaType.String);
+	[LuaGlobal] static int istable(ILuaInterface lua) => IsType(LuaType.Table);
+	[LuaGlobal] static int isfunction(ILuaInterface lua) => IsType(LuaType.Function);
+	[LuaGlobal] static int isentity(ILuaInterface lua) => IsType(LuaType.Entity);
+	[LuaGlobal] static int isvector(ILuaInterface lua) => IsType(LuaType.Vector);
+	[LuaGlobal] static int isangle(ILuaInterface lua) => IsType(LuaType.Angle);
+	[LuaGlobal] static int ispanel(ILuaInterface lua) => IsType(LuaType.Panel);
+	[LuaGlobal] static int ismatrix(ILuaInterface lua) => IsType(LuaType.Matrix);
 
-	static int CurTime(ILuaInterface lua) {
-		g_Lua!.PushNumber(gpGlobals.CurTime);
-		return 1;
-	}
+	[LuaGlobal]
+	static double CurTime() => gpGlobals.CurTime;
 
-	static int UnPredictedCurTime(ILuaInterface lua) {
+	[LuaGlobal]
+	static double UnPredictedCurTime() {
 #if CLIENT_DLL
-		if (Prediction.UnpredictedCurTime != 0.0) {
-			g_Lua!.PushNumber(Prediction.UnpredictedCurTime);
-			return 1;
-		}
+		if (Prediction.UnpredictedCurTime != 0.0)
+			return Prediction.UnpredictedCurTime;
 #endif
-		g_Lua!.PushNumber(gpGlobals.CurTime);
-		return 1;
+		return gpGlobals.CurTime;
 	}
 
-	static int RealTime(ILuaInterface lua) {
-		g_Lua!.PushNumber((float)gpGlobals.RealTime);
-		return 1;
-	}
+	[LuaGlobal]
+	static float RealTime() => (float)gpGlobals.RealTime;
 
-	static int FrameTime(ILuaInterface lua) {
-		g_Lua!.PushNumber((float)gpGlobals.FrameTime);
-		return 1;
-	}
+	[LuaGlobal]
+	static float FrameTime() => (float)gpGlobals.FrameTime;
 
-	static int FrameNumber(ILuaInterface lua) {
-		g_Lua!.PushNumber(gpGlobals.FrameCount);
-		return 1;
-	}
+	[LuaGlobal]
+	static long FrameNumber() => gpGlobals.FrameCount;
 
-	static int SysTime(ILuaInterface lua) {
+	[LuaGlobal]
+	static double SysTime() {
 #if CLIENT_DLL
-		g_Lua!.PushNumber(Singleton<ISystem>().GetCurrentTime());
+		return Singleton<ISystem>().GetCurrentTime();
 #else
-		g_Lua!.PushNumber(Platform.Time);
+		return Platform.Time;
 #endif
-		return 1;
 	}
 
-	static int VGUIFrameTime(ILuaInterface lua) {
+	[LuaGlobal]
+	static double VGUIFrameTime() {
 #if CLIENT_DLL
-		g_Lua!.PushNumber(Singleton<ISystem>().GetFrameTime());
+		return Singleton<ISystem>().GetFrameTime();
 #else
-		g_Lua!.PushNumber(Platform.Time);
+		return Platform.Time;
 #endif
-		return 1;
 	}
 
 	public static void ReadStackFrom(ref LuaError error, ILuaInterface lua) {

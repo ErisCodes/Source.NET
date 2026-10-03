@@ -12,8 +12,9 @@ namespace Game.Client.GarrysMod;
 namespace Game.Server.GarrysMod;
 #endif
 
-public static class LuaNet
+public static partial class LuaNet
 {
+	[LuaLibrary]
 	static readonly LuaLibrary LL_Factory_net = new("net");
 
 	static readonly byte[] g_Buffer = new byte[0x10000];
@@ -22,51 +23,7 @@ public static class LuaNet
 	static bool g_Reliable = true;
 	public static bf_read? g_NetIncoming;
 
-	static LuaLibraryFunction Add(string name, CFunc function) {
-		LuaLibraryFunction func = new() { Name = name, Function = function };
-		LL_Factory_net.Add(func);
-		return func;
-	}
-
-	static readonly LuaLibraryFunction fectory__net__Start = Add("Start", Start);
-	static readonly LuaLibraryFunction fectory__net__WriteFloat = Add("WriteFloat", WriteFloat);
-	static readonly LuaLibraryFunction fectory__net__WriteDouble = Add("WriteDouble", WriteDouble);
-	static readonly LuaLibraryFunction fectory__net__WriteBit = Add("WriteBit", WriteBit);
-	static readonly LuaLibraryFunction fectory__net__WriteString = Add("WriteString", WriteString);
-	static readonly LuaLibraryFunction fectory__net__WriteData = Add("WriteData", WriteData);
-	static readonly LuaLibraryFunction fectory__net__WriteVector = Add("WriteVector", WriteVector);
-	static readonly LuaLibraryFunction fectory__net__WriteNormal = Add("WriteNormal", WriteNormal);
-	static readonly LuaLibraryFunction fectory__net__WriteAngle = Add("WriteAngle", WriteAngle);
-	// todo: static readonly LuaLibraryFunction fectory__net__WriteMatrix = Add("WriteMatrix", WriteMatrix);
-	static readonly LuaLibraryFunction fectory__net__WriteInt = Add("WriteInt", WriteInt);
-	static readonly LuaLibraryFunction fectory__net__WriteUInt = Add("WriteUInt", WriteUInt);
-	static readonly LuaLibraryFunction fectory__net__WriteUInt64 = Add("WriteUInt64", WriteUInt64);
-	static readonly LuaLibraryFunction fectory__net__BytesWritten = Add("BytesWritten", BytesWritten);
-#if CLIENT_DLL
-	static readonly LuaLibraryFunction fectory__net__SendToServer = Add("SendToServer", SendToServer);
-#else
-	static readonly LuaLibraryFunction fectory__net__Broadcast = Add("Broadcast", Broadcast);
-	static readonly LuaLibraryFunction fectory__net__Send = Add("Send", Send);
-	static readonly LuaLibraryFunction fectory__net__SendOmit = Add("SendOmit", SendOmit);
-	static readonly LuaLibraryFunction fectory__net__SendPVS = Add("SendPVS", SendPVS);
-	static readonly LuaLibraryFunction fectory__net__SendPAS = Add("SendPAS", SendPAS);
-#endif
-	static readonly LuaLibraryFunction fectory__net__ReadData = Add("ReadData", ReadData);
-	static readonly LuaLibraryFunction fectory__net__ReadHeader = Add("ReadHeader", ReadHeader);
-	static readonly LuaLibraryFunction fectory__net__ReadBit = Add("ReadBit", ReadBit);
-	static readonly LuaLibraryFunction fectory__net__ReadFloat = Add("ReadFloat", ReadFloat);
-	static readonly LuaLibraryFunction fectory__net__ReadDouble = Add("ReadDouble", ReadDouble);
-	static readonly LuaLibraryFunction fectory__net__ReadVector = Add("ReadVector", ReadVector);
-	static readonly LuaLibraryFunction fectory__net__ReadNormal = Add("ReadNormal", ReadNormal);
-	static readonly LuaLibraryFunction fectory__net__ReadAngle = Add("ReadAngle", ReadAngle);
-	// todo: static readonly LuaLibraryFunction fectory__net__ReadMatrix = Add("ReadMatrix", ReadMatrix);
-	static readonly LuaLibraryFunction fectory__net__ReadString = Add("ReadString", ReadString);
-	static readonly LuaLibraryFunction fectory__net__ReadInt = Add("ReadInt", ReadInt);
-	static readonly LuaLibraryFunction fectory__net__ReadUInt = Add("ReadUInt", ReadUInt);
-	static readonly LuaLibraryFunction fectory__net__ReadUInt64 = Add("ReadUInt64", ReadUInt64);
-	static readonly LuaLibraryFunction fectory__net__BytesLeft = Add("BytesLeft", BytesLeft);
-	static readonly LuaLibraryFunction fectory__net__Abort = Add("Abort", Abort);
-
+	[LuaFunction]
 	static int Start(ILuaInterface lua) {
 		string name = g_Lua!.CheckString(1);
 		if (g_Started)
@@ -88,6 +45,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int WriteFloat(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -97,6 +55,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int WriteDouble(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -106,6 +65,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int WriteBit(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -120,6 +80,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int WriteString(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -132,6 +93,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int WriteData(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -166,6 +128,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int WriteVector(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -174,6 +137,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int WriteNormal(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -182,6 +146,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int WriteAngle(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -190,6 +155,9 @@ public static class LuaNet
 		return 0;
 	}
 
+	// todo: [LuaFunction] static int WriteMatrix(ILuaInterface lua)
+
+	[LuaFunction]
 	static int WriteInt(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -202,6 +170,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int WriteUInt(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -221,6 +190,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int WriteUInt64(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -230,6 +200,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int BytesWritten(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -240,6 +211,7 @@ public static class LuaNet
 	}
 
 #if CLIENT_DLL
+	[LuaFunction]
 	static int SendToServer(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -263,6 +235,7 @@ public static class LuaNet
 
 	static void SendFilter(RecipientFilter filter) => engine.GMOD_SendToClient(ref filter, g_Buffer, g_Write.BitsWritten);
 
+	[LuaFunction]
 	static int Broadcast(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -285,6 +258,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int Send(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -352,6 +326,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int SendOmit(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -420,6 +395,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int SendPVS(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -443,6 +419,7 @@ public static class LuaNet
 		return 0;
 	}
 
+	[LuaFunction]
 	static int SendPAS(ILuaInterface lua) {
 		if (!g_Started)
 			return 0;
@@ -475,6 +452,7 @@ public static class LuaNet
 			lua.ErrorFromLua($"Trying to read more data ({bits} bit) than the net message has left ({g_NetIncoming.BitsLeft} bits)!\n");
 	}
 
+	[LuaFunction]
 	static int ReadData(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -499,6 +477,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadHeader(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -508,6 +487,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadBit(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -517,6 +497,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadFloat(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -528,6 +509,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadDouble(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -539,6 +521,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadVector(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -549,6 +532,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadNormal(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -559,6 +543,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadAngle(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -569,8 +554,11 @@ public static class LuaNet
 		return 1;
 	}
 
+	// todo: [LuaFunction] static int ReadMatrix(ILuaInterface lua)
+
 	static readonly byte[] strString = new byte[0x10000];
 
+	[LuaFunction]
 	static int ReadString(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -583,6 +571,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadInt(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -596,6 +585,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadUInt(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -609,6 +599,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int ReadUInt64(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -618,6 +609,7 @@ public static class LuaNet
 		return 1;
 	}
 
+	[LuaFunction]
 	static int BytesLeft(ILuaInterface lua) {
 		if (g_NetIncoming == null)
 			return 0;
@@ -627,10 +619,10 @@ public static class LuaNet
 		return 2;
 	}
 
-	static int Abort(ILuaInterface lua) {
+	[LuaFunction]
+	static void Abort() {
 		g_Reliable = true;
 		g_Started = false;
-		return 0;
 	}
 }
 #endif

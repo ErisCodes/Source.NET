@@ -40,12 +40,10 @@ public class LuaEntityClass(string name, LuaType type, Action? initFn, string? d
 	}
 }
 
-public static class LuaEntity
+public static partial class LuaEntity
 {
+	[LuaClass]
 	public static readonly LuaClass LC_Entity = new("Entity", LuaType.Entity, null, null);
-
-	static readonly LuaClassFunction Entity___index__Factory = LC_Entity.Add("__index", Entity____index);
-	static readonly LuaClassFunction Entity___newindex__Factory = LC_Entity.Add("__newindex", Entity____newindex);
 
 	public static readonly LuaEntityClass LC_NPC = new("NPC", LuaType.Entity, null, "Entity");
 	public static readonly LuaEntityClass LC_Player = new("Player", LuaType.Entity, null, "Entity");
@@ -171,8 +169,10 @@ public static class LuaEntity
 		return EntityBaseIndex();
 	}
 
+	[LuaMethod]
 	static int Entity____index(ILuaInterface lua) => EntityBaseIndex();
 
+	[LuaMethod]
 	static int Entity____newindex(ILuaInterface lua) {
 		BaseEntity? ent = Get_Entity(1, true);
 		if (ent == null)
