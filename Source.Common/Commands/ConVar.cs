@@ -134,8 +134,8 @@ public class ConVar : ConCommandBase, IConVar
 
 		Changed += callback;
 
-		doubleValue = double.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var dRes) ? dRes : 0;
-		intValue = int.TryParse(value, out var iRes) ? iRes : Convert.ToInt32(Math.Clamp(doubleValue, int.MinValue, int.MaxValue));
+		doubleValue = atof(value);
+		intValue = atoi(value); // dont convert from float to int and lose bits
 
 		Assert(!hasMin || doubleValue >= minVal);
 		Assert(!hasMax || doubleValue <= maxVal);
@@ -223,13 +223,14 @@ public class ConVar : ConCommandBase, IConVar
 
 	void InternalSetValue(ReadOnlySpan<char> value) {
 		value = value.SliceNullTerminatedString();
-		double dNewValue = double.TryParse(value, out double d) ? d : 0;
-		if (ClampValue(ref dNewValue)) 
-			value = $"{dNewValue:.4}";
+		double dNewValue = atof(value);
+		if (ClampValue(ref dNewValue))
+			value = FormatFixed(dNewValue, 6);
 
+		// Redetermine value
 		double oldValue = doubleValue;
 		doubleValue = dNewValue;
-		intValue = int.TryParse(value, out var iRes) ? iRes : Convert.ToInt32(Math.Clamp(doubleValue, int.MinValue, int.MaxValue));
+		intValue = (int)dNewValue;
 
 		if ((Flags & FCvar.NeverAsString) != FCvar.NeverAsString)
 			ChangeStringValue(value, oldValue);
@@ -270,7 +271,7 @@ public class ConVar : ConCommandBase, IConVar
 		Debug.Assert(parent == this);
 		double dbValue = value;
 		if (ClampValue(ref dbValue))
-			value = Convert.ToInt32(Math.Clamp(dbValue, int.MinValue, int.MaxValue));
+			value = (int)dbValue;
 
 		double oldValue = doubleValue;
 		doubleValue = dbValue;

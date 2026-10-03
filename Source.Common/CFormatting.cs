@@ -478,6 +478,46 @@ public static class CFormatting
 		return 0;
 	}
 
+	public static double strtod(ReadOnlySpan<char> input, out ReadOnlySpan<char> output) {
+		int i = 0;
+		while (i < input.Length && input[i] is ' ' or '\t' or '\n' or '\r' or '\f' or '\v')
+			i++;
+
+		int start = i;
+		if (i < input.Length && (input[i] == '+' || input[i] == '-'))
+			i++;
+
+		int mantissaStart = i;
+		bool seenDot = false;
+		while (i < input.Length && (char.IsAsciiDigit(input[i]) || (input[i] == '.' && !seenDot))) {
+			if (input[i] == '.')
+				seenDot = true;
+			i++;
+		}
+
+		if (i > mantissaStart && i < input.Length && (input[i] == 'e' || input[i] == 'E')) {
+			int expStart = i;
+			i++;
+			if (i < input.Length && (input[i] == '+' || input[i] == '-'))
+				i++;
+			if (i < input.Length && char.IsAsciiDigit(input[i])) {
+				while (i < input.Length && char.IsAsciiDigit(input[i]))
+					i++;
+			}
+			else
+				i = expStart;
+		}
+
+		if (double.TryParse(input[start..i], NumberStyles.Float, CultureInfo.InvariantCulture, out double ret)) {
+			output = input[i..];
+			return ret;
+		}
+		output = input;
+		return 0;
+	}
+
+	public static double atof(ReadOnlySpan<char> str) => strtod(str, out _);
+
 	public static string FormatFixed(double value, int precision) {
 		long bits = BitConverter.DoubleToInt64Bits(value);
 		bool negative = bits < 0;
