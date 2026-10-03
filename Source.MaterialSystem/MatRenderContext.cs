@@ -214,6 +214,7 @@ public class MatRenderContext : IMatRenderContextInternal
 			}
 			SetCurrentMaterialInternal(material);
 		}
+		SetCurrentProxy(proxyData);
 
 		shaderAPI.Bind(GetCurrentMaterialInternal());
 	}
@@ -228,6 +229,12 @@ public class MatRenderContext : IMatRenderContextInternal
 	public IMaterial? GetCurrentMaterial() {
 		return currentMaterial;
 	}
+
+	object? CurrentProxyData;
+	public object? GetCurrentProxy() => CurrentProxyData;
+	public void SetCurrentProxy(object? proxyData) => CurrentProxyData = proxyData;
+
+	public int GetCurrentNumBones() => shaderAPI.GetCurrentNumBones();
 
 	public void PopMatrix() {
 		shaderAPI.PopMatrix(); // We need to tell ShaderAPI *NOW* so it can flush primitives trigger matrix sync etc
@@ -286,8 +293,16 @@ public class MatRenderContext : IMatRenderContextInternal
 	bool FlashlightEnable;
 	bool DirtyViewState;
 	bool DirtyViewProjState;
-	bool EnableClipping;
+	bool EnableClippingValue;
 	MaterialHeightClipMode HeightClipMode;
+
+	public bool EnableClipping(bool enable) {
+		if (enable != EnableClippingValue) {
+			EnableClippingValue = enable;
+			return !enable;
+		}
+		return enable;
+	}
 
 	public MaterialHeightClipMode GetHeightClipMode() => HeightClipMode;
 
