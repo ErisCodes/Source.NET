@@ -546,6 +546,61 @@ public class MStudioMesh
 		return VertexData;
 	}
 }
+public class MStudioEyeball
+{
+	public const int SIZEOF = 172;
+	public static MStudioEyeball FACTORY(object caller, Memory<byte> data) => new(data);
+
+	public Memory<byte> Data;
+
+	public int NameIndex;
+	public string? nameCache;
+	public string Name() => Studio.ProduceASCIIString(ref nameCache, Data.Span[NameIndex..]);
+
+	public int Bone;
+	public Vector3 Org;
+	public float ZOffset;
+	public float Radius;
+	public Vector3 Up;
+	public Vector3 Forward;
+	public int Texture;
+
+	public float IrisScale;
+
+	public InlineArray3<int> UpperFlexDesc;
+	public InlineArray3<int> LowerFlexDesc;
+	public InlineArray3<float> UpperTarget;
+	public InlineArray3<float> LowerTarget;
+
+	public int UpperLidFlexDesc;
+	public int LowerLidFlexDesc;
+	public bool NonFACS;
+
+	public MStudioEyeball(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(Data.Span);
+		br.Read(out NameIndex);
+		br.Read(out Bone);
+		br.Read(out Org);
+		br.Read(out ZOffset);
+		br.Read(out Radius);
+		br.Read(out Up);
+		br.Read(out Forward);
+		br.Read(out Texture);
+		br.Read<int>();
+		br.Read(out IrisScale);
+		br.Read<int>();
+		br.ReadInto<int>(UpperFlexDesc);
+		br.ReadInto<int>(LowerFlexDesc);
+		br.ReadInto<float>(UpperTarget);
+		br.ReadInto<float>(LowerTarget);
+		br.Read(out UpperLidFlexDesc);
+		br.Read(out LowerLidFlexDesc);
+		br.Advance(sizeof(int) * 4);
+		NonFACS = br.Read<byte>() != 0;
+	}
+}
+
 /// <summary>
 /// analog of mstudiomodel_t
 /// </summary>
@@ -604,6 +659,10 @@ public class MStudioModel
 
 	string? nameCache;
 	public string Name() => Studio.ProduceASCIIString(ref nameCache, name);
+
+	MStudioEyeball[]? eyeballCache;
+	public MStudioEyeball Eyeball(int i)
+		=> Studio.ProduceArrayIdx(this, ref eyeballCache, NumEyeballs, EyeballIndex, i, MStudioEyeball.SIZEOF, Data, MStudioEyeball.FACTORY);
 
 	public MStudioModelVertexData? GetVertexData(IStudioDataCache dataCache, StudioHeader studioHdr) {
 		VertexFileHeader? vertexHdr = CacheVertexData(dataCache, studioHdr);
