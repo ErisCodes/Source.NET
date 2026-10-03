@@ -1,3 +1,5 @@
+using Game.Shared;
+
 using Source.Common.Formats.BSP;
 
 using System.Numerics;
@@ -9,4 +11,9 @@ public class AI_MoveProbe : AI_Component
 	public AI_MoveProbe(AI_BaseNPC? outer) : base(outer) { }
 
 	public bool FloorPoint(in Vector3 start, Mask collisionMask, float startZ, float endZ, out Vector3 result) => throw new NotImplementedException();
+
+	public void ClearBlockingEntity() => LastBlockingEnt.Set(null);
+	public BaseEntity? GetBlockingEntity() => LastBlockingEnt.Get();
+
+	readonly EHANDLE LastBlockingEnt = new();
 }

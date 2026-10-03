@@ -4,6 +4,9 @@ public class AI_LocalNavigator : AI_Component, IAI_MovementSink
 {
 	public AI_LocalNavigator(AI_BaseNPC? outer) : base(outer) {
 		MoveProbe = null;
+		PlaneSolver = new AI_PlaneSolver(outer!);
+
+		LastWasClear = false;
 	}
 
 	public void Init(IAI_MovementSink? movementServices) {
@@ -18,6 +21,15 @@ public class AI_LocalNavigator : AI_Component, IAI_MovementSink
 		return -1.0f;
 	}
 
+	public void ResetMoveCalculations() {
+		FullDirectTimer.Force();
+		PlaneSolver.Reset();
+	}
+
 	public AI_MoveProbe? MoveProbe;
 	public IAI_MovementSink? Proxied;
+
+	bool LastWasClear;
+	readonly SimpleSimTimer FullDirectTimer = new();
+	readonly AI_PlaneSolver PlaneSolver;
 }

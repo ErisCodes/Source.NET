@@ -9,5 +9,5 @@ public static class AI_NetworkGlobals
 
 public class AI_Network
 {
-
+	public AI_Node? GetNode(int id, bool asserted = true) => throw new NotImplementedException();
 }

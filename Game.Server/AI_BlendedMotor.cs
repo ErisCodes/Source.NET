@@ -39,6 +39,12 @@ public class AI_BlendedMotor : AI_Motor
 
 	public float GetMoveScriptTotalTime() => throw new NotImplementedException();
 
+	public override void ResetMoveCalculations() {
+		base.ResetMoveCalculations();
+		ScriptMove.Clear();
+		ScriptTurn.Clear();
+	}
+
 	public float OverrideMaxYawSpeed(Activity activity) {
 		if (IsYawLocked())
 			return 0.0f;
@@ -65,6 +71,29 @@ public class AI_BlendedMotor : AI_Motor
 
 		SetYawSpeed(CalcYawSpeed());
 	}
+
+	public struct AI_Movementscript_t
+	{
+		public float Time;
+		public float ElapsedTime;
+
+		public float Dist;
+
+		public float MaxVelocity;
+
+		public float Yaw;
+		public float AngularVelocity;
+
+		public bool Looping;
+		public int Flags;
+
+		public AI_Waypoint_t? Waypoint;
+
+		public Vector3 Location;
+	}
+
+	readonly List<AI_Movementscript_t> ScriptMove = [];
+	readonly List<AI_Movementscript_t> ScriptTurn = [];
 
 	public bool DeceleratingToGoal;
 

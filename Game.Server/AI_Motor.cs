@@ -26,6 +26,8 @@ public class AI_Motor : AI_Component, IAI_MovementSink
 	public void SetYawSpeed(float yawSpeed) => YawSpeed = yawSpeed;
 	public float GetYawSpeed() => YawSpeed;
 
+	public virtual void ResetMoveCalculations() { }
+
 	public virtual void RecalculateYawSpeed() {
 		SetYawSpeed(CalcYawSpeed());
 	}

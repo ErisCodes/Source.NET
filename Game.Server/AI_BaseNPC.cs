@@ -4,6 +4,7 @@ using Game.Shared;
 
 using Source;
 using Source.Common;
+using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
 
@@ -53,6 +54,9 @@ public static class AI_BaseNPCGlobals
 	public const int AI_SLEEP_FLAGS_NONE = 0x00000000;
 	public const int AI_SLEEP_FLAG_AUTO_PVS = 0x00000001;
 	public const int AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS = 0x00000002;
+
+	public static readonly ConVar ai_strong_optimizations = new("ai_strong_optimizations", "0");
+	public static bool AIStrongOpt() => ai_strong_optimizations.GetBool();
 }
 
 public struct AIScheduleState_t
@@ -224,6 +228,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public static AI_GlobalScheduleNamespace GetSchedulingSymbols() => SchedulingSymbols;
 
+	public void Forget(int memory) => Memory &= ~memory;
 	public bool HasMemory(int memory) => (Memory & memory) != 0;
 
 	public bool IsUsingSmallHull() => IsUsingSmallHullValue;
