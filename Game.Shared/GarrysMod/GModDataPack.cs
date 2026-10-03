@@ -3,6 +3,11 @@ using Source;
 using Source.Common.Engine;
 using Source.Common.GarrysMod;
 using Source.Common.GarrysMod.Lua;
+using Source.Common.Hashing;
+#if CLIENT_DLL
+using Source.Common;
+using Source.Common.Filesystem;
+#endif
 
 using System.Security.Cryptography;
 using System.Text;
@@ -22,10 +27,206 @@ public class GModDataPack : IGModDataPack
 	bool OverflowWarned;
 	readonly SortedSet<string> SingleplayerFiles = new(StringComparer.Ordinal);
 
+#if CLIENT_DLL
+	string ClientSearchPaths = "";
+
+	static int FilesRequesting_Total;
+	static int FilesRequesting_Recv;
+
+	public void Initialize() {
+		Table = networkstringtable.FindTable("client_lua_files");
+		get.LuaShared()!.SetLuaFindHook(this);
+		OverflowWarned = false;
+	}
+
+	int FindInTable(ReadOnlySpan<char> name) {
+		Span<char> fixedName = stackalloc char[0x104];
+		strcpy(fixedName, name);
+		for (int i = 0; i < fixedName.Length && fixedName[i] != '\0'; i++) {
+			if (fixedName[i] == '\\')
+				fixedName[i] = '/';
+		}
+
+		string path = new(fixedName.SliceNullTerminatedString());
+		int index = Table!.FindStringIndex(path);
+		if (index != INetworkStringTable.INVALID_STRING_INDEX)
+			return index;
+
+		index = Table.FindStringIndex("lua\\" + path);
+		if (index != INetworkStringTable.INVALID_STRING_INDEX)
+			return index;
+
+		return Table.FindStringIndex("gamemodes\\" + path);
+	}
+
+	ReadOnlySpan<char> GetClientSearchPaths() {
+		byte[]? data = Table!.GetStringUserData(0);
+		ClientSearchPaths = data == null ? "" : Encoding.UTF8.GetString(data);
+		return ClientSearchPaths;
+	}
+
+	byte[] GetHashFromDatatable(int index) {
+		if (index == INetworkStringTable.INVALID_STRING_INDEX)
+			return [];
+
+		byte[]? data = Table!.GetStringUserData(index);
+		if (data == null || data.Length < 0x20)
+			return [];
+
+		return data[..0x20];
+	}
+
+	public void RequestFiles() {
+		FilesRequesting_Total = 0;
+		FilesRequesting_Recv = 0;
+		if (IsSingleplayer())
+			return;
+
+		if (Table == null) {
+			Warning("RequestFiles with no table!\n");
+			return;
+		}
+
+		List<byte> buffer = new(0x20) { (byte)GModMessageType.LuaFile };
+		int requesting = 0;
+		for (int i = 1; i < Table.GetNumStrings(); i++) {
+			byte[] hash = GetHashFromDatatable(i);
+			if (ReadCache(hash, out byte[]? cached)) {
+				SetFileContents(i, cached!, false);
+				continue;
+			}
+
+			string name = new(Table.GetString(i));
+			if (LoadFromDisk(i, name, "MOD", hash))
+				continue;
+			if (LoadFromDisk(i, name, "workshop", hash))
+				continue;
+
+			buffer.Add((byte)i);
+			buffer.Add((byte)(i >> 8));
+			requesting++;
+		}
+		buffer.Add(0);
+		buffer.Add(0);
+
+		engine.GMOD_SendToServer(buffer.ToArray(), buffer.Count << 3, true);
+
+		if (requesting < 1)
+			Msg("Lua cache is up to date\n");
+		else {
+			FilesRequesting_Total = requesting;
+			Msg($"Requesting {requesting} Lua files from the server...\n");
+			enginevgui.UpdateCustomProgressBar(0.9f, $"Requesting {requesting} Lua files from the server...");
+		}
+	}
+
+	bool LoadFromDisk(int index, string fileName, ReadOnlySpan<char> pathID, byte[] hash) {
+		if (fileName.Contains("..", StringComparison.Ordinal))
+			return false;
+
+		using IFileHandle? handle = filesystem.Open(fileName, FileOpenOptions.Read | FileOpenOptions.Binary, pathID);
+		if (handle == null)
+			return false;
+
+		int size = (int)handle.Stream.Length;
+		byte[] contents = new byte[size + 1];
+		handle.Stream.ReadExactly(contents, 0, size);
+		contents[size] = 0;
+
+		if (!GetHashFromString(contents).AsSpan().SequenceEqual(hash))
+			return false;
+
+		using MemoryStream output = new();
+		output.Write(hash, 0, 0x20);
+		bool compressed = Bootil.Compression.LZMA.Compress(contents, output, 5, 0x10000);
+		if (compressed)
+			SetFileContents(index, output.ToArray(), false);
+
+		return compressed;
+	}
+
+	static string GetCachePath(ReadOnlySpan<byte> hash) => "cache/lua/" + SHA256Value.FromBytes(hash).ToString() + ".lua";
+
+	static bool ReadCache(byte[] hash, out byte[]? data) {
+		data = null;
+		if (hash.Length != 0x20)
+			return false;
+
+		string path = GetCachePath(hash);
+		if (!filesystem.FileExists(path, "DEFAULT_WRITE_PATH"))
+			return false;
+
+		using IFileHandle? handle = filesystem.Open(path, FileOpenOptions.Read | FileOpenOptions.Binary, "DEFAULT_WRITE_PATH");
+		if (handle == null)
+			return false;
+
+		using MemoryStream file = new();
+		handle.Stream.CopyTo(file);
+		byte[] contents = file.ToArray();
+		if (contents.Length >= 0x20 && contents.AsSpan(0, 0x20).SequenceEqual(hash)) {
+			data = contents;
+			return true;
+		}
+
+		Msg("SHA256 in cache file doesn't match!!\n");
+		return false;
+	}
+
+	static void DeleteCache(ReadOnlySpan<byte> hash) {
+		string path = GetCachePath(hash);
+		if (filesystem.FileExists(path, "DEFAULT_WRITE_PATH"))
+			filesystem.RemoveFile(path, "DEFAULT_WRITE_PATH");
+	}
+
+	static bool WriteCache(ReadOnlySpan<byte> hash, ReadOnlySpan<byte> data) {
+		filesystem.CreateDirHierarchy("cache/lua", "DEFAULT_WRITE_PATH");
+		string path = GetCachePath(hash);
+		if (filesystem.FileExists(path, "DEFAULT_WRITE_PATH"))
+			return false;
+
+		using IFileHandle? handle = filesystem.Open(path, FileOpenOptions.Write | FileOpenOptions.Binary, "DEFAULT_WRITE_PATH");
+		handle?.Stream.Write(data);
+		return true;
+	}
+
+	public void SetFileContents(int index, ReadOnlySpan<byte> data, bool save) {
+		if (Table == null) {
+			DevWarning("SetFileContents with no table!\n");
+			return;
+		}
+
+		if (Table.GetNumStrings() <= index) {
+			DevWarning($"Client requesting crazy file update number ({index})\n");
+			return;
+		}
+
+		Table.SetStringUserData(index, data.Length, data);
+		if (save) {
+			if (data.Length < 0x21)
+				Warning($"Downlaoded .lua file '{Table.GetString(index)}', but it has no content?\n");
+			else
+				WriteCache(data[..0x20], data);
+		}
+
+		get.LuaShared()!.InvalidateCache("!" + new string(Table.GetString(index)));
+
+		if (FilesRequesting_Total != 0) {
+			FilesRequesting_Recv++;
+			enginevgui.UpdateCustomProgressBar(0.91f, $"Downloaded {FilesRequesting_Recv} of {FilesRequesting_Total} Lua files");
+		}
+
+		if (FilesRequesting_Total <= FilesRequesting_Recv && FilesRequesting_Total != 0) {
+			FilesRequesting_Recv = 0;
+			FilesRequesting_Total = 0;
+			enginevgui.UpdateCustomProgressBar(0.91f, "Received all Lua files we needed!");
+		}
+	}
+#else
 	public void Initialize() {
 		Table = networkstringtable.CreateStringTable("client_lua_files", IsSingleplayer() ? 0x8000 : 0x2000, 0, 0);
 		Table.AddString(true, "paths");
 	}
+#endif
 
 	public void BuildSearchPaths() {
 		string gameDir = new(get.GameDir());
@@ -119,11 +320,106 @@ public class GModDataPack : IGModDataPack
 
 	public bool IsSingleplayer() => gpGlobals.MaxClients == 1;
 
+#if CLIENT_DLL
+	public string? GetFromDatatable(ReadOnlySpan<char> name) {
+		if (Table == null)
+			return null;
+
+		int index = FindInTable(name);
+		if (index == INetworkStringTable.INVALID_STRING_INDEX)
+			return null;
+
+		byte[]? data = Table.GetStringUserData(index);
+		if (data == null)
+			return null;
+
+		if (data.Length < 0x20) {
+			Warning($"This should never happen - datapack file entry has no hash! ({name})\n");
+			return null;
+		}
+
+		if (data.Length == 0x20) {
+			if (engine.IsPlayingDemo())
+				return null;
+
+			Warning($"This should never happen - datapack file entry has no data! ({name})\n");
+			return null;
+		}
+
+		ReadOnlySpan<byte> hash = data.AsSpan(0, 0x20);
+		using MemoryStream output = new();
+		if (!Bootil.Compression.LZMA.Extract(data.AsSpan(0x20), output)) {
+			Warning($"Couldn't extract from datatable ({name}) ({data.Length})\n");
+			return null;
+		}
+
+		byte[] contents = output.ToArray();
+		byte[] computed = GetHashFromString(contents);
+		if (hash.SequenceEqual(computed)) {
+			int length = Array.IndexOf(contents, (byte)0);
+			return Encoding.UTF8.GetString(contents, 0, length < 0 ? contents.Length : length);
+		}
+
+		DeleteCache(computed);
+		DeleteCache(hash);
+		Warning($"Hash mismatch for file {name}! ({SHA256Value.FromBytes(computed)} {SHA256Value.FromBytes(hash)})\n");
+		return null;
+	}
+
+	public byte[] GetHashFromDatatable(ReadOnlySpan<char> name) {
+		if (Table == null)
+			return [];
+
+		return GetHashFromDatatable(FindInTable(name));
+	}
+
+	public string? FindFileInDatatable(ReadOnlySpan<char> path, bool unk, bool isGamePath) {
+		if (Table == null)
+			return null;
+
+		string fullPath = new(path);
+		Bootil.String.Lower(ref fullPath);
+		Bootil.String.Util.FindAndReplace(ref fullPath, "\\", "/");
+
+		string paths = new(GetClientSearchPaths().SliceNullTerminatedString());
+		Bootil.String.Lower(ref paths);
+
+		if (isGamePath)
+			paths = "/";
+
+		foreach (string tok in paths.Split(';', StringSplitOptions.RemoveEmptyEntries)) {
+			string searchPath = tok;
+			Bootil.String.Util.FindAndReplace(ref searchPath, "\\", "/");
+			Bootil.String.Util.TrimLeft(ref searchPath, "/\\");
+
+			string check = searchPath + fullPath;
+			for (int i = 0; i < Table.GetNumStrings(); i++) {
+				string name = new(Table.GetString(i));
+				if (name != check)
+					continue;
+
+				if (!unk)
+					Bootil.String.File.ExtractFilename(ref name);
+				return name;
+			}
+		}
+
+		return null;
+	}
+
+	public bool IsLocalLuaBlocked() {
+		if (IsSingleplayer())
+			return false;
+
+		return cvar.FindVar("sv_cheats")!.GetInt() == 0 && GarrysMod.sv_allowcslua.GetInt() == 0;
+	}
+#else
 	public string? GetFromDatatable(ReadOnlySpan<char> name) => throw new NotImplementedException();
 	public byte[] GetHashFromDatatable(ReadOnlySpan<char> name) => throw new NotImplementedException();
-	public void FindInDatatable(ReadOnlySpan<char> wildcard, List<LuaFindResult> output, bool unk) => throw new NotImplementedException();
 	public string? FindFileInDatatable(ReadOnlySpan<char> path, bool unk, bool isGamePath) => throw new NotImplementedException();
 	public bool IsLocalLuaBlocked() => throw new NotImplementedException();
+#endif
+	public void FindInDatatable(ReadOnlySpan<char> wildcard, List<LuaFindResult> output, bool unk) => throw new NotImplementedException();
 	public bool IsValidDirectory(ReadOnlySpan<char> name) => throw new NotImplementedException();
 }
 #endif

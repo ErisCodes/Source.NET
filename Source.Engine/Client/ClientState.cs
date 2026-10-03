@@ -611,17 +611,7 @@ IModelLoader modelloader, ICommandLine commandLine,
 					g_ClientDLL!.GMOD_RequestLuaFiles(NetChannel!);
 				}
 				return true;
-			case GModMessageType.LuaFile: {
-					// FOR FUTURE REFERENCE (when moving to client dll)
-					// This is how you would decode the Lua file data:
-					// readonly MemoryStream luaFileData = new(new byte[500_000], 0, 500_000, true, true);
-					// luaFileData.Position = 0;
-					// luaFileData.SetLength(0);
-					// Bootil.Compression.LZMA.Extract(msg.LuaFile.FileContents.Span, luaFileData);
-					g_ClientDLL!.GMOD_ReceiveLuaFile(ClientLuaFiles.GetString(msg.LuaFile.FileStringTableEntryID), in msg.LuaFile.FileSHA256, msg.LuaFile.FileContents.Span);
-
-				}
-				return true;
+			case GModMessageType.LuaFile:
 			case GModMessageType.NetMessage:
 				g_ClientDLL!.GMOD_ReceiveServerMessage(new bf_read(msg.RawData.ToArray(), msg.RawData.Length, msg.RawBits), msg.RawBits);
 				return true;

@@ -270,8 +270,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 				Game.Client.GarrysMod.NetworkString.Install();
 				break;
 			case Protocol.CLIENT_LUA_FILES_TABLENAME:
-				g_ClientLuaFiles = networkstringtable.FindTable(tableName)!;
-				g_ClientLuaFiles.SetStringChangedCallback(this, OnReceiveLuaFileString);
+				Game.Client.GarrysMod.GModDataPack.DataPack().Initialize();
 				break;
 		}
 
@@ -542,29 +541,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 	int filesRequesting_Total;
 	int filesRequesting_Recv;
 
-	public void GMOD_RequestLuaFiles(INetChannel netchan) {
-		Span<char> shaBuffer = stackalloc char[LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS + LUA_SUFFIX.Length];
-		LUA_PREFIX.CopyTo(shaBuffer);
-
-		var luaFileMessage = new CLC_GMod_ClientToServer(GModMessageType.LuaFile);
-
-		int filesRequesting = 0;
-		for (int i = 1; i < g_ClientLuaFiles.GetNumStrings(); i++) {
-			ReadOnlySpan<char> filename = g_ClientLuaFiles.GetString(i);
-			byte[]? filehash = g_ClientLuaFiles.GetStringUserData(i);
-			SHA256Value.FromBytes(filehash).ToString(shaBuffer[LUA_PREFIX.Length..]);
-			LUA_SUFFIX.CopyTo(shaBuffer.Slice(LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS, LUA_SUFFIX.Length));
-			if (!filesystem.FileExists(shaBuffer, "CACHE")) {
-				luaFileMessage.LuaFile.FileStringTableEntryIDs[filesRequesting] = (ushort)i;
-				filesRequesting++;
-			}
-		}
-
-		netchan!.SendNetMsg(luaFileMessage!);
-
-		filesRequesting_Total = filesRequesting;
-		filesRequesting_Recv = 0;
-	}
+	public void GMOD_RequestLuaFiles(INetChannel netchan) => Game.Client.GarrysMod.GModDataPack.DataPack().RequestFiles();
 
 	public void GMOD_ReceiveLuaFile(ReadOnlySpan<char> fileName, in SHA256Value sha256, ReadOnlySpan<byte> compressed) {
 		Span<char> shaBuffer = stackalloc char[LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS + LUA_SUFFIX.Length];
@@ -744,8 +721,17 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 			case GModMessageType.LuaCmd:
 				Game.Client.GarrysMod.GarrysMod.RunLuaCmd(buffer);
 				return;
-			case GModMessageType.LuaFile:
-				// todo: DataPack()->...
+			case GModMessageType.LuaFile: {
+					int index = (int)buffer.ReadUBitLong(16);
+					uint size = (uint)((len >> 3) - 3);
+					if (size > 0x10000) {
+						Msg($"Lua file {index} too big, ignoring! ({size} > {0x10000})\n");
+						return;
+					}
+					byte[] bdata = new byte[size];
+					buffer.ReadBytes(bdata);
+					Game.Client.GarrysMod.GModDataPack.DataPack().SetFileContents(index, bdata, true);
+				}
 				return;
 		}
 

@@ -725,7 +725,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return WriteToStream(fileSystem.Open(path, FileOpenOptions.Write, pathID)?.Stream);
 	}
 	public bool WriteToFile(IFileSystem fileSystem, ReadOnlySpan<char> path) {
-		return WriteToStream(fileSystem.Open(path, FileOpenOptions.Read, null)?.Stream);
+		return WriteToStream(fileSystem.Open(path, FileOpenOptions.Write, null)?.Stream);
 	}
 
 

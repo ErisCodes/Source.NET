@@ -29,7 +29,7 @@ public static class GarrysModSingletons
 public class GarrysMod : IGarrysMod
 {
 	public static readonly ConVar lua_strict = new("lua_strict", "0", FCvar.Replicated | FCvar.Notify, "Enable extra checks for Lua API, such as argument type checking, errors that normally would be silent, etc. Useful to catch bugs in code when developing addons.");
-	static readonly ConVar sv_allowcslua = new("sv_allowcslua", "0", FCvar.Archive | FCvar.Notify | FCvar.Replicated, "Allow clients to run clientside addons. This will override any gamemode setting!");
+	public static readonly ConVar sv_allowcslua = new("sv_allowcslua", "0", FCvar.Archive | FCvar.Notify | FCvar.Replicated, "Allow clients to run clientside addons. This will override any gamemode setting!");
 
 	public void DLLInit(IServiceCollection services) {
 #if CLIENT_DLL
@@ -250,7 +250,7 @@ public class GarrysMod : IGarrysMod
 #else
 			Game.Server.GarrysMod.LuaEntity.MakeLuaNULLEntity();
 #endif
-			// g_Lua.FindAndRunScript("includes/init.lua", true, true, "!UNKNOWN", true);
+			g_Lua.FindAndRunScript("includes/init.lua", true, true, "!UNKNOWN", true);
 #if CLIENT_DLL
 			// if (gGM == null)
 			// 	Error("We should have a gGM at this point!");
