@@ -6,6 +6,7 @@ using Game.Shared;
 
 using Source.Common;
 using Source.Common.Commands;
+using Source.Common.Formats.BSP;
 using Source.Common.Mathematics;
 using Source.Common.Physics;
 
@@ -730,7 +731,32 @@ namespace Game.Server
 		}
 
 		private bool PhysicsCheckWater() {
-			throw new NotImplementedException();
+			if (GetMoveParent() != null)
+				return GetWaterLevel() > Shared.WaterLevel.Feet;
+
+			Contents cont = GetWaterType();
+
+			if ((cont & (Contents)(Mask.Water | Mask.Current)) != (Contents)(Mask.Water | Mask.Current))
+				return GetWaterLevel() > Shared.WaterLevel.Feet;
+
+			Vector3 v = new(0, 0, 0);
+			if ((cont & Contents.Current0) != 0)
+				v[0] += 1;
+			if ((cont & Contents.Current90) != 0)
+				v[1] += 1;
+			if ((cont & Contents.Current180) != 0)
+				v[0] -= 1;
+			if ((cont & Contents.Current270) != 0)
+				v[1] -= 1;
+			if ((cont & Contents.CurrentUp) != 0)
+				v[2] += 1;
+			if ((cont & Contents.CurrentDown) != 0)
+				v[2] -= 1;
+
+			MathLib.VectorMA(GetBaseVelocity(), 50.0f * (int)GetWaterLevel(), v, out Vector3 newBaseVelocity);
+			SetBaseVelocity(newBaseVelocity);
+
+			return GetWaterLevel() > Shared.WaterLevel.Feet;
 		}
 
 		public void SimulateAngles(TimeUnit_t frameTime) {
