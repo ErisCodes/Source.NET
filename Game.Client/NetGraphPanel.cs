@@ -1045,7 +1045,7 @@ public class NetGraphPanel : Panel
 
 	void UpdateEstimatedServerFramerate(INetChannelInfo netchannel) {
 		netchannel.GetRemoteFramerate(out TimeUnit_t frameTime, out ServerFramerateStdDeviation);
-		if (frameTime > float.Epsilon) {
+		if (frameTime > FLT_EPSILON) {
 			ServerFramerate = 1.0 / frameTime;
 		}
 	}
