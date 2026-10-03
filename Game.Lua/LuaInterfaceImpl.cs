@@ -308,14 +308,18 @@ public unsafe class LuaInterfaceImpl : ILuaInterface
 		try {
 			return func(this);
 		}
-		catch (LuaException e) {
-			return Raise(e);
-		}
 		catch (Exception e) {
-			Warning($"{e}\n");
-			PushString($"{e.GetType().Name}: {e.Message}");
-			return SN_ERRORMSG;
+			return HandleException(e);
 		}
+	}
+
+	public int HandleException(Exception e) {
+		if (e is LuaException luaException)
+			return Raise(luaException);
+
+		Warning($"{e}\n");
+		PushString($"{e.GetType().Name}: {e.Message}");
+		return SN_ERRORMSG;
 	}
 
 	int Raise(LuaException e) {
@@ -449,6 +453,8 @@ public unsafe class LuaInterfaceImpl : ILuaInterface
 	public void PushBool(bool val) => lua_pushboolean(state, val ? 1 : 0);
 
 	public void PushCFunction(CFunc val) => lua_pushcclosure(state, GetFunctionPointer(val), 0);
+
+	public void PushCFunction(delegate* unmanaged[Cdecl]<nint, int> val) => lua_pushcclosure(state, (nint)val, 0);
 
 	public void PushCClosure(CFunc val, int vars) => lua_pushcclosure(state, GetFunctionPointer(val), vars);
 
