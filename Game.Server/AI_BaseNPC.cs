@@ -358,6 +358,14 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return false;
 	}
 
+	public override void AddEntityRelationship(BaseEntity entity, Disposition_t disposition, int priority) {
+		base.AddEntityRelationship(entity, disposition, priority);
+	}
+
+	public override void AddClassRelationship(Class_T classType, Disposition_t disposition, int priority) {
+		base.AddClassRelationship(classType, disposition, priority);
+	}
+
 	public virtual int SelectSchedule() => throw new NotImplementedException();
 
 	public virtual void GatherConditions() => throw new NotImplementedException();
@@ -588,7 +596,67 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		AddRelationship(RelationshipString, null);
 	}
 
-	public void AddRelationship(ReadOnlySpan<char> relationship, BaseEntity? activator) => throw new NotImplementedException();
+	public void AddRelationship(ReadOnlySpan<char> relationship, BaseEntity? activator) {
+		string parseString = new(relationship.Length > 999 ? relationship[..999] : relationship);
+
+		string[] tokens = parseString.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+		int tokenIndex = 0;
+
+		string? entityString = tokenIndex < tokens.Length ? tokens[tokenIndex++] : null;
+		while (entityString != null) {
+			string? dispositionString = tokenIndex < tokens.Length ? tokens[tokenIndex++] : null;
+			Disposition_t disposition = Disposition_t.D_NU;
+			if (dispositionString != null) {
+				if (stricmp(dispositionString, "D_HT") == 0)
+					disposition = Disposition_t.D_HT;
+				else if (stricmp(dispositionString, "D_FR") == 0)
+					disposition = Disposition_t.D_FR;
+				else if (stricmp(dispositionString, "D_LI") == 0)
+					disposition = Disposition_t.D_LI;
+				else if (stricmp(dispositionString, "D_NU") == 0)
+					disposition = Disposition_t.D_NU;
+				else {
+					disposition = Disposition_t.D_NU;
+					Warning($"***ERROR***\nBad relationship type ({dispositionString}) to unknown entity ({entityString})!\n");
+					Assert(false);
+					return;
+				}
+			}
+			else {
+				Warning($"Can't parse relationship info ({relationship}) - Expecting 'name [D_HT, D_FR, D_LI, D_NU] [1-99]'\n");
+				Assert(false);
+				return;
+			}
+
+			string? priorityString = tokenIndex < tokens.Length ? tokens[tokenIndex++] : null;
+			int priority = (priorityString != null) ? atoi(priorityString) : DEF_RELATIONSHIP_PRIORITY;
+
+			bool foundEntity = false;
+
+			BaseEntity? entity = gEntList.FindEntityByName(null, entityString);
+			while (entity != null) {
+				foundEntity = true;
+				AddEntityRelationship(entity, disposition, priority);
+				entity = gEntList.FindEntityByName(entity, entityString);
+			}
+
+			if (!foundEntity) {
+				if (stricmp("player", entityString) == 0 || stricmp("!player", entityString) == 0)
+					AddClassRelationship(Class_T.Player, disposition, priority);
+				else {
+					BaseEntity? pEntity = CanCreateEntityClass(entityString) ? CreateEntityByName(entityString) : null;
+					if (pEntity != null) {
+						AddClassRelationship(pEntity.Classify(), disposition, priority);
+						Util.RemoveImmediate(pEntity);
+					}
+					else
+						DevWarning($"Couldn't set relationship to unknown entity or class ({entityString})!\n");
+				}
+			}
+
+			entityString = tokenIndex < tokens.Length ? tokens[tokenIndex++] : null;
+		}
+	}
 
 	public void SetState(NPC_STATE state) {
 		NPC_STATE oldState;

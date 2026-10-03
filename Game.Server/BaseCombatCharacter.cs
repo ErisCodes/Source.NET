@@ -138,7 +138,12 @@ public partial class BaseCombatCharacter : BaseFlex
 	public Hull_t Hull;
 	public float FieldOfView;
 
+	public const int DEF_RELATIONSHIP_PRIORITY = int.MinValue;
+
 	public virtual Disposition_t IRelationType(BaseEntity? target) => throw new NotImplementedException();
+
+	public virtual void AddEntityRelationship(BaseEntity entity, Disposition_t disposition, int priority) => throw new NotImplementedException();
+	public virtual void AddClassRelationship(Class_T classType, Disposition_t disposition, int priority) => throw new NotImplementedException();
 
 	public void SetImpactEnergyScale(float scale) => ImpactEnergyScale = scale;
 

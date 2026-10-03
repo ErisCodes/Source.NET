@@ -131,6 +131,7 @@ public static partial class Util_Globals
 	static readonly CEntityFactoryDictionary s_EntityFactory = new();
 	public static IEntityFactoryDictionary EntityFactoryDictionary() => s_EntityFactory;
 
+	public static bool CanCreateEntityClass(ReadOnlySpan<char> classname) => EntityFactoryDictionary() != null && EntityFactoryDictionary().FindFactory(classname) != null;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static int ENTINDEX(Edict? edict) {
