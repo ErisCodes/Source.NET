@@ -189,11 +189,18 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public AI_Squad? Squad;
 	public string? SquadName;
 
+	public bool IsUsingSmallHullValue;
+
 	public override bool IsNPC() => true;
 
 	public override Mask PhysicsSolidMaskForEntity() => Mask.NPCSolid;
 
 	public override void Precache() => throw new NotImplementedException();
+
+	public bool IsUsingSmallHull() => IsUsingSmallHullValue;
+
+	public ref readonly Vector3 GetHullMins() => ref NAI_Hull.Mins(GetHullType());
+	public ref readonly Vector3 GetHullMaxs() => ref NAI_Hull.Maxs(GetHullType());
 
 	public virtual int SelectSchedule() => throw new NotImplementedException();
 
@@ -207,7 +214,19 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return Capability;
 	}
 
-	public void SetHullSizeNormal(bool force = false) => throw new NotImplementedException();
+	public void SetHullSizeNormal(bool force = false) {
+		if (IsUsingSmallHullValue || force) {
+			float scale = GetModelScale();
+			Vector3 mins = GetHullMins() * scale;
+			Vector3 maxs = GetHullMaxs() * scale;
+
+			Util.SetSize(this, mins, maxs);
+
+			IsUsingSmallHullValue = false;
+			if (VPhysicsGetObject() != null)
+				SetupVPhysicsHull();
+		}
+	}
 
 	public virtual int GetSoundInterests() {
 		return (int)(SoundInstanceType.World | SoundInstanceType.Combat | SoundInstanceType.Player | SoundInstanceType.PlayerVehicle |
