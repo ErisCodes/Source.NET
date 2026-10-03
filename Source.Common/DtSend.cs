@@ -137,7 +137,9 @@ public static class SendPropHelpers
 		else
 			highValue = (uint)((1 << bits) - 1);
 
-		float fHighLowMul = (float)(Math.Abs(range) <= double.Epsilon ? highValue : highValue / range);
+		float fHighLowMul = (float)(highValue / range);
+		if (MathLib.CloseEnough((float)range, 0))
+			fHighLowMul = highValue;
 
 		if ((uint)(fHighLowMul * range) > highValue ||
 			 (fHighLowMul * range) > (double)highValue) {
