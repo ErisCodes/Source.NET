@@ -103,7 +103,6 @@ public class ClientState : BaseClientState
 	public INetworkStringTable? UserInfoTable;
 	public INetworkStringTable? ServerStartupTable;
 	public INetworkStringTable? DynamicModelsTable;
-	public INetworkStringTable? ClientLuaFiles;
 	public INetworkStringTable? DownloadableFileTable;
 
 
@@ -262,11 +261,6 @@ IModelLoader modelloader, ICommandLine commandLine,
 				return true;
 			case Protocol.DOWNLOADABLE_FILE_TABLENAME:
 				DownloadableFileTable = table;
-				return true;
-			case Protocol.CLIENT_LUA_FILES_TABLENAME:
-				ClientLuaFiles = table;
-				// allow client dll to grab this
-				Host.clientDLL?.InstallStringTableCallback(tableName);
 				return true;
 		}
 
@@ -602,28 +596,11 @@ IModelLoader modelloader, ICommandLine commandLine,
 		g_ClientSidePrediction.PostNetworkDataReceived(commandsAcknowledged);
 	}
 	public readonly LinkedList<EventInfo> Events = [];
-	CLC_GMod_ClientToServer? luaFileMessage;
 
 
 	protected override bool ProcessGMod_ServerToClient(SVC_GMod_ServerToClient msg) {
-		switch (msg.MessageType) {
-			case GModMessageType.RequestLuaFiles: {
-					g_ClientDLL!.GMOD_RequestLuaFiles(NetChannel!);
-				}
-				return true;
-			case GModMessageType.LuaFile:
-			case GModMessageType.NetMessage:
-				g_ClientDLL!.GMOD_ReceiveServerMessage(new bf_read(msg.RawData.ToArray(), msg.RawData.Length, msg.RawBits), msg.RawBits);
-				return true;
-			case GModMessageType.LuaCmd: {
-					byte[] data = new byte[1 + msg.LuaCmd.Data.Length];
-					data[0] = (byte)msg.MessageType;
-					msg.LuaCmd.Data.Span.CopyTo(data.AsSpan(1));
-					g_ClientDLL!.GMOD_ReceiveServerMessage(new bf_read(data, data.Length), data.Length * 8);
-				}
-				return true;
-		}
-		return base.ProcessGMod_ServerToClient(msg);
+		g_ClientDLL?.GMOD_ReceiveServerMessage(new bf_read(msg.RawData.ToArray(), msg.RawData.Length, msg.RawBits), msg.RawBits);
+		return true;
 	}
 
 	protected override bool ProcessTempEntities(SVC_TempEntities msg) {
@@ -951,6 +928,7 @@ IModelLoader modelloader, ICommandLine commandLine,
 			return;
 
 		SendClientInfo();
+		g_ClientDLL?.GMOD_RequestLuaFiles();
 		var msg = new NET_SignonState(SignOnState, ServerCount);
 		NetChannel.SendNetMsg(msg);
 	}

@@ -261,8 +261,6 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		view.Render(rects);
 	}
 
-	public static INetworkStringTable g_ClientLuaFiles = null!;
-
 	public void InstallStringTableCallback(ReadOnlySpan<char> tableName) {
 		// TODO: what to do here, if anything
 		switch (tableName) {
@@ -275,21 +273,6 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		}
 
 		GameRulesRegister.InstallStringTableCallback_GameRules();
-	}
-
-	private void OnReceiveLuaFileString(object? context, INetworkStringTable stringTable, int stringNumber, ReadOnlySpan<char> newString, ReadOnlySpan<byte> newData) {
-		if (stringNumber == 0 && newString.Equals("paths", StringComparison.Ordinal)) {
-			// Load paths
-			Span<char> paths = stackalloc char[Encoding.ASCII.GetCharCount(newData)];
-			Encoding.ASCII.GetChars(newData, paths);
-			var splitter = paths.Split(";");
-			while (splitter.MoveNext()) {
-				ReadOnlySpan<char> path = paths[splitter.Current].SliceNullTerminatedString();
-				// This sucks! TODO: Fix this!!!
-				ReadOnlySpan<char> absPath = $"{engine.GetGameDirectory()}{path}";
-				filesystem.AddSearchPath(absPath, "lcl", groupName: Source.Common.Filesystem.PathGroupName.Lua);
-			}
-		}
 	}
 
 	public int IN_KeyEvent(int eventcode, ButtonCode keynum, ReadOnlySpan<char> currentBinding) {
@@ -535,30 +518,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		throw new NotImplementedException();
 	}
 
-	const string LUA_PREFIX = "lua/";
-	const string LUA_SUFFIX = ".lua";
-
-	int filesRequesting_Total;
-	int filesRequesting_Recv;
-
-	public void GMOD_RequestLuaFiles(INetChannel netchan) => Game.Client.GarrysMod.GModDataPack.DataPack().RequestFiles();
-
-	public void GMOD_ReceiveLuaFile(ReadOnlySpan<char> fileName, in SHA256Value sha256, ReadOnlySpan<byte> compressed) {
-		Span<char> shaBuffer = stackalloc char[LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS + LUA_SUFFIX.Length];
-		LUA_PREFIX.CopyTo(shaBuffer);
-		sha256.ToString(shaBuffer[LUA_PREFIX.Length..]);
-		LUA_SUFFIX.CopyTo(shaBuffer.Slice(LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS, LUA_SUFFIX.Length));
-
-		using IFileHandle? h = filesystem.Open(shaBuffer, FileOpenOptions.Write, "CACHE");
-		if (h == null)
-			return;
-		h.Stream.Write(compressed);
-		filesRequesting_Recv++;
-
-		if (filesRequesting_Recv != filesRequesting_Total)
-			gameUI.UpdateProgressBar(filesRequesting_Recv / (float)filesRequesting_Total, $"Received {filesRequesting_Recv}/{filesRequesting_Total} Lua files...");
-
-	}
+	public void GMOD_RequestLuaFiles() => Game.Client.GarrysMod.GModDataPack.DataPack().RequestFiles();
 
 	public void FileReceived(ReadOnlySpan<char> fileName, uint transferID) {
 
