@@ -1,6 +1,9 @@
 ﻿using Source.Common;
+using Source.Common.Bitmap;
+using Source.Common.Commands;
 using Source.Common.DataCache;
 using Source.Common.Engine;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
 
@@ -352,6 +355,261 @@ public unsafe class StudioRender
 		mat.M13 = -Vector3.Dot(state.Org, new Vector3(mat.M10, mat.M11, mat.M12)) + 0.5f;
 	}
 
+	static readonly ConVar r_flashlightscissor = new("r_flashlightscissor", "1", 0);
+
+	private void DisableScissor() {
+		using MatRenderContextPtr renderContext = new(materialSystem);
+		if (r_flashlightscissor.GetBool())
+			renderContext.SetScissorRect(-1, -1, -1, -1, false);
+	}
+
+	public struct GlintRenderData
+	{
+		public Vector2 Position;
+		public Vector3 Intensity;
+	}
+
+	ITexture? GlintTexture;
+	ITexture? GlintLODTexture;
+	IMaterial? GlintBuildMaterial;
+	short GlintWidth;
+	short GlintHeight;
+
+	internal void PrecacheGlint() {
+		if (GlintTexture == null) {
+			materialSystem.BeginRenderTargetAllocation();
+
+			GlintTexture = materialSystem.CreateNamedRenderTargetTextureEx("_rt_eyeglint", 32, 32, RenderTargetSizeMode.NoChange, ImageFormat.BGRA8888, MaterialRenderTargetDepth.None, TextureFlags.ClampS | TextureFlags.ClampT, 0)!;
+			GlintTexture.IncrementReferenceCount();
+
+			materialSystem.EndRenderTargetAllocation();
+
+			GlintLODTexture = materialSystem.FindTexture("vgui/black", null, false);
+			GlintLODTexture.IncrementReferenceCount();
+		}
+
+		if (GlintBuildMaterial == null) {
+			KeyValues vmtKeyValues = new("EyeGlint");
+			GlintBuildMaterial = materialSystem.CreateMaterial("___glintbuildmaterial", vmtKeyValues);
+		}
+	}
+
+	private bool R_LightGlintPosition(int index, in Vector3 org, out Vector3 delta, out Vector3 intensity) {
+		if (index >= pRC!.NumLocalLights) {
+			delta = default;
+			intensity = default;
+			return false;
+		}
+
+		R_WorldLightDelta(in pRC.LocalLights[index], in org, out delta);
+		float falloff = R_WorldLightDistanceFalloff(in pRC.LocalLights[index], in delta);
+
+		intensity = pRC.LocalLights[index].Color * falloff;
+		return true;
+	}
+
+	private int BuildGlintRenderData(Span<GlintRenderData> data, int maxGlints, in EyeballState state, in Vector3 vright, in Vector3 vup, in Vector3 r_origin) {
+		Vector3 viewdelta = r_origin - state.Org;
+		MathLib.VectorNormalize(ref viewdelta);
+
+		float iris_radius = state.Eyeball!.Radius * (6.0f / 12.0f);
+		float cornea_radius = state.Eyeball.Radius * (8.0f / 12.0f);
+
+		float er = iris_radius / state.Eyeball.Radius;
+		er = MathF.Sqrt(1 - er * er);
+
+		float cr = iris_radius / cornea_radius;
+		cr = MathF.Sqrt(1 - cr * cr);
+
+		float r = er * state.Eyeball.Radius - cr * cornea_radius;
+		Vector3 cornea = state.Forward * r;
+
+		float dx = Vector3.Dot(vright, cornea);
+		float dy = Vector3.Dot(vup, cornea);
+
+		cornea += state.Org;
+
+		Vector3 reflection;
+
+		int glintCount = 0;
+		for (int i = 0; R_LightGlintPosition(i, in cornea, out Vector3 delta, out Vector3 intensity); ++i) {
+			MathLib.VectorNormalize(ref delta);
+			if (Vector3.Dot(delta, state.Forward) <= 0)
+				continue;
+
+			reflection = delta + viewdelta;
+			MathLib.VectorNormalize(ref reflection);
+
+			data[glintCount].Position.X = dx + cornea_radius * Vector3.Dot(vright, reflection);
+			data[glintCount].Position.Y = dy + cornea_radius * Vector3.Dot(vup, reflection);
+			data[glintCount].Intensity = intensity;
+			if (++glintCount >= maxGlints)
+				return maxGlints;
+
+			if (!R_LightGlintPosition(i, in state.Org, out delta, out intensity))
+				continue;
+
+			MathLib.VectorNormalize(ref delta);
+			if (Vector3.Dot(delta, state.Forward) >= er)
+				continue;
+
+			data[glintCount].Position.X = state.Eyeball.Radius * Vector3.Dot(vright, reflection);
+			data[glintCount].Position.Y = state.Eyeball.Radius * Vector3.Dot(vup, reflection);
+			data[glintCount].Intensity = intensity;
+			if (++glintCount >= maxGlints)
+				return maxGlints;
+		}
+		return glintCount;
+	}
+
+	private ITexture? RenderGlintTexture(in EyeballState state, in Vector3 vright, in Vector3 vup, in Vector3 r_origin) {
+		Span<GlintRenderData> renderData = stackalloc GlintRenderData[16];
+		int glintCount = BuildGlintRenderData(renderData, renderData.Length, in state, in vright, in vup, in r_origin);
+
+		if (glintCount == 0)
+			return GlintLODTexture;
+
+		using MatRenderContextPtr renderContext = new(materialSystem);
+		renderContext.PushRenderTargetAndViewport(GlintTexture);
+
+		IMaterial? prevMaterial = renderContext.GetCurrentMaterial();
+		object? prevProxy = renderContext.GetCurrentProxy();
+		int prevBoneCount = renderContext.GetCurrentNumBones();
+		MaterialHeightClipMode prevClipMode = renderContext.GetHeightClipMode();
+		bool prevClippingEnabled = renderContext.EnableClipping(false);
+		bool inFlashlightMode = renderContext.GetFlashlightMode();
+
+		if (inFlashlightMode)
+			DisableScissor();
+
+		renderContext.ClearColor4ub(0, 0, 0, 0);
+		renderContext.ClearBuffers(true, false, false);
+
+		renderContext.SetFlashlightMode(false);
+		renderContext.SetHeightClipMode(MaterialHeightClipMode.Disable);
+		renderContext.SetNumBoneWeights(0);
+		renderContext.Bind(GlintBuildMaterial!, null);
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		MeshBuilder meshBuilder = new();
+		IMesh mesh = renderContext.GetDynamicMesh();
+		meshBuilder.Begin(mesh, MaterialPrimitiveType.Triangles, glintCount * 4, glintCount * 6);
+
+		const float epsilon = 0.5f / 32.0f;
+		int index = 0;
+		for (int i = 0; i < glintCount; ++i) {
+			ref GlintRenderData glint = ref renderData[i];
+
+			float x = (glint.Position.X + 0.5f) * GlintWidth;
+			float y = (glint.Position.Y + 0.5f) * GlintHeight;
+			Vector2 glintCenter = new(x, y);
+			float ooWidth = 1.0f / GlintWidth;
+			float ooHeight = 1.0f / GlintHeight;
+
+			int x0 = (int)MathF.Floor(x);
+			int y0 = (int)MathF.Floor(y);
+			int x1 = x0 + 1;
+			int y1 = y0 + 1;
+			x0 -= 2;
+			y0 -= 2;
+
+			float screenX0 = x0 * 2 * ooWidth + epsilon - 1;
+			float screenX1 = x1 * 2 * ooWidth + epsilon - 1;
+			float screenY0 = -(y0 * 2 * ooHeight + epsilon - 1);
+			float screenY1 = -(y1 * 2 * ooHeight + epsilon - 1);
+
+			ReadOnlySpan<float> intensity = [glint.Intensity.X, glint.Intensity.Y, glint.Intensity.Z];
+
+			meshBuilder.Position3f(screenX0, screenY0, 0.0f);
+			meshBuilder.TexCoord2f(0, x0, y0);
+			meshBuilder.TexCoord2fv(1, in glintCenter);
+			meshBuilder.TexCoord3fv(2, intensity);
+			meshBuilder.AdvanceVertex();
+
+			meshBuilder.Position3f(screenX1, screenY0, 0.0f);
+			meshBuilder.TexCoord2f(0, x1, y0);
+			meshBuilder.TexCoord2fv(1, in glintCenter);
+			meshBuilder.TexCoord3fv(2, intensity);
+			meshBuilder.AdvanceVertex();
+
+			meshBuilder.Position3f(screenX1, screenY1, 0.0f);
+			meshBuilder.TexCoord2f(0, x1, y1);
+			meshBuilder.TexCoord2fv(1, in glintCenter);
+			meshBuilder.TexCoord3fv(2, intensity);
+			meshBuilder.AdvanceVertex();
+
+			meshBuilder.Position3f(screenX0, screenY1, 0.0f);
+			meshBuilder.TexCoord2f(0, x0, y1);
+			meshBuilder.TexCoord2fv(1, in glintCenter);
+			meshBuilder.TexCoord3fv(2, intensity);
+			meshBuilder.AdvanceVertex();
+
+			meshBuilder.FastIndex((ushort)index);
+			meshBuilder.FastIndex((ushort)(index + 1));
+			meshBuilder.FastIndex((ushort)(index + 2));
+			meshBuilder.FastIndex((ushort)index);
+			meshBuilder.FastIndex((ushort)(index + 2));
+			meshBuilder.FastIndex((ushort)(index + 3));
+			index += 4;
+		}
+
+		meshBuilder.End();
+		mesh.Draw();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.PopMatrix();
+
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PopMatrix();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+		renderContext.PopMatrix();
+
+		renderContext.PopRenderTargetAndViewport();
+
+		renderContext.Bind(prevMaterial!, prevProxy);
+		renderContext.SetNumBoneWeights(prevBoneCount);
+		renderContext.SetHeightClipMode(prevClipMode);
+		renderContext.EnableClipping(prevClippingEnabled);
+		renderContext.SetFlashlightMode(inFlashlightMode);
+
+		return GlintTexture;
+	}
+
+	static readonly ConVar r_glint_alwaysdraw = new("r_glint_alwaysdraw", "0");
+
+	private void R_StudioEyeballGlint(in EyeballState state, IMaterialVar glintVar, in Vector3 vright, in Vector3 vup, in Vector3 r_origin) {
+		using MatRenderContextPtr renderContext = new(materialSystem);
+
+		if (GlintLODTexture != null && r_glint_alwaysdraw.GetInt() == 0) {
+			float pixelArea = renderContext.ComputePixelWidthOfSphere(state.Org, state.Eyeball!.Radius);
+			if (pixelArea < pRC!.Config.EyeGlintPixelWidthLODThreshold) {
+				glintVar.SetTextureValue(GlintLODTexture);
+				return;
+			}
+		}
+
+		GlintWidth = (short)GlintTexture!.GetActualWidth();
+		GlintHeight = (short)GlintTexture.GetActualHeight();
+
+		ITexture? useGlintTexture = RenderGlintTexture(in state, in vright, in vup, in r_origin);
+
+		glintVar.SetTextureValue(useGlintTexture);
+	}
+
+	static TokenCache glintCache;
+
 	private int R_StudioDrawEyeball(IMatRenderContext renderContext, MStudioMesh pmesh, StudioMeshData pMeshData, StudioModelLighting lighting, IMaterial pMaterial, int lod) {
 		if (!pRC!.Config.Eyes)
 			return 0;
@@ -392,8 +650,12 @@ public unsafe class StudioRender
 
 		ComputeGlintTextureProjection(in EyeballStates[pmesh.MaterialParam], in pRC.ViewRight, in pRC.ViewUp, out Matrix3x4 glintMat);
 
-		if (!pRC.Config.Wireframe)
+		if (!pRC.Config.Wireframe) {
+			IMaterialVar? glintVar = pMaterial.FindVarFast("$glint", ref glintCache);
+			if (glintVar != null)
+				R_StudioEyeballGlint(in EyeballStates[pmesh.MaterialParam], glintVar, in pRC.ViewRight, in pRC.ViewUp, in pRC.ViewOrigin);
 			SetEyeMaterialVars(pMaterial, eyeball, in org, in EyeballStates[pmesh.MaterialParam].Mat, in glintMat);
+		}
 
 		if (shouldHardwareSkin) {
 			for (j = 0; j < pMeshData.NumGroup; ++j) {

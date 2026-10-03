@@ -47,6 +47,7 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 		RC.Config.SupportsVertexAndPixelShaders = hardwareConfig.SupportsVertexAndPixelShaders();
 
 
+		studioRenderImp.PrecacheGlint();
 	}
 
 	public void EndFrame() {
