@@ -450,16 +450,11 @@ public partial class C_BaseEntity : IClientEntity
 	public bool Teleported() => OldMoveParent != NetworkMoveParent || OldParentAttachment != ParentAttachment;
 
 	public static void ProcessInterpolatedList() {
-		LinkedListNode<C_BaseEntity>? curr = InterpolationList.First;
-		LinkedListNode<C_BaseEntity>? next = curr?.Next;
-		while (curr != null) {
+		LinkedListNode<C_BaseEntity>? next;
+		for (LinkedListNode<C_BaseEntity>? curr = InterpolationList.First; curr != null; curr = next) {
+			next = curr.Next;
 			C_BaseEntity entity = curr.Value;
 			entity.ReadyToDraw = entity.Interpolate(gpGlobals.CurTime);
-			if (curr.List == null) // We got removed!!
-				curr = next;
-
-			curr = curr?.Next;
-			next = curr?.Next;
 		}
 	}
 
