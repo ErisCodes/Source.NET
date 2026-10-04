@@ -49,6 +49,27 @@ public static class String
 	{
 		public static bool StartsWith(string str, string strFind) => str.StartsWith(strFind, StringComparison.Ordinal);
 
+		public static bool Contains(string strHaystack, string strNeedle, bool ignoreCaps = false) {
+			if (ignoreCaps) {
+				string haystack = strHaystack, needle = strNeedle;
+				Lower(ref haystack);
+				Lower(ref needle);
+				return Contains(haystack, needle, false);
+			}
+
+			return strHaystack.Contains(strNeedle, StringComparison.Ordinal);
+		}
+
+		public static bool ContainsChar(string str, char chr) => str.Contains(chr);
+
+		public static bool ContainsOnly(string str, string chars) {
+			foreach (char c in str) {
+				if (!ContainsChar(chars, c))
+					return false;
+			}
+			return true;
+		}
+
 		public static bool EndsWith(string str, string strFind) {
 			int i = str.LastIndexOf(strFind, StringComparison.Ordinal);
 			return i != -1 && i == str.Length - strFind.Length;
