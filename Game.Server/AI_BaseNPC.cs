@@ -341,6 +341,8 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public bool CrouchDesired;
 	public bool InAScript;
 	public TimeUnit_t SceneTime;
+	public string? SceneCustomMoveSeq;
+	public EHANDLE TargetEnt = new();
 	public AI_MoveEfficiency MoveEfficiency;
 	public TimeUnit_t NextDecisionTime;
 	public float WakeRadius;
@@ -2576,6 +2578,58 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public bool CineCleanup() => throw new NotImplementedException();
 
 	public bool IsInLockedScene() => SceneTime > gpGlobals.CurTime;
+	public void AddSceneLock(TimeUnit_t duration = 0.2) => SceneTime = Math.Max(gpGlobals.CurTime + duration, SceneTime);
+	public void ClearSceneLock(TimeUnit_t duration = 0.2) => SceneTime = gpGlobals.CurTime + duration;
+
+	public virtual bool IsInterruptable() {
+		if (GetState() == NPCState.Script) {
+			AI_ScriptedSequence? cine = Cine.Get();
+			if (cine != null) {
+				if (!cine.CanInterrupt())
+					return false;
+
+				if ((GetFlags() & EntityFlags.Fly) != 0 && (cine.SavedFlags & EntityFlags.Fly) == 0)
+					return false;
+			}
+		}
+
+		return IsAlive();
+	}
+
+	public virtual void OnStartScene() { }
+
+	public bool ExitScriptedSequence() {
+		if (LifeState == (int)Source.LifeState.Dying) {
+			SetIdealState(NPCState.Dead);
+			return false;
+		}
+
+		Cine.Get()?.CancelScript();
+
+		return true;
+	}
+
+	public virtual float CalcIdealYaw(in Vector3 target) => Util.VecToYaw(target - GetLocalOrigin());
+
+	public virtual void AddFacingTarget(BaseEntity? target, float importance, float duration, float ramp = 0.0f) => GetMotor()!.AddFacingTarget(target, importance, duration, ramp);
+	public virtual void AddFacingTarget(in Vector3 position, float importance, float duration, float ramp = 0.0f) => GetMotor()!.AddFacingTarget(position, importance, duration, ramp);
+	public virtual void AddFacingTarget(BaseEntity? target, in Vector3 position, float importance, float duration, float ramp = 0.0f) => GetMotor()!.AddFacingTarget(target, position, importance, duration, ramp);
+
+	public virtual void AddLookTarget(BaseEntity? target, float importance, float duration, float ramp = 0.0f) { }
+	public virtual void AddLookTarget(in Vector3 position, float importance, float duration, float ramp = 0.0f) { }
+
+	public virtual Vector3 FacingPosition() => EyePosition();
+
+	public virtual void SetAim(in Vector3 aimDir) => throw new NotImplementedException();
+
+	public virtual int HolsterWeapon() => throw new NotImplementedException();
+	public virtual int UnholsterWeapon() => throw new NotImplementedException();
+
+	public virtual BaseEntity? FindNamedEntity(ReadOnlySpan<char> name, IEntityFindFilter? filter = null) => throw new NotImplementedException();
+
+	public void SetTarget(BaseEntity? target) => TargetEnt.Set(target);
+
+	public float GetHullWidth() => NAI_Hull.Width(GetHullType());
 
 	public void Forget(AI_MemoryFlags memory) => Memory &= ~memory;
 	public bool HasMemory(AI_MemoryFlags memory) => (Memory & memory) != 0;
@@ -2599,7 +2653,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual Vector3 GetCrouchEyeOffset() => new(0, 0, 40);
 
-	public bool IsMoving() => GetNavigator()!.IsGoalSet();
+	public override bool IsMoving() => GetNavigator()!.IsGoalSet();
 
 	public virtual float CalcYawSpeed() => -1.0f;
 
