@@ -1472,7 +1472,7 @@ public partial class BaseEntity : IServerEntity
 	public byte MoveCollide;
 	public Vector3 AbsOrigin;
 	public QAngle AbsRotation;
-	[NetworkName("m_Origin")]
+	[NetworkName("m_vecOrigin")]
 	[NetworkVar] public partial Vector3 Origin { get; set; }
 	[NetworkName("m_angRotation")]
 	[NetworkVar] public partial QAngle Rotation { get; set; }
