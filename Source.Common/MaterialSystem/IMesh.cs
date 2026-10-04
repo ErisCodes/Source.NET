@@ -118,6 +118,8 @@ public interface IMesh : IVertexBuffer, IIndexBuffer
 	void Draw(int firstIndex = -1, int indexCount = 0);
 	void Draw(ReadOnlySpan<PrimList> lists, int numLists);
 	void SetColorMesh(IMesh colorMesh, int vertexOffset);
+	void SetFlexMesh(IMesh? mesh, int vertexOffset);
+	void DisableFlexMesh();
 	void LockMesh(int vertexCount, int indexCount, ref MeshDesc desc);
 	void ModifyBegin(int firstVertex, int vertexCount, int firstIndex, int indexCount, ref MeshDesc desc);
 	void ModifyEnd(ref MeshDesc desc);
@@ -244,6 +246,31 @@ public unsafe struct VertexBuilder
 		*pDst++ = x;
 		*pDst++ = y;
 		*pDst = z;
+	}
+
+	public void NormalDelta3f(float nx, float ny, float nz) {
+		Assert(float.IsFinite(nx) && float.IsFinite(ny) && float.IsFinite(nz));
+
+		float* pDst = CurrNormal;
+		*pDst++ = nx;
+		*pDst++ = ny;
+		*pDst = nz;
+	}
+
+	public void NormalDelta3fv(ReadOnlySpan<float> n) {
+		Assert(float.IsFinite(n[0]) && float.IsFinite(n[1]) && float.IsFinite(n[2]));
+
+		float* pDst = CurrNormal;
+		*pDst++ = n[0];
+		*pDst++ = n[1];
+		*pDst = n[2];
+	}
+
+	public void Wrinkle1f(float flWrinkle) {
+		Assert(float.IsFinite(flWrinkle));
+
+		float* pWrinkle = OffsetFloatPointer(Desc.Wrinkle, CurrentVertex, Desc.WrinkleSize);
+		*pWrinkle = flWrinkle;
 	}
 
 	public void UserData(ReadOnlySpan<float> pData) {
@@ -753,7 +780,11 @@ public unsafe struct MeshBuilder : IDisposable
 
 	// Locks the vertex buffer, can specify arbitrary index lists
 	// (must use the Index() call below)
-	public void Begin(IMesh pMesh, MaterialPrimitiveType type, int nVertexCount, int nIndexCount, ref int nFirstVertex) => throw new NotImplementedException();
+	public void Begin(IMesh pMesh, MaterialPrimitiveType type, int nVertexCount, int nIndexCount, out int nFirstVertex) {
+		Begin(pMesh, type, nVertexCount, nIndexCount);
+
+		nFirstVertex = VertexBuilder.Desc.FirstVertex * VertexBuilder.Desc.ActualVertexSize;
+	}
 	public void Begin(IMesh pMesh, MaterialPrimitiveType type, int nVertexCount, int nIndexCount) {
 		Assert(pMesh != null && Mesh == null);
 		Assert((type != MaterialPrimitiveType.Quads) && (type != MaterialPrimitiveType.InstancedQuads) && (type != MaterialPrimitiveType.Polygon) &&
@@ -897,8 +928,9 @@ public unsafe struct MeshBuilder : IDisposable
 	public void Normal3fv(ReadOnlySpan<float> n) => VertexBuilder.Normal3fv(n);
 	public void Normal3fv(in Vector3 vec) => VertexBuilder.Normal3f(vec.X, vec.Y, vec.Z);
 	// What do these even do
-	public void NormalDelta3fv(ReadOnlySpan<float> n) => throw new NotImplementedException();
-	public void NormalDelta3f(float nx, float ny, float nz) => throw new NotImplementedException();
+	public void NormalDelta3fv(ReadOnlySpan<float> n) => VertexBuilder.NormalDelta3fv(n);
+	public void NormalDelta3fv(in Vector3 vec) => VertexBuilder.NormalDelta3f(vec.X, vec.Y, vec.Z);
+	public void NormalDelta3f(float nx, float ny, float nz) => VertexBuilder.NormalDelta3f(nx, ny, nz);
 
 	// color setting
 	public void Color3f(float r, float g, float b) => VertexBuilder.Color3f(r, g, b);
@@ -955,7 +987,7 @@ public unsafe struct MeshBuilder : IDisposable
 	public void TangentT3fv(Vector3 vec) => VertexBuilder.TangentT3f(vec.X, vec.Y, vec.Z);
 
 	// Wrinkle
-	public void Wrinkle1f(float flWrinkle) => throw new NotImplementedException();
+	public void Wrinkle1f(float flWrinkle) => VertexBuilder.Wrinkle1f(flWrinkle);
 
 	// bone weights
 	public void BoneWeight(int idx, float weight) => VertexBuilder.BoneWeight(idx, weight);

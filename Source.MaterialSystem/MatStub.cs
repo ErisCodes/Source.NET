@@ -178,6 +178,8 @@ public class DummyMesh : IMesh
 	}
 	public void ModifyEnd(ref MeshDesc desc) { }
 	public void SetColorMesh(IMesh colorMesh, int vertexOffset) { }
+	public void SetFlexMesh(IMesh? mesh, int vertexOffset) { }
+	public void DisableFlexMesh() { }
 	public void SetPrimitiveType(MaterialPrimitiveType type) { }
 	public bool Unlock(int vertexCount, ref VertexDesc desc) => false;
 	public bool Unlock(int writtenIndexCount, ref IndexDesc desc) => false;
@@ -392,6 +394,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public bool EnableClipping(bool enable) => true;
 	public int GetDisplayAdapterCount() => 0;
 	public IMesh GetDynamicMesh(bool buffered, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => GetDummyMesh();
+	public IMesh GetFlexMesh() => GetDummyMesh();
 	public void BeginBatch(IMesh indices) { }
 	public void BindBatch(IMesh vertices, IMaterial? autoBind = null) { }
 	public void DrawBatch(int firstIndex, int numIndices) { }

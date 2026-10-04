@@ -253,6 +253,8 @@ public class MatRenderContext : IMatRenderContextInternal
 		return true;
 	}
 
+	public IMesh GetFlexMesh() => shaderAPI.GetFlexMesh();
+
 	public IMesh GetDynamicMesh(bool buffered, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) {
 		if (autoBind != null) {
 			Bind(autoBind, null);

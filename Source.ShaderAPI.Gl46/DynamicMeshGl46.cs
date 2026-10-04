@@ -26,6 +26,10 @@ public unsafe class DynamicMeshGl46 : MeshGl46
 		}
 	}
 
+	public override void MarkAsDrawn() {
+		HasDrawn = true;
+	}
+
 	internal void OverrideVertexBuffer(VertexBufferGl46 vertexBuffer) {
 		UseVertexBuffer(vertexBuffer);
 		VertexOverride = true;

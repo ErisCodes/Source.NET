@@ -333,6 +333,7 @@ public interface IMatRenderContext
 	IShaderAPI GetShaderAPI();
 	bool InFlashlightMode();
 	IMesh GetDynamicMesh(bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null);
+	IMesh GetFlexMesh();
 	void BeginBatch(IMesh indices);
 	void BindBatch(IMesh vertices, IMaterial? autoBind = null);
 	void DrawBatch(int firstIndex, int numIndices);
@@ -430,6 +431,7 @@ public readonly struct MatRenderContextPtr : IDisposable, IMatRenderContext
 	public IShaderAPI GetShaderAPI() => ctx.GetShaderAPI();
 	public IMesh GetDynamicMesh(bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) =>
 		ctx.GetDynamicMesh(buffered, vertexOverride, indexOverride, autoBind);
+	public IMesh GetFlexMesh() => ctx.GetFlexMesh();
 	public void BeginBatch(IMesh indices) => ctx.BeginBatch(indices);
 	public void BindBatch(IMesh vertices, IMaterial? autoBind = null) => ctx.BindBatch(vertices, autoBind);
 	public void DrawBatch(int firstIndex, int numIndices) => ctx.DrawBatch(firstIndex, numIndices);
