@@ -1,4 +1,5 @@
 using Source.Common.GarrysMod.Lua;
+using Source.Common.GUI;
 using Source.GUI.Controls;
 
 namespace Game.Client.GarrysMod;
@@ -198,5 +199,195 @@ public static partial class LuaVGUI
 			return 0;
 		parent.PushLua(lua, PanelClass.Type);
 		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__IsEnabled(ILuaInterface lua) {
+		Panel? panel = Get_Panel(1);
+		lua.PushBool(panel == null || panel.IsEnabled());
+		return 1;
+	}
+
+	[LuaMethod]
+	static void Panel__SetAutoDelete(Panel panel, [LuaGet] bool state) => panel.SetAutoDelete(state);
+
+	[LuaMethod]
+	static void Panel__SetMouseInputEnabled(Panel panel, [LuaGet] bool state) => panel.SetMouseInputEnabled(state);
+
+	[LuaMethod]
+	[LuaMethod("SetKeyBoardInputEnabled")]
+	static void Panel__SetKeyboardInputEnabled(Panel panel, [LuaGet] bool state) => panel.SetKeyboardInputEnabled(state);
+
+	[LuaMethod]
+	static void Panel__SetEnabled(Panel panel, [LuaGet] bool state) => panel.SetEnabled(state);
+
+	[LuaMethod]
+	static void Panel__SetMinimumSize(Panel panel, int wide, int tall) => panel.SetMinimumSize(wide, tall);
+
+	[LuaMethod]
+	static bool Panel__IsMarkedForDeletion(Panel panel) => panel.IsMarkedForDeletion();
+
+	[LuaMethod]
+	static void Panel__MakePopup(Panel panel) {
+		panel.MakePopup(true, false);
+		panel.SetMouseInputEnabled(true);
+		panel.SetKeyboardInputEnabled(true);
+	}
+
+	[LuaMethod]
+	static void Panel__InvalidateLayout(Panel panel, [LuaGet] bool layoutNow) => panel.InvalidateLayout(layoutNow, false);
+
+	[LuaMethod]
+	static void Panel__SetZPos(Panel panel, int z) => panel.SetZPos(z);
+
+	[LuaMethod]
+	static int Panel__GetZPos(Panel panel) => panel.GetZPos();
+
+	[LuaMethod]
+	static bool Panel__HasFocus(Panel panel) => panel.HasFocus();
+
+	[LuaMethod]
+	static void Panel__RequestFocus(Panel panel) => panel.RequestFocus(0);
+
+	[LuaMethod]
+	static void Panel__SetPaintedManually(Panel panel, [LuaGet] bool state) => panel.SetPaintedManually(state);
+
+	[LuaMethod]
+	static void Panel__SetPaintBorderEnabled(Panel panel, [LuaGet] bool state) => panel.SetPaintBorderEnabled(state);
+
+	[LuaMethod]
+	static void Panel__SetPaintBackgroundEnabled(Panel panel, [LuaGet] bool state) => panel.SetPaintBackgroundEnabled(state);
+
+	[LuaMethod]
+	static void Panel__MoveToFront(Panel panel) => panel.MoveToFront();
+
+	[LuaMethod]
+	static void Panel__MoveToBack(Panel panel) => panel.MoveToBack();
+
+	[LuaMethod]
+	static void Panel__SetFocusTopLevel(Panel panel, [LuaGet] bool state) {
+		if (panel is EditablePanel editable)
+			editable.GetFocusNavGroup().SetFocusTopLevel(state);
+	}
+
+	[LuaMethod]
+	static void Panel__SetRenderInScreenshots(Panel panel, [LuaGet] bool state) => panel.SetRenderInScreenshots(state);
+
+	[LuaMethod]
+	static void Panel__SetTabPosition(Panel panel, [LuaGet] int position) => panel.SetTabPosition(position);
+
+	[LuaMethod]
+	static void Panel__SetAlpha(Panel panel, [LuaGet] int alpha) => panel.SetAlpha(alpha);
+
+	[LuaMethod]
+	static int Panel__GetAlpha(Panel panel) => panel.GetAlpha();
+
+	[LuaMethod]
+	static void Panel__SetDrawOnTop(Panel panel, [LuaGet] bool state) => panel.SetDrawOnTop(state);
+
+	[LuaMethod]
+	static void Panel__NoClipping(Panel panel, [LuaGet] bool state) => panel.SetNoClipping(state);
+
+	[LuaMethod]
+	static bool Panel__HasParent(Panel panel, Panel parent) => panel.HasParent(parent);
+
+	[LuaMethod]
+	static int Panel__ChildCount(Panel panel) => panel.GetChildCount();
+
+	[LuaMethod]
+	static bool Panel__IsKeyboardInputEnabled(Panel panel) => panel.IsKeyboardInputEnabled();
+
+	[LuaMethod]
+	static bool Panel__IsMouseInputEnabled(Panel panel) => panel.IsMouseInputEnabled();
+
+	[LuaMethod]
+	static void Panel__SetWorldClicker(Panel panel, [LuaGet] bool state) => panel.SetWorldClicker(state);
+
+	[LuaMethod]
+	static bool Panel__IsWorldClicker(Panel panel) => panel.IsWorldClicker();
+
+	[LuaMethod]
+	static bool Panel__IsPopup(Panel panel) => panel.IsPopup();
+
+	[LuaMethod]
+	static bool Panel__IsModal(Panel panel) {
+		IPanel? modal = vguiInput.GetAppModalSurface();
+		if (modal == null)
+			return false;
+		return modal == panel;
+	}
+
+	[LuaMethod]
+	static void Panel__SetFontInternal(ILuaInterface lua, Panel panel) {
+		IFont? font = LuaFonts.GetFont(lua.GetString(2));
+		if (font == null) {
+			font = GModBase.GetGModBasePanel(true)!.GetScheme()!.GetFont(lua.GetString(2), false);
+			if (font == null) {
+				lua.ErrorNoHalt($"SetFontInternal: font doesn't exist ({lua.GetString(2)})\n");
+				return;
+			}
+		}
+
+		if (panel is Label label)
+			label.SetFont(font);
+		if (panel is TextEntry textEntry)
+			textEntry.SetFont(font);
+		if (panel is RichText richText)
+			richText.SetFont(font);
+	}
+
+	[LuaMethod]
+	static (int, int) Panel__LocalToScreen(Panel panel, int x, int y) {
+		panel.LocalToScreen(ref x, ref y);
+		return (x, y);
+	}
+
+	[LuaMethod]
+	static (int, int) Panel__ScreenToLocal(Panel panel, int x, int y) {
+		panel.ScreenToLocal(ref x, ref y);
+		return (x, y);
+	}
+
+	[LuaMethod]
+	static (int, int) Panel__CursorPos(Panel panel) {
+		vguiInput.GetCursorPos(out int x, out int y);
+		if (engine != null && !engine.IsActiveApp()) {
+			x = 0;
+			y = 0;
+		}
+		panel.ScreenToLocal(ref x, ref y);
+		return (x, y);
+	}
+
+	[LuaMethod]
+	static void Panel__SetCursor(Panel panel, [LuaGet] string? name) {
+		if (stricmp(name, "hand") == 0)
+			panel.SetCursor(CursorCode.Hand);
+		else if (stricmp(name, "no") == 0)
+			panel.SetCursor(CursorCode.No);
+		else if (stricmp(name, "blank") == 0)
+			panel.SetCursor(CursorCode.Blank);
+		else if (stricmp(name, "sizenwse") == 0)
+			panel.SetCursor(CursorCode.SizeNWSE);
+		else if (stricmp(name, "sizenesw") == 0)
+			panel.SetCursor(CursorCode.SizeNESW);
+		else if (stricmp(name, "sizewe") == 0)
+			panel.SetCursor(CursorCode.SizeWE);
+		else if (stricmp(name, "sizens") == 0)
+			panel.SetCursor(CursorCode.SizeNS);
+		else if (stricmp(name, "sizeall") == 0)
+			panel.SetCursor(CursorCode.SizeAll);
+		else if (stricmp(name, "arrow") == 0)
+			panel.SetCursor(CursorCode.Arrow);
+		else if (stricmp(name, "beam") == 0)
+			panel.SetCursor(CursorCode.IBeam);
+		else if (stricmp(name, "hourglass") == 0)
+			panel.SetCursor(CursorCode.Hourglass);
+		else if (stricmp(name, "waitarrow") == 0)
+			panel.SetCursor(CursorCode.WaitArrow);
+		else if (stricmp(name, "crosshair") == 0)
+			panel.SetCursor(CursorCode.Crosshair);
+		else
+			panel.SetCursor(stricmp(name, "up") == 0 ? CursorCode.Up : CursorCode.None);
 	}
 }

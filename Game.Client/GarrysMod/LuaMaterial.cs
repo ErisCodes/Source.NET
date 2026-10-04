@@ -11,6 +11,9 @@ public static partial class LuaMaterial
 	[LuaClass(typeof(IMaterial), NullError = "Tried to use a NULL IMaterial!")]
 	public static readonly LuaClass LC_IMaterial = new("IMaterial", LuaType.Material, null, null);
 
+	[LuaMethod]
+	static bool IMaterial__IsError(IMaterial material) => material.IsErrorMaterialInternal();
+
 	static bool IsAllowedMaterialPath(ReadOnlySpan<char> name) {
 		Span<char> buffer = stackalloc char[MAX_PATH];
 		strcpy(buffer, name);
