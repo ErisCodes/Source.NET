@@ -587,6 +587,19 @@ public class ModelRender : IModelRender
 		//  	return;
 
 		// TODO: Flexes
+		Span<float> flexWeights = default;
+		Span<float> flexDelayedWeights = default;
+		int flexCount = state.StudioHdr!.NumFlexDesc;
+		if (flexCount > 0) {
+			Assert(!boneToWorldArray.IsEmpty);
+			bool usesDelayedWeights = state.Renderable!.UsesFlexDelayedWeights();
+			if (usesDelayedWeights)
+				StudioRender.LockFlexWeights(flexCount, out flexWeights, out flexDelayedWeights);
+			else
+				StudioRender.LockFlexWeights(flexCount, out flexWeights);
+			state.Renderable.SetupWeights(boneToWorldArray, flexWeights, flexDelayedWeights);
+			StudioRender.UnlockFlexWeights();
+		}
 
 		// OPTIMIZE: Try to precompute part of this mess once a frame at the very least.
 		bool bUsesBumpmapping = (pInfo.Model!.Flags & ModelFlag.UsesBumpMapping) != 0;
@@ -674,8 +687,8 @@ public class ModelRender : IModelRender
 
 		// TODO: perf stats
 		DrawModelResults results = default;
-		StudioRender.DrawModel(ref results, ref info, boneToWorldArray, null,
-			null, in pInfo.Origin, drawFlags);
+		StudioRender.DrawModel(ref results, ref info, boneToWorldArray, flexWeights,
+			flexDelayedWeights, in pInfo.Origin, drawFlags);
 
 		// TODO: debug overlay
 
