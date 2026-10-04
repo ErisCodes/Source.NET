@@ -101,6 +101,9 @@ public static class AI_BaseNPCGlobals
 	public static readonly ConVar ai_debug_avoidancebounds = new("ai_debug_avoidancebounds", "0");
 
 	public static readonly ConVar g_DisableAI = new("ai_disabled", "0", FCvar.Notify);
+	public static readonly ConVar g_IgnorePlayers = new("ai_ignoreplayers", "0", FCvar.Notify);
+	public static readonly ConVar ai_LOS_mode = new("ai_LOS_mode", "0", FCvar.Replicated);
+	public static readonly ConVar ai_auto_contact_solver = new("ai_auto_contact_solver", "1");
 
 	public static bool ShouldUseEfficiency() => ai_use_think_optimizations.GetBool() && ai_use_efficiency.GetBool();
 	public static bool ShouldUseFrameThinkLimits() => ai_use_think_optimizations.GetBool() && ai_use_frame_think_limits.GetBool();
@@ -114,7 +117,12 @@ public static class AI_BaseNPCGlobals
 	public static float g_NpcTimeThisFrame;
 	public static TimeUnit_t g_StartTimeCurThink;
 
-	public static bool AIIsDebuggingDoors(AI_BaseNPC npc) => throw new NotImplementedException();
+#if DEBUG
+	public static bool AIIsDebuggingDoors(AI_BaseNPC npc) => ai_debug_doors.GetBool() && npc.Selected;
+#else
+	public static bool AIIsDebuggingDoors(AI_BaseNPC npc) => false;
+#endif
+
 }
 
 public class AI_Manager
@@ -155,11 +163,40 @@ public struct AIScheduleState
 	public TaskStatus TaskStatus;
 	public TimeUnit_t TimeStarted;
 	public TimeUnit_t TimeCurTaskStarted;
-	public int TaskFailureCode;
+	public AI_TaskFailureCode TaskFailureCode;
 	public int TaskInterrupt;
 	public bool TaskRanAutomovement;
 	public bool TaskUpdatedYaw;
 	public bool ScheduleWasInterrupted;
+}
+
+public enum DesiredWeaponState
+{
+	Ignore = 0,
+	Holstered,
+	HolsteredDestroyed,
+	Unholstered,
+	Changing,
+	ChangingDestroy,
+}
+
+public enum ScriptStateType
+{
+	Playing = 0,
+	Wait,
+	PostIdle,
+	Cleanup,
+	WalkToMark,
+	RunToMark,
+	CustomMoveToMark,
+}
+
+public enum NPCInteractionState
+{
+	NotRunning = 0,
+	RunningActive,
+	RunningPartner,
+	MovingToMark,
 }
 
 public struct AIRebalanceInfo
@@ -356,6 +393,38 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public EHANDLE OpeningDoor = new();
 	public int DebugCurIndex;
 	public bool PlayerAvoidState;
+	public bool Selected;
+
+	public TimeUnit_t LastSawPlayerTime;
+	public TimeUnit_t LastEnemyTime;
+	public AI_ScheduleBits CustomInterruptConditions;
+	public AI_Schedule? FailedSchedule;
+	public AI_Schedule? InterruptSchedule;
+	public string? FailText;
+	public string? InterruptText;
+	public TimeUnit_t WaitFinished;
+	public TimeUnit_t MoveWaitFinished;
+	public bool DeferredNavigation;
+	public TimeUnit_t NextFlinchTime;
+	public TimeUnit_t NextWeaponSearchTime;
+	public string? PendingWeapon;
+	public DesiredWeaponState DesiredWeaponState;
+	public ScriptStateType ScriptState;
+	public readonly SimTimer CheckOnGroundTimer = new();
+	public Handle<AI_BaseNPC> ForcedInteractionPartner = new();
+	public NPCInteractionState InteractionState;
+	public Vector3 SavePosition;
+	public Vector3 EyeLookTarget;
+	public Vector3 CurEyeTarget;
+	public float EyeIntegRate = 0.95f;
+	public float HeadYaw;
+	public float HeadPitch;
+
+	public OutputEvent OnHearWorld = new();
+	public OutputEvent OnHearPlayer = new();
+	public OutputEvent OnHearCombat = new();
+	public OutputEvent OnLostEnemy = new();
+	public OutputEvent OnLostPlayer = new();
 
 	static readonly BASEPTR CallNPCThinkPtr = static self => ((AI_BaseNPC)self).CallNPCThink();
 
@@ -2620,6 +2689,115 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual Vector3 FacingPosition() => EyePosition();
 
+	public virtual void MaintainLookTargets(TimeUnit_t interval) {
+		if (GetEnemy() != null) {
+			if (ValidEyeTarget(GetEnemy()!.EyePosition())) {
+				SetHeadDirection(GetEnemy()!.EyePosition(), interval);
+				SetViewtarget(GetEnemy()!.EyePosition());
+				return;
+			}
+		}
+
+		if (NextEyeLookTime > gpGlobals.CurTime) {
+			if (!ValidEyeTarget(EyeLookTarget))
+				NextEyeLookTime = 0;
+		}
+
+		if (NextEyeLookTime < gpGlobals.CurTime) {
+			Vector3 bodyDir = BodyDirection2D();
+
+			EyeLookTarget = EyePosition() + 500 * bodyDir;
+			NextEyeLookTime = gpGlobals.CurTime + 0.5;
+		}
+		SetHeadDirection(EyeLookTarget, interval);
+
+		TimeUnit_t timeToUse = interval;
+		while (timeToUse > 0) {
+			CurEyeTarget = ((1 - EyeIntegRate) * CurEyeTarget + EyeIntegRate * EyeLookTarget);
+			timeToUse -= 0.1;
+		}
+		SetViewtarget(CurEyeTarget);
+	}
+
+	public virtual bool ValidEyeTarget(in Vector3 lookTargetPos) {
+		Vector3 headDir = HeadDirection3D();
+		Vector3 lookTargetDir = lookTargetPos - EyePosition();
+		MathLib.VectorNormalize(ref lookTargetDir);
+
+		float dotPr = Vector3.Dot(lookTargetDir, headDir);
+		if (dotPr > 0.7)
+			return true;
+		return false;
+	}
+
+	public virtual void SetHeadDirection(in Vector3 targetPos, TimeUnit_t interval) {
+		if ((CapabilitiesGet() & Server.Capability.TurnHead) == 0)
+			return;
+
+		float desiredYaw = Util.VecToYaw(targetPos - GetLocalOrigin()) - GetLocalAngles().Y;
+		if (desiredYaw > 180)
+			desiredYaw -= 360;
+		if (desiredYaw < -180)
+			desiredYaw += 360;
+
+		float rate = 0.8f;
+
+		TimeUnit_t timeToUse = interval;
+		while (timeToUse > 0) {
+			HeadYaw = (rate * HeadYaw) + (1 - rate) * desiredYaw;
+			timeToUse -= 0.1;
+		}
+		if (HeadYaw > 360) HeadYaw = 0;
+
+		HeadYaw = SetBoneController(0, HeadYaw);
+
+		Vector3 eyePosition = EyePosition();
+		float targetDist = (targetPos - eyePosition).Length();
+		float vertDist = targetPos.Z - eyePosition.Z;
+		float desiredPitch = -MathLib.RAD2DEG(MathF.Atan(vertDist / targetDist));
+
+		timeToUse = interval;
+		while (timeToUse > 0) {
+			HeadPitch = (rate * HeadPitch) + (1 - rate) * desiredPitch;
+			timeToUse -= 0.1;
+		}
+		if (HeadPitch > 360) HeadPitch = 0;
+
+		SetBoneController(1, HeadPitch);
+	}
+
+	public override Vector3 EyeDirection2D() => HeadDirection2D();
+
+	public override Vector3 EyeDirection3D() => HeadDirection3D();
+
+	public override Vector3 HeadDirection2D() {
+		QAngle bodyAngles = BodyAngles();
+		float worldHeadYaw = HeadYaw + bodyAngles.Y;
+
+		return Util.YawToVector(worldHeadYaw);
+	}
+
+	public override Vector3 HeadDirection3D() {
+		QAngle bodyAngles = BodyAngles();
+		float worldHeadYaw = HeadYaw + bodyAngles.Y;
+
+		MathLib.AngleVectors(new QAngle(HeadPitch, worldHeadYaw, 0), out Vector3 headDirection);
+		return headDirection;
+	}
+
+	public void MaintainTurnActivity() {
+		if (IsInAVehicle())
+			return;
+
+		GetMotor()!.MaintainTurnActivity();
+	}
+
+	public Capability CapabilitiesRemove(Capability capability) {
+		Capability &= ~capability;
+
+		return Capability;
+	}
+
 	public virtual void SetAim(in Vector3 aimDir) => throw new NotImplementedException();
 
 	public virtual int HolsterWeapon() => throw new NotImplementedException();
@@ -2771,9 +2949,1047 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return Schedule.GetId() == schedId;
 	}
 
-	public Task_t? GetTask() => throw new NotImplementedException();
-	public bool TaskIsRunning() => throw new NotImplementedException();
-	public int GetTaskInterrupt() => throw new NotImplementedException();
+	public Task_t? GetTask() {
+		int scheduleIndex = GetScheduleCurTaskIndex();
+		if (GetCurSchedule() == null || scheduleIndex < 0 || scheduleIndex >= GetCurSchedule()!.NumTasks())
+			return null;
+
+		return GetCurSchedule()!.GetTaskList()![scheduleIndex];
+	}
+
+	public bool TaskIsRunning() {
+		if (GetTaskStatus() != TaskStatus.Complete && GetTaskStatus() != TaskStatus.RunMove)
+			return true;
+
+		return false;
+	}
+
+	public void TaskInterrupt() => ScheduleState.TaskInterrupt++;
+	public void ClearTaskInterrupt() => ScheduleState.TaskInterrupt = 0;
+	public int GetTaskInterrupt() => ScheduleState.TaskInterrupt;
+
+	public bool TaskIsComplete() => GetTaskStatus() == TaskStatus.Complete;
+
+	public TimeUnit_t GetTimeTaskStarted() => ScheduleState.TimeCurTaskStarted;
+
+	public TaskStatus GetTaskStatus() => ScheduleState.TaskStatus;
+
+	public int GetScheduleCurTaskIndex() => ScheduleState.CurTask;
+
+	public int IncScheduleCurTaskIndex() {
+		ScheduleState.TaskInterrupt = 0;
+		ScheduleState.TaskRanAutomovement = false;
+		ScheduleState.TaskUpdatedYaw = false;
+		return ++ScheduleState.CurTask;
+	}
+
+	public void SetUpdatedYaw() => ScheduleState.TaskUpdatedYaw = true;
+
+	public virtual int GetLocalScheduleId(int globalScheduleID) => AI_IdIsLocal(globalScheduleID) ? globalScheduleID : GetClassScheduleIdSpace().ScheduleGlobalToLocal(globalScheduleID);
+
+	public virtual void TaskComplete(bool ignoreSetFailedCondition = false) {
+		EndTaskOverlay();
+
+		if (ignoreSetFailedCondition || !HasCondition((int)SCOND_t.COND_TASK_FAILED))
+			SetTaskStatus(TaskStatus.Complete);
+	}
+
+	public void TaskFail(AI_TaskFailureCode code) {
+		EndTaskOverlay();
+
+		if (developer.GetInt() != 0) {
+			FailText = TaskFailureToString(code);
+
+			InterruptSchedule = null;
+			FailedSchedule = GetCurSchedule();
+
+			if ((DebugOverlays & DebugOverlayBits.TaskText) != 0)
+				DevMsg($"      TaskFail -> {FailText}\n");
+		}
+
+		ScheduleState.TaskFailureCode = code;
+		SetCondition((int)SCOND_t.COND_TASK_FAILED);
+		Forget(AI_MemoryFlags.Turning);
+	}
+
+	public void TaskFail(string generalFailText) => TaskFail(MakeFailCode(generalFailText));
+
+	public void Remember(AI_MemoryFlags memory) => Memory |= memory;
+
+	public void ClearConditions(ReadOnlySpan<int> conditions) {
+		for (int i = 0; i < conditions.Length; ++i) {
+			int condition = conditions[i];
+			int interrupt = InterruptFromCondition(condition);
+
+			if (interrupt == -1) {
+				Assert(false);
+				continue;
+			}
+
+			Conditions.Clear(interrupt);
+		}
+	}
+
+	public bool HasInterruptCondition(int condition) {
+		if (GetCurSchedule() == null)
+			return false;
+
+		int interrupt = InterruptFromCondition(condition);
+
+		if (interrupt == -1) {
+			Assert(false);
+			return false;
+		}
+		return Conditions.IsBitSet(interrupt) && GetCurSchedule()!.HasInterrupt(interrupt);
+	}
+
+	public bool IsCustomInterruptConditionSet(int condition) {
+		int interrupt = InterruptFromCondition(condition);
+
+		if (interrupt == -1) {
+			Assert(false);
+			return false;
+		}
+
+		return CustomInterruptConditions.IsBitSet(interrupt);
+	}
+
+	public void SetCustomInterruptCondition(int condition) {
+		int interrupt = InterruptFromCondition(condition);
+
+		if (interrupt == -1) {
+			Assert(false);
+			return;
+		}
+
+		CustomInterruptConditions.Set(interrupt);
+	}
+
+	public void ClearCustomInterruptCondition(int condition) {
+		int interrupt = InterruptFromCondition(condition);
+
+		if (interrupt == -1) {
+			Assert(false);
+			return;
+		}
+
+		CustomInterruptConditions.Clear(interrupt);
+	}
+
+	public float SetWait(float minWait, float maxWait = 0.0f) {
+		int minThinks = (int)MathF.Ceiling(minWait * 10);
+
+		if (maxWait == 0.0)
+			WaitFinished = gpGlobals.CurTime + (0.1 * minThinks);
+		else {
+			if (minThinks == 0)
+				minThinks = 1;
+			int maxThinks = (int)MathF.Ceiling(maxWait * 10);
+
+			WaitFinished = gpGlobals.CurTime + (0.1 * RandomInt(minThinks, maxThinks));
+		}
+		return (float)WaitFinished;
+	}
+
+	public void ClearWait() => WaitFinished = float.MaxValue;
+
+	public bool IsWaitFinished() => gpGlobals.CurTime >= WaitFinished;
+
+	public bool IsWaitSet() => WaitFinished != float.MaxValue;
+
+	public bool FScheduleDone() {
+		Assert(GetCurSchedule() != null);
+
+		if (GetScheduleCurTaskIndex() == GetCurSchedule()!.NumTasks())
+			return true;
+
+		return false;
+	}
+
+	public void NextScheduledTask() {
+		Assert(GetCurSchedule() != null);
+
+		SetTaskStatus(TaskStatus.New);
+		IncScheduleCurTaskIndex();
+
+		if (FScheduleDone()) {
+			FailedSchedule = null;
+			InterruptSchedule = null;
+
+			SetCondition((int)SCOND_t.COND_SCHEDULE_DONE);
+		}
+	}
+
+	public virtual void BuildScheduleTestBits() { }
+
+	public bool IsScheduleValid() {
+		if (GetCurSchedule() == null || GetCurSchedule()!.NumTasks() == 0)
+			return false;
+
+		GetCurSchedule()!.GetInterruptMask(out CustomInterruptConditions);
+
+		if (NPCState != NPCState.Script && !IsInLockedScene() && !CustomInterruptConditions.IsBitSet((int)SCOND_t.COND_NO_CUSTOM_INTERRUPTS))
+			BuildScheduleTestBits();
+
+		SetCustomInterruptCondition((int)SCOND_t.COND_NPC_FREEZE);
+
+		CustomInterruptConditions.And(Conditions, out AI_ScheduleBits testBits);
+
+		if (!testBits.IsAllClear()) {
+			if (developer.GetInt() != 0) {
+				FailedSchedule = null;
+				InterruptSchedule = GetCurSchedule();
+
+				for (int i = 0; i < MAX_CONDITIONS; i++) {
+					if (testBits.IsBitSet(i)) {
+						InterruptText = ConditionName(AI_RemapToGlobal(i));
+						if (InterruptText == null)
+							InterruptText = "(UNKNOWN CONDITION)";
+
+						if ((DebugOverlays & DebugOverlayBits.TaskText) != 0)
+							DevMsg($"      Break condition -> {InterruptText}\n");
+
+						break;
+					}
+				}
+
+				if (HasCondition((int)SCOND_t.COND_NEW_ENEMY)) {
+					if ((DebugOverlays & DebugOverlayBits.TaskText) != 0)
+						DevMsg($"      New enemy: {(GetEnemy() != null ? GetEnemy()!.GetDebugName() : "<NULL>")}\n");
+				}
+			}
+
+			return false;
+		}
+
+		if (HasCondition((int)SCOND_t.COND_SCHEDULE_DONE) || HasCondition((int)SCOND_t.COND_TASK_FAILED))
+			return false;
+
+		return true;
+	}
+
+	public bool ShouldSelectIdealState() {
+		if (IdealNPCState == NPCState.Dead)
+			return false;
+
+		if ((IdealNPCState == NPCState.Script) && (NPCState != NPCState.Script))
+			return false;
+
+		if (!HasCondition((int)SCOND_t.COND_SCHEDULE_DONE))
+			return true;
+
+		if (GetCurSchedule() != null && GetCurSchedule()!.HasInterrupt((int)SCOND_t.COND_SCHEDULE_DONE))
+			return true;
+
+		if ((NPCState == NPCState.Combat) && (GetEnemy() == null))
+			return true;
+
+		if ((NPCState == NPCState.Idle || NPCState == NPCState.Alert) && (GetEnemy() != null))
+			return true;
+
+		return false;
+	}
+
+	public virtual AI_Schedule? GetNewSchedule() {
+		int scheduleType;
+
+		if (HasCondition((int)SCOND_t.COND_NPC_FREEZE))
+			scheduleType = SCHED_NPC_FREEZE;
+		else {
+			if (NPCState == NPCState.Combat && GetEnemy() == null) {
+				DevMsg("**ERROR: Combat State with no enemy! slamming to ALERT\n");
+				SetState(NPCState.Alert);
+			}
+
+			if (NPCState == NPCState.Script || NPCState == NPCState.Dead || InteractionState == NPCInteractionState.MovingToMark)
+				scheduleType = BaseSelectSchedule();
+			else
+				scheduleType = SelectSchedule();
+
+			IdealSchedule = GetGlobalScheduleId(scheduleType);
+		}
+
+		return GetScheduleOfType(scheduleType);
+	}
+
+	public virtual AI_Schedule? GetFailSchedule() {
+		int prevSchedule;
+		int failedTask;
+
+		if (GetCurSchedule() != null)
+			prevSchedule = GetLocalScheduleId(GetCurSchedule()!.GetId());
+		else
+			prevSchedule = SCHED_NONE;
+
+		Task_t? task = GetTask();
+		if (task != null)
+			failedTask = task.Value.Task;
+		else
+			failedTask = TASK_INVALID;
+
+		Assert(AI_IdIsLocal(prevSchedule));
+		Assert(AI_IdIsLocal(failedTask));
+
+		int scheduleType = SelectFailSchedule(prevSchedule, failedTask, ScheduleState.TaskFailureCode);
+		return GetScheduleOfType(scheduleType);
+	}
+
+	public virtual int SelectFailSchedule(int failedSchedule, int failedTask, AI_TaskFailureCode taskFailCode) => (FailSchedule != SCHED_NONE) ? FailSchedule : SCHED_FAIL;
+
+	const int MAX_TASKS_RUN = 10;
+
+	static bool ShouldStopProcessingTasks(AI_BaseNPC npc, long taskTime, long timeLimit) {
+		if (npc.IsNavigationDeferred())
+			return true;
+
+		if (AIStrongOpt()) {
+			bool inScript = npc.GetState() == NPCState.Script || npc.IsCurSchedule(SCHED_SCENE_GENERIC, false);
+
+			if (npc.HasMemory(AI_MemoryFlags.TaskExpensive) && inScript == false)
+				return true;
+		}
+
+		if (taskTime > timeLimit) {
+			if (ShouldUseEfficiency() ||
+				 npc.IsMoving() ||
+				 (npc.GetIdealActivity() != Activity.ACT_RUN && npc.GetIdealActivity() != Activity.ACT_WALK)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public void MaintainSchedule() {
+		AI_Schedule? newSchedule;
+		int i;
+		bool runTask = true;
+
+#if DEBUG
+		const int timeLimit = 16;
+#else
+		const int timeLimit = 8;
+#endif
+		long taskTime = Environment.TickCount64;
+
+		Forget(AI_MemoryFlags.TaskExpensive);
+
+		bool stopProcessing = false;
+		for (i = 0; i < MAX_TASKS_RUN && !stopProcessing; i++) {
+			if (GetCurSchedule() != null && TaskIsComplete()) {
+				NextScheduledTask();
+
+				if (HasCondition((int)SCOND_t.COND_SCHEDULE_DONE)) {
+					Conditions = ConditionsPreIgnore;
+					SetCondition((int)SCOND_t.COND_SCHEDULE_DONE);
+
+					InverseIgnoreConditions.SetAll();
+				}
+
+				if ((DebugBits & AI_DebugFlags.StepAI) != 0) {
+					DebugCurIndex++;
+					return;
+				}
+			}
+
+			if (!IsScheduleValid() || NPCState != IdealNPCState) {
+				ScheduleState.ScheduleWasInterrupted = true;
+				OnScheduleChange();
+
+				if (!HasCondition((int)SCOND_t.COND_NPC_FREEZE) && !ConditionsGatheredValue)
+					GatherConditions();
+
+				if (ShouldSelectIdealState()) {
+					NPCState idealState = SelectIdealState();
+					SetIdealState(idealState);
+				}
+
+				if (HasCondition((int)SCOND_t.COND_TASK_FAILED) && NPCState == IdealNPCState) {
+					if ((DebugOverlays & DebugOverlayBits.TaskText) != 0)
+						DevMsg("      (failed)\n");
+
+					newSchedule = GetFailSchedule();
+					IdealSchedule = newSchedule!.GetId();
+					DevWarning(2, $"({GetEntityName()}) Schedule ({(GetCurSchedule() != null ? GetCurSchedule()!.GetName() : "GetCurSchedule() == NULL")}) Failed at {GetScheduleCurTaskIndex()}!\n");
+					SetSchedule(newSchedule);
+				}
+				else {
+					SetState(IdealNPCState);
+
+					newSchedule = GetNewSchedule();
+
+					SetSchedule(newSchedule!);
+				}
+			}
+
+			if (GetCurSchedule() == null) {
+				newSchedule = GetNewSchedule();
+
+				if (newSchedule != null)
+					SetSchedule(newSchedule);
+			}
+
+			if (GetCurSchedule() == null || GetCurSchedule()!.NumTasks() == 0) {
+				DevMsg("ERROR: Missing or invalid schedule!\n");
+				SetActivity(Activity.ACT_IDLE);
+				return;
+			}
+
+			if (GetTaskStatus() == TaskStatus.New) {
+				if (GetScheduleCurTaskIndex() == 0) {
+					int globalId = GetCurSchedule()!.GetId();
+					int localId = GetLocalScheduleId(globalId);
+					OnStartSchedule((localId != -1) ? localId : globalId);
+				}
+
+				Task_t? task = GetTask();
+				Assert(task != null);
+
+				if ((DebugOverlays & DebugOverlayBits.TaskText) != 0)
+					DevMsg($"  Task: {TaskName(task!.Value.Task)}\n");
+
+				OnStartTask();
+
+				ScheduleState.TaskFailureCode = AI_TaskFailureCode.NoTaskFailure;
+				ScheduleState.TimeCurTaskStarted = gpGlobals.CurTime;
+
+				StartTask(task!.Value);
+
+				if (TaskIsRunning() && !HasCondition((int)SCOND_t.COND_TASK_FAILED))
+					StartTaskOverlay();
+			}
+
+			MaintainActivity();
+
+			if (!TaskIsComplete() && GetTaskStatus() != TaskStatus.New) {
+				if (TaskIsRunning() && !HasCondition((int)SCOND_t.COND_TASK_FAILED) && runTask) {
+					Task_t? task = GetTask();
+					Assert(task != null);
+
+					int j;
+					for (j = 0; j < 8; j++) {
+						RunTask(task!.Value);
+
+						if (GetTaskInterrupt() == 0 || TaskIsComplete() || HasCondition((int)SCOND_t.COND_TASK_FAILED))
+							break;
+
+						if (ShouldUseEfficiency() && ShouldStopProcessingTasks(this, Environment.TickCount64 - taskTime, timeLimit)) {
+							stopProcessing = true;
+							break;
+						}
+					}
+					AssertMsg(j < 8, "Runaway task interrupt\n");
+
+					if (TaskIsRunning() && !HasCondition((int)SCOND_t.COND_TASK_FAILED)) {
+						if (IsCurTaskContinuousMove())
+							Remember(AI_MemoryFlags.MovedFromSpawn);
+						RunTaskOverlay();
+					}
+
+					if (!TaskIsComplete())
+						stopProcessing = true;
+				}
+				else
+					stopProcessing = true;
+			}
+
+			if (!stopProcessing && ShouldStopProcessingTasks(this, Environment.TickCount64 - taskTime, timeLimit))
+				stopProcessing = true;
+		}
+
+		MaintainActivity();
+
+		if ((DebugBits & AI_DebugFlags.StepAI) != 0) {
+			if (DebugCurIndex >= DebugPauseIndex)
+				PlaybackRate = 0;
+		}
+	}
+
+	public virtual string? TaskName(int taskID) {
+		if (AI_IdIsLocal(taskID))
+			taskID = GetClassScheduleIdSpace().TaskLocalToGlobal(taskID);
+		return GetSchedulingSymbols().TaskIdToSymbol(taskID);
+	}
+
+	public virtual string? ConditionName(int conditionID) {
+		if (AI_IdIsLocal(conditionID))
+			conditionID = GetClassScheduleIdSpace().ConditionLocalToGlobal(conditionID);
+		return GetSchedulingSymbols().ConditionIdToSymbol(conditionID);
+	}
+
+	public virtual void OnStartSchedule(int scheduleType) { }
+
+	public void OnStartTask() => SetTaskStatus(TaskStatus.RunMoveAndTask);
+
+	public bool IsNavigationDeferred() => DeferredNavigation;
+
+	public virtual bool IsCurTaskContinuousMove() {
+		Task_t? task = GetTask();
+
+		if (task == null)
+			return true;
+
+		switch (task.Value.Task) {
+			case TASK_WAIT_FOR_MOVEMENT:
+			case TASK_MOVE_TO_TARGET_RANGE:
+			case TASK_MOVE_TO_GOAL_RANGE:
+			case TASK_WEAPON_RUN_PATH:
+			case TASK_PLAY_SCENE:
+			case TASK_RUN_PATH_TIMED:
+			case TASK_WALK_PATH_TIMED:
+			case TASK_RUN_PATH_FOR_UNITS:
+			case TASK_WALK_PATH_FOR_UNITS:
+			case TASK_RUN_PATH_FLEE:
+			case TASK_WALK_PATH_WITHIN_DIST:
+			case TASK_RUN_PATH_WITHIN_DIST:
+				return true;
+
+			default:
+				return false;
+		}
+	}
+
+	public bool ShouldMoveWait() => MoveWaitFinished > gpGlobals.CurTime;
+
+	public virtual bool ShouldMoveAndShoot() => (CapabilitiesGet() & Server.Capability.MoveShoot) != 0;
+
+	public void StartTaskOverlay() {
+		if (IsCurTaskContinuousMove()) {
+			if (ShouldMoveAndShoot())
+				MoveAndShootOverlay.StartShootWhileMove();
+			else
+				MoveAndShootOverlay.NoShootWhileMove();
+		}
+	}
+
+	public void RunTaskOverlay() {
+		if (IsCurTaskContinuousMove())
+			MoveAndShootOverlay.RunShootWhileMove();
+	}
+
+	public void EndTaskOverlay() => MoveAndShootOverlay.EndShootWhileMove();
+
+	public virtual void OnScheduleChange() {
+		EndTaskOverlay();
+
+		MoveWaitFinished = 0;
+
+		if (HasMemory(AI_MemoryFlags.LockedHint) && GetHintNode() != null) {
+			float hintDelay = GetHintDelay(GetHintNode()!.HintType());
+			GetHintNode()!.Unlock(hintDelay);
+			SetHintNode(null);
+		}
+	}
+
+	public virtual float GetHintDelay(short hintType) => 0;
+
+	public Activity GetIdealActivity() => IdealActivity;
+
+	public bool IsActivityStarted() => GetSequence() == IdealSequence;
+
+	public bool IsActivityFinished() => IsSequenceFinished() && (GetSequence() == IdealSequence);
+
+	public Activity GetStoppedActivity() => Activity.ACT_IDLE;
+
+	public void MaintainActivity() {
+		if (LifeState == (int)Source.LifeState.Dead)
+			return;
+
+		if (GetState() == NPCState.Script) {
+			if (GetActivity() != Activity.ACT_TRANSITION)
+				return;
+		}
+
+		if (IdealActivity == Activity.ACT_DO_NOT_DISTURB || GetModelPtr() == null)
+			return;
+
+		if ((GetActivity() != IdealActivity) || (GetSequence() != IdealSequence)) {
+			if (ai_sequence_debug.GetBool() == true && (DebugOverlays & DebugOverlayBits.NPCSelected) != 0)
+				DevMsg($"MaintainActivity {GetClassname()} : {GetActivityName(GetActivity())}:{Animation.GetSequenceName(GetModelPtr(), GetSequence())} -> {GetActivityName(IdealActivity)}:{Animation.GetSequenceName(GetModelPtr(), IdealSequence)}\n");
+
+			bool advance = false;
+
+			if (GetActivity() == Activity.ACT_TRANSITION) {
+				if (IsSequenceFinished())
+					advance = true;
+			}
+			else {
+				ResolveActivityToSequence(IdealActivity, ref IdealSequence, ref IdealTranslatedActivity, ref IdealWeaponActivity);
+				advance = true;
+			}
+
+			if (advance)
+				AdvanceToIdealActivity();
+		}
+	}
+
+	public void AdvanceToIdealActivity() {
+		int nextSequence = FindTransitionSequence(GetSequence(), IdealSequence);
+		if (nextSequence != -1) {
+			if (nextSequence != IdealSequence) {
+				Activity weaponActivity = Activity.ACT_TRANSITION;
+				Activity translatedActivity = Activity.ACT_TRANSITION;
+
+				Activity transitionActivity = GetSequenceActivity(nextSequence);
+				if (transitionActivity != Activity.ACT_INVALID) {
+					int discard = 0;
+					ResolveActivityToSequence(transitionActivity, ref discard, ref translatedActivity, ref weaponActivity);
+				}
+
+				SetActivityAndSequence(Activity.ACT_TRANSITION, nextSequence, translatedActivity, weaponActivity);
+			}
+			else
+				SetActivityAndSequence(IdealActivity, IdealSequence, IdealTranslatedActivity, IdealWeaponActivity);
+		}
+		else
+			SetActivity(IdealActivity);
+	}
+
+	public void ResetIdealActivity(Activity newIdealActivity) {
+		if (Activity == newIdealActivity)
+			Activity = Activity.ACT_RESET;
+
+		SetIdealActivity(newIdealActivity);
+	}
+
+	public bool FacingIdeal() {
+		if (MathF.Abs(GetMotor()!.DeltaIdealYaw()) <= 0.006)
+			return true;
+
+		return false;
+	}
+
+	public void SetTurnActivity() {
+		if (IsCrouching()) {
+			SetIdealActivity(Activity.ACT_IDLE);
+			return;
+		}
+
+		float yd;
+		yd = GetMotor()!.DeltaIdealYaw();
+
+		if (yd <= -80 && yd >= -100 && SelectWeightedSequence(Activity.ACT_90_RIGHT) != StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+			Remember(AI_MemoryFlags.Turning);
+			SetIdealActivity(Activity.ACT_90_RIGHT);
+			return;
+		}
+		if (yd >= 80 && yd <= 100 && SelectWeightedSequence(Activity.ACT_90_LEFT) != StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+			Remember(AI_MemoryFlags.Turning);
+			SetIdealActivity(Activity.ACT_90_LEFT);
+			return;
+		}
+		if (MathF.Abs(yd) >= 160 && SelectWeightedSequence(Activity.ACT_180_LEFT) != StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+			Remember(AI_MemoryFlags.Turning);
+			SetIdealActivity(Activity.ACT_180_LEFT);
+			return;
+		}
+
+		if (yd <= -45 && SelectWeightedSequence(Activity.ACT_TURN_RIGHT) != StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+			SetIdealActivity(Activity.ACT_TURN_RIGHT);
+			return;
+		}
+		if (yd >= 45 && SelectWeightedSequence(Activity.ACT_TURN_LEFT) != StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+			SetIdealActivity(Activity.ACT_TURN_LEFT);
+			return;
+		}
+
+		SetIdealActivity(Activity.ACT_IDLE);
+	}
+
+	public bool UpdateTurnGesture() {
+		float yd = GetMotor()!.DeltaIdealYaw();
+		return GetMotor()!.AddTurnGesture(yd);
+	}
+
+	public void ChainStartTask(int task, float taskData = 0) {
+		Task_t tempTask = new() { Task = task, TaskData = taskData };
+		StartTask(tempTask);
+	}
+
+	public void ChainRunTask(int task, float taskData = 0) {
+		Task_t tempTask = new() { Task = task, TaskData = taskData };
+		RunTask(tempTask);
+	}
+
+	public bool TaskRanAutomovement() => ScheduleState.TaskRanAutomovement;
+
+	public virtual void StartTask(in Task_t task) {
+		switch (task.Task) {
+			case TASK_RESET_ACTIVITY:
+				Activity = Activity.ACT_RESET;
+				TaskComplete();
+				break;
+
+			case TASK_STOP_MOVING:
+				SetIdealActivity(GetStoppedActivity());
+				TaskComplete();
+				break;
+
+			case TASK_SET_SCHEDULE:
+				if (!SetSchedule((int)task.TaskData))
+					TaskFail(AI_TaskFailureCode.ScheduleNotFound);
+				break;
+
+			case TASK_FACE_IDEAL:
+				SetTurnActivity();
+				break;
+
+			case TASK_WAIT_PVS:
+			case TASK_WAIT_INDEFINITE:
+				break;
+
+			case TASK_WAIT:
+			case TASK_WAIT_FACE_ENEMY:
+				SetWait(task.TaskData);
+				break;
+
+			case TASK_WAIT_RANDOM:
+			case TASK_WAIT_FACE_ENEMY_RANDOM:
+				SetWait(0, task.TaskData);
+				break;
+
+			case TASK_SET_ACTIVITY: {
+					Activity goalActivity = (Activity)(int)task.TaskData;
+					if (goalActivity != Activity.ACT_RESET)
+						SetIdealActivity(goalActivity);
+					else
+						Activity = Activity.ACT_RESET;
+					break;
+				}
+
+			case TASK_WAIT_FOR_MOVEMENT:
+				TaskComplete();
+				break;
+
+			case TASK_PLAY_SCENE:
+				break;
+
+			case TASK_SUGGEST_STATE:
+				SetIdealState((NPCState)(int)task.TaskData);
+				TaskComplete();
+				break;
+
+			case TASK_SET_FAIL_SCHEDULE:
+				FailSchedule = (int)task.TaskData;
+				TaskComplete();
+				break;
+
+			case TASK_CLEAR_FAIL_SCHEDULE:
+				FailSchedule = SCHED_NONE;
+				TaskComplete();
+				break;
+
+			case TASK_FALL_TO_GROUND:
+				SetWait(4);
+				break;
+
+			case TASK_FREEZE:
+				PlaybackRate = 0;
+				break;
+
+			case TASK_GATHER_CONDITIONS:
+				GatherConditions();
+				TaskComplete();
+				break;
+
+			case TASK_CREATE_PENDING_WEAPON:
+			case TASK_RANDOMIZE_FRAMERATE:
+			case TASK_DEFER_DODGE:
+			case TASK_ANNOUNCE_ATTACK:
+			case TASK_TURN_RIGHT:
+			case TASK_TURN_LEFT:
+			case TASK_REMEMBER:
+			case TASK_FORGET:
+			case TASK_FIND_HINTNODE:
+			case TASK_FIND_LOCK_HINTNODE:
+			case TASK_LOCK_HINTNODE:
+			case TASK_STORE_LASTPOSITION:
+			case TASK_CLEAR_LASTPOSITION:
+			case TASK_STORE_POSITION_IN_SAVEPOSITION:
+			case TASK_STORE_BESTSOUND_IN_SAVEPOSITION:
+			case TASK_STORE_ENEMY_POSITION_IN_SAVEPOSITION:
+			case TASK_CLEAR_HINTNODE:
+			case TASK_PLAY_PRIVATE_SEQUENCE:
+			case TASK_PLAY_PRIVATE_SEQUENCE_FACE_ENEMY:
+			case TASK_PLAY_SEQUENCE_FACE_ENEMY:
+			case TASK_PLAY_SEQUENCE_FACE_TARGET:
+			case TASK_PLAY_SEQUENCE:
+			case TASK_ADD_GESTURE_WAIT:
+			case TASK_ADD_GESTURE:
+			case TASK_PLAY_HINT_ACTIVITY:
+			case TASK_FIND_BACKAWAY_FROM_SAVEPOSITION:
+			case TASK_FIND_NEAR_NODE_COVER_FROM_ENEMY:
+			case TASK_FIND_FAR_NODE_COVER_FROM_ENEMY:
+			case TASK_FIND_NODE_COVER_FROM_ENEMY:
+			case TASK_FIND_COVER_FROM_ENEMY:
+			case TASK_FIND_COVER_FROM_ORIGIN:
+			case TASK_FIND_COVER_FROM_BEST_SOUND:
+			case TASK_FACE_HINTNODE:
+			case TASK_FACE_LASTPOSITION:
+			case TASK_FACE_AWAY_FROM_SAVEPOSITION:
+			case TASK_SET_IDEAL_YAW_TO_CURRENT:
+			case TASK_FACE_TARGET:
+			case TASK_FACE_PLAYER:
+			case TASK_FACE_ENEMY:
+			case TASK_FACE_PATH:
+			case TASK_MOVE_TO_TARGET_RANGE:
+			case TASK_MOVE_TO_GOAL_RANGE:
+			case TASK_WAIT_UNTIL_NO_DANGER_SOUND:
+			case TASK_TARGET_PLAYER:
+			case TASK_SCRIPT_RUN_TO_TARGET:
+			case TASK_SCRIPT_WALK_TO_TARGET:
+			case TASK_SCRIPT_CUSTOM_MOVE_TO_TARGET:
+			case TASK_CLEAR_MOVE_WAIT:
+			case TASK_MELEE_ATTACK1:
+			case TASK_MELEE_ATTACK2:
+			case TASK_RANGE_ATTACK1:
+			case TASK_RANGE_ATTACK2:
+			case TASK_RELOAD:
+			case TASK_SPECIAL_ATTACK1:
+			case TASK_SPECIAL_ATTACK2:
+			case TASK_GET_CHASE_PATH_TO_ENEMY:
+			case TASK_GET_PATH_TO_ENEMY_LKP:
+			case TASK_GET_PATH_TO_INTERACTION_PARTNER:
+			case TASK_GET_PATH_TO_RANGE_ENEMY_LKP_LOS:
+			case TASK_GET_PATH_TO_ENEMY_LOS:
+			case TASK_GET_FLANK_RADIUS_PATH_TO_ENEMY_LOS:
+			case TASK_GET_FLANK_ARC_PATH_TO_ENEMY_LOS:
+			case TASK_GET_PATH_TO_ENEMY_LKP_LOS:
+			case TASK_SET_GOAL:
+			case TASK_GET_PATH_TO_GOAL:
+			case TASK_GET_PATH_TO_ENEMY:
+			case TASK_GET_PATH_TO_ENEMY_CORPSE:
+			case TASK_GET_PATH_TO_PLAYER:
+			case TASK_GET_PATH_TO_SAVEPOSITION_LOS:
+			case TASK_GET_PATH_TO_TARGET_WEAPON:
+			case TASK_GET_PATH_TO_TARGET:
+			case TASK_GET_PATH_TO_HINTNODE:
+			case TASK_GET_PATH_TO_COMMAND_GOAL:
+			case TASK_MARK_COMMAND_GOAL_POS:
+			case TASK_CLEAR_COMMAND_GOAL:
+			case TASK_GET_PATH_TO_LASTPOSITION:
+			case TASK_GET_PATH_TO_SAVEPOSITION:
+			case TASK_GET_PATH_TO_RANDOM_NODE:
+			case TASK_GET_PATH_TO_BESTSOUND:
+			case TASK_GET_PATH_TO_BESTSCENT:
+			case TASK_GET_PATH_AWAY_FROM_BEST_SOUND:
+			case TASK_MOVE_AWAY_PATH:
+			case TASK_WEAPON_RUN_PATH:
+			case TASK_ITEM_RUN_PATH:
+			case TASK_RUN_PATH:
+			case TASK_WALK_PATH_FOR_UNITS:
+			case TASK_RUN_PATH_FOR_UNITS:
+			case TASK_WALK_PATH:
+			case TASK_WALK_PATH_WITHIN_DIST:
+			case TASK_RUN_PATH_WITHIN_DIST:
+			case TASK_RUN_PATH_FLEE:
+			case TASK_WALK_PATH_TIMED:
+			case TASK_RUN_PATH_TIMED:
+			case TASK_STRAFE_PATH:
+			case TASK_WAIT_FOR_MOVEMENT_STEP:
+			case TASK_SMALL_FLINCH:
+			case TASK_BIG_FLINCH:
+			case TASK_DIE:
+			case TASK_SOUND_WAKE:
+			case TASK_SOUND_DIE:
+			case TASK_SOUND_IDLE:
+			case TASK_SOUND_PAIN:
+			case TASK_SOUND_ANGRY:
+			case TASK_SPEAK_SENTENCE:
+			case TASK_WAIT_FOR_SPEAK_FINISH:
+			case TASK_WAIT_FOR_SCRIPT:
+			case TASK_PUSH_SCRIPT_ARRIVAL_ACTIVITY:
+			case TASK_PLAY_SCRIPT:
+			case TASK_PLAY_SCRIPT_POST_IDLE:
+			case TASK_PRE_SCRIPT:
+			case TASK_ENABLE_SCRIPT:
+			case TASK_PLANT_ON_SCRIPT:
+			case TASK_FACE_SCRIPT:
+			case TASK_SET_TOLERANCE_DISTANCE:
+			case TASK_SET_ROUTE_SEARCH_TIME:
+			case TASK_WEAPON_FIND:
+			case TASK_ITEM_PICKUP:
+			case TASK_WEAPON_PICKUP:
+			case TASK_WEAPON_CREATE:
+			case TASK_USE_SMALL_HULL:
+			case TASK_WANDER:
+			case TASK_IGNORE_OLD_ENEMIES:
+			case TASK_ADD_HEALTH:
+				throw new NotImplementedException();
+
+			default:
+				break;
+		}
+	}
+
+	public virtual void RunTask(in Task_t task) {
+		switch (task.Task) {
+			case TASK_STOP_MOVING: {
+					if (task.TaskData == 1)
+						ChainRunTask(TASK_WAIT_FOR_MOVEMENT);
+					else {
+						SetIdealActivity(GetStoppedActivity());
+
+						TaskComplete();
+					}
+					break;
+				}
+
+			case TASK_SET_ACTIVITY: {
+					if (IsActivityStarted())
+						TaskComplete();
+				}
+				break;
+
+			case TASK_FACE_SAVEPOSITION:
+			case TASK_FACE_IDEAL: {
+					Assert(GetMotor()!.IsYawLocked() == false);
+
+					GetMotor()!.UpdateYaw();
+
+					if (FacingIdeal())
+						TaskComplete();
+					break;
+				}
+
+			case TASK_FACE_REASONABLE: {
+					Assert(GetMotor()!.IsYawLocked() == false);
+
+					GetMotor()!.UpdateYaw();
+
+					if (FacingIdeal())
+						TaskComplete();
+					break;
+				}
+
+			case TASK_WAIT_PVS: {
+					if (ShouldAlwaysThink() ||
+						 Util.FindClientInPVS(Edict()) != null) {
+						TaskComplete();
+					}
+					break;
+				}
+
+			case TASK_WAIT_INDEFINITE:
+				break;
+
+			case TASK_WAIT:
+			case TASK_WAIT_RANDOM: {
+					if (IsWaitFinished())
+						TaskComplete();
+					break;
+				}
+
+			case TASK_WAIT_FOR_MOVEMENT_STEP:
+			case TASK_WAIT_FOR_MOVEMENT: {
+					TaskComplete();
+					break;
+				}
+
+			case TASK_PLAY_SCENE: {
+					if (!IsInLockedScene())
+						ClearSchedule("Playing a scene, but not in a scene!");
+					break;
+				}
+
+			case TASK_FALL_TO_GROUND:
+				if ((GetFlags() & EntityFlags.OnGround) != 0)
+					TaskComplete();
+				else if ((GetFlags() & EntityFlags.Fly) != 0)
+					RemoveFlag(EntityFlags.Fly);
+				else {
+					if (IsWaitFinished()) {
+						Vector3 maxs = WorldAlignMaxs() - new Vector3(.1f, .1f, .2f);
+						Vector3 mins = WorldAlignMins() + new Vector3(.1f, .1f, 0);
+						Vector3 start = GetAbsOrigin() + new Vector3(0, 0, .1f);
+						Vector3 down = GetAbsOrigin();
+						down.Z -= 0.2f;
+
+						MoveProbe!.TraceHull(start, down, mins, maxs, Mask.NPCSolid, out Trace trace);
+
+						if (trace.Ent != null) {
+							SetGroundEntity(trace.Ent);
+							TaskComplete();
+						}
+						else
+							SetWait(4);
+					}
+				}
+				break;
+
+			case TASK_WANDER:
+				break;
+
+			case TASK_FREEZE:
+				break;
+
+			case TASK_GET_PATH_TO_RANDOM_NODE:
+				break;
+
+			case TASK_TURN_RIGHT:
+			case TASK_TURN_LEFT:
+			case TASK_PLAY_PRIVATE_SEQUENCE_FACE_ENEMY:
+			case TASK_PLAY_SEQUENCE_FACE_ENEMY:
+			case TASK_PLAY_SEQUENCE_FACE_TARGET:
+			case TASK_PLAY_HINT_ACTIVITY:
+			case TASK_PLAY_SEQUENCE:
+			case TASK_PLAY_PRIVATE_SEQUENCE:
+			case TASK_ADD_GESTURE_WAIT:
+			case TASK_FACE_ENEMY:
+			case TASK_FACE_PLAYER:
+			case TASK_FIND_COVER_FROM_BEST_SOUND:
+			case TASK_FACE_HINTNODE:
+			case TASK_FACE_LASTPOSITION:
+			case TASK_FACE_AWAY_FROM_SAVEPOSITION:
+			case TASK_FACE_TARGET:
+			case TASK_FACE_SCRIPT:
+			case TASK_FACE_PATH:
+			case TASK_WAIT_FACE_ENEMY:
+			case TASK_WAIT_FACE_ENEMY_RANDOM:
+			case TASK_WAIT_UNTIL_NO_DANGER_SOUND:
+			case TASK_MOVE_TO_TARGET_RANGE:
+			case TASK_MOVE_TO_GOAL_RANGE:
+			case TASK_GET_PATH_TO_ENEMY_LOS:
+			case TASK_GET_FLANK_RADIUS_PATH_TO_ENEMY_LOS:
+			case TASK_GET_FLANK_ARC_PATH_TO_ENEMY_LOS:
+			case TASK_GET_PATH_TO_ENEMY_LKP_LOS:
+			case TASK_GET_PATH_AWAY_FROM_BEST_SOUND:
+			case TASK_MOVE_AWAY_PATH:
+			case TASK_WEAPON_RUN_PATH:
+			case TASK_ITEM_RUN_PATH:
+			case TASK_DIE:
+			case TASK_WAIT_FOR_SPEAK_FINISH:
+			case TASK_SCRIPT_RUN_TO_TARGET:
+			case TASK_SCRIPT_WALK_TO_TARGET:
+			case TASK_SCRIPT_CUSTOM_MOVE_TO_TARGET:
+			case TASK_RANGE_ATTACK1:
+			case TASK_RANGE_ATTACK2:
+			case TASK_MELEE_ATTACK1:
+			case TASK_MELEE_ATTACK2:
+			case TASK_SPECIAL_ATTACK1:
+			case TASK_SPECIAL_ATTACK2:
+			case TASK_RELOAD:
+			case TASK_SMALL_FLINCH:
+			case TASK_BIG_FLINCH:
+			case TASK_WAIT_FOR_SCRIPT:
+			case TASK_PLAY_SCRIPT:
+			case TASK_PLAY_SCRIPT_POST_IDLE:
+			case TASK_ENABLE_SCRIPT:
+			case TASK_RUN_PATH_FOR_UNITS:
+			case TASK_WALK_PATH_FOR_UNITS:
+			case TASK_RUN_PATH_FLEE:
+			case TASK_WALK_PATH_WITHIN_DIST:
+			case TASK_RUN_PATH_WITHIN_DIST:
+			case TASK_WALK_PATH_TIMED:
+			case TASK_RUN_PATH_TIMED:
+			case TASK_WEAPON_PICKUP:
+			case TASK_ITEM_PICKUP:
+				throw new NotImplementedException();
+
+			default:
+				TaskComplete();
+				break;
+		}
+	}
 
 	int InterruptFromCondition(int condition) => AI_RemapFromGlobal(AI_IdIsLocal(condition) ? GetClassScheduleIdSpace().ConditionLocalToGlobal(condition) : condition);
 
@@ -2915,9 +4131,557 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		base.AddClassRelationship(classType, disposition, priority);
 	}
 
-	public virtual int SelectSchedule() => throw new NotImplementedException();
+	public virtual int SelectSchedule() => BaseSelectSchedule();
 
-	public virtual void GatherConditions() => throw new NotImplementedException();
+	int BaseSelectSchedule() {
+		if (HasCondition((int)SCOND_t.COND_FLOATING_OFF_GROUND)) {
+			SetGravity(1.0f);
+			SetGroundEntity(null);
+			return SCHED_FALL_TO_GROUND;
+		}
+
+		switch (NPCState) {
+			case NPCState.None:
+				DevWarning(2, "NPC_STATE IS NONE!\n");
+				break;
+
+			case NPCState.Prone:
+				return SCHED_IDLE_STAND;
+
+			case NPCState.Idle:
+				AssertMsg(GetEnemy() == null, "NPC has enemy but is not in combat state?");
+				return SelectIdleSchedule();
+
+			case NPCState.Alert:
+				AssertMsg(GetEnemy() == null, "NPC has enemy but is not in combat state?");
+				return SelectAlertSchedule();
+
+			case NPCState.Combat:
+				return SelectCombatSchedule();
+
+			case NPCState.Dead:
+				return SelectDeadSchedule();
+
+			case NPCState.Script:
+				return SelectScriptSchedule();
+
+			default:
+				DevWarning(2, "Invalid State for SelectSchedule!\n");
+				break;
+		}
+
+		return SCHED_FAIL;
+	}
+
+	public virtual int SelectInteractionSchedule() => throw new NotImplementedException();
+
+	public virtual int SelectIdleSchedule() {
+		if (ForcedInteractionPartner.Get() != null)
+			return SelectInteractionSchedule();
+
+		int sched = SelectFlinchSchedule();
+		if (sched != SCHED_NONE)
+			return sched;
+
+		if (HasCondition((int)SCOND_t.COND_HEAR_DANGER) ||
+			 HasCondition((int)SCOND_t.COND_HEAR_COMBAT) ||
+			 HasCondition((int)SCOND_t.COND_HEAR_WORLD) ||
+			 HasCondition((int)SCOND_t.COND_HEAR_BULLET_IMPACT) ||
+			 HasCondition((int)SCOND_t.COND_HEAR_PLAYER)) {
+			return SCHED_ALERT_FACE_BESTSOUND;
+		}
+
+		return SCHED_IDLE_STAND;
+	}
+
+	public virtual int SelectAlertSchedule() {
+		if (ForcedInteractionPartner.Get() != null)
+			return SelectInteractionSchedule();
+
+		int sched = SelectFlinchSchedule();
+		if (sched != SCHED_NONE)
+			return sched;
+
+		if (HasCondition((int)SCOND_t.COND_ENEMY_DEAD) && SelectWeightedSequence(Activity.ACT_VICTORY_DANCE) != StudioHdr.ACTIVITY_NOT_AVAILABLE)
+			return SCHED_ALERT_SCAN;
+
+		if (IsPlayerAlly() && HasCondition((int)SCOND_t.COND_HEAR_COMBAT))
+			return SCHED_ALERT_REACT_TO_COMBAT_SOUND;
+
+		if (HasCondition((int)SCOND_t.COND_HEAR_DANGER) ||
+				  HasCondition((int)SCOND_t.COND_HEAR_PLAYER) ||
+				  HasCondition((int)SCOND_t.COND_HEAR_WORLD) ||
+				  HasCondition((int)SCOND_t.COND_HEAR_BULLET_IMPACT) ||
+				  HasCondition((int)SCOND_t.COND_HEAR_COMBAT)) {
+			return SCHED_ALERT_FACE_BESTSOUND;
+		}
+
+		return SCHED_ALERT_STAND;
+	}
+
+	public virtual int SelectCombatSchedule() => throw new NotImplementedException();
+
+	public virtual int SelectDeadSchedule() => throw new NotImplementedException();
+
+	public virtual int SelectScriptSchedule() {
+		Assert(Cine.Get() != null);
+		if (Cine.Get() != null)
+			return SCHED_AISCRIPT;
+
+		DevWarning(2, $"Script failed for {GetClassname()}\n");
+		CineCleanup();
+		return SCHED_IDLE_STAND;
+	}
+
+	public virtual int SelectFlinchSchedule() {
+		if (!HasCondition((int)SCOND_t.COND_HEAVY_DAMAGE))
+			return SCHED_NONE;
+
+		if (HasMemory(AI_MemoryFlags.Flinched))
+			return SCHED_NONE;
+
+		if (!CanFlinch())
+			return SCHED_NONE;
+
+		Activity flinchActivity = GetFlinchActivity(true, false);
+		if (HaveSequenceForActivity(flinchActivity))
+			return SCHED_BIG_FLINCH;
+
+		return SCHED_NONE;
+	}
+
+	public virtual Activity GetFlinchActivity(bool heavyDamage, bool gesture) => throw new NotImplementedException();
+
+	public virtual bool CanFlinch() {
+		if (IsCurSchedule(SCHED_BIG_FLINCH))
+			return false;
+
+		if (NextFlinchTime >= gpGlobals.CurTime)
+			return false;
+
+		return true;
+	}
+
+	public void PlayFlinchGesture() => throw new NotImplementedException();
+
+	public void CheckFlinches() {
+		if (IsCurSchedule(SCHED_BIG_FLINCH)) {
+			ClearCondition((int)SCOND_t.COND_LIGHT_DAMAGE);
+			ClearCondition((int)SCOND_t.COND_HEAVY_DAMAGE);
+		}
+
+		if (HasCondition((int)SCOND_t.COND_HEAVY_DAMAGE)) {
+			if (HasMemory(AI_MemoryFlags.Flinched))
+				ClearCondition((int)SCOND_t.COND_HEAVY_DAMAGE);
+			else if (!HasInterruptCondition((int)SCOND_t.COND_HEAVY_DAMAGE))
+				PlayFlinchGesture();
+		}
+		else if (HasCondition((int)SCOND_t.COND_LIGHT_DAMAGE))
+			PlayFlinchGesture();
+
+		if (HasMemory(AI_MemoryFlags.Flinched) && gpGlobals.CurTime > NextFlinchTime)
+			Forget(AI_MemoryFlags.Flinched);
+	}
+
+	public virtual NPCState SelectIdleIdealState() {
+		if (HasCondition((int)SCOND_t.COND_NEW_ENEMY) ||
+			 HasCondition((int)SCOND_t.COND_SEE_ENEMY)) {
+			return NPCState.Combat;
+		}
+
+		if (HasCondition((int)SCOND_t.COND_LIGHT_DAMAGE) ||
+			 HasCondition((int)SCOND_t.COND_HEAVY_DAMAGE)) {
+			Vector3 enemyLKP;
+
+			if (GetEnemy() != null)
+				throw new NotImplementedException();
+			else
+				enemyLKP = WorldSpaceCenter() + (g_vecAttackDir * 128);
+
+			GetMotor()!.SetIdealYawToTarget(enemyLKP);
+
+			return NPCState.Alert;
+		}
+
+		if (HasInterruptCondition((int)SCOND_t.COND_SMELL))
+			return NPCState.Alert;
+
+		return NPCState.Invalid;
+	}
+
+	public virtual NPCState SelectAlertIdealState() {
+		if (HasCondition((int)SCOND_t.COND_NEW_ENEMY) ||
+			 HasCondition((int)SCOND_t.COND_SEE_ENEMY) ||
+			 GetEnemy() != null) {
+			return NPCState.Combat;
+		}
+
+		if (HasCondition((int)SCOND_t.COND_LIGHT_DAMAGE) ||
+			 HasCondition((int)SCOND_t.COND_HEAVY_DAMAGE)) {
+			Vector3 enemyLKP;
+
+			if (GetEnemy() != null)
+				throw new NotImplementedException();
+			else
+				enemyLKP = WorldSpaceCenter() + (g_vecAttackDir * 128);
+
+			GetMotor()!.SetIdealYawToTarget(enemyLKP);
+
+			return NPCState.Alert;
+		}
+
+		if (ShouldGoToIdleState())
+			return NPCState.Idle;
+
+		return NPCState.Invalid;
+	}
+
+	public virtual NPCState SelectScriptIdealState() {
+		if (HasCondition((int)SCOND_t.COND_TASK_FAILED) ||
+			 HasCondition((int)SCOND_t.COND_LIGHT_DAMAGE) ||
+			 HasCondition((int)SCOND_t.COND_HEAVY_DAMAGE)) {
+			ExitScriptedSequence();
+		}
+
+		if (IdealNPCState == NPCState.Idle) {
+			NPCState = NPCState.Idle;
+			NPCState idealState = SelectIdealState();
+			NPCState = NPCState.Script;
+			return idealState;
+		}
+
+		return NPCState.Invalid;
+	}
+
+	public virtual NPCState SelectIdealState() {
+		switch (NPCState) {
+			case NPCState.Idle: {
+					NPCState state = SelectIdleIdealState();
+					if (state != NPCState.Invalid)
+						return state;
+				}
+				break;
+
+			case NPCState.Alert: {
+					NPCState state = SelectAlertIdealState();
+					if (state != NPCState.Invalid)
+						return state;
+				}
+				break;
+
+			case NPCState.Combat: {
+					if (GetEnemy() == null) {
+						DevWarning(2, "***Combat state with no enemy!\n");
+						return NPCState.Alert;
+					}
+					break;
+				}
+			case NPCState.Script: {
+					NPCState state = SelectScriptIdealState();
+					if (state != NPCState.Invalid)
+						return state;
+				}
+				break;
+
+			case NPCState.Dead:
+				return NPCState.Dead;
+		}
+
+		return IdealNPCState;
+	}
+
+	public virtual bool ShouldGoToIdleState() => false;
+
+	public virtual void GatherConditions() {
+		ConditionsGatheredValue = true;
+
+		if (gpGlobals.CurTime > TimePingEffect && TimePingEffect > 0.0f) {
+			DispatchUpdateTransmitState();
+			TimePingEffect = 0.0f;
+		}
+
+		if (NPCState != NPCState.None && NPCState != NPCState.Dead) {
+			if (FacingIdeal())
+				Forget(AI_MemoryFlags.Turning);
+
+			bool forcedGather = ForceConditionsGather;
+			ForceConditionsGather = false;
+
+			if (FnThink != CallNPCThinkPtr) {
+				if (Util.FindClientInPVS(Edict()) != null)
+					SetCondition((int)SCOND_t.COND_IN_PVS);
+				else
+					ClearCondition((int)SCOND_t.COND_IN_PVS);
+			}
+
+			if (!IsFlaggedEfficient() &&
+				 (forcedGather ||
+				   HasCondition((int)SCOND_t.COND_IN_PVS) ||
+				   ShouldAlwaysThink() ||
+				   NPCState == NPCState.Combat)) {
+				CheckOnGround();
+
+				if (ShouldPlayIdleSound())
+					IdleSound();
+
+
+				if (Weapon_IsBetterAvailable())
+					SetCondition((int)SCOND_t.COND_BETTER_WEAPON_AVAILABLE);
+
+				if (GetCurSchedule() != null &&
+					(NPCState == NPCState.Idle || NPCState == NPCState.Alert) &&
+					 GetEnemy() != null &&
+					 !HasCondition((int)SCOND_t.COND_NEW_ENEMY) &&
+					 GetCurSchedule()!.HasInterrupt((int)SCOND_t.COND_NEW_ENEMY)) {
+					DevMsg(2, "Had to force COND_NEW_ENEMY\n");
+					SetCondition((int)SCOND_t.COND_NEW_ENEMY);
+				}
+			}
+			else
+				ClearSenseConditions();
+
+			if (GetEnemy() != null) {
+				if (!IsFlaggedEfficient()) {
+					GatherEnemyConditions(GetEnemy()!);
+					LastEnemyTime = gpGlobals.CurTime;
+				}
+				else
+					SetEnemy(null);
+			}
+
+			CheckAmmo();
+
+			CheckFlinches();
+		}
+		else
+			ClearCondition((int)SCOND_t.COND_IN_PVS);
+	}
+
+	public virtual void GatherEnemyConditions(BaseEntity enemy) => throw new NotImplementedException();
+
+	public virtual void CheckAmmo() { }
+
+	public bool IsMovingToPickupWeapon() => IsCurSchedule(SCHED_NEW_WEAPON);
+
+	public bool ShouldLookForBetterWeapon() {
+		if (NextWeaponSearchTime > gpGlobals.CurTime)
+			return false;
+
+		if ((CapabilitiesGet() & Server.Capability.UseWeapons) == 0)
+			return false;
+
+		if (GetActiveWeapon() != null && NPCState == NPCState.Combat)
+			return false;
+
+		if (IsMovingToPickupWeapon())
+			return false;
+
+		if (!IsPlayerAlly() && GetActiveWeapon() != null)
+			return false;
+
+		if (IsInAScript())
+			return false;
+
+		return true;
+	}
+
+	public bool Weapon_IsBetterAvailable() {
+		if (PendingWeapon != null)
+			return true;
+
+		if (ShouldLookForBetterWeapon())
+			throw new NotImplementedException();
+
+		return false;
+	}
+
+	public BaseEntity? GetTarget() => TargetEnt.Get();
+
+	public float EnemyDistance(BaseEntity enemy) {
+		Vector3 enemyDelta = enemy.WorldSpaceCenter() - WorldSpaceCenter();
+
+		float enemyHeight = enemy.CollisionProp().OBBSize().Z;
+		float myHeight = CollisionProp().OBBSize().Z;
+
+		float maxZDist = (enemyHeight + myHeight) * 0.5f;
+
+		if (enemyDelta.Z > maxZDist)
+			enemyDelta.Z -= maxZDist;
+		else if (enemyDelta.Z < -maxZDist)
+			enemyDelta.Z += maxZDist;
+		else
+			enemyDelta.Z = 0;
+
+		return enemyDelta.Length();
+	}
+
+	public void CheckOnGround() {
+		bool scriptedWait = IsCurSchedule(SCHED_WAIT_FOR_SCRIPT) || (Cine.Get() != null && ScriptState == ScriptStateType.Wait);
+		if (!scriptedWait && !HasCondition((int)SCOND_t.COND_FLOATING_OFF_GROUND)) {
+			if (GetMoveParent() != null)
+				return;
+
+			if ((GetState() == NPCState.Script) && (GetFlags() & EntityFlags.Fly) != 0)
+				return;
+
+			if ((GetNavType() == Navigation.Ground) && (GetMoveType() != Source.MoveType.VPhysics) && (GetMoveType() != Source.MoveType.None)) {
+				if (CheckOnGroundTimer.Expired()) {
+					CheckOnGroundTimer.Set(0.5f);
+
+					Vector3 maxs = WorldAlignMaxs();
+					Vector3 mins = WorldAlignMins();
+
+					if (mins != maxs) {
+						maxs -= new Vector3(0.0f, 0.0f, 0.2f);
+
+						Vector3 start = GetAbsOrigin() + new Vector3(0, 0, .1f);
+						Vector3 down = GetAbsOrigin();
+						down.Z -= 4.0f;
+
+						MoveProbe!.TraceHull(start, down, mins, maxs, Mask.NPCSolid, out Trace trace);
+
+						if (trace.Fraction == 1.0) {
+							SetCondition((int)SCOND_t.COND_FLOATING_OFF_GROUND);
+							SetGroundEntity(null);
+						}
+						else {
+							if (trace.StartSolid && trace.Ent!.GetMoveType() == Source.MoveType.VPhysics &&
+								trace.Ent.VPhysicsGetObject() != null && trace.Ent.VPhysicsGetObject()!.GetMass() < VPHYSICS_LARGE_OBJECT_MASS) {
+								CheckOnGroundTimer.Set(0.1f);
+								NPCPhysics_CreateSolver(this, trace.Ent, true, 0.25f);
+								VPhysicsGetObject()?.RecheckContactPoints();
+							}
+
+							if (trace.Ent != null && trace.Ent != GetGroundEntity())
+								SetGroundEntity(trace.Ent);
+						}
+					}
+				}
+			}
+		}
+		else {
+			if (scriptedWait || GetMoveParent() != null || (GetFlags() & EntityFlags.OnGround) != 0 || GetNavType() != Navigation.Ground)
+				ClearCondition((int)SCOND_t.COND_FLOATING_OFF_GROUND);
+		}
+	}
+
+	public Navigation GetNavType() => Navigator!.GetNavType();
+
+	public virtual bool ShouldPlayIdleSound() {
+		if ((NPCState == NPCState.Idle || NPCState == NPCState.Alert) &&
+			   RandomInt(0, 99) == 0 && !HasSpawnFlags(SF_NPC_GAG)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	public virtual void IdleSound() { }
+	public virtual void LostEnemySound() { }
+	public virtual void FoundEnemySound() { }
+
+	public virtual bool ShouldAlwaysThink() => HasSpawnFlags(SF_NPC_ALWAYSTHINK);
+
+	static readonly int[] SenseConditionsToClear = [
+		(int)SCOND_t.COND_SEE_HATE,
+		(int)SCOND_t.COND_SEE_DISLIKE,
+		(int)SCOND_t.COND_SEE_ENEMY,
+		(int)SCOND_t.COND_SEE_FEAR,
+		(int)SCOND_t.COND_SEE_NEMESIS,
+		(int)SCOND_t.COND_SEE_PLAYER,
+		(int)SCOND_t.COND_HEAR_DANGER,
+		(int)SCOND_t.COND_HEAR_COMBAT,
+		(int)SCOND_t.COND_HEAR_WORLD,
+		(int)SCOND_t.COND_HEAR_PLAYER,
+		(int)SCOND_t.COND_HEAR_THUMPER,
+		(int)SCOND_t.COND_HEAR_BUGBAIT,
+		(int)SCOND_t.COND_HEAR_PHYSICS_DANGER,
+		(int)SCOND_t.COND_HEAR_MOVE_AWAY,
+		(int)SCOND_t.COND_SMELL,
+	];
+
+	public void ClearSenseConditions() => ClearConditions(SenseConditionsToClear);
+
+	public virtual void OnSeeEntity(BaseEntity entity) { }
+
+	public virtual bool ShouldNotDistanceCull() => false;
+
+	public virtual bool ShouldIgnoreSound(ref WorldSoundInstance sound) => false;
+
+	public virtual SoundPriority GetSoundPriority(ref WorldSoundInstance sound) {
+		SoundInstanceType soundTypeNoContext = sound.SoundTypeNoContext();
+		SoundInstanceType soundContext = sound.SoundContext();
+
+		if ((soundTypeNoContext & SoundInstanceType.Danger) != 0)
+			return SoundPriority.Highest;
+
+		if ((soundTypeNoContext & SoundInstanceType.Combat) != 0) {
+			if ((soundContext & SoundInstanceType.ContextExplosion) != 0)
+				return SoundPriority.VeryHigh;
+
+			return SoundPriority.High;
+		}
+
+		return SoundPriority.Normal;
+	}
+
+	public void ForceDecisionThink() {
+		NextDecisionTime = 0;
+		SetEfficiency(AI_Efficiency.Normal);
+	}
+
+	public virtual bool IsValidEnemy(BaseEntity enemy) => throw new NotImplementedException();
+
+	public virtual bool CanBeAnEnemyOf(BaseEntity enemy) {
+		if (GetSleepState() > AI_SleepState.WaitingForThreat)
+			return false;
+
+		return true;
+	}
+
+	public void RemoveIgnoredConditions() {
+		ConditionsPreIgnore = Conditions;
+		Conditions.And(InverseIgnoreConditions, out Conditions);
+
+		if (NPCState == NPCState.Script && Cine.Get() != null)
+			Cine.Get()!.RemoveIgnoredConditions();
+	}
+
+	public void TryRestoreHull() {
+		if (IsUsingSmallHull() && GetCurSchedule() != null) {
+			Vector3 upBit = GetAbsOrigin();
+			upBit.Z += 1;
+
+			Util.TraceHull(GetAbsOrigin(), upBit, GetHullMins(), GetHullMaxs(), Mask.Solid, this, Source.CollisionGroup.None, out Trace tr);
+			if (!tr.StartSolid && (tr.Fraction == 1.0))
+				SetHullSizeNormal();
+		}
+	}
+
+	public virtual void PrescheduleThink() {
+		if ((CapabilitiesGet() & Server.Capability.UseWeapons) != 0 && (DesiredWeaponState == DesiredWeaponState.Holstered || DesiredWeaponState == DesiredWeaponState.Unholstered || DesiredWeaponState == DesiredWeaponState.HolsteredDestroyed)) {
+			if (IsAlive() && !IsInAScript()) {
+				if (!IsCurSchedule(SCHED_MELEE_ATTACK1, false) && !IsCurSchedule(SCHED_MELEE_ATTACK2, false) &&
+					 !IsCurSchedule(SCHED_RANGE_ATTACK1, false) && !IsCurSchedule(SCHED_RANGE_ATTACK2, false)) {
+					if (DesiredWeaponState == DesiredWeaponState.Holstered || DesiredWeaponState == DesiredWeaponState.HolsteredDestroyed)
+						HolsterWeapon();
+					else if (DesiredWeaponState == DesiredWeaponState.Unholstered)
+						UnholsterWeapon();
+				}
+			}
+			else
+				DesiredWeaponState = DesiredWeaponState.Ignore;
+		}
+	}
+
+	public virtual void PostscheduleThink() { }
+
+	public virtual void ClearTransientConditions() {
+		ClearCondition((int)SCOND_t.COND_LIGHT_DAMAGE);
+		ClearCondition((int)SCOND_t.COND_HEAVY_DAMAGE);
+		ClearCondition((int)SCOND_t.COND_PHYSICS_DAMAGE);
+		ClearCondition((int)SCOND_t.COND_PLAYER_PUSHING);
+	}
 
 	public virtual AI_BehaviorBase? GetRunningBehavior() => null;
 
@@ -3960,7 +5724,58 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return inPVS;
 	}
 
-	public void CheckPhysicsContacts() => throw new NotImplementedException();
+	public void CheckPhysicsContacts() {
+		if (gpGlobals.FrameTime <= 0.0f || !ai_auto_contact_solver.GetBool())
+			return;
+
+		CheckContacts = false;
+		if (GetMoveType() == Source.MoveType.Step && VPhysicsGetObject() != null) {
+			IPhysicsObject physics = VPhysicsGetObject()!;
+			IPhysicsFrictionSnapshot snapshot = physics.CreateFrictionSnapshot();
+			BaseEntity? groundEntity = GetGroundEntity();
+			float heightCheck = GetAbsOrigin().Z + GetHullMaxs().Z;
+			physics.GetVelocity(out Vector3 npcVel, out _);
+			BaseEntity? otherEntity = null;
+			bool createSolver = false;
+			float solverTime = 0.0f;
+			while (snapshot.IsValid()) {
+				IPhysicsObject other = snapshot.GetObject(1)!;
+				otherEntity = (BaseEntity?)other.GetGameData();
+
+				if (otherEntity != null && groundEntity != otherEntity) {
+					float otherMass = PhysGetEntityMass(otherEntity);
+
+					if (otherEntity.GetMoveType() == Source.MoveType.VPhysics && other.IsMoveable() &&
+						otherMass < VPHYSICS_LARGE_OBJECT_MASS && otherEntity.GetServerVehicle() == null) {
+						CheckContacts = true;
+						other.GetVelocity(out Vector3 vel, out _);
+						snapshot.GetContactPoint(out Vector3 point);
+
+						vel -= npcVel;
+
+						if (vel.LengthSquared() < 5.0f * 5.0f) {
+							float topdist = MathF.Abs(point.Z - heightCheck);
+							solverTime = 4.0f;
+							if (topdist < 2.0f) {
+								solverTime = 0.5f;
+								if ((other.GetGameFlags() & PhysicsFlags.PlayerHeld) != 0)
+									solverTime = 0.25f;
+
+								createSolver = true;
+								break;
+							}
+						}
+					}
+				}
+				snapshot.NextFrictionData();
+			}
+			physics.DestroyFrictionSnapshot(snapshot);
+			if (createSolver) {
+				NPCPhysics_CreateSolver(this, otherEntity, true, solverTime);
+				physics.RecheckContactPoints();
+			}
+		}
+	}
 
 	public void Wake(bool fireOutput = true) => throw new NotImplementedException();
 
@@ -4283,11 +6098,113 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return true;
 	}
 
-	public virtual void RunAI() => throw new NotImplementedException();
+	public virtual void RunAI() {
+		g_AIRunTimer.Restart();
+
+#if DEBUG
+		Selected = (DebugOverlays & DebugOverlayBits.NPCSelected) != 0;
+#endif
+
+		ConditionsGatheredValue = false;
+
+		GatherConditions();
+		RemoveIgnoredConditions();
+
+		if (!ConditionsGatheredValue)
+			ConditionsGatheredValue = true;
+
+		TryRestoreHull();
+
+		PrescheduleThink();
+
+		MaintainSchedule();
+
+		PostscheduleThink();
+
+		ClearTransientConditions();
+
+		g_AIRunTimer.Stop();
+	}
+
 	public virtual bool AutoMovement(BaseEntity? target = null) => throw new NotImplementedException();
-	public virtual void PostRun() => throw new NotImplementedException();
-	public virtual void PerformMovement() => throw new NotImplementedException();
-	public virtual void PostMovement() => throw new NotImplementedException();
+
+	public virtual void PostRun() {
+		if (!IsMoving()) {
+			if (GetIdealActivity() == Activity.ACT_WALK ||
+				 GetIdealActivity() == Activity.ACT_RUN ||
+				 GetIdealActivity() == Activity.ACT_WALK_AIM ||
+				 GetIdealActivity() == Activity.ACT_RUN_AIM) {
+				PostRunStopMoving();
+			}
+		}
+
+		RunAnimation();
+
+		Weapon_FrameUpdate();
+	}
+
+	public virtual void PostRunStopMoving() {
+		SetIdealActivity(GetStoppedActivity());
+	}
+
+	public virtual void RunAnimation() {
+		if (GetModelPtr() == null)
+			return;
+
+		TimeUnit_t interval = GetAnimTimeInterval();
+
+		StudioFrameAdvance();
+
+		if ((DebugBits & AI_DebugFlags.StepAI) != 0)
+			interval = 0;
+
+		if (NPCState != NPCState.Script && NPCState != NPCState.Dead && Activity == Activity.ACT_IDLE && IsActivityFinished()) {
+			int sequence;
+
+			if (SequenceLoops)
+				sequence = SelectWeightedSequence(TranslatedActivity);
+			else
+				sequence = SelectHeaviestSequence(TranslatedActivity);
+
+			if (sequence != StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+				ResetSequence(sequence);
+
+				if (hl2_episodic.GetBool())
+					IdealSequence = sequence;
+			}
+		}
+
+		DispatchAnimEvents(this);
+	}
+
+	public virtual bool OverrideMove(float interval) => false;
+
+	public virtual void PerformMovement() {
+		if (!IsAlive())
+			return;
+
+		TimeLastMovement = gpGlobals.CurTime;
+	}
+
+	public virtual void PostMovement() {
+		InvalidateBoneCache();
+
+		if (GetModelPtr() != null && GetModelPtr()!.SequencesAvailable()) {
+			TimeUnit_t interval = GetAnimTimeInterval();
+
+			if ((CapabilitiesGet() & Server.Capability.AimGun) != 0)
+				AimGun();
+			else
+				InteractionYaw = GetAbsAngles().Y;
+
+			if ((CapabilitiesGet() & Server.Capability.AnimatedFace) != 0)
+				MaintainLookTargets(interval);
+		}
+
+		MaintainTurnActivity();
+	}
+
+	public virtual void AimGun() => throw new NotImplementedException();
 
 	static readonly float[] g_DecisionIntervals = [
 		.1f,

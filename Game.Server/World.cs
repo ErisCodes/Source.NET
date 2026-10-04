@@ -91,7 +91,7 @@ public class World : BaseEntity
 		// 63 testing
 		engine.LightStyle(63, "a");
 
-		// AI_NetworkManager.InitializeAINetworks();
+		AI_NetworkManager.InitializeAINetworks();
 		g_AI_SchedulesManager.LoadAllSchedules();
 		// g_pGameRules.InitDefaultAIRelationships();
 

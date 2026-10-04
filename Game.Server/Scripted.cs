@@ -31,6 +31,8 @@ public class AI_ScriptedSequence : BaseEntity
 
 	public void CancelScript() => throw new NotImplementedException();
 
+	public void RemoveIgnoredConditions() => throw new NotImplementedException();
+
 	public static string? GetSpawnPreIdleSequenceForScript(BaseEntity entity) {
 		AI_ScriptedSequence? script = gEntList.NextEntByClass<AI_ScriptedSequence>(null);
 		while (script != null) {
