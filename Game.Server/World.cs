@@ -92,7 +92,7 @@ public class World : BaseEntity
 		engine.LightStyle(63, "a");
 
 		// AI_NetworkManager.InitializeAINetworks();
-		// g_AI_SchedulesManager.LoadAllSchedules();
+		g_AI_SchedulesManager.LoadAllSchedules();
 		// g_pGameRules.InitDefaultAIRelationships();
 
 		// BaseCombatCharacter.InitInteractionSystem();
