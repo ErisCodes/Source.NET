@@ -49,7 +49,7 @@ static Animation(){
 
 		for (int i = 0; i < studiohdr.GetNumSeq(); i++) {
 			MStudioSeqDesc seqdesc = studiohdr.Seqdesc(i);
-			if (stricmp(seqdesc.ActivityName(), label) == 0)
+			if (stricmp(seqdesc.Label(), label) == 0)
 				return i;
 		}
 
