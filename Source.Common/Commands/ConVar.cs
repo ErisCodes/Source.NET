@@ -134,8 +134,8 @@ public class ConVar : ConCommandBase, IConVar
 
 		Changed += callback;
 
-		doubleValue = double.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var dRes) ? dRes : 0;
-		intValue = int.TryParse(value, out var iRes) ? iRes : Convert.ToInt32(Math.Clamp(doubleValue, int.MinValue, int.MaxValue));
+		doubleValue = atof(value);
+		intValue = atoi(value); // dont convert from float to int and lose bits
 
 		Assert(!hasMin || doubleValue >= minVal);
 		Assert(!hasMax || doubleValue <= maxVal);
@@ -193,6 +193,10 @@ public class ConVar : ConCommandBase, IConVar
 		parent!.Flags |= flags;
 	}
 
+	public override FCvar GetFlags() {
+		return parent!.Flags;
+	}
+
 	public override bool IsRegistered() {
 		return parent!.Registered;
 	}
@@ -219,13 +223,14 @@ public class ConVar : ConCommandBase, IConVar
 
 	void InternalSetValue(ReadOnlySpan<char> value) {
 		value = value.SliceNullTerminatedString();
-		double dNewValue = double.TryParse(value, out double d) ? d : 0;
-		if (ClampValue(ref dNewValue)) 
-			value = $"{dNewValue:.4}";
+		double dNewValue = atof(value);
+		if (ClampValue(ref dNewValue))
+			value = FormatFixed(dNewValue, 6);
 
+		// Redetermine value
 		double oldValue = doubleValue;
 		doubleValue = dNewValue;
-		intValue = int.TryParse(value, out var iRes) ? iRes : Convert.ToInt32(Math.Clamp(doubleValue, int.MinValue, int.MaxValue));
+		intValue = (int)dNewValue;
 
 		if ((Flags & FCvar.NeverAsString) != FCvar.NeverAsString)
 			ChangeStringValue(value, oldValue);
@@ -266,7 +271,7 @@ public class ConVar : ConCommandBase, IConVar
 		Debug.Assert(parent == this);
 		double dbValue = value;
 		if (ClampValue(ref dbValue))
-			value = Convert.ToInt32(Math.Clamp(dbValue, int.MinValue, int.MaxValue));
+			value = (int)dbValue;
 
 		double oldValue = doubleValue;
 		doubleValue = dbValue;
@@ -280,21 +285,21 @@ public class ConVar : ConCommandBase, IConVar
 	}
 
 	private void InternalSetDoubleValue(double value) {
-		if (value == intValue)
+		if (value == doubleValue)
 			return;
 
 		Debug.Assert(parent == this);
 
+		// Check bounds
 		ClampValue(ref value);
+
+		// Redetermine value
 		double oldValue = doubleValue;
 		doubleValue = value;
-		intValue = Convert.ToInt32(Math.Clamp(doubleValue, int.MinValue, int.MaxValue));
+		intValue = (int)doubleValue;
 
-		if ((Flags & FCvar.NeverAsString) != FCvar.NeverAsString) {
-			Span<char> tempVal = stackalloc char[64];
-			intValue.TryFormat(tempVal, out int charsWritten);
-			ChangeStringValue(tempVal[..charsWritten], oldValue);
-		}
+		if ((Flags & FCvar.NeverAsString) != FCvar.NeverAsString)
+			ChangeStringValue(FormatFixed(doubleValue, 6), oldValue);
 	}
 
 	public virtual bool GetBool() => GetInt() != 0;
@@ -377,6 +382,15 @@ public class ConVar : ConCommandBase, IConVar
 	public bool GetMax(out double max) {
 		max = this.maxVal;
 		return this.hasMax;
+	}
+
+	public void SetMin(bool hasMin, double min) {
+		this.hasMin = hasMin;
+		this.minVal = min;
+	}
+	public void SetMax(bool hasMax, double max) {
+		this.hasMax = hasMax;
+		this.maxVal = max;
 	}
 
 	public void Revert() {

@@ -296,6 +296,8 @@ public interface IMaterialSystem
 	IMaterialProxyFactory? GetMaterialProxyFactory();
 	void AddRestoreFunc(Action<int> func);
 	void RemoveRestoreFunc(Action<int> func);
+	void AddReleaseFunc(Action func);
+	void RemoveReleaseFunc(Action func);
 	bool SupportsShadowDepthTextures();
 	ImageFormat GetShadowDepthTextureFormat();
 	ImageFormat GetNullTextureFormat();

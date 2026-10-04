@@ -316,6 +316,9 @@ public unsafe class FontManager
 				if (!CustomFontFiles.TryGetValue(fontName.Hash(), out string? filePath))
 					filePath = new(system.GetSystemFontPath(fontName, weight)); // If not custom font file, load from the OS
 
+				if (string.IsNullOrEmpty(filePath))
+					return null; // cannot load...
+
 				FileInfo info = new(filePath);
 				if (!info.Exists)
 					return null; // cannot load...

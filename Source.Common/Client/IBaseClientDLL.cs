@@ -217,8 +217,7 @@ public interface IBaseClientDLL
 	void GMOD_VoiceVolume(uint playerID, float volume);
 	void GMOD_OnDrawSkybox();
 	void IN_MouseWheelAnalog(int value);
-	void GMOD_RequestLuaFiles(INetChannel netchan);
-	void GMOD_ReceiveLuaFile(ReadOnlySpan<char> fileName, in SHA256Value sha256, ReadOnlySpan<byte> compressed);
+	void GMOD_RequestLuaFiles();
 	void GMOD_SignOnStateChanged(int userID, int oldState, int newState);
 	void GMOD_OnAllSoundsStoppedCL();
 #endif

@@ -116,6 +116,7 @@ public interface IServerGameDLL
 	bool GMOD_CheckPassword(CSteamID steamID, ReadOnlySpan<char> ipAddress, ReadOnlySpan<char> serverPassword, ReadOnlySpan<char> clientPassword, ReadOnlySpan<char> name, Span<char> rejectionMessage);
 	void GMOD_ClientSignOnStateChanged(int userID, int oldState, int newState);
 	void GMOD_OnAllSoundsStoppedSV();
+	void GMOD_OnStringTablesRemoved();
 }
 
 public enum PrepareLevelResourcesResult
@@ -159,5 +160,5 @@ public interface IServerGameClients
 
 	void GMOD_ReceiveClientMessage(int userID, Edict player, bf_read msg, int bits);
 	void GMOD_ClientConnected(int userID);
-	void GMOD_SentClientStringTables(IClient client);
+	void GMOD_SentClientStringTables(int userID);
 }

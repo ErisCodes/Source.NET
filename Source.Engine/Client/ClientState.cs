@@ -103,7 +103,6 @@ public class ClientState : BaseClientState
 	public INetworkStringTable? UserInfoTable;
 	public INetworkStringTable? ServerStartupTable;
 	public INetworkStringTable? DynamicModelsTable;
-	public INetworkStringTable? ClientLuaFiles;
 	public INetworkStringTable? DownloadableFileTable;
 
 
@@ -263,11 +262,6 @@ IModelLoader modelloader, ICommandLine commandLine,
 			case Protocol.DOWNLOADABLE_FILE_TABLENAME:
 				DownloadableFileTable = table;
 				return true;
-			case Protocol.CLIENT_LUA_FILES_TABLENAME:
-				ClientLuaFiles = table;
-				// allow client dll to grab this
-				Host.clientDLL?.InstallStringTableCallback(tableName);
-				return true;
 		}
 
 		Host.clientDLL?.InstallStringTableCallback(tableName);
@@ -285,7 +279,9 @@ IModelLoader modelloader, ICommandLine commandLine,
 		}
 
 		Sound.StopAllSounds(true);
+#if !SWDS
 		Render.DecalTermAll();
+#endif
 
 		if (MaxClients > 1)
 			if (EngineVGui!.IsConsoleVisible() == false)
@@ -600,28 +596,11 @@ IModelLoader modelloader, ICommandLine commandLine,
 		g_ClientSidePrediction.PostNetworkDataReceived(commandsAcknowledged);
 	}
 	public readonly LinkedList<EventInfo> Events = [];
-	CLC_GMod_ClientToServer? luaFileMessage;
 
 
 	protected override bool ProcessGMod_ServerToClient(SVC_GMod_ServerToClient msg) {
-		switch (msg.MessageType) {
-			case GModMessageType.RequestLuaFiles: {
-					g_ClientDLL!.GMOD_RequestLuaFiles(NetChannel!);
-				}
-				return true;
-			case GModMessageType.LuaFile: {
-					// FOR FUTURE REFERENCE (when moving to client dll)
-					// This is how you would decode the Lua file data:
-					// readonly MemoryStream luaFileData = new(new byte[500_000], 0, 500_000, true, true);
-					// luaFileData.Position = 0;
-					// luaFileData.SetLength(0);
-					// Bootil.Compression.LZMA.Extract(msg.LuaFile.FileContents.Span, luaFileData);
-					g_ClientDLL!.GMOD_ReceiveLuaFile(ClientLuaFiles.GetString(msg.LuaFile.FileStringTableEntryID), in msg.LuaFile.FileSHA256, msg.LuaFile.FileContents.Span);
-
-				}
-				return true;
-		}
-		return base.ProcessGMod_ServerToClient(msg);
+		g_ClientDLL?.GMOD_ReceiveServerMessage(new bf_read(msg.RawData.ToArray(), msg.RawData.Length, msg.RawBits), msg.RawBits);
+		return true;
 	}
 
 	protected override bool ProcessTempEntities(SVC_TempEntities msg) {
@@ -949,6 +928,7 @@ IModelLoader modelloader, ICommandLine commandLine,
 			return;
 
 		SendClientInfo();
+		g_ClientDLL?.GMOD_RequestLuaFiles();
 		var msg = new NET_SignonState(SignOnState, ServerCount);
 		NetChannel.SendNetMsg(msg);
 	}
@@ -1078,7 +1058,9 @@ IModelLoader modelloader, ICommandLine commandLine,
 		PrecacheItem p = DecalPrecache[tableIndex];
 		p.SetDecal(new(name));
 
+#if !SWDS
 		Render.Draw_DecalSetName(tableIndex, name);
+#endif
 	}
 
 	public void SetModel(int tableIndex) {

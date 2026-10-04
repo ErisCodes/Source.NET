@@ -77,6 +77,9 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 		modemanager.LevelInit(mapname);
 		IGameSystem.LevelInitPreEntityAllSystems(mapname);
+#if GMOD_DLL
+		garrysmod.LevelInit(mapname);
+#endif
 
 		if (gpGlobals.MaxClients > 1) {
 			if (cl_predict.GetInt() == 0)
@@ -200,6 +203,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 	public void Shutdown() {
 		ClientVoiceMgr_Shutdown();
+		Game.Client.GarrysMod.GarrysMod.Lua.Kill();
 	}
 
 	public void VoiceStatus(int entindex, bool talking) {
@@ -257,33 +261,18 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		view.Render(rects);
 	}
 
-	public static INetworkStringTable g_ClientLuaFiles = null!;
-
 	public void InstallStringTableCallback(ReadOnlySpan<char> tableName) {
 		// TODO: what to do here, if anything
 		switch (tableName) {
+			case "networkstring":
+				Game.Client.GarrysMod.NetworkString.Install();
+				break;
 			case Protocol.CLIENT_LUA_FILES_TABLENAME:
-				g_ClientLuaFiles = networkstringtable.FindTable(tableName)!;
-				g_ClientLuaFiles.SetStringChangedCallback(this, OnReceiveLuaFileString);
+				Game.Client.GarrysMod.GModDataPack.DataPack().Initialize();
 				break;
 		}
 
 		GameRulesRegister.InstallStringTableCallback_GameRules();
-	}
-
-	private void OnReceiveLuaFileString(object? context, INetworkStringTable stringTable, int stringNumber, ReadOnlySpan<char> newString, ReadOnlySpan<byte> newData) {
-		if (stringNumber == 0 && newString.Equals("paths", StringComparison.Ordinal)) {
-			// Load paths
-			Span<char> paths = stackalloc char[Encoding.ASCII.GetCharCount(newData)];
-			Encoding.ASCII.GetChars(newData, paths);
-			var splitter = paths.Split(";");
-			while (splitter.MoveNext()) {
-				ReadOnlySpan<char> path = paths[splitter.Current].SliceNullTerminatedString();
-				// This sucks! TODO: Fix this!!!
-				ReadOnlySpan<char> absPath = $"{engine.GetGameDirectory()}{path}";
-				filesystem.AddSearchPath(absPath, "lcl", groupName: Source.Common.Filesystem.PathGroupName.Lua);
-			}
-		}
 	}
 
 	public int IN_KeyEvent(int eventcode, ButtonCode keynum, ReadOnlySpan<char> currentBinding) {
@@ -529,52 +518,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		throw new NotImplementedException();
 	}
 
-	const string LUA_PREFIX = "lua/";
-	const string LUA_SUFFIX = ".lua";
-
-	int filesRequesting_Total;
-	int filesRequesting_Recv;
-
-	public void GMOD_RequestLuaFiles(INetChannel netchan) {
-		Span<char> shaBuffer = stackalloc char[LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS + LUA_SUFFIX.Length];
-		LUA_PREFIX.CopyTo(shaBuffer);
-
-		var luaFileMessage = new CLC_GMod_ClientToServer(GModMessageType.LuaFile);
-
-		int filesRequesting = 0;
-		for (int i = 1; i < g_ClientLuaFiles.GetNumStrings(); i++) {
-			ReadOnlySpan<char> filename = g_ClientLuaFiles.GetString(i);
-			byte[]? filehash = g_ClientLuaFiles.GetStringUserData(i);
-			SHA256Value.FromBytes(filehash).ToString(shaBuffer[LUA_PREFIX.Length..]);
-			LUA_SUFFIX.CopyTo(shaBuffer.Slice(LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS, LUA_SUFFIX.Length));
-			if (!filesystem.FileExists(shaBuffer, "CACHE")) {
-				luaFileMessage.LuaFile.FileStringTableEntryIDs[filesRequesting] = (ushort)i;
-				filesRequesting++;
-			}
-		}
-
-		netchan!.SendNetMsg(luaFileMessage!);
-
-		filesRequesting_Total = filesRequesting;
-		filesRequesting_Recv = 0;
-	}
-
-	public void GMOD_ReceiveLuaFile(ReadOnlySpan<char> fileName, in SHA256Value sha256, ReadOnlySpan<byte> compressed) {
-		Span<char> shaBuffer = stackalloc char[LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS + LUA_SUFFIX.Length];
-		LUA_PREFIX.CopyTo(shaBuffer);
-		sha256.ToString(shaBuffer[LUA_PREFIX.Length..]);
-		LUA_SUFFIX.CopyTo(shaBuffer.Slice(LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS, LUA_SUFFIX.Length));
-
-		using IFileHandle? h = filesystem.Open(shaBuffer, FileOpenOptions.Write, "CACHE");
-		if (h == null)
-			return;
-		h.Stream.Write(compressed);
-		filesRequesting_Recv++;
-
-		if (filesRequesting_Recv != filesRequesting_Total)
-			gameUI.UpdateProgressBar(filesRequesting_Recv / (float)filesRequesting_Total, $"Received {filesRequesting_Recv}/{filesRequesting_Total} Lua files...");
-
-	}
+	public void GMOD_RequestLuaFiles() => Game.Client.GarrysMod.GModDataPack.DataPack().RequestFiles();
 
 	public void FileReceived(ReadOnlySpan<char> fileName, uint transferID) {
 
@@ -727,7 +671,64 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 	}
 
 	public void GMOD_ReceiveServerMessage(bf_read buffer, int len) {
-		throw new NotImplementedException();
+		GModMessageType type = (GModMessageType)buffer.ReadByte();
+		switch (type) {
+			case GModMessageType.LuaAutoRefresh:
+				// todo: GarrysMod::AutoRefresh::HandleChange_Lua(buffer, len);
+				return;
+			case GModMessageType.RequestLuaFiles:
+				return;
+			case GModMessageType.LuaCmd:
+				Game.Client.GarrysMod.GarrysMod.RunLuaCmd(buffer);
+				return;
+			case GModMessageType.LuaFile: {
+					int index = (int)buffer.ReadUBitLong(16);
+					uint size = (uint)((len >> 3) - 3);
+					if (size > 0x10000) {
+						Msg($"Lua file {index} too big, ignoring! ({size} > {0x10000})\n");
+						return;
+					}
+					byte[] bdata = new byte[size];
+					buffer.ReadBytes(bdata);
+					Game.Client.GarrysMod.GModDataPack.DataPack().SetFileContents(index, bdata, true);
+				}
+				return;
+		}
+
+		len -= 8;
+		if (type != GModMessageType.NetMessage) {
+			Msg("Not net message!?\n");
+			return;
+		}
+
+		int curBit = buffer.BitsRead;
+		int bitOffset = curBit % 8;
+		int numBits = len + bitOffset;
+		byte[] data = new byte[Protocol.Bits2Bytes(numBits)];
+		ReadOnlySpan<byte> source = buffer.BaseArray.AsSpan(curBit / 8);
+		source[..Math.Min(source.Length, data.Length)].CopyTo(data);
+
+		bf_read read = new("NetMessage(read_cl)", data, data.Length, numBits);
+		read.Seek(bitOffset);
+		Game.Client.GarrysMod.LuaNet.g_NetIncoming = read;
+
+		if (g_Lua != null && g_Lua.Global() != null) {
+			Game.Client.GarrysMod.LuaObject net = new();
+			g_Lua.Global().GetMember("net", net);
+			if (net.isTable()) {
+				Game.Client.GarrysMod.LuaObject incoming = new();
+				net.GetMember("Incoming", incoming);
+				if (incoming.isFunction()) {
+					incoming.Push();
+					g_Lua.PushNumber(len);
+					g_Lua.CallInternalNoReturns(1);
+				}
+				incoming.UnReference();
+			}
+			net.UnReference();
+		}
+
+		Game.Client.GarrysMod.LuaNet.g_NetIncoming = null;
 	}
 
 	public void GMOD_DoSnapshots() {

@@ -1194,7 +1194,7 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 			Disconnect("Server info data overflow");
 			return false;
 		}
-		serverGameClients.GMOD_SentClientStringTables(this);
+		serverGameClients.GMOD_SentClientStringTables(ClientSlot);
 
 		Common.TimestampedLog(" BaseClient.SendServerInfo(finished)");
 
