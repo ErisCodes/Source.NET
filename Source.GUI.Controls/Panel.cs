@@ -1550,6 +1550,12 @@ public class Panel : IPanel
 		LuaObject?.UnReference();
 		LuaObject = null;
 	}
+
+	public virtual void ClearLuaReferencesRecursive() {
+		ClearLuaReferences();
+		for (int i = 0; i < GetChildCount(); i++)
+			GetChild(i).ClearLuaReferencesRecursive();
+	}
 #endif
 
 	public virtual bool HasLuaTable() => LuaTable != null;
@@ -2727,6 +2733,7 @@ public class Panel : IPanel
 #if GMOD_DLL
 		ClearLuaReferences();
 #endif
+		VGui.PanelDeleted(this);
 		GC.SuppressFinalize(this);
 	}
 

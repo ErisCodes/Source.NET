@@ -289,6 +289,9 @@ public class GarrysMod : IGarrysMod
 		}
 
 		public void Shutdown() {
+#if CLIENT_DLL
+			GModBase.Shutdown();
+#endif
 			g_LuaID++;
 #if CLIENT_DLL
 			LuaClass.ShutdownLuaClasses(g_Lua!);

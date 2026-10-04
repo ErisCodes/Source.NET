@@ -40,6 +40,12 @@ public class VGui : IVGui
 		this.engineAPI = engineAPI;
 	}
 
+	public void PanelDeleted(IPanel focus) {
+		surface.ReleasePanel(focus);
+		Input.PanelDeleted(focus);
+		RemoveTickSignal(focus);
+	}
+
 	public void AddTickSignal(IPanel panel, long intervalMilliseconds = 0) {
 		ref Tick t = ref CreateNewTick(panel, intervalMilliseconds);
 	}

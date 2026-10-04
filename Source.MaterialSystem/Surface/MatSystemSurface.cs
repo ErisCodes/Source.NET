@@ -1267,7 +1267,19 @@ public class MatSystemSurface : IMatSystemSurface
 	}
 
 	public void ReleasePanel(IPanel panel) {
-		throw new NotImplementedException();
+		RemovePopup(panel);
+		// todo: m_Titles remove
+	}
+
+	void RemovePopup(IPanel panel) {
+		for (int i = PopupList.Count - 1; i >= 0; i--) {
+			IPanel? popup = PopupList[i];
+			if (popup != null && popup != panel)
+				continue;
+
+			PopupList.RemoveAt(i);
+			break;
+		}
 	}
 
 	public void DrawTexturedPolygon(Span<SurfaceVertex> vertices, bool clipVertices = true) {

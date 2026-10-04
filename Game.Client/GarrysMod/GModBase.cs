@@ -33,6 +33,31 @@ public class GModBase : Panel
 		return ParentToHUDPanel;
 	}
 
+	static void DestroyPanel(ref Panel? panel) {
+		if (panel == null)
+			return;
+		panel.SetParent(null);
+		panel.SetVisible(false);
+		panel.MarkForDeletion();
+		panel = null;
+	}
+
+	public static void Shutdown() {
+		Panel clientDll = (Panel)enginevgui.GetPanel(VGuiPanelType.ClientDll);
+		for (int i = 0; i < clientDll.GetChildCount(); i++)
+			clientDll.GetChild(i).ClearLuaReferencesRecursive();
+
+		// todo: g_HudGMod children MarkForDeletion + ClearLuaReferencesRecursive
+
+		// todo: GModMouseInput ClearLuaReferencesRecursive
+		BasePanel?.ClearLuaReferencesRecursive();
+		ParentToHUDPanel?.ClearLuaReferencesRecursive();
+
+		// todo: DestroyPanel(GModMouseInput)
+		DestroyPanel(ref BasePanel);
+		DestroyPanel(ref ParentToHUDPanel);
+	}
+
 	public GModBase(ReadOnlySpan<char> panelName) : base(null, panelName) {
 		FirstThink = false;
 		SetParent(enginevgui.GetPanel(VGuiPanelType.Root));
