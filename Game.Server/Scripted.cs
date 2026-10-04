@@ -12,6 +12,12 @@ public enum ScriptMoveTo
 	WaitFacing = 5,
 }
 
+public enum ScriptPlayerDeath
+{
+	DoNothing = 0,
+	Cancel = 1,
+}
+
 public class AI_ScriptedSequence : BaseEntity
 {
 	public const int SF_SCRIPT_START_ON_SPAWN = 16;
