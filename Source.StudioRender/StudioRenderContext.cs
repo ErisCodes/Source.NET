@@ -546,8 +546,7 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 			// Increment the reference count for the material.
 			// material.IncrementReferenceCount();
 			threadData.Context.ComputeMaterialFlags(hdr, lodData, material);
-			// lodData.MaterialFlags[i] = UsesMouthShader(material) ? 1 : 0;
-			// ^ todo: flex system...
+			lodData.MaterialFlags[i] = UsesMouthShader(material) ? 1 : 0;
 		}
 	}
 
@@ -566,6 +565,15 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 
 	static TokenCache bumpvarCache = default;
 	static TokenCache phongVarCache = default;
+	static TokenCache clientShaderCache;
+
+	static bool UsesMouthShader(IMaterial material) {
+		IMaterialVar? clientShaderVar = material.FindVarFast("$clientShader", ref clientShaderCache);
+		if (clientShaderVar != null)
+			return stricmp(clientShaderVar.GetStringValue(), "MouthShader") == 0;
+		return false;
+	}
+
 	private void ComputeMaterialFlags(StudioHeader hdr, StudioLODData lodData, IMaterial material) {
 		if (material.UsesEnvCubemap())
 			hdr.Flags |= StudioHdrFlags.UsesEnvCubemap;

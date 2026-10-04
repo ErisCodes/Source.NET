@@ -1653,9 +1653,11 @@ public unsafe class StudioRender
 
 		lighting = R_StudioComputeLighting(pMaterial, materialFlags, colorMeshes);
 		if (lighting == StudioModelLighting.Mouth) {
-			// TODO
-			Assert(false);
-			return null;
+			if (!pRC.Config.Teeth || !R_TeethAreVisible())
+				return null;
+
+			if (pRC.Config.SupportsVertexAndPixelShaders)
+				R_MouthSetupVertexShader(pMaterial);
 		}
 
 		// todo: lightmap var
@@ -1672,6 +1674,35 @@ public unsafe class StudioRender
 		}
 
 		return pMaterial;
+	}
+
+	static bool R_TeethAreVisible() => true;
+
+	static TokenCache illumVarCache;
+	static TokenCache forwardVarCache;
+
+	private void R_MouthSetupVertexShader(IMaterial? material) {
+		if (material == null)
+			return;
+
+		MStudioMouth mouth = StudioHdr!.Mouth(0);
+
+		float illum = pFlexWeights[mouth.FlexDesc];
+		if (illum < 0)
+			illum = 0;
+		if (illum > 1)
+			illum = 1;
+
+		MathLib.VectorRotate(in mouth.Forward, in pBoneToWorld[mouth.Bone], out Vector3 forward);
+		forward *= -1;
+
+		IMaterialVar? illumVar = material.FindVarFast("$illumfactor", ref illumVarCache);
+		if (illumVar != null)
+			illumVar.SetFloatValue(illum);
+
+		IMaterialVar? forwardVar = material.FindVarFast("$forward", ref forwardVarCache);
+		if (forwardVar != null)
+			forwardVar.SetVecValue(in forward);
 	}
 
 	private StudioModelLighting R_StudioComputeLighting(IMaterial pMaterial, int materialFlags, Span<ColorMeshInfo> colorMeshes) {

@@ -658,6 +658,26 @@ public class MStudioFlex
 	public Span<byte> BaseVertAnim() => Data.Span[VertIndex..];
 	public int VertAnimSizeBytes() => (VertAnimType == StudioVertAnimType.Normal) ? Unsafe.SizeOf<MStudioVertAnim>() : Unsafe.SizeOf<MStudioVertAnimWrinkle>();
 }
+public class MStudioMouth
+{
+	public const int SIZEOF = 20;
+	public static MStudioMouth FACTORY(object caller, Memory<byte> data) => new(data);
+
+	public Memory<byte> Data;
+
+	public int Bone;
+	public Vector3 Forward;
+	public int FlexDesc;
+
+	public MStudioMouth(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(Data.Span);
+		br.Read(out Bone);
+		br.Read(out Forward);
+		br.Read(out FlexDesc);
+	}
+}
+
 public class MStudioEyeball
 {
 	public const int SIZEOF = 172;
@@ -2751,6 +2771,9 @@ public class StudioHeader
 
 	public int NumMouths;
 	public int MouthIndex;
+	MStudioMouth[]? mouthCache;
+	public MStudioMouth Mouth(int i)
+		=> Studio.ProduceArrayIdx(this, ref mouthCache, NumMouths, MouthIndex, i, MStudioMouth.SIZEOF, Data, MStudioMouth.FACTORY);
 
 	public int NumLocalPoseParameters;
 	public int LocalPoseParamIndex;
