@@ -431,6 +431,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public static AI_GlobalScheduleNamespace GetSchedulingSymbols() => SchedulingSymbols;
 
 	public static StringRegistry? ActivitySR;
+	public static StringRegistry? EventSR;
 
 	public static int GetScheduleID(ReadOnlySpan<char> schedName) => GetSchedulingSymbols().ScheduleSymbolToId(schedName);
 	public static int GetTaskID(ReadOnlySpan<char> taskName) => GetSchedulingSymbols().TaskSymbolToId(taskName);

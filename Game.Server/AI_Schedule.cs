@@ -41,6 +41,20 @@ public class AI_SchedulesManager
 	int CurLoadSig;
 	AI_Schedule? allSchedules;
 
+	public void DestroyStringRegistries() {
+		AI_BaseNPC.GetSchedulingSymbols().Clear();
+
+		AI_BaseNPC.ActivitySR = null;
+		AI_BaseNPC.NumActivities = 0;
+	}
+
+	public void CreateStringRegistries() {
+		AI_BaseNPC.GetSchedulingSymbols().Clear();
+
+		AI_BaseNPC.ActivitySR = new();
+		AI_BaseNPC.EventSR = new();
+	}
+
 	public bool LoadAllSchedules() {
 		if (allSchedules == null) {
 			AI_BaseNPC.InitSchedulingTables();
@@ -358,7 +372,7 @@ public class AI_SchedulesManager
 		return null;
 	}
 
-	void DeleteAllSchedules() {
+	public void DeleteAllSchedules() {
 		CurLoadSig++;
 
 		if (CurLoadSig < 0)
