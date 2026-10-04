@@ -162,7 +162,31 @@ public partial class
 		}
 
 		AddEFlags(dirtyFlags);
-		// todo: children
+
+		bool onlyDueToAttachment = false;
+		if ((changeFlags & InvalidatePhysicsBits.AnimationChanged) != 0) {
+#if CLIENT_DLL
+			g_ClientShadowMgr.MarkRenderToTextureShadowDirty(GetShadowHandle());
+#endif
+
+			if ((changeFlags & (InvalidatePhysicsBits.PositionChanged | InvalidatePhysicsBits.VelocityChanged | InvalidatePhysicsBits.AnglesChanged)) == 0)
+				onlyDueToAttachment = true;
+
+			changeFlags = InvalidatePhysicsBits.PositionChanged | InvalidatePhysicsBits.AnglesChanged | InvalidatePhysicsBits.VelocityChanged;
+		}
+
+		for (BaseEntity? child = FirstMoveChild(); child != null; child = child.NextMovePeer()) {
+			if (onlyDueToAttachment) {
+#if CLIENT_DLL
+				if ((child.ParentAttachment == 0) && !child.IsFollowingEntity())
+					continue;
+#else
+				if (child.ParentAttachment == 0)
+					continue;
+#endif
+			}
+			child.InvalidatePhysicsRecursive(changeFlags);
+		}
 	}
 
 
