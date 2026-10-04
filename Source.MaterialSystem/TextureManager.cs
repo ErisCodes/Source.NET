@@ -162,7 +162,7 @@ public class TextureManager : ITextureManager
 		if (texture == null)
 			return null;
 
-		TextureList[new UtlSymbol(rtName)] = texture;
+		TextureList[texture.GetName().Hash()] = texture;
 		texture.Download();
 		return texture;
 	}
