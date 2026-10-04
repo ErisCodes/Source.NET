@@ -5,6 +5,7 @@ using Source.Common;
 using Source.Common.Commands;
 using Source.Common.DataCache;
 using Source.Common.Engine;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.Mathematics;
 
 using System.Numerics;
@@ -261,6 +262,28 @@ public class BaseAnimating : BaseEntity
 
 	public int LookupSequence(ReadOnlySpan<char> label) {
 		return Animation.LookupSequence(GetModelPtr(), label);
+	}
+
+	static string? Studio_GetKeyValueText(StudioHdr? studioHdr, int sequence) {
+		if (studioHdr != null && studioHdr.SequencesAvailable()) {
+			if (sequence >= 0 && sequence < studioHdr.GetNumSeq()) {
+				MStudioSeqDesc seqdesc = studioHdr.Seqdesc(sequence);
+				if (seqdesc.KeyValueSize != 0)
+					return System.Text.Encoding.ASCII.GetString(((ReadOnlySpan<byte>)seqdesc.Data.Span[seqdesc.KeyValueIndex..]).SliceNullTerminatedString());
+			}
+		}
+		return null;
+	}
+
+	public KeyValues? GetSequenceKeyValues(int sequence) {
+		string? text = Studio_GetKeyValueText(GetModelPtr(), sequence);
+
+		if (text != null) {
+			KeyValues seqKeyValues = new("");
+			if (seqKeyValues.LoadFromBuffer(modelinfo.GetModelName(GetModel()), text))
+				return seqKeyValues;
+		}
+		return null;
 	}
 	public TimeUnit_t GetSequenceGroundSpeed(int sequence) => GetSequenceGroundSpeed(GetModelPtr(), sequence);
 
