@@ -254,17 +254,31 @@ public class GarrysMod : IGarrysMod
 #if CLIENT_DLL
 			// if (gGM == null)
 			// 	Error("We should have a gGM at this point!");
-			// g_Lua.FindAndRunScript("derma/init.lua", true, true, "!UNKNOWN", true);
-			// g_Lua.RunString("Startup", "", "require('notification');", true, true);
+			g_Lua.FindAndRunScript("derma/init.lua", true, true, "!UNKNOWN", true);
+			g_Lua.RunString("Startup", "", "require('notification');", true, true);
 			// gGM.LoadGamemode("base", false);
-			// RunScriptsInFolder("autorun", "!RELOAD");
-			// RunScriptsInFolder("autorun/client", "!RELOAD_CL");
-			// RunScriptsInFolder("postprocess", "!RELOAD_CL");
-			// RunScriptsInFolder("vgui", "!RELOAD_CL");
-			// RunScriptsInFolder("matproxy", "!RELOAD_CL");
-			// g_Lua.FindAndRunScript("skins/default.lua", true, true, "!UNKNOWN", true);
+			RunScriptsInFolder("autorun", "!RELOAD");
+			RunScriptsInFolder("autorun/client", "!RELOAD_CL");
+			RunScriptsInFolder("postprocess", "!RELOAD_CL");
+			RunScriptsInFolder("vgui", "!RELOAD_CL");
+			RunScriptsInFolder("matproxy", "!RELOAD_CL");
+			g_Lua.FindAndRunScript("skins/default.lua", true, true, "!UNKNOWN", true);
 			enginevgui.UpdateCustomProgressBar(0.96f, "Lua Started!");
 #endif
+		}
+
+		public void RunScriptsInFolder(ReadOnlySpan<char> folder, ReadOnlySpan<char> source) {
+			if (g_LuaManager == null) {
+				Warning($"RunScriptsInFolder: Couldn't run scripts in '{folder}': no gLUA!\n");
+				return;
+			}
+
+			List<LuaFindResult> files = [];
+			get.LuaShared()!.FindScripts($"{folder}/*.lua", LuaPathID, files);
+			foreach (LuaFindResult file in files) {
+				string path = $"{folder}/{file.FileName}";
+				g_Lua?.FindAndRunScript(path, true, true, source.IsEmpty ? "!UNKNOWN" : source, true);
+			}
 		}
 
 		public void Shutdown() {
