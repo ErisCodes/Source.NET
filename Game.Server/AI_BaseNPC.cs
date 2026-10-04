@@ -3480,7 +3480,20 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		InverseIgnoreConditions.SetAll();
 	}
 
-	public virtual bool SetSchedule(int localScheduleID) => throw new NotImplementedException();
+	public virtual bool SetSchedule(int localScheduleID) {
+		AI_Schedule? newSchedule = GetScheduleOfType(localScheduleID);
+		if (newSchedule != null) {
+			if (Cine.Get() != null) {
+				if (!(localScheduleID == SCHED_SLEEP || localScheduleID == SCHED_WAIT_FOR_SCRIPT || localScheduleID == SCHED_SCRIPTED_WALK || localScheduleID == SCHED_SCRIPTED_RUN || localScheduleID == SCHED_SCRIPTED_CUSTOM_MOVE || localScheduleID == SCHED_SCRIPTED_WAIT || localScheduleID == SCHED_SCRIPTED_FACE))
+					Assert(false);
+			}
+
+			IdealSchedule = GetGlobalScheduleId(localScheduleID);
+			SetSchedule(newSchedule);
+			return true;
+		}
+		return false;
+	}
 
 	public void SetSchedule(AI_Schedule newSchedule) {
 		Assert(newSchedule != null);
