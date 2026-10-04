@@ -412,6 +412,20 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public static AI_GlobalScheduleNamespace GetSchedulingSymbols() => SchedulingSymbols;
 
+	public static StringRegistry? ActivitySR;
+
+	public static int GetScheduleID(ReadOnlySpan<char> schedName) => GetSchedulingSymbols().ScheduleSymbolToId(schedName);
+	public static int GetTaskID(ReadOnlySpan<char> taskName) => GetSchedulingSymbols().TaskSymbolToId(taskName);
+	public static int GetConditionID(ReadOnlySpan<char> condName) => GetSchedulingSymbols().ConditionSymbolToId(condName);
+
+	public static int GetActivityID(ReadOnlySpan<char> actName) {
+		Assert(ActivitySR != null);
+		if (ActivitySR == null)
+			return (int)Activity.ACT_INVALID;
+
+		return ActivitySR.GetStringID(actName);
+	}
+
 	public NPC_STATE GetState() => NPCState;
 
 	public bool IsInAScript() => InAScript;
