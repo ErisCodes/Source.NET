@@ -2613,6 +2613,54 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public AI_Schedule? GetCurSchedule() => Schedule;
 
+	public virtual int TranslateSchedule(int scheduleType) {
+		switch (scheduleType) {
+			case SCHED_AISCRIPT: {
+					AI_ScriptedSequence? cine = Cine.Get();
+					Assert(cine != null);
+					if (cine == null) {
+						DevWarning(2, $"Script failed for {GetClassname()}\n");
+						CineCleanup();
+						return SCHED_IDLE_STAND;
+					}
+
+					switch (cine.MoveTo) {
+						case ScriptMoveTo.Wait:
+						case ScriptMoveTo.Teleport:
+							return SCHED_SCRIPTED_WAIT;
+						case ScriptMoveTo.Walk:
+							return SCHED_SCRIPTED_WALK;
+						case ScriptMoveTo.Run:
+							return SCHED_SCRIPTED_RUN;
+						case ScriptMoveTo.Custom:
+							return SCHED_SCRIPTED_CUSTOM_MOVE;
+						case ScriptMoveTo.WaitFacing:
+							return SCHED_SCRIPTED_FACE;
+					}
+				}
+				break;
+
+			case SCHED_IDLE_WALK:
+				switch (NPCState) {
+					case NPCState.Alert:
+						return SCHED_ALERT_WALK;
+					case NPCState.Combat:
+						return SCHED_COMBAT_WALK;
+				}
+				break;
+
+			case SCHED_ALERT_WALK:
+				Assert(NPCState == NPCState.Alert);
+				break;
+
+			case SCHED_COMBAT_WALK:
+				Assert(NPCState == NPCState.Combat);
+				break;
+		}
+
+		return scheduleType;
+	}
+
 	public bool IsCurSchedule(int schedId, bool ideal = true) {
 		if (Schedule == null)
 			return schedId == SCHED_NONE || schedId == AI_RemapToGlobal(SCHED_NONE);
