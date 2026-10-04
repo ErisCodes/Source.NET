@@ -114,6 +114,10 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 
 	AI_Expresser? Expresser;
 
+	public virtual float PickLookTarget(bool excludePlayers = false, float minTime = 1.5f, float maxTime = 2.5f) => throw new NotImplementedException();
+
+	public virtual void AddLookTarget(BaseEntity? target, float importance, float duration, float ramp = 0.0f) => throw new NotImplementedException();
+
 	string? ExpressionOverride;
 
 	protected string? IdleExpression;

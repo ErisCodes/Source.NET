@@ -262,6 +262,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public EHANDLE GoalEnt = new();
 	public Handle<AI_Hint> HintNode = new();
 	public TimeUnit_t LastRealThinkTime;
+	public TimeUnit_t NextEyeLookTime;
 	public Activity ScriptArrivalActivity;
 	public string? ScriptArrivalSequence;
 
