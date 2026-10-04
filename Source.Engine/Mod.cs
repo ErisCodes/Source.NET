@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
 using Source.Common.Engine;
+using Source.Common.SceneFileCache;
 
 using System;
 using System.Collections.Generic;
@@ -16,6 +17,9 @@ public class Mod(bool serverOnly, IEngineAPI engineAPI)
 		IEngine eng = engineAPI.GetRequiredService<IEngine>();
 		var host_parms = engineAPI.GetRequiredService<EngineParms>();
 		SV SV = engineAPI.GetRequiredService<SV>();
+		ISceneFileCache scenefilecache = engineAPI.GetRequiredService<ISceneFileCache>();
+
+		scenefilecache.Init();
 
 		if (IsServerOnly()) {
 			if (eng.Load(true, host_parms.BaseDir)) {
@@ -36,6 +40,8 @@ public class Mod(bool serverOnly, IEngineAPI engineAPI)
 				SV.ShutdownGameDLL();
 			}
 		}
+
+		scenefilecache.Shutdown();
 
 		return res;
 	}
