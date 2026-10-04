@@ -97,4 +97,5 @@ public struct AI_ScheduleBits
 	public void Set(int bit) => BitVecBase.Set(this, bit);
 	public void Clear(int bit) => BitVecBase.Clear(this, bit);
 	public bool IsBitSet(int bit) => BitVecBase.IsBitSet(this, bit);
+	public bool IsAllClear() => ((ReadOnlySpan<byte>)this).IndexOfAnyExcept((byte)0) < 0;
 }
