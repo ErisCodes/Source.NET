@@ -18,7 +18,9 @@ public static class MathLibConsts
 	public const int YAW = 1;
 	public const int ROLL = 2;
 
-	public const float FLT_EPSILON = 1.192092896e-07F;
+	public const float FLT_EPSILON = 1.192092896e-07f; // FLT_EPSILON (2^-23), MathF.BitIncrement(1.0f) - 1.0f, not the same as float.Epsilon
+	public const double DBL_EPSILON = 2.2204460492503131e-16; // DBL_EPSILON (2^-52), Math.BitIncrement(1.0) - 1.0, not the same as double.Epsilon
+	public const float EQUAL_EPSILON = 0.001f;
 
 	public static readonly Vector3 vec3_origin = new(0, 0, 0);
 	public static readonly QAngle vec3_angle = new(0, 0, 0);
@@ -554,7 +556,7 @@ public static class MathLib
 	public static readonly Vector128<float> Four_2ToThe23s = Vector128.Create((float)(1 << 23), (float)(1 << 23), (float)(1 << 23), (float)(1 << 23));
 	public static readonly Vector128<float> Four_2ToThe24s = Vector128.Create((float)(1 << 24), (float)(1 << 24), (float)(1 << 24), (float)(1 << 24));
 	public static readonly Vector128<float> Four_Point225s = Vector128.Create(.225f, .225f, .225f, .225f);
-	public static readonly Vector128<float> Four_Epsilons = Vector128.Create(float.Epsilon, float.Epsilon, float.Epsilon, float.Epsilon);
+	public static readonly Vector128<float> Four_Epsilons = Vector128.Create(FLT_EPSILON, FLT_EPSILON, FLT_EPSILON, FLT_EPSILON);
 	public static readonly Vector128<float> Four_FLT_MAX = Vector128.Create(float.MaxValue, float.MaxValue, float.MaxValue, float.MaxValue);
 	public static readonly Vector128<float> Four_Negative_FLT_MAX = Vector128.Create(-float.MaxValue, -float.MaxValue, -float.MaxValue, -float.MaxValue);
 	public static Vector3 AsVector3(this ReadOnlySpan<float> span) => new(span[0], span[1], span[2]);
@@ -1088,7 +1090,7 @@ public static class MathLib
 
 		float sinsom = MathF.Sin(MathF.Asin(sinom) * t);
 
-		t = sinsom / (sinom + float.Epsilon);
+		t = sinsom / (sinom + FLT_EPSILON);
 		q = default;
 		VectorScale(in p.AsVector3ReadOnlyRef(), t, out q.AsVector3Ref());
 
@@ -1864,6 +1866,13 @@ public static class MathLib
 		MathF.Abs(src1.X - src2.X) <= tolerance &&
 		MathF.Abs(src1.Y - src2.Y) <= tolerance &&
 		MathF.Abs(src1.Z - src2.Z) <= tolerance;
+
+	public static bool CloseEnough(float a, float b, float epsilon = EQUAL_EPSILON) => MathF.Abs(a - b) <= epsilon;
+
+	public static bool CloseEnough(in Vector3 a, in Vector3 b, float epsilon = EQUAL_EPSILON) =>
+		MathF.Abs(a.X - b.X) <= epsilon &&
+		MathF.Abs(a.Y - b.Y) <= epsilon &&
+		MathF.Abs(a.Z - b.Z) <= epsilon;
 
 	public static float Approach(float target, float value, float speed) {
 		float delta = target - value;
