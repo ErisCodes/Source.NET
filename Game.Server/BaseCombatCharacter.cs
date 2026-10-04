@@ -83,6 +83,11 @@ public partial class BaseCombatCharacter : BaseFlex
 	public virtual Vector3 HeadDirection3D() => BodyDirection2D(); // No head motion so just return body dir
 	public virtual Vector3 EyeDirection3D() => HeadDirection3D(); // No eye motion so just return head dir
 
+	public virtual bool FInViewCone(BaseEntity entity) => throw new NotImplementedException();
+
+	public virtual bool IsInAVehicle() => false;
+	public virtual bool ExitVehicle() => false;
+
 	public static readonly SendTable DT_BCCLocalPlayerExclusive = new(nameof(DT_BCCLocalPlayerExclusive), [
 		SendPropTime64(FIELD.OF(nameof(NextAttack))),
 	]);

@@ -514,7 +514,7 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	public IServerVehicle? GetVehicle() => Vehicle.Get()?.GetServerVehicle();
 	public BaseEntity? GetVehicleEntity() => Vehicle.Get();
-	public bool IsInAVehicle() => Vehicle.Get() != null;
+	public override bool IsInAVehicle() => Vehicle.Get() != null;
 	public float GetStepSize() => Local.StepSize;
 
 	public BaseEntity? GetViewEntity() => ViewEntity.Get();
