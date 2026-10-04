@@ -146,6 +146,9 @@ public static class Studio
 
 	public const int USESHADOWLOD = -2;
 
+	public const float VertAnimFixedPointScale = 1.0f / 4096.0f;
+	public const float VertAnimFixedPointScaleInv = 1.0f / VertAnimFixedPointScale;
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static int BONE_USED_BY_VERTEX_AT_LOD(int lod) => BONE_USED_BY_VERTEX_LOD0 << lod;
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static int BONE_USED_BY_ANYTHING_AT_LOD(int lod) => ((BONE_USED_BY_ANYTHING & ~BONE_USED_BY_VERTEX_MASK) | BONE_USED_BY_VERTEX_AT_LOD(lod));
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -549,6 +552,103 @@ public class MStudioMesh
 			return null;
 		return VertexData;
 	}
+
+	MStudioFlex[]? flexCache;
+	public MStudioFlex Flex(int i)
+		=> Studio.ProduceArrayIdx(this, ref flexCache, NumFlexes, FlexIndex, i, MStudioFlex.SIZEOF, Data, MStudioFlex.FACTORY);
+}
+
+public enum StudioVertAnimType : byte
+{
+	Normal = 0,
+	Wrinkle
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 2)]
+public struct DStudioVertAnim
+{
+	public ushort Index;
+	public byte Speed;
+	public byte Side;
+	public Vector48 Delta;
+	public Vector48 NDelta;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 2)]
+public struct MStudioVertAnim
+{
+	public ushort Index;
+	public byte Speed;
+	public byte Side;
+	InlineArray3<short> delta;
+	InlineArray3<short> ndelta;
+
+	public readonly Vector3 GetDeltaFixed() => new(delta[0] * Studio.VertAnimFixedPointScale, delta[1] * Studio.VertAnimFixedPointScale, delta[2] * Studio.VertAnimFixedPointScale);
+	public readonly Vector3 GetNDeltaFixed() => new(ndelta[0] * Studio.VertAnimFixedPointScale, ndelta[1] * Studio.VertAnimFixedPointScale, ndelta[2] * Studio.VertAnimFixedPointScale);
+
+	public void SetDeltaFixed(in Vector3 input) {
+		delta[0] = (short)(input.X * Studio.VertAnimFixedPointScaleInv);
+		delta[1] = (short)(input.Y * Studio.VertAnimFixedPointScaleInv);
+		delta[2] = (short)(input.Z * Studio.VertAnimFixedPointScaleInv);
+	}
+
+	public void SetNDeltaFixed(in Vector3 inputNormal) {
+		ndelta[0] = (short)(inputNormal.X * Studio.VertAnimFixedPointScaleInv);
+		ndelta[1] = (short)(inputNormal.Y * Studio.VertAnimFixedPointScaleInv);
+		ndelta[2] = (short)(inputNormal.Z * Studio.VertAnimFixedPointScaleInv);
+	}
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 2)]
+public struct MStudioVertAnimWrinkle
+{
+	public MStudioVertAnim VertAnim;
+	public short WrinkleDelta;
+}
+
+public class MStudioFlex
+{
+	public const int SIZEOF = 60;
+	public static MStudioFlex FACTORY(object caller, Memory<byte> data) => new(data);
+
+	public Memory<byte> Data;
+
+	public int FlexDesc;
+	public float Target0;
+	public float Target1;
+	public float Target2;
+	public float Target3;
+	public int NumVerts;
+	public int VertIndex;
+	public int FlexPair;
+	public StudioVertAnimType VertAnimType;
+
+	public MStudioFlex(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(Data.Span);
+		br.Read(out FlexDesc);
+		br.Read(out Target0);
+		br.Read(out Target1);
+		br.Read(out Target2);
+		br.Read(out Target3);
+		br.Read(out NumVerts);
+		br.Read(out VertIndex);
+		br.Read(out FlexPair);
+		br.Read(out VertAnimType);
+	}
+
+	public ref MStudioVertAnim VertAnim(int i) {
+		Assert(VertAnimType == StudioVertAnimType.Normal);
+		return ref Data.Span[(VertIndex + i * Unsafe.SizeOf<MStudioVertAnim>())..].Cast<byte, MStudioVertAnim>()[0];
+	}
+
+	public ref MStudioVertAnimWrinkle VertAnimWrinkle(int i) {
+		Assert(VertAnimType == StudioVertAnimType.Wrinkle);
+		return ref Data.Span[(VertIndex + i * Unsafe.SizeOf<MStudioVertAnimWrinkle>())..].Cast<byte, MStudioVertAnimWrinkle>()[0];
+	}
+
+	public Span<byte> BaseVertAnim() => Data.Span[VertIndex..];
+	public int VertAnimSizeBytes() => (VertAnimType == StudioVertAnimType.Normal) ? Unsafe.SizeOf<MStudioVertAnim>() : Unsafe.SizeOf<MStudioVertAnimWrinkle>();
 }
 public class MStudioEyeball
 {
