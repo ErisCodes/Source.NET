@@ -217,6 +217,8 @@ public partial class
 		GetPredictionErrorSmoothingVector(out Vector3 smoothOffset);
 		eyeOrigin += smoothOffset;
 #endif
+
+		fov = GetFOV();
 	}
 
 	public int GetDefaultFOV() {
