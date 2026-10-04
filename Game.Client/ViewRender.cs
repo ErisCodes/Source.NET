@@ -55,6 +55,25 @@ public class SimpleRenderExecutor : RenderExecutor
 	}
 }
 
+public struct IntroDataBlendPass
+{
+	public int BlendMode;
+	public float Alpha;
+}
+
+public class IntroData
+{
+	public bool DrawPrimary;
+	public Vector3 CameraView;
+	public QAngle CameraViewAngles;
+	public float PlayerViewFOV;
+	public readonly List<IntroDataBlendPass> Passes = [];
+
+	public InlineArray4<float> CurrentFadeColor;
+
+	public static IntroData? g_pIntroData;
+}
+
 public enum ViewID : sbyte
 {
 	Illegal = -2,

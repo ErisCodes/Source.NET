@@ -18,6 +18,35 @@ public static class ViewScene
 	public static readonly ConVar r_updaterefracttexture = new("r_updaterefracttexture", "1", FCvar.Cheat);
 	public static readonly ConVar r_depthoverlay = new("r_depthoverlay", "0", FCvar.Cheat, "Replaces opaque objects with their grayscaled depth values. r_showz_power scales the output.");
 
+	public static void UpdateScreenEffectTexture(int textureIndex, int x, int y, int w, int h, bool destFullScreen, out System.Drawing.Rectangle actualRect) {
+		System.Drawing.Rectangle srcRect = new(x, y, w, h);
+
+		using MatRenderContextPtr renderContext = new(materials);
+		ITexture texture = RenderTexture.GetFullFrameFrameBufferTexture(textureIndex)!;
+		renderContext.GetRenderTargetDimensions(out int srcWidth, out int srcHeight);
+		int destWidth = texture.GetActualWidth();
+		int destHeight = texture.GetActualHeight();
+
+		System.Drawing.Rectangle destRect = srcRect;
+		if (!destFullScreen && (srcWidth > destWidth || srcHeight > destHeight)) {
+			float scaleX = (float)destWidth / (float)srcWidth;
+			float scaleY = (float)destHeight / (float)srcHeight;
+			destRect.X = (int)(srcRect.X * scaleX);
+			destRect.Y = (int)(srcRect.Y * scaleY);
+			destRect.Width = (int)(srcRect.Width * scaleX);
+			destRect.Height = (int)(srcRect.Height * scaleY);
+			destRect.X = Math.Clamp(destRect.X, 0, destWidth);
+			destRect.Y = Math.Clamp(destRect.Y, 0, destHeight);
+			destRect.Width = Math.Clamp(destRect.Width, 0, destWidth - destRect.X);
+			destRect.Height = Math.Clamp(destRect.Height, 0, destHeight - destRect.Y);
+		}
+
+		renderContext.CopyRenderTargetToTextureEx(texture, 0, srcRect, destFullScreen ? null : destRect);
+		renderContext.SetFrameBufferCopyTexture(texture, textureIndex);
+
+		actualRect = destRect;
+	}
+
 	public static void ViewTransform(in Vector3 worldSpace, out Vector3 viewSpace) {
 		ref readonly Matrix4x4 viewMatrix = ref engine.WorldToViewMatrix();
 		MathLib.Vector3DMultiplyPosition(in viewMatrix, in worldSpace, out viewSpace);
