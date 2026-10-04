@@ -517,6 +517,8 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 		return true;
 	}
 
+	protected virtual void WriteGameSounds(bf_write buf) { }
+
 	protected virtual ClientFrame? GetDeltaFrame(int tick) {
 		Assert(false);
 		return null;
@@ -566,7 +568,7 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 		int maxTempEnts = Server.IsMultiplayer() ? 64 : 255;
 		Server.WriteTempEntities(this, frame.GetSnapshot(), LastSnapshot, msg, maxTempEnts);
 
-		// WriteGameSounds();
+		WriteGameSounds(msg);
 
 		if (msg.Overflowed) {
 			bool wasTracing = Tracing != 0;

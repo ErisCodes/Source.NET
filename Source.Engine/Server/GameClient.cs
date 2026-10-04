@@ -380,7 +380,7 @@ public class GameClient : BaseClient
 
 	// void SendSound(SoundInfo sound, bool isReliable) { }
 
-	void WriteGameSounds(bf_write buf) {
+	protected override void WriteGameSounds(bf_write buf) {
 		if (Sounds.Count == 0)
 			return;
 
