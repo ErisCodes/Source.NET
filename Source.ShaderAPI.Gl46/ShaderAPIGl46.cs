@@ -1081,6 +1081,11 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		return MeshMgr.GetDynamicMesh(material, 0, hwSkinBoneCount, buffered, vertexOverride, indexOverride);
 	}
 
+	public IMesh GetDynamicMeshEx(IMaterial material, VertexFormat vertexFormat, int hwSkinBoneCount, bool buffered, IMesh? vertexOverride, IMesh? indexOverride) {
+		Assert(material == null || material.IsRealTimeVersion());
+		return MeshMgr.GetDynamicMesh(material, vertexFormat, hwSkinBoneCount, buffered, vertexOverride, indexOverride);
+	}
+
 	public IMesh GetFlexMesh() => MeshMgr.GetFlexMesh();
 
 	public void Bind(IMaterial? material) {

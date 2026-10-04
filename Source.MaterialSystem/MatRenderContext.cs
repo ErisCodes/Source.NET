@@ -255,6 +255,18 @@ public class MatRenderContext : IMatRenderContextInternal
 
 	public IMesh GetFlexMesh() => shaderAPI.GetFlexMesh();
 
+	public IMesh GetDynamicMeshEx(VertexFormat vertexFormat, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) {
+		if (autoBind != null)
+			Bind(autoBind, null);
+
+		int nCurrentBoneCount = shaderAPI.GetCurrentNumBones();
+		Assert(nCurrentBoneCount <= 4);
+		if (nCurrentBoneCount > 1)
+			--nCurrentBoneCount;
+
+		return shaderAPI.GetDynamicMeshEx(GetCurrentMaterialInternal()!, vertexFormat, nCurrentBoneCount, buffered, vertexOverride, indexOverride);
+	}
+
 	public IMesh GetDynamicMesh(bool buffered, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) {
 		if (autoBind != null) {
 			Bind(autoBind, null);

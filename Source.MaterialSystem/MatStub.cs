@@ -394,6 +394,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public bool EnableClipping(bool enable) => true;
 	public int GetDisplayAdapterCount() => 0;
 	public IMesh GetDynamicMesh(bool buffered, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => GetDummyMesh();
+	public IMesh GetDynamicMeshEx(VertexFormat vertexFormat, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => GetDummyMesh();
 	public IMesh GetFlexMesh() => GetDummyMesh();
 	public void BeginBatch(IMesh indices) { }
 	public void BindBatch(IMesh vertices, IMaterial? autoBind = null) { }
