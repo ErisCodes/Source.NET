@@ -1,9 +1,59 @@
+using Source.Common.GarrysMod.Lua;
 using Source.GUI.Controls;
 
 namespace Game.Client.GarrysMod;
 
-public static class LuaVGUI
+public static partial class LuaVGUI
 {
+	[LuaClass(typeof(Panel), NullError = "Tried to use a NULL Panel!")]
+	public static readonly LuaClass PanelClass = new("Panel", LuaType.Panel, null, null);
+
+	[LuaLibrary]
+	static readonly LuaLibrary LL_Factory_vgui = new("vgui");
+
+	// todo: GetAll
+	// todo: CursorVisible
+	// todo: IsHoveringWorld
+	// todo: GetWorldPanel
+	// todo: FocusedHasParent
+	// todo: GetKeyboardFocus
+	// todo: GetHoveredPanel
+
+	public static ILuaObject? GetLuaTable(Panel panel) {
+		ILuaObject? table = panel.LuaTable;
+		if (table == null && g_Lua != null) {
+			if (panel.LuaObject != null && panel.LuaObject.GetType() != LuaType.Panel) {
+				panel.LuaObject.UnReference();
+				panel.LuaObject = null;
+			}
+
+			LuaObject newTable = new();
+			newTable.Set(g_Lua.GetNewTable());
+			panel.LuaTable = newTable;
+			Push_Panel(panel);
+			panel.LuaTable.SetMember("Panel", g_Lua.GetObject(-1));
+			return panel.LuaTable;
+		}
+		return table;
+	}
+
+	public static void Push_Panel(Panel? panel) {
+		if (panel != null)
+			panel.PushLua(g_Lua!, PanelClass.Type);
+		else
+			g_Lua!.PushNil();
+	}
+
+	public static Panel? Get_Panel(int stackPos) {
+		return (Panel?)PanelClass.Get(stackPos);
+	}
+
+	public static bool IsValidPanel(Panel? panel) {
+		if (panel != null && panel != GModBase.GetGModBasePanel(true) /* && panel != g_HudGMod */ && panel != GModBase.GetGModParentToHUDPanel())
+			return panel.LuaPanel && !panel.IsMarkedForDeletion();
+		return true;
+	}
+
 	public static Panel? CreateControl(ReadOnlySpan<char> className) {
 		if (stricmp(className, "Awesomium") == 0 || stricmp(className, "Chromium") == 0)
 			className = "HTML";
@@ -54,31 +104,41 @@ public static class LuaVGUI
 			return null; // AvatarImage
 
 		if (stricmp(className, "HTML") == 0)
-			return null; // GarrysMod::HtmlPanel
+			return new HtmlPanel(null, "HtmlPanel");
 
 		return null;
 	}
 
-	public static Panel? Create(ReadOnlySpan<char> className, Panel? parent, ReadOnlySpan<char> name) {
+	[LuaFunction]
+	static int Create(ILuaInterface lua) {
+		string className = lua.CheckString(1);
 		Panel? panel = CreateControl(className);
 		if (panel == null) {
-			// lua error "vgui.Create failed to create the VGUI component (%s)"
-			return null;
+			lua.ErrorFromLua($"vgui.Create failed to create the VGUI component ({className})");
+			return 0;
 		}
 
 		panel.LuaPanel = true;
 		panel.SetAutoDelete(true);
 
-		if (parent != null)
-			panel.SetParent(parent);
-		else
+		if (lua.GetType(2) == LuaType.Panel) {
+			Panel? parent = Get_Panel(2);
+			if (IsValidPanel(parent))
+				panel.SetParent(parent);
+		}
+		else {
+			if (lua.GetType(2) != LuaType.Nil)
+				lua.ErrorFromLua($"bad argument #2 to 'Create' (Panel expected, got {lua.GetActualTypeName(2)})");
 			panel.SetParent(GModBase.GetGModBasePanel(true));
+		}
 
-		if (!name.IsEmpty)
-			panel.SetName(name);
+		if (lua.GetType(3) == LuaType.String)
+			panel.SetName(lua.CheckString(3));
+		else if (lua.GetType(3) != LuaType.Nil)
+			lua.ErrorFromLua($"bad argument #3 to 'Create' (string expected, got {lua.GetActualTypeName(3)})");
 
-		// todo: push lua panel object
-		panel.InvalidateLayout();
-		return panel;
+		Push_Panel(panel);
+		panel.InvalidateLayout(false, false);
+		return 1;
 	}
 }
