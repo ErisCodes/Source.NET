@@ -83,4 +83,7 @@ public class BaseFlex : BaseAnimatingOverlay {
 
 		return 0;
 	}
+
+	public virtual void ProcessSceneEvents() => throw new NotImplementedException();
+	public bool HasSceneEvents() => throw new NotImplementedException();
 }
