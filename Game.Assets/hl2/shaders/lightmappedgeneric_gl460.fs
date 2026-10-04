@@ -506,6 +506,18 @@ void main()
     alpha = fogFactor;
 #endif
 
+    if(isAlphaTesting){
+        switch(alphaTestFunc){
+            case 0: discard; break;
+            case 1: if(alpha >= alphaTestRef){ discard; } break;
+            case 2: if(alpha != alphaTestRef){ discard; } break;
+            case 3: if(alpha > alphaTestRef){ discard; } break;
+            case 4: if(alpha <= alphaTestRef){ discard; } break;
+            case 5: if(alpha == alphaTestRef){ discard; } break;
+            case 6: if(alpha < alphaTestRef){ discard; } break;
+        }
+    }
+
     fragColor = FinalOutput(vec4(result.rgb, alpha), fogFactor, PIXELFOGTYPE, TONEMAP_SCALE_LINEAR, bWriteDepthToAlpha, vs_WorldPos_ProjPosZ.w);
 
 #endif
