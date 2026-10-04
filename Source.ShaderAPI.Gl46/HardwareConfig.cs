@@ -299,7 +299,7 @@ public class HardwareConfig : IMaterialSystemHardwareConfig
 	}
 
 	public bool SupportsStreamOffset() {
-		return false;
+		return true;
 	}
 
 	public bool SupportsVertexAndPixelShaders() {

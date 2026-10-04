@@ -1015,15 +1015,23 @@ public unsafe class StudioRender
 		// Needed when we switch back and forth between hardware + software lighting
 		// TODO ^^^^^^^^^^^^^^^^^^
 
-		// Build separate flex stream containing deltas, which will get copied into another vertex stream
-		// TODO ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+		bool useSOFlex = hardwareConfig.SupportsStreamOffset();
+		if ((pGroup.Flags & StudioMeshGroupFlags.IsDeltaFlexed) != 0 && pRC.Config.Flex) {
+			if (useSOFlex) {
+				R_StudioProcessFlexedMesh_StreamOffset(pmesh, lod);
+				R_StudioFlexMeshGroup(pGroup);
+			}
+		}
 
 		if (!colorMeshes.IsEmpty && (pGroup.ColorMeshID != -1))
 			numTrianglesRendered = R_StudioDrawGroupHWSkin(renderContext, pGroup, pGroup.Mesh, ref colorMeshes[pGroup.ColorMeshID]);
 		else
 			numTrianglesRendered = R_StudioDrawGroupHWSkin(renderContext, pGroup, pGroup.Mesh, ref Unsafe.NullRef<ColorMeshInfo>());
 
-		// TODO: Morph/flex
+		if ((pGroup.Flags & StudioMeshGroupFlags.IsDeltaFlexed) != 0 && pRC.Config.Flex) {
+			if (useSOFlex)
+				pGroup.Mesh!.DisableFlexMesh();
+		}
 
 		return numTrianglesRendered;
 	}
@@ -1263,6 +1271,119 @@ public unsafe class StudioRender
 				meshBuilder.UserData(in tangentS);
 			meshBuilder.AdvanceVertex();
 		}
+	}
+
+	private void ComputeFlexedVertex_StreamOffset(MStudioFlex flex, int vertCount, float w1, float w2, float w3, float w4) {
+		float w12 = w1 - w2;
+		float w34 = w3 - w4;
+
+		bool wrinkle = flex.VertAnimType != StudioVertAnimType.Normal;
+		for (int j = 0; j < flex.NumVerts; j++) {
+			int n;
+			float s, b;
+			Vector4 position, normal;
+			if (wrinkle) {
+				ref MStudioVertAnimWrinkle anim = ref flex.VertAnimWrinkle(j);
+				n = anim.VertAnim.Index;
+				s = anim.VertAnim.Speed;
+				b = anim.VertAnim.Side;
+				position = anim.GetDeltaFixed4DAligned();
+				normal = anim.GetNDeltaFixed4DAligned();
+			}
+			else {
+				ref MStudioVertAnim anim = ref flex.VertAnim(j);
+				n = anim.Index;
+				s = anim.Speed;
+				b = anim.Side;
+				position = anim.GetDeltaFixed4DAligned();
+				normal = anim.GetNDeltaFixed4DAligned();
+			}
+
+			if (n >= vertCount)
+				continue;
+
+			ref CachedPosNorm flexedVertex = ref Unsafe.NullRef<CachedPosNorm>();
+			if (!VertexCache.IsThinVertexFlexed(n)) {
+				flexedVertex = ref VertexCache.CreateThinFlexVertex(n);
+
+				Assert(!Unsafe.IsNullRef(ref flexedVertex));
+				if (Unsafe.IsNullRef(ref flexedVertex))
+					continue;
+
+				flexedVertex.Position = Vector4.Zero;
+				flexedVertex.Normal = Vector4.Zero;
+			}
+			else
+				flexedVertex = ref VertexCache.GetThinFlexVertex(n);
+
+			s *= 1.0f / 255.0f;
+			b *= 1.0f / 255.0f;
+
+			float wa = w2 + w12 * s;
+			float wb = w4 + w34 * s;
+			float w = wa + (wb - wa) * b;
+			flexedVertex.Position += position * w;
+			flexedVertex.Normal += normal * w;
+		}
+	}
+
+	private void R_StudioProcessFlexedMesh_StreamOffset(MStudioMesh mesh, int lod) {
+		if (VertexCache.IsFlexComputationDone())
+			return;
+
+		int vertCount = mesh.VertexData.NumLODVertexes[lod];
+		VertexCache.SetupComputation(mesh, true);
+
+		for (int i = 0; i < mesh.NumFlexes; i++) {
+			MStudioFlex flex = mesh.Flex(i);
+
+			float w1 = RampFlexWeight(flex, pFlexWeights[flex.FlexDesc]);
+			float w2 = RampFlexWeight(flex, pFlexDelayedWeights[flex.FlexDesc]);
+
+			float w3, w4;
+			if (flex.FlexPair != 0) {
+				w3 = RampFlexWeight(flex, pFlexWeights[flex.FlexPair]);
+				w4 = RampFlexWeight(flex, pFlexDelayedWeights[flex.FlexPair]);
+			}
+			else {
+				w3 = w1;
+				w4 = w2;
+			}
+
+			if (w1 > -0.001 && w1 < 0.001 && w2 > -0.001 && w2 < 0.001) {
+				if (w3 > -0.001 && w3 < 0.001 && w4 > -0.001 && w4 < 0.001)
+					continue;
+			}
+
+			ComputeFlexedVertex_StreamOffset(flex, vertCount, w1, w2, w3, w4);
+		}
+	}
+
+	private void R_StudioFlexMeshGroup(StudioMeshGroup pGroup) {
+		MeshBuilder meshBuilder = new();
+		using MatRenderContextPtr renderContext = new(materialSystem);
+		IMesh mesh = renderContext.GetFlexMesh();
+		meshBuilder.Begin(mesh, MaterialPrimitiveType.Heterogenous, pGroup.NumVertices, 0, out int vertexOffsetInBytes);
+
+		for (int j = 0; j < pGroup.NumVertices; j++) {
+			int n = pGroup.GroupIndexToMeshIndex![j];
+			if (VertexCache.IsThinVertexFlexed(n)) {
+				ref CachedPosNorm flexedVertex = ref VertexCache.GetThinFlexVertex(n);
+				meshBuilder.Position3fv(in flexedVertex.Position.AsVector3D());
+				meshBuilder.NormalDelta3fv(in flexedVertex.Normal.AsVector3D());
+				meshBuilder.Wrinkle1f(flexedVertex.Position.W);
+			}
+			else {
+				meshBuilder.Position3f(0.0f, 0.0f, 0.0f);
+				meshBuilder.NormalDelta3f(0.0f, 0.0f, 0.0f);
+				meshBuilder.Wrinkle1f(0.0f);
+			}
+			meshBuilder.AdvanceVertex();
+		}
+
+		meshBuilder.End(false, false);
+
+		pGroup.Mesh!.SetFlexMesh(mesh, vertexOffsetInBytes);
 	}
 
 	private void R_StudioProcessFlexedMesh(MStudioMesh mesh, ref MeshBuilder meshBuilder, int numVertices, ushort[] groupToMesh) {

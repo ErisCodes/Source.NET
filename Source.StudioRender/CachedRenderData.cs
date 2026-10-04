@@ -39,11 +39,15 @@ public class CachedRenderData
 	int FlexVertexCount;
 	readonly CachedPosNormTan[] FlexVerts = new CachedPosNormTan[Studio.MAXSTUDIOFLEXVERTS + 1];
 
+	int ThinFlexVertexCount;
+	readonly CachedPosNorm[] ThinFlexVerts = new CachedPosNorm[Studio.MAXSTUDIOFLEXVERTS + 1];
+
 	int WorldVertexCount;
 	readonly CachedPosNorm[] WorldVerts = new CachedPosNorm[Studio.MAXSTUDIOVERTS + 1];
 
 	int IndexCount;
 	readonly CacheIndex[] FlexIndex = new CacheIndex[Studio.MAXSTUDIOVERTS + 1];
+	readonly CacheIndex[] ThinFlexIndex = new CacheIndex[Studio.MAXSTUDIOVERTS + 1];
 	readonly CacheIndex[] WorldIndex = new CacheIndex[Studio.MAXSTUDIOVERTS + 1];
 
 	readonly List<List<List<CacheDict>>> CacheDictionary = [];
@@ -55,14 +59,17 @@ public class CachedRenderData
 	int Mesh;
 
 	int FirstFlexIndex = -1;
+	int FirstThinFlexIndex = -1;
 	int FirstWorldIndex = -1;
 
 	public void StartModel() {
 		++CurrentTag;
 		IndexCount = 0;
 		FlexVertexCount = 0;
+		ThinFlexVertexCount = 0;
 		WorldVertexCount = 0;
 		FirstFlexIndex = -1;
+		FirstThinFlexIndex = -1;
 		FirstWorldIndex = -1;
 	}
 
@@ -71,6 +78,7 @@ public class CachedRenderData
 		CacheDictionary.EnsureCount(Body + 1);
 		Model = Mesh = -1;
 		FirstFlexIndex = -1;
+		FirstThinFlexIndex = -1;
 		FirstWorldIndex = -1;
 	}
 
@@ -80,6 +88,7 @@ public class CachedRenderData
 		CacheDictionary[Body].EnsureCount(Model + 1);
 		Mesh = -1;
 		FirstFlexIndex = -1;
+		FirstThinFlexIndex = -1;
 		FirstWorldIndex = -1;
 	}
 
@@ -93,10 +102,12 @@ public class CachedRenderData
 
 		if (dict.Tag == CurrentTag) {
 			FirstFlexIndex = dict.FirstIndex;
+			FirstThinFlexIndex = dict.FirstIndex;
 			FirstWorldIndex = dict.FirstIndex;
 		}
 		else {
 			FirstFlexIndex = -1;
+			FirstThinFlexIndex = -1;
 			FirstWorldIndex = -1;
 		}
 	}
@@ -123,10 +134,13 @@ public class CachedRenderData
 			dict.FlexTag = CurrentTag;
 
 		FirstFlexIndex = dict.FirstIndex;
+		FirstThinFlexIndex = dict.FirstIndex;
 		FirstWorldIndex = dict.FirstIndex;
 	}
 
 	public bool IsVertexFlexed(int vertex) => FirstFlexIndex != -1 && FlexIndex[FirstFlexIndex + vertex].Tag == CurrentTag;
+
+	public bool IsThinVertexFlexed(int vertex) => FirstThinFlexIndex != -1 && ThinFlexIndex[FirstThinFlexIndex + vertex].Tag == CurrentTag;
 
 	public ref CachedPosNormTan GetFlexVertex(int vertex) {
 		Assert(FirstFlexIndex != -1);
@@ -148,6 +162,28 @@ public class CachedRenderData
 		++FlexVertexCount;
 
 		return ref GetFlexVertex(vertex);
+	}
+
+	public ref CachedPosNorm GetThinFlexVertex(int vertex) {
+		Assert(FirstThinFlexIndex != -1);
+		Assert(ThinFlexIndex[FirstThinFlexIndex + vertex].Tag == CurrentTag);
+		return ref ThinFlexVerts[ThinFlexIndex[FirstThinFlexIndex + vertex].VertexIndex];
+	}
+
+	public ref CachedPosNorm CreateThinFlexVertex(int vertex) {
+		Assert(FirstThinFlexIndex != -1);
+		Assert(ThinFlexIndex[FirstThinFlexIndex + vertex].Tag != CurrentTag);
+
+		Assert(ThinFlexVertexCount < Studio.MAXSTUDIOFLEXVERTS);
+		if (ThinFlexVertexCount >= Studio.MAXSTUDIOFLEXVERTS)
+			return ref Unsafe.NullRef<CachedPosNorm>();
+
+		ThinFlexIndex[FirstThinFlexIndex + vertex].Tag = CurrentTag;
+		ThinFlexIndex[FirstThinFlexIndex + vertex].VertexIndex = (ushort)ThinFlexVertexCount;
+
+		++ThinFlexVertexCount;
+
+		return ref GetThinFlexVertex(vertex);
 	}
 
 	public void RenormalizeFlexVertices(bool hasTangentData) {
