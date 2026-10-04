@@ -73,7 +73,6 @@ public unsafe class StudioRender
 
 	internal void DrawModel(ref DrawModelInfo info, StudioRenderCtx RC, Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights, StudioRenderFlags flags) {
 		// TODO: a better way to do this that doesnt require unsafe
-		// TODO: flex
 		nBoneToWorld = boneToWorld.Length;
 		fixed (Matrix3x4* pBtW = boneToWorld)
 		fixed (float* pFW = flexWeights, pFDW = flexDelayedWeights) {
@@ -84,7 +83,6 @@ public unsafe class StudioRender
 
 			using MatRenderContextPtr pRenderContext = new(materialSystem);
 
-			// TODO: Disable flex if we're told to...
 			bool flexConfig = pRC.Config.Flex;
 			if ((flags & StudioRenderFlags.DrawNoFlexes) != 0)
 				pRC.Config.Flex = false;
@@ -418,7 +416,6 @@ public unsafe class StudioRender
 
 			ComputeEyelidStateFACS(SubModel!);
 
-			// TODO: Flex controller stuff
 			VertexCache.SetBodyPart(i);
 			VertexCache.SetModel(pBodyPartInfo[i].SubModelIndex);
 

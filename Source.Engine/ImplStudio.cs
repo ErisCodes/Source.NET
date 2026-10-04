@@ -590,7 +590,6 @@ public class ModelRender : IModelRender
 		//  if (textMode)
 		//  	return;
 
-		// TODO: Flexes
 		Span<float> flexWeights = default;
 		Span<float> flexDelayedWeights = default;
 		int flexCount = state.StudioHdr!.NumFlexDesc;

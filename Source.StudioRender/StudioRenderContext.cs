@@ -664,7 +664,6 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 		if (info.StudioHdr == null || info.HardwareData == null || info.HardwareData.NumLODs == 0 || info.HardwareData.LODs == null)
 			return;
 
-		// TODO: Flex weights
 		GenerateRandomFlexWeights(info.StudioHdr.NumFlexDesc, flexWeights, flexDelayedWeights);
 
 		using MatRenderContextPtr renderContext = new(materialSystem);
