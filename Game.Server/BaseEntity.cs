@@ -2227,7 +2227,7 @@ public partial class BaseEntity : IServerEntity
 	public static readonly DataMap DataDesc = new(typeof(BaseEntity), [
 		DEFINE.KEYFIELD(nameof(Classname), FieldType.String, "classname"),
 		DEFINE.GLOBAL_KEYFIELD(nameof(GlobalName), FieldType.String, "globalname"),
-		DEFINE.KEYFIELD(nameof(Parent), FieldType.String, "parentname"),
+		DEFINE.KEYFIELD(nameof(ParentName), FieldType.String, "parentname"),
 		DEFINE.KEYFIELD(nameof(HammerID), FieldType.Integer, "hammerid"),
 		DEFINE.KEYFIELD(nameof(Speed), FieldType.Float, "speed"),
 		DEFINE.KEYFIELD(nameof(RenderFX), FieldType.Character, "renderfx"),
