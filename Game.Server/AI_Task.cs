@@ -156,6 +156,93 @@ public static class AI_TaskGlobals
 	public const int TASK_GET_PATH_TO_INTERACTION_PARTNER = 148;
 	public const int TASK_PRE_SCRIPT = 149;
 	public const int LAST_SHARED_TASK = 150;
+
+	static readonly string[] g_ppszTaskFailureText = [
+		"No failure",
+		"No Target",
+		"Weapon owned by someone else",
+		"Weapon/Item doesn't exist",
+		"No hint node",
+		"Schedule not found",
+		"Don't have an enemy",
+		"Found no backaway node",
+		"Couldn't find cover",
+		"Couldn't find flank",
+		"Couldn't find shoot position",
+		"Don't have a route",
+		"Don't have a route: no goal",
+		"Don't have a route: blocked",
+		"Don't have a route: illegal move",
+		"Couldn't walk to target",
+		"Node already locked",
+		"No sound present",
+		"No scent present",
+		"Bad activity",
+		"No goal entity",
+		"No player",
+		"Can't reach any nodes",
+		"No AI Network to Use",
+		"Bad position to Target",
+		"Route Destination No Longer Valid",
+		"Stuck on top of something",
+		"Item has been taken",
+	];
+
+	static readonly List<string> GeneralFailTexts = [];
+
+	public static bool IsPathTaskFailure(AI_TaskFailureCode code) => code >= AI_TaskFailureCode.NoRoute && code <= AI_TaskFailureCode.NoRouteIllegal;
+
+	public static string TaskFailureToString(AI_TaskFailureCode code) {
+		string result;
+		if (code < 0 || code >= AI_TaskFailureCode.NumFailCodes)
+			result = GeneralFailTexts[code - AI_TaskFailureCode.NumFailCodes];
+		else
+			result = g_ppszTaskFailureText[(int)code];
+		return result;
+	}
+
+	public static AI_TaskFailureCode MakeFailCode(string generalError) {
+		int index = GeneralFailTexts.IndexOf(generalError);
+		if (index == -1) {
+			index = GeneralFailTexts.Count;
+			GeneralFailTexts.Add(generalError);
+		}
+		return AI_TaskFailureCode.NumFailCodes + index;
+	}
+}
+
+public enum AI_TaskFailureCode
+{
+	NoTaskFailure,
+	NoTarget,
+	WeaponOwned,
+	ItemNoFind,
+	NoHintNode,
+	ScheduleNotFound,
+	NoEnemy,
+	NoBackawayNode,
+	NoCover,
+	NoFlank,
+	NoShoot,
+	NoRoute,
+	NoRouteGoal,
+	NoRouteBlocked,
+	NoRouteIllegal,
+	NoWalk,
+	AlreadyLocked,
+	NoSound,
+	NoScent,
+	BadActivity,
+	NoGoal,
+	NoPlayer,
+	NoReachableNode,
+	NoAINetwork,
+	BadPosition,
+	BadPathGoal,
+	StuckOnTop,
+	ItemTaken,
+
+	NumFailCodes,
 }
 
 public enum TaskStatus

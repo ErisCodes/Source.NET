@@ -870,6 +870,10 @@ public partial class BaseEntity : IServerEntity
 
 	public virtual Mask PhysicsSolidMaskForEntity() => Mask.Solid;
 
+	public BaseEntity? Link;
+
+	public virtual bool CanBeSeenBy(AI_BaseNPC npc) => true;
+
 	public bool IsViewable() {
 		if (IsEffectActive(EntityEffects.NoDraw))
 			return false;
@@ -1412,7 +1416,36 @@ public partial class BaseEntity : IServerEntity
 
 		return physicsObject;
 	}
-	public int VPhysicsGetObjectList(Span<IPhysicsObject> list) => throw new NotImplementedException();
+	public int VPhysicsGetObjectList(Span<IPhysicsObject> list) {
+		IPhysicsObject? phys = VPhysicsGetObject();
+		if (phys != null) {
+			Assert((phys.GetGameFlags() & PhysicsFlags.MultiObjectEntity) == 0);
+			if (list.Length > 0) {
+				list[0] = phys;
+				return 1;
+			}
+		}
+		return 0;
+	}
+
+	public class TimedOverlay
+	{
+		public string Msg = "";
+		public TimeUnit_t MsgEndTime;
+		public TimeUnit_t MsgStartTime;
+		public TimedOverlay? NextTimedOverlay;
+	}
+
+	public TimedOverlay? TimedOverlayList;
+
+	public void AddTimedOverlay(string msg, int endTime) {
+		TimedOverlay newTO = new();
+		newTO.Msg = msg;
+		newTO.MsgEndTime = gpGlobals.CurTime + endTime;
+		newTO.MsgStartTime = gpGlobals.CurTime;
+		newTO.NextTimedOverlay = TimedOverlayList;
+		TimedOverlayList = newTO;
+	}
 
 	public bool IsFloating() {
 		if (!IsEFlagSet(EFL.TouchingFluid))
@@ -2097,6 +2130,8 @@ public partial class BaseEntity : IServerEntity
 		else
 			AddEFlags(EFL.DontBlockLOS);
 	}
+
+	public bool BlocksLOS() => !IsEFlagSet(EFL.DontBlockLOS);
 
 	public Vector3 AbsVelocity;
 	public QAngle AngVelocity;
@@ -2994,6 +3029,17 @@ public partial class BaseEntity : IServerEntity
 	public bool IsWorld() => EntIndex() == 0;
 
 	public virtual bool FVisible(BaseEntity entity) => throw new NotImplementedException();
+
+	public virtual void GetVectors(out Vector3 forward, out Vector3 right, out Vector3 up) {
+		ref readonly Matrix3x4 entityToWorld = ref EntityToWorldTransform();
+
+		MathLib.MatrixGetColumn(entityToWorld, 0, out forward);
+
+		MathLib.MatrixGetColumn(entityToWorld, 1, out right);
+		right *= -1.0f;
+
+		MathLib.MatrixGetColumn(entityToWorld, 2, out up);
+	}
 
 	public TimeUnit_t NavIgnoreUntilTime;
 

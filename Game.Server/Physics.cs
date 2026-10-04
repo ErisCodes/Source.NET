@@ -32,6 +32,17 @@ public static class PhysicsHookGlobals {
 		SetPhysicsGameSystem(g_PhysicsHook);
 	}
 
+	public static float PhysGetEntityMass(BaseEntity entity) {
+		IPhysicsObject[] list = System.Buffers.ArrayPool<IPhysicsObject>.Shared.Rent(VPHYSICS_MAX_OBJECT_LIST_COUNT);
+		int physCount = entity.VPhysicsGetObjectList(list.AsSpan(0, VPHYSICS_MAX_OBJECT_LIST_COUNT));
+		float otherMass = 0;
+		for (int i = 0; i < physCount; i++)
+			otherMass += list[i].GetMass();
+
+		System.Buffers.ArrayPool<IPhysicsObject>.Shared.Return(list);
+		return otherMass;
+	}
+
 	public static bool PhysIsInCallback(){
 		return (physenv != null && physenv.IsInSimulation()) || g_Collisions.IsInCallback();
 	}
