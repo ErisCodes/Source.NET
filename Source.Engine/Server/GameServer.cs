@@ -791,7 +791,7 @@ public class GameServer : BaseServer
 			GameClient client = Client(index - 1)!;
 
 			// client must be fully connect to hear sounds
-			if (client.IsActive())
+			if (!client.IsActive())
 				continue;
 
 			client.SendSound(sound, filter.IsReliable());
