@@ -1,7 +1,10 @@
-﻿using Game.Shared;
+﻿global using static Game.Server.BaseFlexGlobals;
+
+using Game.Shared;
 
 using Source;
 using Source.Common;
+using Source.Common.Commands;
 
 using System.Numerics;
 
@@ -86,4 +89,54 @@ public class BaseFlex : BaseAnimatingOverlay {
 
 	public virtual void ProcessSceneEvents() => throw new NotImplementedException();
 	public bool HasSceneEvents() => throw new NotImplementedException();
+}
+
+public static class BaseFlexGlobals
+{
+	public static readonly ConVar flex_expression = new("flex_expression", "-");
+	public static readonly ConVar flex_talk = new("flex_talk", "0");
+
+	public static readonly string?[] predef_flexcontroller_names = [
+		"right_lid_raiser",
+		"left_lid_raiser",
+		"right_lid_tightener",
+		"left_lid_tightener",
+		"right_lid_droop",
+		"left_lid_droop",
+		"right_inner_raiser",
+		"left_inner_raiser",
+		"right_outer_raiser",
+		"left_outer_raiser",
+		"right_lowerer",
+		"left_lowerer",
+		"right_cheek_raiser",
+		"left_cheek_raiser",
+		"wrinkler",
+		"right_upper_raiser",
+		"left_upper_raiser",
+		"right_corner_puller",
+		"left_corner_puller",
+		"corner_depressor",
+		"chin_raiser",
+		"right_puckerer",
+		"left_puckerer",
+		"right_funneler",
+		"left_funneler",
+		"tightener",
+		"jaw_clencher",
+		"jaw_drop",
+		"right_mouth_drop",
+		"left_mouth_drop",
+		null
+	];
+
+	public static readonly float[,] predef_flexcontroller_values = {
+		{ 0.700f, 0.560f, 0.650f, 0.650f, 0.650f, 0.585f, 0.000f, 0.000f, 0.400f, 0.040f, 0.000f, 0.000f, 0.450f, 0.450f, 0.000f, 0.000f, 0.000f, 0.750f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.150f, 1.000f, 0.000f, 0.000f, 0.000f },
+		{ 0.450f, 0.450f, 0.450f, 0.450f, 0.000f, 0.000f, 0.000f, 0.000f, 0.300f, 0.300f, 0.000f, 0.000f, 0.250f, 0.250f, 0.000f, 0.000f, 0.000f, 0.750f, 0.750f, 0.000f, 0.000f, 0.000f, 0.000f, 0.400f, 0.400f, 0.000f, 1.000f, 0.000f, 0.050f, 0.050f },
+		{ 0.200f, 0.200f, 0.500f, 0.500f, 0.150f, 0.150f, 0.100f, 0.100f, 0.150f, 0.150f, 0.000f, 0.000f, 0.700f, 0.700f, 0.000f, 0.000f, 0.000f, 0.750f, 0.750f, 0.000f, 0.200f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.850f, 0.000f, 0.000f, 0.000f },
+		{ 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.300f, 0.300f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.100f, 0.000f, 0.000f, 0.000f, 0.000f, 0.700f, 0.300f, 0.000f, 0.000f, 0.200f, 0.200f, 0.000f, 0.000f, 0.300f, 0.000f, 0.000f },
+		{ 0.450f, 0.450f, 0.000f, 0.000f, 0.450f, 0.450f, 0.000f, 0.000f, 0.000f, 0.000f, 0.450f, 0.450f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.300f, 0.000f, 0.000f, 0.000f, 0.000f },
+		{ 0.000f, 0.000f, 0.350f, 0.350f, 0.150f, 0.150f, 0.300f, 0.300f, 0.450f, 0.450f, 0.000f, 0.000f, 0.200f, 0.200f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.200f, 0.200f, 0.000f, 0.000f, 0.300f, 0.000f, 0.000f, 0.000f, 0.000f },
+		{ 0.000f, 0.000f, 0.650f, 0.650f, 0.750f, 0.750f, 0.000f, 0.000f, 0.000f, 0.000f, 0.300f, 0.300f, 0.000f, 0.000f, 0.000f, 0.250f, 0.250f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f, 0.000f }
+	};
 }
