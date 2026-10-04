@@ -212,13 +212,13 @@ public class AI_Navigator : AI_Component, IAI_MovementSink
 	bool LocalSucceedOnWithinTolerance;
 	bool RememberStaleNodes;
 
-	readonly EHANDLE PeerWaitingOn = new();
+	EHANDLE PeerWaitingOn = new();
 	readonly SimTimer PeerWaitMoveTimer = new();
 	readonly SimTimer PeerWaitClearTimer = new();
 
 	readonly SimTimer NextSidestepTimer = new();
 
-	readonly EHANDLE BigStepGroundEnt = new();
+	EHANDLE BigStepGroundEnt = new();
 
 	Vector3 PosBeginFailedSteer;
 	float TimeBeginFailedSteer;

@@ -126,19 +126,19 @@ public readonly struct BoneCache
 	}
 
 	private Span<Matrix3x4> BoneArray() {
-		Span<byte> mem = backingMemory.AsSpan()[1..][MatrixOffset..];
+		Span<byte> mem = backingMemory.AsSpan()[BoneCache_SIZE..][MatrixOffset..];
 		int numMatrices = mem.Length / Unsafe.SizeOf<Matrix3x4>();
 		return mem.Cast<byte, Matrix3x4>()[..numMatrices];
 	}
 
 	private Span<ushort> StudioToCached() {
-		Span<byte> mem = backingMemory.AsSpan()[1..];
+		Span<byte> mem = backingMemory.AsSpan()[BoneCache_SIZE..];
 		int numPtrs = mem.Length / Unsafe.SizeOf<ushort>();
 		return mem.Cast<byte, ushort>()[..numPtrs];
 	}
 
 	private Span<ushort> CachedToStudio() {
-		Span<byte> mem = backingMemory.AsSpan()[1..][CachedToStudioOffset..];
+		Span<byte> mem = backingMemory.AsSpan()[BoneCache_SIZE..][CachedToStudioOffset..];
 		int numPtrs = mem.Length / Unsafe.SizeOf<ushort>();
 		return mem.Cast<byte, ushort>()[..numPtrs];
 	}

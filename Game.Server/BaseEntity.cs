@@ -694,7 +694,7 @@ public partial class BaseEntity : IServerEntity
 		BaseAnimating? animating = entity.GetBaseAnimating();
 
 		if (animating != null /*&& !animating.IsUsingClientSideAnimation()*/)
-			return data;
+			return instance;
 		else
 			return null;
 	}

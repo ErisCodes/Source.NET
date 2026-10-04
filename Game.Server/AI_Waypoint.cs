@@ -73,9 +73,9 @@ public class AI_Waypoint
 
 	public float PathDistGoal;
 
-	public readonly EHANDLE PathCorner = new();
+	public EHANDLE PathCorner = new();
 
-	public readonly EHANDLE Data = new();
+	public EHANDLE Data = new();
 
 	WaypointFlags WaypointFlags;
 	Navigation WPType;

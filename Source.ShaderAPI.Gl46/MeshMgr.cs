@@ -28,6 +28,9 @@ public class MeshMgr : IMeshMgr
 	public IMesh GetDynamicMesh(IMaterial? material, VertexFormat vertexFormat, int hwSkinBoneCount, bool buffered, IMesh? vertexOverride, IMesh? indexOverride) {
 		Assert(material == null || ((IMaterialInternal)material).IsRealTimeVersion());
 
+		if (vertexOverride != null || indexOverride != null)
+			buffered = false;
+
 		if (BufferedMode != buffered && BufferedMode) {
 			BufferedMesh.SetMesh(null);
 		}
@@ -44,7 +47,20 @@ public class MeshMgr : IMeshMgr
 		}
 
 		if (vertexOverride == null) {
-			VertexFormat fmt = matInternal.GetVertexFormat();
+			VertexFormat materialFormat = matInternal.GetVertexFormat();
+			VertexFormat fmt = (vertexFormat != 0) ? vertexFormat : materialFormat;
+			if (vertexFormat != 0) {
+				int vertexFormatBoneWeights = vertexFormat.GetBoneWeightsSize();
+				if (hwSkinBoneCount < vertexFormatBoneWeights)
+					hwSkinBoneCount = vertexFormatBoneWeights;
+			}
+
+			fmt &= ~(VertexFormat.BoneWeights1 | VertexFormat.BoneWeights2 | VertexFormat.BoneWeights3 | VertexFormat.BoneWeights4);
+			if (hwSkinBoneCount > 0) {
+				fmt |= VertexExts.GetBoneWeight(2);
+				fmt |= VertexFormat.BoneIndex;
+			}
+
 			mesh.SetVertexFormat(fmt);
 		}
 		else {
