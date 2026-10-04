@@ -34,7 +34,17 @@ public class RecipientFilter : IRecipientFilter
 		return Recipients[slot];
 	}
 
-	public void CopyFrom(scoped in RecipientFilter src) { }
+	public void CopyFrom(scoped in RecipientFilter src) {
+		Reliable = src.IsReliable();
+		InitMessage = src.IsInitMessage();
+
+		UsingPredictionRules = src.IsUsingPredictionRules();
+		IgnoringPredictionCull = src.IgnorePredictionCull();
+
+		int c = src.GetRecipientCount();
+		for (int i = 0; i < c; ++i)
+			Recipients.Add(src.GetRecipientIndex(i));
+	}
 	public void Reset() {
 		Reliable = false;
 		InitMessage = false;
@@ -117,7 +127,11 @@ public class RecipientFilter : IRecipientFilter
 			Recipients.Remove(index);
 		}
 	}
-	public void RemoveRecipientByPlayerIndex(int playerindex) { }
+	public void RemoveRecipientByPlayerIndex(int playerindex) {
+		Assert(playerindex >= 1 && playerindex <= Constants.ABSOLUTE_PLAYER_LIMIT);
+
+		Recipients.Remove(playerindex);
+	}
 	public void AddRecipientsByTeam(Team team) { }
 	public void RemoveRecipientsByTeam(Team team) { }
 	public void RemoveRecipientsNotOnTeam(Team team) { }
