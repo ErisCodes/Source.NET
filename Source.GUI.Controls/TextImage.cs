@@ -243,6 +243,7 @@ public class TextImage : Image
 				else
 					x = 0;
 				y += lineHeight;
+				continue;
 			}
 			else if (ch == '&') {
 				if (i + 1 < len && Text[(int)(i + 1)] == '&')

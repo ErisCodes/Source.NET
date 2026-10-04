@@ -14,6 +14,97 @@ public static partial class LuaMaterial
 	[LuaMethod]
 	static bool IMaterial__IsError(IMaterial material) => material.IsErrorMaterialInternal();
 
+	static readonly TextureReference ErrorTexture = new();
+
+	static ITexture? GetTextureValue(IMaterialVar var) {
+		if (!var.IsTexture()) {
+			if (!ErrorTexture.IsValid())
+				ErrorTexture.Init("error", "Other textures", true);
+			return ErrorTexture.Get();
+		}
+		return var.GetTextureValue();
+	}
+
+	[LuaMethod]
+	static int IMaterial__GetColor(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null)
+			lua.Error("Tried to use a NULL IMaterial!");
+
+		IMaterialVar var = material.FindVar("$basetexture", out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		ITexture? texture = GetTextureValue(var);
+		if (texture == null)
+			return 0;
+
+		Color color = default;
+		if (get.Resources() != null)
+			color = get.Resources()!.GetTextureColour(texture, (int)lua.GetNumber(2), (int)lua.GetNumber(3));
+		lua.PushColor(color);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int IMaterial__Width(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar("$basetexture", out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		ITexture? texture = GetTextureValue(var);
+		if (texture == null)
+			return 0;
+
+		lua.PushNumber(texture.GetActualWidth());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int IMaterial__Height(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar("$basetexture", out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		ITexture? texture = GetTextureValue(var);
+		if (texture == null)
+			return 0;
+
+		lua.PushNumber(texture.GetActualHeight());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int IMaterial__GetTexture(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null)
+			lua.Error("Tried to use a NULL IMaterial!");
+
+		IMaterialVar var = material.FindVar(lua.GetString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		ITexture? texture = var.GetTextureValue();
+		if (texture == null || texture.IsError())
+			return 0;
+
+		texture.IncrementReferenceCount();
+		LuaTexture.LC_ITexture.Push(texture);
+		return 1;
+	}
+
 	static bool IsAllowedMaterialPath(ReadOnlySpan<char> name) {
 		Span<char> buffer = stackalloc char[MAX_PATH];
 		strcpy(buffer, name);

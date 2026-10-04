@@ -473,6 +473,8 @@ public class Panel : IPanel
 	}
 
 #if GMOD_DLL
+	public virtual void SetText(ReadOnlySpan<char> text) { }
+
 	public void SetClipRect(int x0, int y0, int x1, int y1) {
 		ClipRectX = (short)x0;
 		ClipRectY = (short)y0;
@@ -1509,6 +1511,21 @@ public class Panel : IPanel
 		LuaObject.SetFromStack(-1);
 	}
 
+	protected bool PushLuaHook(LUA_POOLEDSTRING name) {
+		if (Lua == null || LuaTable == null || LuaTable.isNil() || IsMarkedForDeletion())
+			return false;
+
+		LuaTable.Push();
+		Lua.PushPooledString((int)name);
+		Lua.GetTable(-2);
+		Lua.Remove(-2);
+		if (Lua.GetType(-1) == LuaType.Function)
+			return true;
+
+		Lua.Pop(1);
+		return false;
+	}
+
 	bool CanCallLuaHook([NotNullWhen(true)] ILuaObject? hook) => Lua != null && LuaTable != null && !LuaTable.isNil() && !IsMarkedForDeletion() && hook != null && hook.isFunction();
 
 	public void ClearLuaReferences() {
@@ -1699,7 +1716,12 @@ public class Panel : IPanel
 		PerformDockLayout();
 
 		LayoutCount++;
-		// todo PerformLayout hook
+		if (PushLuaHook(LUA_POOLEDSTRING.PerformLayout)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber(GetWide());
+			Lua!.PushNumber(GetTall());
+			Lua!.CallInternalNoReturns(3);
+		}
 		LayoutCount--;
 
 		if ((Flags & PanelFlags.NeedsSchemeUpdate) == 0)
@@ -2158,13 +2180,16 @@ public class Panel : IPanel
 	public static ReadOnlySpan<char> GetDescription() => "string fieldName, int xpos, int ypos, int wide, int tall, bool visible, bool enabled, int tabPosition, corner pinCorner, autoresize autoResize, string tooltiptext".AsSpan();
 
 	public virtual void ApplySchemeSettings(IScheme scheme) {
-#if GMOD_DLL
-		// todo: ApplySchemeSettings hook
-#endif
 		SetFgColor(GetSchemeColor("Panel.FgColor", scheme));
 		SetBgColor(GetSchemeColor("Panel.BgColor", scheme));
 
 		Flags &= ~PanelFlags.NeedsSchemeUpdate;
+#if GMOD_DLL
+		if (PushLuaHook(LUA_POOLEDSTRING.ApplySchemeSettings)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
+#endif
 	}
 
 	public void Repaint() {

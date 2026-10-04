@@ -45,6 +45,60 @@ public static class String
 		}
 	}
 
+	public static class Decode
+	{
+		static int Base64Value(byte c) {
+			if (c >= 'A' && c <= 'Z') return c - 'A';
+			if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+			if (c >= '0' && c <= '9') return c - '0' + 52;
+			if (c == '+') return 62;
+			if (c == '/') return 63;
+			return 64;
+		}
+
+		static bool IsSpace(byte c) => c == ' ' || (c >= '\t' && c <= '\r');
+
+		static int NextValue(ReadOnlySpan<byte> input, ref int pos) {
+			while (pos < input.Length) {
+				byte c = input[pos++];
+				int value = Base64Value(c);
+				if (value != 64)
+					return value;
+				if (IsSpace(c))
+					continue;
+				if (c == '=')
+					return -1;
+				throw new FormatException("base64 decode error");
+			}
+			return -1;
+		}
+
+		public static void Base64(ReadOnlySpan<byte> input, List<byte> output) {
+			output.Clear();
+			try {
+				int pos = 0;
+				while (true) {
+					int a = NextValue(input, ref pos);
+					if (a < 0)
+						return;
+					int b = NextValue(input, ref pos);
+					if (b < 0)
+						throw new FormatException("base64 decode error");
+					output.Add((byte)((a << 2) | (b >> 4)));
+					int c = NextValue(input, ref pos);
+					if (c < 0)
+						return;
+					output.Add((byte)((b << 4) | (c >> 2)));
+					int d = NextValue(input, ref pos);
+					if (d < 0)
+						return;
+					output.Add((byte)((c << 6) | d));
+				}
+			}
+			catch (FormatException) { }
+		}
+	}
+
 	public static class Test
 	{
 		public static bool StartsWith(string str, string strFind) => str.StartsWith(strFind, StringComparison.Ordinal);

@@ -212,7 +212,24 @@ public class Resources : IResources
 	public int Init(IServiceProvider services) => throw new NotImplementedException();
 	public void Shutdown() => throw new NotImplementedException();
 	public IVideoHolly? CreateMovie() => throw new NotImplementedException();
-	public Color GetTextureColour(ITexture unk1, int unk2, int unk3) => throw new NotImplementedException();
+	public Color GetTextureColour(ITexture texture, int x, int y) {
+		foreach (Image image in Image.Images) {
+			if (image.Texture != texture)
+				continue;
+
+			if (!image.Load())
+				return new Color(255, 0, 255, 255);
+
+			FreeImage.GetPixelColor(image.Bitmap, (uint)x, (uint)y, out RGBQUAD pixel);
+			if (!image.Bitmap.IsNull) {
+				FreeImage.Unload(image.Bitmap);
+				image.Bitmap = FIBITMAP.Zero;
+			}
+			return new Color(pixel.rgbRed, pixel.rgbGreen, pixel.rgbBlue, pixel.rgbReserved);
+		}
+
+		return new Color(0, 0, 0, 255);
+	}
 	public void SavePNG(int unk1, int unk2, Span<byte> unk3, ReadOnlySpan<byte> unk4, int unk5, int unk6) => throw new NotImplementedException();
 	public void SaveJPG(int unk1, int unk2, int unk3, Span<byte> unk4, ReadOnlySpan<char> unk5, int unk6, int unk7, Stream unk8) => throw new NotImplementedException();
 	public bool ShouldRecordSound() => throw new NotImplementedException();

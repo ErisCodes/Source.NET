@@ -231,6 +231,16 @@ public static partial class LuaGlobalFunctions
 #endif
 	}
 
+#if CLIENT_DLL
+	[LuaGlobal]
+	static int DisableClipping(ILuaInterface lua) {
+		surface.GetClippingRect(out _, out _, out _, out _, out bool clippingDisabled);
+		surface.DisableClipping(lua.GetBool(1));
+		lua.PushBool(clippingDisabled);
+		return 1;
+	}
+#endif
+
 	public static void ReadStackFrom(ref LuaError error, ILuaInterface lua) {
 		error.Stack.Clear();
 		lua_Debug ar = default;

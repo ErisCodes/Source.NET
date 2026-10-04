@@ -2068,6 +2068,14 @@ public class MatSystemSurface : IMatSystemSurface
 		EnableScissor(!disable);
 	}
 
+	public void GetClippingRect(out int left, out int top, out int right, out int bottom, out bool clippingDisabled) {
+		left = scissorRect.Left;
+		top = scissorRect.Top;
+		right = scissorRect.Right;
+		bottom = scissorRect.Bottom;
+		clippingDisabled = !scissorRect.Scissor;
+	}
+
 	public void PushFullscreenViewport() {
 		using MatRenderContextPtr renderContext = new(materials);
 

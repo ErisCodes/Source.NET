@@ -52,7 +52,20 @@ public class TextEntry : Panel
 
 	public override void PaintBackground() {
 		base.PaintBackground();
+		PaintText();
+	}
 
+#if GMOD_DLL
+	public virtual void DrawText(Color textColor, Color highlightColor, Color cursorColor) {
+		SelectionColor = highlightColor;
+		FocusEdgeColor = highlightColor;
+		CursorColor = cursorColor;
+		SetFgColor(textColor);
+		PaintText();
+	}
+#endif
+
+	void PaintText() {
 		Color col = IsEnabled() ? GetBgColor() : DisabledBgColor;
 		Color saveBgColor = col;
 
@@ -2080,7 +2093,11 @@ public class TextEntry : Panel
 		return i;
 	}
 
+#if GMOD_DLL
+	public override void SetText(ReadOnlySpan<char> text) {
+#else
 	public void SetText(ReadOnlySpan<char> text) {
+#endif
 		if (text.IsEmpty)
 			text = [];
 

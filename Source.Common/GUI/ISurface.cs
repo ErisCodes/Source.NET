@@ -247,4 +247,5 @@ public interface IMatSystemSurface : ISurface
 	void GetFullscreenViewport(out int x, out int y, out int w, out int h);
 	void OnScreenSizeChanged(int oldWidth, int oldHeight);
 	void DisableClipping(bool disable);
+	void GetClippingRect(out int left, out int top, out int right, out int bottom, out bool clippingDisabled);
 }

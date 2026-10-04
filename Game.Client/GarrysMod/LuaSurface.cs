@@ -184,7 +184,16 @@ public static partial class LuaSurface
 	}
 	// todo: DisableClipping
 	// todo: DrawCircle
-	// todo: DrawTexturedRectUV
+	[LuaFunction]
+	static int DrawTexturedRectUV(ILuaInterface lua) {
+		int x = (int)lua.GetNumber(1);
+		int y = (int)lua.GetNumber(2);
+		int w = (int)lua.GetNumber(3);
+		int h = (int)lua.GetNumber(4);
+		// TODO: poster cmd split scaling (?)
+		surface.DrawTexturedSubRect(x, y, w + x, h + y, (float)lua.GetNumber(5), (float)lua.GetNumber(6), (float)lua.GetNumber(7), (float)lua.GetNumber(8));
+		return 0;
+	}
 
 	[LuaFunction]
 	static void SetAlphaMultiplier([LuaGet] float alpha) => surface.DrawSetAlphaMultiplier(alpha);

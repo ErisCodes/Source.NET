@@ -18,6 +18,15 @@ public static partial class LuaUtil
 	[LuaFunction]
 	static int NetworkStringToID(string name) => NetworkString.Get(name);
 
+	[LuaFunction]
+	static int Base64Decode(ILuaInterface lua) {
+		string str = lua.GetString(1) ?? "";
+		List<byte> decoded = [];
+		Bootil.String.Decode.Base64(System.Text.Encoding.Latin1.GetBytes(str), decoded);
+		lua.PushString(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(decoded));
+		return 1;
+	}
+
 #if GAME_DLL
 	[LuaFunction]
 	static int AddNetworkString(string name) => NetworkString.Add(name);

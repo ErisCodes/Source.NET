@@ -173,6 +173,40 @@ public static partial class LuaEntity
 	static int Entity____index(ILuaInterface lua) => EntityBaseIndex();
 
 	[LuaMethod]
+	static int Entity__EntIndex(ILuaInterface lua) {
+		LuaType type = lua.GetType(1);
+		if (type != LuaType.Entity && type != LuaType.Nil)
+			lua.TypeError("Entity", 1);
+
+		BaseEntity? ent = UserGet(1);
+		if (ent == null) {
+			lua.PushNumber(0);
+			return 1;
+		}
+
+		lua.PushNumber(ent.EntIndex());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Entity__GetTable(ILuaInterface lua) {
+		LuaType type = lua.GetType(1);
+		if (type != LuaType.Entity && type != LuaType.Nil)
+			lua.TypeError("Entity", 1);
+
+		BaseEntity? ent = UserGet(1);
+		if (ent == null)
+			return 0;
+
+		ILuaObject? table = ent.GetLuaTable();
+		if (table == null)
+			return 0;
+
+		table.Push();
+		return 1;
+	}
+
+	[LuaMethod]
 	static int Entity____newindex(ILuaInterface lua) {
 		BaseEntity? ent = Get_Entity(1, true);
 		if (ent == null)
