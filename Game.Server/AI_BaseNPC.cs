@@ -2684,6 +2684,12 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return g_AI_SchedulesManager.GetScheduleFromID(schedule);
 	}
 
+	public virtual int GetGlobalScheduleId(int localScheduleID) => AI_IdIsGlobal(localScheduleID) ? localScheduleID : GetClassScheduleIdSpace().ScheduleLocalToGlobal(localScheduleID);
+
+	public virtual ReadOnlySpan<char> GetSchedulingErrorName() => "CAI_BaseNPC";
+
+	public static bool LoadSchedules() => true;
+
 	public bool IsCurSchedule(int schedId, bool ideal = true) {
 		if (Schedule == null)
 			return schedId == SCHED_NONE || schedId == AI_RemapToGlobal(SCHED_NONE);
