@@ -76,7 +76,7 @@ public class SoundEmitterSystem : BaseGameSystem
 			(int)parms.Channel,
 			parms.SoundName,
 			parms.Volume,
-			(float)parms.SoundLevel,
+			parms.SoundLevel,
 			ep.Flags,
 			parms.Pitch,
 			ep.SpecialDSP,
