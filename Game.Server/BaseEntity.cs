@@ -583,6 +583,12 @@ public partial class BaseEntity : IServerEntity
 	public virtual bool IsPlayer() => false;
 	public virtual bool IsBaseCombatCharacter() => false;
 	public virtual bool IsNPC() => false;
+	public AI_BaseNPC? MyNPCPointer() {
+		if (IsNPC())
+			return (AI_BaseNPC)this;
+
+		return null;
+	}
 	public bool IsTransparent() => RenderMode != (byte)Source.RenderMode.Normal;
 	public virtual bool IsNextBot() => false;
 	public virtual bool IsBaseCombatWeapon() => false;
@@ -2841,7 +2847,7 @@ public partial class BaseEntity : IServerEntity
 			otherProp.GetCollisionOrigin(), otherProp.GetCollisionAngles(), otherProp.OBBMins(), otherProp.OBBMaxs());
 	}
 
-	public bool IsMoving() {
+	public virtual bool IsMoving() {
 		GetVelocity(out Vector3 velocity, out _);
 		return velocity != vec3_origin;
 	}
