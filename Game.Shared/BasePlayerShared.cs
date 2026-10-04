@@ -54,6 +54,35 @@ public static class BasePlayerGlobals
 
 	public const TimeUnit_t DEATH_ANIMATION_TIME = 3.0f;
 
+	public static void CopySoundNameWithModifierToken(Span<char> dest, ReadOnlySpan<char> source, int maxLenInChars, ReadOnlySpan<char> token) {
+		source = source.SliceNullTerminatedString();
+		token = token.SliceNullTerminatedString();
+
+		int nSource = 0;
+		int nDest = 0;
+		bool foundPeriod = false;
+
+		while (nSource < source.Length && nDest < maxLenInChars - 2) {
+			dest[nDest] = source[nSource];
+			nDest++;
+			nSource++;
+
+			if (!foundPeriod && source[nSource - 1] == '.') {
+				foundPeriod = true;
+
+				int nToken = 0;
+
+				while (nToken < token.Length && nDest < maxLenInChars - 2) {
+					dest[nDest] = token[nToken];
+					nDest++;
+					nToken++;
+				}
+			}
+		}
+
+		dest[nDest] = '\0';
+	}
+
 	public enum StepSoundTimes
 	{
 		Normal = 0,
