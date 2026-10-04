@@ -706,16 +706,6 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 	public override void AddLookTarget(BaseEntity? target, float importance, float duration, float ramp = 0.0f) => LookQueue.Add(target, importance, duration, ramp);
 	public override void AddLookTarget(in Vector3 position, float importance, float duration, float ramp = 0.0f) => LookQueue.Add(position, importance, duration, ramp);
 
-	public const int SCENE_AI_BLINK = 1;
-	public const int SCENE_AI_HOLSTER = 2;
-	public const int SCENE_AI_UNHOLSTER = 3;
-	public const int SCENE_AI_AIM = 4;
-	public const int SCENE_AI_RANDOMLOOK = 5;
-	public const int SCENE_AI_RANDOMFACEFLEX = 6;
-	public const int SCENE_AI_RANDOMHEADFLEX = 7;
-	public const int SCENE_AI_IGNORECOLLISION = 8;
-	public const int SCENE_AI_DISABLEAI = 9;
-
 	static readonly ConVar scene_showfaceto = new("scene_showfaceto", "0", FCvar.Archive, "When playing back, show the directions of faceto events.");
 
 	public override bool StartSceneEvent(SceneEventInfo info, ChoreoScene scene, ChoreoEvent ev, ChoreoActor actor, BaseEntity? target) {
@@ -729,43 +719,43 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 
 			case EventType.Generic: {
 					if (stricmp(ev.GetParameters(), "AI_BLINK") == 0) {
-						info.Type = SCENE_AI_BLINK;
+						info.Type = SceneAIEvent.Blink;
 						Blink();
 						TimeUnit_t duration = ev.GetEndTime() - scene.GetTime();
 						Blinktime = gpGlobals.CurTime + Math.Max(duration, RandomFloat(1.5f, 4.5f));
 					}
 					else if (stricmp(ev.GetParameters(), "AI_HOLSTER") == 0) {
-						info.Type = SCENE_AI_HOLSTER;
+						info.Type = SceneAIEvent.Holster;
 						info.Layer = HolsterWeapon();
 						return true;
 					}
 					else if (stricmp(ev.GetParameters(), "AI_UNHOLSTER") == 0) {
-						info.Type = SCENE_AI_UNHOLSTER;
+						info.Type = SceneAIEvent.Unholster;
 						info.Layer = UnholsterWeapon();
 						return true;
 					}
 					else if (stricmp(ev.GetParameters(), "AI_AIM") == 0) {
-						info.Type = SCENE_AI_AIM;
+						info.Type = SceneAIEvent.Aim;
 						info.Target.Set(target);
 					}
 					else if (stricmp(ev.GetParameters(), "AI_RANDOMLOOK") == 0) {
-						info.Type = SCENE_AI_RANDOMLOOK;
+						info.Type = SceneAIEvent.RandomLook;
 						info.Next = 0.0;
 					}
 					else if (stricmp(ev.GetParameters(), "AI_RANDOMFACEFLEX") == 0) {
-						info.Type = SCENE_AI_RANDOMFACEFLEX;
+						info.Type = SceneAIEvent.RandomFaceFlex;
 						info.Next = 0.0;
 						info.InitWeight(this);
 					}
 					else if (stricmp(ev.GetParameters(), "AI_RANDOMHEADFLEX") == 0) {
-						info.Type = SCENE_AI_RANDOMHEADFLEX;
+						info.Type = SceneAIEvent.RandomHeadFlex;
 						info.Next = 0.0;
 					}
 					else if (stricmp(ev.GetParameters(), "AI_IGNORECOLLISION") == 0) {
 						BaseEntity? namedTarget = FindNamedEntity(ev.GetParameters2());
 
 						if (namedTarget != null) {
-							info.Type = SCENE_AI_IGNORECOLLISION;
+							info.Type = SceneAIEvent.IgnoreCollision;
 							info.Target.Set(namedTarget);
 							TimeUnit_t remaining = ev.GetEndTime() - scene.GetTime();
 							NPCPhysics_CreateSolver(this, namedTarget, true, remaining);
@@ -778,7 +768,7 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 						}
 					}
 					else if (stricmp(ev.GetParameters(), "AI_DISABLEAI") == 0)
-						info.Type = SCENE_AI_DISABLEAI;
+						info.Type = SceneAIEvent.DisableAI;
 					else
 						return base.StartSceneEvent(info, scene, ev, actor, target);
 					return true;
@@ -893,16 +883,16 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 				}
 			case EventType.Generic: {
 					switch (info.Type) {
-						case SCENE_AI_BLINK: {
+						case SceneAIEvent.Blink: {
 								TimeUnit_t duration = ev.GetEndTime() - scene.GetTime();
 								Blinktime = Math.Max(Blinktime, gpGlobals.CurTime + duration);
 							}
 							return true;
-						case SCENE_AI_HOLSTER:
+						case SceneAIEvent.Holster:
 							return true;
-						case SCENE_AI_UNHOLSTER:
+						case SceneAIEvent.Unholster:
 							return true;
-						case SCENE_AI_AIM: {
+						case SceneAIEvent.Aim: {
 								if (info.Target.Get() != null) {
 									Vector3 aimTargetLoc = info.Target.Get()!.EyePosition();
 									Vector3 aimDir = aimTargetLoc - EyePosition();
@@ -912,7 +902,7 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 								}
 							}
 							return true;
-						case SCENE_AI_RANDOMLOOK: {
+						case SceneAIEvent.RandomLook: {
 								if (info.Next < gpGlobals.CurTime) {
 									info.Next = gpGlobals.CurTime + PickLookTarget(SyntheticLookQueue) - 0.4;
 									if (SyntheticLookQueue.Count > 0) {
@@ -924,11 +914,11 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 								}
 							}
 							return true;
-						case SCENE_AI_RANDOMFACEFLEX:
+						case SceneAIEvent.RandomFaceFlex:
 							return RandomFaceFlex(info, scene, ev);
-						case SCENE_AI_RANDOMHEADFLEX:
+						case SceneAIEvent.RandomHeadFlex:
 							return true;
-						case SCENE_AI_IGNORECOLLISION:
+						case SceneAIEvent.IgnoreCollision:
 							if (info.Target.Get() != null && info.Next < gpGlobals.CurTime) {
 								TimeUnit_t remaining = ev.GetEndTime() - scene.GetTime();
 								NPCPhysics_CreateSolver(this, info.Target.Get(), true, remaining);
@@ -936,7 +926,7 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 							}
 
 							return true;
-						case SCENE_AI_DISABLEAI:
+						case SceneAIEvent.DisableAI:
 							if (!(GetState() == NPCState.Script || IsCurSchedule(SCHED_SCENE_GENERIC)))
 								EnterSceneSequence(scene, ev);
 							return true;
@@ -1009,8 +999,8 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 		switch (ev.GetType()) {
 			case EventType.Generic: {
 					switch (info.Type) {
-						case SCENE_AI_HOLSTER:
-						case SCENE_AI_UNHOLSTER: {
+						case SceneAIEvent.Holster:
+						case SceneAIEvent.Unholster: {
 								if (info.Layer == -1)
 									return true;
 

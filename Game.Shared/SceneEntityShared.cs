@@ -11,6 +11,19 @@ using Source.Common.Commands;
 
 namespace Game.Shared;
 
+public enum SceneAIEvent
+{
+	Blink = 1,
+	Holster,
+	Unholster,
+	Aim,
+	RandomLook,
+	RandomFaceFlex,
+	RandomHeadFlex,
+	IgnoreCollision,
+	DisableAI
+}
+
 public class SceneEventInfo
 {
 	public ChoreoEvent? Event;
@@ -31,7 +44,7 @@ public class SceneEventInfo
 	public float TargetYaw;
 	public float FacingYaw;
 
-	public int Type;
+	public SceneAIEvent Type;
 	public TimeUnit_t Next;
 
 	public bool ClientSide;

@@ -691,7 +691,7 @@ public class MatRenderContext : IMatRenderContextInternal
 	readonly ITexture?[] CurrentFrameBufferCopyTexture = new ITexture?[MAX_FB_TEXTURES];
 
 	public void SetFrameBufferCopyTexture(ITexture? texture, int textureIndex = 0) {
-		if (textureIndex < 0 || textureIndex > MAX_FB_TEXTURES) {
+		if (textureIndex < 0 || textureIndex >= MAX_FB_TEXTURES) {
 			Assert(false);
 			return;
 		}
