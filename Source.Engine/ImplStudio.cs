@@ -444,6 +444,10 @@ public class ModelRender : IModelRender
 		StudioRender.ForcedMaterialOverride(null);
 	}
 
+	public void SetViewTarget(StudioHdr studioHdr, int bodyIndex, in Vector3 target) {
+		StudioRender.SetEyeViewTarget(studioHdr.GetRenderHdr(), bodyIndex, in target);
+	}
+
 	readonly IMDLCache MDLCache;
 	readonly IStudioRender StudioRender;
 	readonly IMaterialSystem materials;
