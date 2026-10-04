@@ -516,6 +516,41 @@ public static class CFormatting
 		return (int)(sign * val);
 	}
 
+	public static double atof(ReadOnlySpan<char> str) {
+		int start = 0;
+		while (start < str.Length && str[start] is ' ' or '\t' or '\n' or '\r' or '\f' or '\v')
+			start++;
+
+		int i = start;
+		if (i < str.Length && (str[i] == '+' || str[i] == '-'))
+			i++;
+
+		while (i < str.Length && str[i] >= '0' && str[i] <= '9')
+			i++;
+
+		if (i < str.Length && str[i] == '.') {
+			i++;
+			while (i < str.Length && str[i] >= '0' && str[i] <= '9')
+				i++;
+		}
+
+		if (i < str.Length && (str[i] == 'e' || str[i] == 'E')) {
+			int exp = i + 1;
+			if (exp < str.Length && (str[exp] == '+' || str[exp] == '-'))
+				exp++;
+			if (exp < str.Length && str[exp] >= '0' && str[exp] <= '9') {
+				i = exp;
+				while (i < str.Length && str[i] >= '0' && str[i] <= '9')
+					i++;
+			}
+		}
+
+		if (double.TryParse(str[start..i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double value))
+			return value;
+
+		return 0.0;
+	}
+
 
 	public static void strlower(Span<char> str) {
 		for (int i = 0; i < str.Length; i++)
