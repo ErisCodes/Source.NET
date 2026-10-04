@@ -2586,6 +2586,14 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		AddActivityToSR("ACT_MP_PUSH_SWIM_SECONDARY", (int)Activity.ACT_MP_PUSH_SWIM_SECONDARY);
 	}
 
+	public static void InitSchedulingTables() {
+		ClassScheduleIdSpace.Init("CAI_BaseNPC", GetSchedulingSymbols());
+		InitDefaultScheduleSR();
+		InitDefaultConditionSR();
+		InitDefaultTaskSR();
+		InitDefaultActivitySR();
+	}
+
 	public static bool LoadDefaultSchedules() {
 		if (!g_AI_SchedulesManager.LoadSchedulesFromBuffer("CAI_BaseNPC", g_pszSCHED_IDLE_STAND, ClassScheduleIdSpace))
 			return false;
