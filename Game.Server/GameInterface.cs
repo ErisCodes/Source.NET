@@ -24,6 +24,12 @@ namespace Game.Server;
 [EngineComponent]
 public static class GameInterface
 {
+	public const int MAX_CHOREO_SCENES_STRING_BITS = 12;
+	public const int MAX_CHOREO_SCENES_STRINGS = 1 << MAX_CHOREO_SCENES_STRING_BITS;
+	public const int CHOREO_SCENES_INVALID_STRING = MAX_CHOREO_SCENES_STRINGS - 1;
+
+	public static INetworkStringTable? g_pStringTableClientSideChoreoScenes;
+
 	public static bf_write? g_pMsgBuffer;
 	public static void UserMessageBegin(in IRecipientFilter filter, ReadOnlySpan<char> messagename) {
 		Assert(g_pMsgBuffer == null);
@@ -213,6 +219,8 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 
 	public void CreateNetworkStringTables() {
 		// throw new NotImplementedException();
+
+		g_pStringTableClientSideChoreoScenes = networkstringtable.CreateStringTable("Scenes", MAX_CHOREO_SCENES_STRINGS);
 
 		GameRulesRegister.CreateNetworkStringTables_GameRules();
 

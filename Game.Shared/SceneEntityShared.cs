@@ -63,8 +63,19 @@ public class SceneEventInfo
 #endif
 }
 
+public class SceneTokenProcessor : ISceneTokenProcessor
+{
+	public ReadOnlySpan<char> CurrentToken() => throw new NotImplementedException();
+	public bool GetToken(bool crossline) => throw new NotImplementedException();
+	public bool TokenAvailable() => throw new NotImplementedException();
+	public void Error(ReadOnlySpan<char> fmt, params object?[] args) => throw new NotImplementedException();
+	public void SetBuffer(byte[] buffer) => throw new NotImplementedException();
+}
+
 public static class SceneEntitySharedGlobals
 {
+	public static readonly SceneTokenProcessor g_TokenProcessor = new();
+
 	static readonly ConVar scene_print = new("scene_print", "0", FCvar.Replicated, "When playing back a scene, print timing and event info to console.");
 	public static readonly ConVar scene_clientflex = new("scene_clientflex", "1", FCvar.Replicated, "Do client side flex animation.");
 
