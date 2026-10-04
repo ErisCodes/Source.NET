@@ -11,6 +11,7 @@ public static class AI_ConditionGlobals
 	public const int MAX_CONDITIONS = 32 * 8;
 }
 
+// TODO: Consider renaming these?
 public enum SCOND_t
 {
 	COND_NONE,

@@ -27,7 +27,7 @@ public class AI_Navigator : AI_Component, IAI_MovementSink
 		ValidateActivitySpeed = true;
 		CalledStartMove = false;
 
-		NavType = Navigation_t.NAV_GROUND;
+		NavType = Navigation.Ground;
 		NavComplete = false;
 		LastNavFailed = false;
 
@@ -72,7 +72,7 @@ public class AI_Navigator : AI_Component, IAI_MovementSink
 
 	public Activity GetArrivalActivity() => GetPath().GetArrivalActivity();
 
-	public bool IsGoalSet() => GetPath().GoalType() != GoalType_t.GOALTYPE_NONE;
+	public bool IsGoalSet() => GetPath().GoalType() != NavGoalType.None;
 
 	public bool IsGoalActive() => GetPath() != null && !GetPath().IsEmpty();
 
@@ -140,9 +140,9 @@ public class AI_Navigator : AI_Component, IAI_MovementSink
 		TimePathRebuildNext = 0;
 		TimePathRebuildDelay = 0;
 
-		GetOuter()!.Forget(bits_MEMORY_PATH_FAILED);
+		GetOuter()!.Forget(AI_MemoryFlags.PathFailed);
 
-		AI_Waypoint_t? waypoint = GetPath().GetCurWaypoint();
+		AI_Waypoint? waypoint = GetPath().GetCurWaypoint();
 
 		if (waypoint != null) {
 			SaveStoppingPath();
@@ -178,7 +178,7 @@ public class AI_Navigator : AI_Component, IAI_MovementSink
 	public AI_MoveProbe? GetMoveProbe() => MoveProbe;
 	public AI_LocalNavigator? GetLocalNavigator() => LocalNavigator;
 
-	public Navigation_t GetNavType() => NavType;
+	public Navigation GetNavType() => NavType;
 
 	public AI_Motor? Motor;
 	public AI_MoveProbe? MoveProbe;
@@ -186,7 +186,7 @@ public class AI_Navigator : AI_Component, IAI_MovementSink
 	public AI_Network? AINetwork;
 	public bool ValidateActivitySpeed;
 
-	Navigation_t NavType;
+	Navigation NavType;
 	bool NavComplete;
 	bool LastNavFailed;
 

@@ -38,7 +38,7 @@ public class GenericActor : AI_BaseActor
 			Util.SetSize(this, VEC_HULL_MIN, VEC_HULL_MAX);
 		}
 		else
-			Util.SetSize(this, NAI_Hull.Mins(Hull_t.HULL_HUMAN), NAI_Hull.Maxs(Hull_t.HULL_HUMAN));
+			Util.SetSize(this, NAI_Hull.Mins(AI_HullType.Human), NAI_Hull.Maxs(AI_HullType.Human));
 
 		if (!FStrEq(GetModelName(), "models/blackout.mdl")) {
 			SetSolid(SolidType.BBox);
@@ -50,17 +50,17 @@ public class GenericActor : AI_BaseActor
 		SetMoveType(Source.MoveType.Step);
 		Health = 8;
 		FieldOfView = 0.5f;
-		NPCState = NPC_STATE.NPC_STATE_NONE;
+		NPCState = NPCState.None;
 
-		CapabilitiesAdd((int)(Capability_t.bits_CAP_MOVE_GROUND | Capability_t.bits_CAP_OPEN_DOORS));
+		CapabilitiesAdd(Server.Capability.MoveGround | Server.Capability.OpenDoors);
 
 		if (LookupAttachment("eyes") > 0 && LookupAttachment("forward") > 0)
-			CapabilitiesAdd((int)(Capability_t.bits_CAP_TURN_HEAD | Capability_t.bits_CAP_ANIMATEDFACE));
+			CapabilitiesAdd(Server.Capability.TurnHead | Server.Capability.AnimatedFace);
 
 		if (HullName != null)
 			SetHullType(NAI_Hull.LookupId(HullName));
 		else
-			SetHullType(Hull_t.HULL_HUMAN);
+			SetHullType(AI_HullType.Human);
 		SetHullSizeNormal();
 
 		NPCInit();

@@ -10,47 +10,48 @@ namespace Game.Server;
 
 using FIELD = Source.FIELD<BaseCombatCharacter>;
 
-public enum Capability_t
+[Flags]
+public enum Capability
 {
-	bits_CAP_MOVE_GROUND = 0x00000001,
-	bits_CAP_MOVE_JUMP = 0x00000002,
-	bits_CAP_MOVE_FLY = 0x00000004,
-	bits_CAP_MOVE_CLIMB = 0x00000008,
-	bits_CAP_MOVE_SWIM = 0x00000010,
-	bits_CAP_MOVE_CRAWL = 0x00000020,
-	bits_CAP_MOVE_SHOOT = 0x00000040,
-	bits_CAP_SKIP_NAV_GROUND_CHECK = 0x00000080,
-	bits_CAP_USE = 0x00000100,
-	bits_CAP_AUTO_DOORS = 0x00000400,
-	bits_CAP_OPEN_DOORS = 0x00000800,
-	bits_CAP_TURN_HEAD = 0x00001000,
-	bits_CAP_WEAPON_RANGE_ATTACK1 = 0x00002000,
-	bits_CAP_WEAPON_RANGE_ATTACK2 = 0x00004000,
-	bits_CAP_WEAPON_MELEE_ATTACK1 = 0x00008000,
-	bits_CAP_WEAPON_MELEE_ATTACK2 = 0x00010000,
-	bits_CAP_INNATE_RANGE_ATTACK1 = 0x00020000,
-	bits_CAP_INNATE_RANGE_ATTACK2 = 0x00040000,
-	bits_CAP_INNATE_MELEE_ATTACK1 = 0x00080000,
-	bits_CAP_INNATE_MELEE_ATTACK2 = 0x00100000,
-	bits_CAP_USE_WEAPONS = 0x00200000,
-	bits_CAP_ANIMATEDFACE = 0x00800000,
-	bits_CAP_USE_SHOT_REGULATOR = 0x01000000,
-	bits_CAP_FRIENDLY_DMG_IMMUNE = 0x02000000,
-	bits_CAP_SQUAD = 0x04000000,
-	bits_CAP_DUCK = 0x08000000,
-	bits_CAP_NO_HIT_PLAYER = 0x10000000,
-	bits_CAP_AIM_GUN = 0x20000000,
-	bits_CAP_NO_HIT_SQUADMATES = 0x40000000,
-	bits_CAP_SIMPLE_RADIUS_DAMAGE = unchecked((int)0x80000000),
+	MoveGround = 0x00000001,
+	MoveJump = 0x00000002,
+	MoveFly = 0x00000004,
+	MoveClimb = 0x00000008,
+	MoveSwim = 0x00000010,
+	MoveCrawl = 0x00000020,
+	MoveShoot = 0x00000040,
+	SkipNavGroundCheck = 0x00000080,
+	Use = 0x00000100,
+	AutoDoors = 0x00000400,
+	OpenDoors = 0x00000800,
+	TurnHead = 0x00001000,
+	WeaponRangeAttack1 = 0x00002000,
+	WeaponRangeAttack2 = 0x00004000,
+	WeaponMeleeAttack1 = 0x00008000,
+	WeaponMeleeAttack2 = 0x00010000,
+	InnateRangeAttack1 = 0x00020000,
+	InnateRangeAttack2 = 0x00040000,
+	InnateMeleeAttack1 = 0x00080000,
+	InnateMeleeAttack2 = 0x00100000,
+	UseWeapons = 0x00200000,
+	AnimatedFace = 0x00800000,
+	UseShotRegulator = 0x01000000,
+	FriendlyDmgImmune = 0x02000000,
+	Squad = 0x04000000,
+	Duck = 0x08000000,
+	NoHitPlayer = 0x10000000,
+	AimGun = 0x20000000,
+	NoHitSquadmates = 0x40000000,
+	SimpleRadiusDamage = unchecked((int)0x80000000),
 }
 
-public enum Disposition_t
+public enum Disposition
 {
-	D_ER,
-	D_HT,
-	D_FR,
-	D_LI,
-	D_NU
+	ER,
+	HT,
+	FR,
+	LI,
+	NU
 }
 
 [NetworkName("CBaseCombatCharacter")]
@@ -135,20 +136,20 @@ public partial class BaseCombatCharacter : BaseFlex
 
 	public string? RelationshipString;
 
-	public Hull_t Hull;
+	public AI_HullType Hull;
 	public float FieldOfView;
 
 	public const int DEF_RELATIONSHIP_PRIORITY = int.MinValue;
 
-	public virtual Disposition_t IRelationType(BaseEntity? target) => throw new NotImplementedException();
+	public virtual Disposition IRelationType(BaseEntity? target) => throw new NotImplementedException();
 
-	public virtual void AddEntityRelationship(BaseEntity entity, Disposition_t disposition, int priority) => throw new NotImplementedException();
-	public virtual void AddClassRelationship(Class_T classType, Disposition_t disposition, int priority) => throw new NotImplementedException();
+	public virtual void AddEntityRelationship(BaseEntity entity, Disposition disposition, int priority) => throw new NotImplementedException();
+	public virtual void AddClassRelationship(Class_T classType, Disposition disposition, int priority) => throw new NotImplementedException();
 
 	public void SetImpactEnergyScale(float scale) => ImpactEnergyScale = scale;
 
-	public Hull_t GetHullType() => Hull;
-	public void SetHullType(Hull_t hullType) => Hull = hullType;
+	public AI_HullType GetHullType() => Hull;
+	public void SetHullType(AI_HullType hullType) => Hull = hullType;
 
 	public virtual Activity Weapon_TranslateActivity(Activity baseAct, ref bool required) {
 		Activity translated = baseAct;

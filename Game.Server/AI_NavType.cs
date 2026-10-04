@@ -1,10 +1,10 @@
 namespace Game.Server;
 
-public enum Navigation_t
+public enum Navigation
 {
-	NAV_NONE = -1,
-	NAV_GROUND = 0,
-	NAV_JUMP,
-	NAV_FLY,
-	NAV_CLIMB,
+	None = -1,
+	Ground = 0,
+	Jump,
+	Fly,
+	Climb,
 }

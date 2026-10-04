@@ -9,36 +9,36 @@ public static class AI_FollowBehaviorGlobals
 	public static readonly AI_FollowManager g_AIFollowManager = new();
 }
 
-public enum AI_Formations_t
+public enum AI_Formations
 {
-	AIF_SIMPLE,
-	AIF_WIDE,
-	AIF_ANTLION,
-	AIF_COMMANDER,
-	AIF_TIGHT,
-	AIF_MEDIUM,
-	AIF_SIDEKICK,
-	AIF_HUNTER,
-	AIF_VORTIGAUNT,
+	Simple,
+	Wide,
+	Antlion,
+	Commander,
+	Tight,
+	Medium,
+	Sidekick,
+	Hunter,
+	Vortigaunt
 }
 
-public class AI_FollowGroup_t;
+public class AI_FollowGroup;
 
 public struct AI_FollowManagerInfoHandle_t
 {
-	public AI_FollowGroup_t? Group;
+	public AI_FollowGroup? Group;
 	public int Follower;
 }
 
-public struct AI_FollowParams_t(AI_Formations_t formation = AI_Formations_t.AIF_SIMPLE, bool normalMemoryDiscard = false)
+public struct AI_FollowParams(AI_Formations formation = AI_Formations.Simple, bool normalMemoryDiscard = false)
 {
-	public AI_Formations_t Formation = formation;
+	public AI_Formations Formation = formation;
 	public bool NormalMemoryDiscard = normalMemoryDiscard;
 }
 
 public class AI_FollowManager
 {
-	public bool AddFollower(BaseEntity? target, AI_BaseNPC? follower, AI_Formations_t formation, ref AI_FollowManagerInfoHandle_t handle) => throw new NotImplementedException();
+	public bool AddFollower(BaseEntity? target, AI_BaseNPC? follower, AI_Formations formation, ref AI_FollowManagerInfoHandle_t handle) => throw new NotImplementedException();
 }
 
 public class AI_FollowBehavior : AI_Behavior_AI_BaseNPC_100000
@@ -66,5 +66,5 @@ public class AI_FollowBehavior : AI_Behavior_AI_BaseNPC_100000
 	protected readonly EHANDLE FollowTarget = new();
 
 	protected AI_FollowManagerInfoHandle_t FollowManagerInfo;
-	protected AI_FollowParams_t Params = new();
+	protected AI_FollowParams Params = new();
 }

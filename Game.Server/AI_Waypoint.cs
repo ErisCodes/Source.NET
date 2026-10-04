@@ -10,9 +10,9 @@ public static class AI_WaypointGlobals
 {
 	public const int NO_NODE = -1;
 
-	public static void DeleteAll(AI_Waypoint_t? waypointList) {
+	public static void DeleteAll(AI_Waypoint? waypointList) {
 		while (waypointList != null) {
-			AI_Waypoint_t prevWaypoint = waypointList;
+			AI_Waypoint prevWaypoint = waypointList;
 			waypointList = waypointList.GetNext();
 			prevWaypoint.Delete();
 		}
@@ -20,20 +20,20 @@ public static class AI_WaypointGlobals
 }
 
 [Flags]
-public enum WaypointFlags_t
+public enum WaypointFlags
 {
-	bits_WP_TO_DETOUR = 0x01,
-	bits_WP_TO_PATHCORNER = 0x02,
-	bits_WP_TO_NODE = 0x04,
-	bits_WP_TO_GOAL = 0x08,
-	bits_WP_TO_DOOR = 0x10,
+	ToDetour = 0x01,
+	ToPathCorner = 0x02,
+	ToNode = 0x04,
+	ToGoal = 0x08,
+	ToDoor = 0x10,
 
-	bits_WP_DONT_SIMPLIFY = 0x20,
+	DontSimplify = 0x20,
 }
 
-public class AI_Waypoint_t
+public class AI_Waypoint
 {
-	public AI_Waypoint_t() {
+	public AI_Waypoint() {
 		VecLocation = vec3_invalid;
 		NodeID = NO_NODE;
 		PathDistGoal = -1;
@@ -58,11 +58,11 @@ public class AI_Waypoint_t
 #endif
 	}
 
-	public WaypointFlags_t Flags() => WaypointFlags;
-	public Navigation_t NavType() => WPType;
+	public WaypointFlags Flags() => WaypointFlags;
+	public Navigation NavType() => WPType;
 
-	public AI_Waypoint_t? GetNext() => Next;
-	public AI_Waypoint_t? GetPrev() => Prev;
+	public AI_Waypoint? GetNext() => Next;
+	public AI_Waypoint? GetPrev() => Prev;
 
 	public ref readonly Vector3 GetPos() => ref VecLocation;
 	public void SetPos(in Vector3 newPos) => VecLocation = newPos;
@@ -77,11 +77,11 @@ public class AI_Waypoint_t
 
 	public readonly EHANDLE Data = new();
 
-	WaypointFlags_t WaypointFlags;
-	Navigation_t WPType;
+	WaypointFlags WaypointFlags;
+	Navigation WPType;
 
-	AI_Waypoint_t? Next;
-	AI_Waypoint_t? Prev;
+	AI_Waypoint? Next;
+	AI_Waypoint? Prev;
 }
 
 public class AI_WaypointList
@@ -90,13 +90,13 @@ public class AI_WaypointList
 		FirstWaypoint = null;
 	}
 
-	public AI_WaypointList(AI_Waypoint_t? firstWaypoint) {
+	public AI_WaypointList(AI_Waypoint? firstWaypoint) {
 		FirstWaypoint = firstWaypoint;
 	}
 
 	public bool IsEmpty() => FirstWaypoint == null;
 
-	public AI_Waypoint_t? GetFirst() => FirstWaypoint;
+	public AI_Waypoint? GetFirst() => FirstWaypoint;
 
 	public void RemoveAll() {
 		DeleteAll(FirstWaypoint);
@@ -104,5 +104,5 @@ public class AI_WaypointList
 		Assert(FirstWaypoint == null);
 	}
 
-	AI_Waypoint_t? FirstWaypoint;
+	AI_Waypoint? FirstWaypoint;
 }

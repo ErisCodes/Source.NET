@@ -5,7 +5,7 @@ public partial class BaseCombatWeapon : BaseAnimating
 
 	}
 
-	public virtual int CapabilitiesGet() => 0;
+	public virtual Capability CapabilitiesGet() => 0;
 
 	public virtual void Operator_FrameUpdate(BaseCombatCharacter op) => throw new NotImplementedException();
 }

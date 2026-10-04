@@ -1,14 +1,14 @@
 namespace Game.Server;
 
-public enum NPC_STATE
+public enum NPCState
 {
-	NPC_STATE_INVALID = -1,
-	NPC_STATE_NONE = 0,
-	NPC_STATE_IDLE,
-	NPC_STATE_ALERT,
-	NPC_STATE_COMBAT,
-	NPC_STATE_SCRIPT,
-	NPC_STATE_PLAYDEAD,
-	NPC_STATE_PRONE,
-	NPC_STATE_DEAD
+	Invalid = -1,
+	None = 0,
+	Idle,
+	Alert,
+	Combat,
+	Script,
+	PlayDead,
+	Prone,
+	Dead
 }

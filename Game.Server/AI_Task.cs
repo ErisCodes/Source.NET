@@ -2,6 +2,7 @@ global using static Game.Server.AI_TaskGlobals;
 
 namespace Game.Server;
 
+// keeping these as const ints for now since the scripts refer to them by these names
 public static class AI_TaskGlobals
 {
 	public const int TASK_INVALID = 0;
@@ -157,15 +158,16 @@ public static class AI_TaskGlobals
 	public const int LAST_SHARED_TASK = 150;
 }
 
-public enum TaskStatus_e
+public enum TaskStatus
 {
-	TASKSTATUS_NEW = 0,
-	TASKSTATUS_RUN_MOVE_AND_TASK = 1,
-	TASKSTATUS_RUN_MOVE = 2,
-	TASKSTATUS_RUN_TASK = 3,
-	TASKSTATUS_COMPLETE = 4,
+	New = 0,
+	RunMoveAndTask = 1,
+	RunMove = 2,
+	RunTask = 3,
+	Complete = 4,
 }
 
+// Keeping this as Task_t to not interact with the C# Task type
 public struct Task_t
 {
 	public int Task;

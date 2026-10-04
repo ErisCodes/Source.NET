@@ -22,7 +22,7 @@ public class NPC_GMan : AI_PlayerAlly
 
 		SetModel("models/gman.mdl");
 
-		SetHullType(Hull_t.HULL_HUMAN);
+		SetHullType(AI_HullType.Human);
 		SetHullSizeNormal();
 
 		SetSolid(SolidType.BBox);
@@ -30,11 +30,11 @@ public class NPC_GMan : AI_PlayerAlly
 		SetMoveType(Source.MoveType.Step);
 		Health = 8;
 		FieldOfView = 0.5f;
-		NPCState = NPC_STATE.NPC_STATE_NONE;
+		NPCState = NPCState.None;
 		SetImpactEnergyScale(0.0f);
 
-		CapabilitiesAdd((int)(Capability_t.bits_CAP_MOVE_GROUND | Capability_t.bits_CAP_OPEN_DOORS | Capability_t.bits_CAP_ANIMATEDFACE | Capability_t.bits_CAP_TURN_HEAD));
-		CapabilitiesAdd((int)Capability_t.bits_CAP_FRIENDLY_DMG_IMMUNE);
+		CapabilitiesAdd(Server.Capability.MoveGround| Server.Capability.OpenDoors | Server.Capability.AnimatedFace | Server.Capability.TurnHead);
+		CapabilitiesAdd(Server.Capability.FriendlyDmgImmune);
 		AddEFlags(EFL.NoDissolve | EFL.NoMegaPhysCannonRagdoll);
 
 		NPCInit();
@@ -46,8 +46,8 @@ public class NPC_GMan : AI_PlayerAlly
 		base.Precache();
 	}
 
-	public override Disposition_t IRelationType(BaseEntity? target) {
-		return Disposition_t.D_NU;
+	public override Disposition IRelationType(BaseEntity? target) {
+		return Disposition.NU;
 	}
 
 	public override bool CreateBehaviors() {

@@ -1,15 +1,18 @@
 namespace Game.Server;
 
-public enum GoalType_t
+/// <summary>
+/// Analog of GoalType_t in C++. (capitalization matters!!)
+/// </summary>
+public enum NavGoalType
 {
-	GOALTYPE_NONE,
-	GOALTYPE_TARGETENT,
-	GOALTYPE_ENEMY,
-	GOALTYPE_PATHCORNER,
-	GOALTYPE_LOCATION,
-	GOALTYPE_LOCATION_NEAREST_NODE,
-	GOALTYPE_FLANK,
-	GOALTYPE_COVER,
+	None,
+	TargetEnt,
+	Enemy,
+	PathCorner,
+	Location,
+	LocationNearestNode,
+	Flank,
+	Cover,
 
-	GOALTYPE_INVALID
+	Invalid
 }

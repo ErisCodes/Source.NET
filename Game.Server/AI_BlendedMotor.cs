@@ -66,16 +66,16 @@ public class AI_BlendedMotor : AI_Motor
 			return;
 		}
 
-		if (GetOuter()!.HasMemory(bits_MEMORY_TURNING))
+		if (GetOuter()!.HasMemory(AI_MemoryFlags.Turning))
 			return;
 
 		SetYawSpeed(CalcYawSpeed());
 	}
 
-	public struct AI_Movementscript_t
+	public struct AI_MovementScript
 	{
-		public float Time;
-		public float ElapsedTime;
+		public TimeUnit_t Time;
+		public TimeUnit_t ElapsedTime;
 
 		public float Dist;
 
@@ -87,13 +87,13 @@ public class AI_BlendedMotor : AI_Motor
 		public bool Looping;
 		public int Flags;
 
-		public AI_Waypoint_t? Waypoint;
+		public AI_Waypoint? Waypoint;
 
 		public Vector3 Location;
 	}
 
-	readonly List<AI_Movementscript_t> ScriptMove = [];
-	readonly List<AI_Movementscript_t> ScriptTurn = [];
+	readonly List<AI_MovementScript> ScriptMove = [];
+	readonly List<AI_MovementScript> ScriptTurn = [];
 
 	public bool DeceleratingToGoal;
 

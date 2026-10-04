@@ -9,21 +9,24 @@ public static class AI_ScheduleGlobals
 	public static readonly AI_SchedulesManager g_AI_SchedulesManager = new();
 }
 
-public enum goalType_t
+/// <summary>
+/// Analog of goalType_t in C++. (capitalization matters!!)
+/// </summary>
+public enum ScheduleGoalType
 {
-	GOAL_NONE = -1,
-	GOAL_ENEMY,
-	GOAL_TARGET,
-	GOAL_ENEMY_LKP,
-	GOAL_SAVED_POSITION,
+	None = -1,
+	Enemy,
+	Target,
+	EnemyLKP,
+	SavedPosition,
 }
 
-public enum pathType_t
+public enum PathType
 {
-	PATH_NONE = -1,
-	PATH_TRAVEL,
-	PATH_LOS,
-	PATH_COVER,
+	None = -1,
+	Travel,
+	LOS,
+	Cover,
 }
 
 public class AI_SchedulesManager
@@ -42,7 +45,7 @@ public class AI_SchedulesManager
 		if (allSchedules == null) {
 			AI_BaseNPC.InitSchedulingTables();
 			if (!AI_BaseNPC.LoadDefaultSchedules()) {
-				AI_BaseNPC.DebugBits |= bits_debugDisableAI;
+				AI_BaseNPC.DebugBits |= AI_DebugFlags.DisableAI;
 				DevMsg("ERROR:  Mistake in default schedule definitions, AI Disabled.\n");
 			}
 		}
@@ -56,50 +59,50 @@ public class AI_SchedulesManager
 		return sched;
 	}
 
-	static int GetStateID(ReadOnlySpan<char> stateName) {
-		if (stricmp(stateName, "NONE") == 0) return (int)NPC_STATE.NPC_STATE_NONE;
-		else if (stricmp(stateName, "IDLE") == 0) return (int)NPC_STATE.NPC_STATE_IDLE;
-		else if (stricmp(stateName, "COMBAT") == 0) return (int)NPC_STATE.NPC_STATE_COMBAT;
-		else if (stricmp(stateName, "PRONE") == 0) return (int)NPC_STATE.NPC_STATE_PRONE;
-		else if (stricmp(stateName, "ALERT") == 0) return (int)NPC_STATE.NPC_STATE_ALERT;
-		else if (stricmp(stateName, "SCRIPT") == 0) return (int)NPC_STATE.NPC_STATE_SCRIPT;
-		else if (stricmp(stateName, "PLAYDEAD") == 0) return (int)NPC_STATE.NPC_STATE_PLAYDEAD;
-		else if (stricmp(stateName, "DEAD") == 0) return (int)NPC_STATE.NPC_STATE_DEAD;
-		else return -1;
+	static NPCState GetStateID(ReadOnlySpan<char> stateName) {
+		if (stricmp(stateName, "NONE") == 0) return NPCState.None;
+		else if (stricmp(stateName, "IDLE") == 0) return NPCState.Idle;
+		else if (stricmp(stateName, "COMBAT") == 0) return NPCState.Combat;
+		else if (stricmp(stateName, "PRONE") == 0) return NPCState.Prone;
+		else if (stricmp(stateName, "ALERT") == 0) return NPCState.Alert;
+		else if (stricmp(stateName, "SCRIPT") == 0) return NPCState.Script;
+		else if (stricmp(stateName, "PLAYDEAD") == 0) return NPCState.PlayDead;
+		else if (stricmp(stateName, "DEAD") == 0) return NPCState.Dead;
+		else return NPCState.Invalid;
 	}
 
-	static int GetMemoryID(ReadOnlySpan<char> stateName) {
-		if (stricmp(stateName, "PROVOKED") == 0) return bits_MEMORY_PROVOKED;
-		else if (stricmp(stateName, "INCOVER") == 0) return bits_MEMORY_INCOVER;
-		else if (stricmp(stateName, "SUSPICIOUS") == 0) return bits_MEMORY_SUSPICIOUS;
-		else if (stricmp(stateName, "PATH_FAILED") == 0) return bits_MEMORY_PATH_FAILED;
-		else if (stricmp(stateName, "FLINCHED") == 0) return bits_MEMORY_FLINCHED;
-		else if (stricmp(stateName, "TOURGUIDE") == 0) return bits_MEMORY_TOURGUIDE;
-		else if (stricmp(stateName, "LOCKED_HINT") == 0) return bits_MEMORY_LOCKED_HINT;
-		else if (stricmp(stateName, "TURNING") == 0) return bits_MEMORY_TURNING;
-		else if (stricmp(stateName, "TURNHACK") == 0) return bits_MEMORY_TURNHACK;
-		else if (stricmp(stateName, "CUSTOM4") == 0) return bits_MEMORY_CUSTOM4;
-		else if (stricmp(stateName, "CUSTOM3") == 0) return bits_MEMORY_CUSTOM3;
-		else if (stricmp(stateName, "CUSTOM2") == 0) return bits_MEMORY_CUSTOM2;
-		else if (stricmp(stateName, "CUSTOM1") == 0) return bits_MEMORY_CUSTOM1;
-		else return -1;
+	static AI_MemoryFlags GetMemoryID(ReadOnlySpan<char> stateName) {
+		if (stricmp(stateName, "PROVOKED") == 0) return AI_MemoryFlags.Provoked;
+		else if (stricmp(stateName, "INCOVER") == 0) return AI_MemoryFlags.Incover;
+		else if (stricmp(stateName, "SUSPICIOUS") == 0) return AI_MemoryFlags.Suspicious;
+		else if (stricmp(stateName, "PATH_FAILED") == 0) return AI_MemoryFlags.PathFailed;
+		else if (stricmp(stateName, "FLINCHED") == 0) return AI_MemoryFlags.Flinched;
+		else if (stricmp(stateName, "TOURGUIDE") == 0) return AI_MemoryFlags.TourGuide;
+		else if (stricmp(stateName, "LOCKED_HINT") == 0) return AI_MemoryFlags.LockedHint;
+		else if (stricmp(stateName, "TURNING") == 0) return AI_MemoryFlags.Turning;
+		else if (stricmp(stateName, "TURNHACK") == 0) return AI_MemoryFlags.TurnHack;
+		else if (stricmp(stateName, "CUSTOM4") == 0) return AI_MemoryFlags.Custom4;
+		else if (stricmp(stateName, "CUSTOM3") == 0) return AI_MemoryFlags.Custom3;
+		else if (stricmp(stateName, "CUSTOM2") == 0) return AI_MemoryFlags.Custom2;
+		else if (stricmp(stateName, "CUSTOM1") == 0) return AI_MemoryFlags.Custom1;
+		else return (AI_MemoryFlags)(-1);
 	}
 
-	static int GetPathID(ReadOnlySpan<char> token) {
-		if (stricmp(token, "TRAVEL") == 0) return (int)pathType_t.PATH_TRAVEL;
-		else if (stricmp(token, "LOS") == 0) return (int)pathType_t.PATH_LOS;
-		else if (stricmp(token, "COVER") == 0) return (int)pathType_t.PATH_COVER;
+	static PathType GetPathID(ReadOnlySpan<char> token) {
+		if (stricmp(token, "TRAVEL") == 0) return PathType.Travel;
+		else if (stricmp(token, "LOS") == 0) return PathType.LOS;
+		else if (stricmp(token, "COVER") == 0) return PathType.Cover;
 
-		return -1;
+		return PathType.None;
 	}
 
-	static int GetGoalID(ReadOnlySpan<char> token) {
-		if (stricmp(token, "ENEMY") == 0) return (int)goalType_t.GOAL_ENEMY;
-		else if (stricmp(token, "ENEMY_LKP") == 0) return (int)goalType_t.GOAL_ENEMY_LKP;
-		else if (stricmp(token, "TARGET") == 0) return (int)goalType_t.GOAL_TARGET;
-		else if (stricmp(token, "SAVED_POSITION") == 0) return (int)goalType_t.GOAL_SAVED_POSITION;
+	static ScheduleGoalType GetGoalID(ReadOnlySpan<char> token) {
+		if (stricmp(token, "ENEMY") == 0) return ScheduleGoalType.Enemy;
+		else if (stricmp(token, "ENEMY_LKP") == 0) return ScheduleGoalType.EnemyLKP;
+		else if (stricmp(token, "TARGET") == 0) return ScheduleGoalType.Target;
+		else if (stricmp(token, "SAVED_POSITION") == 0) return ScheduleGoalType.SavedPosition;
 
-		return -1;
+		return ScheduleGoalType.None;
 	}
 
 	static ReadOnlySpan<char> Token(ReadOnlySpan<char> buffer) => buffer.SliceNullTerminatedString();
@@ -215,7 +218,7 @@ public class AI_SchedulesManager
 					}
 
 					file = engine.ParseFile(file, token);
-					tempTask[taskNum].TaskData = GetStateID(Token(token));
+					tempTask[taskNum].TaskData = (int)GetStateID(Token(token));
 					if (tempTask[taskNum].TaskData == -1) {
 						DevMsg($"ERROR: LoadSchd ({prefix}): ({newSchedule.GetName()}) Unknown shedule {Token(token)}!\n");
 						Assert(false);
@@ -231,7 +234,7 @@ public class AI_SchedulesManager
 					}
 
 					file = engine.ParseFile(file, token);
-					tempTask[taskNum].TaskData = GetMemoryID(Token(token));
+					tempTask[taskNum].TaskData = (int)GetMemoryID(Token(token));
 					if (tempTask[taskNum].TaskData == -1) {
 						DevMsg($"ERROR: LoadSchd ({prefix}): ({newSchedule.GetName()}) Unknown shedule {Token(token)}!\n");
 						Assert(false);
@@ -247,7 +250,7 @@ public class AI_SchedulesManager
 					}
 
 					file = engine.ParseFile(file, token);
-					tempTask[taskNum].TaskData = GetPathID(Token(token));
+					tempTask[taskNum].TaskData = (int)GetPathID(Token(token));
 					if (tempTask[taskNum].TaskData == -1) {
 						DevMsg($"ERROR: LoadSchd ({prefix}): ({newSchedule.GetName()}) Unknown path type {Token(token)}!\n");
 						Assert(false);
@@ -263,7 +266,7 @@ public class AI_SchedulesManager
 					}
 
 					file = engine.ParseFile(file, token);
-					tempTask[taskNum].TaskData = GetGoalID(Token(token));
+					tempTask[taskNum].TaskData = (int)GetGoalID(Token(token));
 					if (tempTask[taskNum].TaskData == -1) {
 						DevMsg($"ERROR: LoadSchd ({prefix}): ({newSchedule.GetName()}) Unknown goal type  {Token(token)}!\n");
 						Assert(false);
@@ -279,7 +282,7 @@ public class AI_SchedulesManager
 					}
 
 					file = engine.ParseFile(file, token);
-					tempTask[taskNum].TaskData = AI_HintManager.GetFlags(Token(token));
+					tempTask[taskNum].TaskData = (int)AI_HintManager.GetFlags(Token(token));
 					if (tempTask[taskNum].TaskData == -1) {
 						DevMsg($"ERROR: LoadSchd ({prefix}): ({newSchedule.GetName()}) Unknown hint flag type  {Token(token)}!\n");
 						Assert(false);

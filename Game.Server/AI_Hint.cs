@@ -2,36 +2,39 @@ namespace Game.Server;
 
 public class AI_Hint : ServerOnlyEntity;
 
+[Flags]
+public enum AI_HintNodeFlags {
+	None = 0x00000000,
+	Visible = 0x00000001,
+	Nearest = 0x00000002,
+	Random = 0x00000004
+}
+
 public static class AI_HintManager
 {
-	public const int bits_HINT_NODE_NONE = 0x00000000;
-	public const int bits_HINT_NODE_VISIBLE = 0x00000001;
-	public const int bits_HINT_NODE_NEAREST = 0x00000002;
-	public const int bits_HINT_NODE_RANDOM = 0x00000004;
-
-	public static int GetFlags(ReadOnlySpan<char> token) {
+	public static AI_HintNodeFlags GetFlags(ReadOnlySpan<char> token) {
 		if (token.Length <= 0)
-			return bits_HINT_NODE_NONE;
+			return AI_HintNodeFlags.None;
 
 		string lowercase = new string(token).ToLowerInvariant();
 
 		if ("none".Contains(lowercase))
-			return bits_HINT_NODE_NONE;
+			return AI_HintNodeFlags.None;
 
-		int bits = 0;
+		AI_HintNodeFlags bits = 0;
 
 		if ("visible".Contains(lowercase))
-			bits |= bits_HINT_NODE_VISIBLE;
+			bits |= AI_HintNodeFlags.Visible;
 
 		if ("nearest".Contains(lowercase))
-			bits |= bits_HINT_NODE_NEAREST;
+			bits |= AI_HintNodeFlags.Nearest;
 
 		if ("random".Contains(lowercase))
-			bits |= bits_HINT_NODE_RANDOM;
+			bits |= AI_HintNodeFlags.Random;
 
-		if ((bits & bits_HINT_NODE_NEAREST) != 0 &&
-			 (bits & bits_HINT_NODE_RANDOM) != 0) {
-			bits &= ~bits_HINT_NODE_RANDOM;
+		if ((bits & AI_HintNodeFlags.Nearest) != 0 &&
+			 (bits & AI_HintNodeFlags.Random) != 0) {
+			bits &= ~AI_HintNodeFlags.Random;
 
 			DevMsg($"HINTFLAGS:{token}, inconsistent, the nearest node is never a random hint node, treating as nearest request!\n");
 		}

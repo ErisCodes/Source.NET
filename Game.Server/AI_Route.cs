@@ -11,7 +11,7 @@ public class AI_Path
 	public const float DEF_WAYPOINT_TOLERANCE = 0.1f;
 
 	public AI_Path() {
-		GoalTypeValue = GoalType_t.GOALTYPE_NONE;
+		GoalTypeValue = Server.NavGoalType.None;
 		GoalPos = vec3_origin;
 		GoalTolerance = 0.0f;
 		ActivityValue = Activity.ACT_INVALID;
@@ -29,7 +29,7 @@ public class AI_Path
 
 	public bool IsEmpty() => Waypoints.IsEmpty();
 
-	public AI_Waypoint_t? GetCurWaypoint() => Waypoints.GetFirst();
+	public AI_Waypoint? GetCurWaypoint() => Waypoints.GetFirst();
 
 	public Vector3 CurWaypointPos() {
 		if (GetCurWaypoint() != null)
@@ -46,12 +46,12 @@ public class AI_Path
 		return Activity.ACT_INVALID;
 	}
 
-	public GoalType_t GoalType() => GoalTypeValue;
+	public NavGoalType GoalType() => GoalTypeValue;
 
 	public void Clear() {
 		Waypoints.RemoveAll();
 
-		GoalTypeValue = GoalType_t.GOALTYPE_NONE;
+		GoalTypeValue = Server.NavGoalType.None;
 		GoalPos = vec3_origin;
 		GoalPosSet = false;
 		GoalTypeSet = false;
@@ -95,7 +95,7 @@ public class AI_Path
 	Vector3 GoalPos;
 
 	bool GoalTypeSet;
-	GoalType_t GoalTypeValue;
+	NavGoalType GoalTypeValue;
 
 	uint GoalFlagsValue;
 
@@ -109,5 +109,5 @@ public class AI_Path
 
 	float GoalStoppingDistance;
 
-	static readonly AI_Waypoint_t gm_InvalidWaypoint = new();
+	static readonly AI_Waypoint gm_InvalidWaypoint = new();
 }

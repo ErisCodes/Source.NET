@@ -19,28 +19,50 @@ namespace Game.Server;
 
 using FIELD = FIELD<AI_BaseNPC>;
 
+/// <summary>
+/// bits_MEMORY_* analogs
+/// </summary>
+[Flags]
+public enum AI_MemoryFlags {
+	Clear = 0,
+	Provoked = 1 << 0,
+	Incover = 1 << 1,
+	Suspicious = 1 << 2,
+	TaskExpensive = 1 << 3,
+	PathFailed = 1 << 5,
+	Flinched = 1 << 6,
+	TourGuide = 1 << 8,
+	LockedHint = 1 << 10,
+	Turning = 1 << 13,
+	TurnHack = 1 << 14,
+	HadEnemy = 1 << 15,
+	HadPlayer = 1 << 16,
+	HadLOS = 1 << 17,
+	MovedFromSpawn = 1 << 18,
+	Custom4 = 1 << 28,
+	Custom3 = 1 << 29,
+	Custom2 = 1 << 30,
+	Custom1 = 1 << 31
+}
+
+[Flags]
+public enum AI_SleepFlags {
+	None= 0x00000000,
+	AutoPVS = 0x00000001,
+	AutoPVSAfterPVS = 0x00000002
+}
+
+[Flags]
+public enum AI_DebugFlags
+{
+	DisableAI = 0x00000001,
+	StepAI = 0x00000002
+}
+
 public static class AI_BaseNPCGlobals
 {
-	public const int MEMORY_CLEAR = 0;
-	public const int bits_MEMORY_PROVOKED = 1 << 0;
-	public const int bits_MEMORY_INCOVER = 1 << 1;
-	public const int bits_MEMORY_SUSPICIOUS = 1 << 2;
-	public const int bits_MEMORY_TASK_EXPENSIVE = 1 << 3;
-	public const int bits_MEMORY_PATH_FAILED = 1 << 5;
-	public const int bits_MEMORY_FLINCHED = 1 << 6;
-	public const int bits_MEMORY_TOURGUIDE = 1 << 8;
-	public const int bits_MEMORY_LOCKED_HINT = 1 << 10;
-	public const int bits_MEMORY_TURNING = 1 << 13;
-	public const int bits_MEMORY_TURNHACK = 1 << 14;
-	public const int bits_MEMORY_HAD_ENEMY = 1 << 15;
-	public const int bits_MEMORY_HAD_PLAYER = 1 << 16;
-	public const int bits_MEMORY_HAD_LOS = 1 << 17;
-	public const int bits_MEMORY_MOVED_FROM_SPAWN = 1 << 18;
-	public const int bits_MEMORY_CUSTOM4 = 1 << 28;
-	public const int bits_MEMORY_CUSTOM3 = 1 << 29;
-	public const int bits_MEMORY_CUSTOM2 = 1 << 30;
-	public const int bits_MEMORY_CUSTOM1 = 1 << 31;
-
+	// TODO: Enum these
+	// need a good name for its enum type
 	public const int SF_NPC_WAIT_TILL_SEEN = 1 << 0;
 	public const int SF_NPC_GAG = 1 << 1;
 	public const int SF_NPC_FALL_TO_GROUND = 1 << 2;
@@ -55,14 +77,7 @@ public static class AI_BaseNPCGlobals
 	public const int SF_NPC_NO_WEAPON_DROP = 1 << 13;
 	public const int SF_NPC_NO_PLAYER_PUSHAWAY = 1 << 14;
 
-	public const int AI_SLEEP_FLAGS_NONE = 0x00000000;
-	public const int AI_SLEEP_FLAG_AUTO_PVS = 0x00000001;
-	public const int AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS = 0x00000002;
-
 	public const string PLAYER_SQUADNAME = "player_squad";
-
-	public const int bits_debugDisableAI = 0x00000001;
-	public const int bits_debugStepAI = 0x00000002;
 
 	public static readonly ConVar ai_show_think_tolerance = new("ai_show_think_tolerance", "0");
 	public static readonly ConVar ai_debug_think_ticks = new("ai_debug_think_ticks", "0");
@@ -128,18 +143,18 @@ public class AI_Manager
 	readonly List<AI_BaseNPC> AIs = [];
 }
 
-public enum AI_MoveEfficiency_t
+public enum AI_MoveEfficiency
 {
-	AIME_NORMAL,
-	AIME_EFFICIENT,
+	Normal,
+	Efficient,
 }
 
-public struct AIScheduleState_t
+public struct AIScheduleState
 {
 	public int CurTask;
-	public TaskStatus_e TaskStatus;
-	public float TimeStarted;
-	public float TimeCurTaskStarted;
+	public TaskStatus TaskStatus;
+	public TimeUnit_t TimeStarted;
+	public TimeUnit_t TimeCurTaskStarted;
 	public int TaskFailureCode;
 	public int TaskInterrupt;
 	public bool TaskRanAutomovement;
@@ -147,7 +162,7 @@ public struct AIScheduleState_t
 	public bool ScheduleWasInterrupted;
 }
 
-public struct AIRebalanceInfo_t
+public struct AIRebalanceInfo
 {
 	public AI_BaseNPC NPC;
 	public int NextThinkTick;
@@ -156,23 +171,23 @@ public struct AIRebalanceInfo_t
 	public float DistPlayer;
 }
 
-public enum AI_Efficiency_t
+public enum AI_Efficiency
 {
-	AIE_NORMAL,
-	AIE_EFFICIENT,
-	AIE_VERY_EFFICIENT,
-	AIE_SUPER_EFFICIENT,
-	AIE_DORMANT,
+	Normal,
+	Efficient,
+	VeryEfficient,
+	SuperEfficient,
+	Dormant,
 }
 
-public enum AI_SleepState_t
+public enum AI_SleepState
 {
-	AISS_AWAKE,
-	AISS_WAITING_FOR_THREAT,
-	AISS_WAITING_FOR_PVS,
-	AISS_WAITING_FOR_INPUT,
-	AISS_AUTO_PVS,
-	AISS_AUTO_PVS_AFTER_PVS,
+	Awake,
+	WaitingForThreat,
+	WaitingForPVS,
+	WaitingForInput,
+	AutoPVS,
+	AutoPVSAfterPVS,
 }
 
 public ref struct TriggerTraceEnum(ref Ray ray, in TakeDamageInfo info, in Vector3 dir, Mask mask) : IEntityEnumerator
@@ -248,11 +263,11 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public static int SpawnedThisFrame;
 
 	public float OriginalYaw;
-	public int Memory;
+	public AI_MemoryFlags Memory;
 	public float DistTooFar;
 	public AI_ScheduleBits Conditions;
 	public bool ForceConditionsGather;
-	public int Capability;
+	public Capability Capability;
 	public string? SpawnEquipment;
 	public RandStopwatch GiveUpOnDeadEnemyTimer = new();
 	public TimeUnit_t TimeLastMovement;
@@ -266,12 +281,12 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public Activity ScriptArrivalActivity;
 	public string? ScriptArrivalSequence;
 
-	public NPC_STATE NPCState;
+	public NPCState NPCState;
 	public TimeUnit_t LastStateChangeTime;
-	public NPC_STATE IdealNPCState;
-	public AI_Efficiency_t Efficiency;
-	public AI_SleepState_t SleepState;
-	public int SleepFlags;
+	public NPCState IdealNPCState;
+	public AI_Efficiency Efficiency;
+	public AI_SleepState SleepState;
+	public AI_SleepFlags SleepFlags;
 
 	public Activity Activity;
 	public Activity IdealActivity;
@@ -291,7 +306,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public AI_Squad? Squad;
 	public string? SquadName;
 
-	public static int DebugBits = 0;
+	public static AI_DebugFlags DebugBits = 0;
 	public static int DebugPauseIndex = -1;
 
 	public static readonly AI_ClassScheduleIdSpace ClassScheduleIdSpace = new(true);
@@ -308,7 +323,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public Vector3 DefaultEyeOffset;
 	public Vector3 CommandGoal;
 	public readonly AI_MoveMonitor CommandMoveMonitor = new();
-	public AIScheduleState_t ScheduleState;
+	public AIScheduleState ScheduleState;
 	public AI_Schedule? Schedule;
 	public int IdealSchedule;
 	public AI_ScheduleBits ConditionsPreIgnore;
@@ -323,7 +338,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public bool CrouchDesired;
 	public bool InAScript;
 	public TimeUnit_t SceneTime;
-	public AI_MoveEfficiency_t MoveEfficiency;
+	public AI_MoveEfficiency MoveEfficiency;
 	public TimeUnit_t NextDecisionTime;
 	public float WakeRadius;
 	public bool InChoreo;
@@ -345,7 +360,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		Capability = 0;
 
-		SetHullType(Hull_t.HULL_HUMAN);
+		SetHullType(AI_HullType.Human);
 
 		LastDamageTime = 0;
 		LastAttackTime = 0;
@@ -2771,27 +2786,27 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return true;
 	}
 
-	public NPC_STATE GetState() => NPCState;
+	public NPCState GetState() => NPCState;
 
 	public bool IsInAScript() => InAScript;
 	public void SetInAScript(bool script) => InAScript = script;
 
 	public bool IsInLockedScene() => SceneTime > gpGlobals.CurTime;
 
-	public void Forget(int memory) => Memory &= ~memory;
-	public bool HasMemory(int memory) => (Memory & memory) != 0;
+	public void Forget(AI_MemoryFlags memory) => Memory &= ~memory;
+	public bool HasMemory(AI_MemoryFlags memory) => (Memory & memory) != 0;
 
 	public TimeUnit_t GetLastAttackTime() => LastAttackTime;
 	public TimeUnit_t GetLastDamageTime() => LastDamageTime;
 
-	public AI_Efficiency_t GetEfficiency() => Efficiency;
-	public AI_MoveEfficiency_t GetMoveEfficiency() => MoveEfficiency;
-	public void SetMoveEfficiency(AI_MoveEfficiency_t efficiency) => MoveEfficiency = efficiency;
+	public AI_Efficiency GetEfficiency() => Efficiency;
+	public AI_MoveEfficiency GetMoveEfficiency() => MoveEfficiency;
+	public void SetMoveEfficiency(AI_MoveEfficiency efficiency) => MoveEfficiency = efficiency;
 
 	public bool IsFlaggedEfficient() => HasSpawnFlags(SF_NPC_START_EFFICIENT);
 
-	public void RemoveSleepFlags(int flags) => SleepFlags &= ~flags;
-	public bool HasSleepFlags(int flags) => (SleepFlags & flags) == flags;
+	public void RemoveSleepFlags(AI_SleepFlags flags) => SleepFlags &= ~flags;
+	public bool HasSleepFlags(AI_SleepFlags flags) => (SleepFlags & flags) == flags;
 
 	public bool IsUsingSmallHull() => IsUsingSmallHullValue;
 
@@ -2806,7 +2821,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual float HearingSensitivity() => 1.0f;
 
-	public void SetTaskStatus(TaskStatus_e status) => ScheduleState.TaskStatus = status;
+	public void SetTaskStatus(TaskStatus status) => ScheduleState.TaskStatus = status;
 
 	public void ResetScheduleCurTaskIndex() {
 		ScheduleState.CurTask = 0;
@@ -2896,7 +2911,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	}
 
 	public virtual bool ShouldPlayerAvoid() {
-		if (GetState() == NPC_STATE.NPC_STATE_SCRIPT)
+		if (GetState() == NPCState.Script)
 			return true;
 
 		if (IsInAScript())
@@ -2911,7 +2926,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return false;
 	}
 
-	public virtual bool IsCrouching() => (CapabilitiesGet() & (int)Capability_t.bits_CAP_DUCK) != 0 && Crouching;
+	public virtual bool IsCrouching() => (CapabilitiesGet() & Server.Capability.Duck) != 0 && Crouching;
 
 	public virtual bool Stand() {
 		if (ForceCrouch)
@@ -2951,7 +2966,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public bool HaveSequenceForActivity(Activity activity) => GetModelPtr() != null && GetModelPtr()!.HaveSequenceForActivity((int)activity);
 
 	public virtual Vector3 EyeOffset(Activity activity) {
-		if ((CapabilitiesGet() & (int)Capability_t.bits_CAP_DUCK) != 0) {
+		if ((CapabilitiesGet() & Server.Capability.Duck) != 0) {
 			if (IsCrouchedActivity(activity))
 				return GetCrouchEyeOffset();
 		}
@@ -2964,11 +2979,11 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual bool IsCrouchedActivity(Activity activity) => throw new NotImplementedException();
 
-	public override void AddEntityRelationship(BaseEntity entity, Disposition_t disposition, int priority) {
+	public override void AddEntityRelationship(BaseEntity entity, Disposition disposition, int priority) {
 		base.AddEntityRelationship(entity, disposition, priority);
 	}
 
-	public override void AddClassRelationship(Class_T classType, Disposition_t disposition, int priority) {
+	public override void AddClassRelationship(Class_T classType, Disposition disposition, int priority) {
 		base.AddClassRelationship(classType, disposition, priority);
 	}
 
@@ -2978,7 +2993,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual AI_BehaviorBase? GetRunningBehavior() => null;
 
-	public int CapabilitiesAdd(int capability) {
+	public Capability CapabilitiesAdd(Capability capability) {
 		Capability |= capability;
 
 		return Capability;
@@ -3038,7 +3053,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		GetMotor()!.SetIdealYaw(GetLocalAngles().Y);
 		MaxHealth = Health;
 		LifeState = (int)Source.LifeState.Alive;
-		SetIdealState(NPC_STATE.NPC_STATE_IDLE);
+		SetIdealState(NPCState.Idle);
 		SetIdealActivity(Activity.ACT_IDLE);
 		SetActivity(Activity.ACT_IDLE);
 
@@ -3054,7 +3069,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		SetHintNode(null);
 
-		Memory = MEMORY_CLEAR;
+		Memory = AI_MemoryFlags.Clear;
 
 		SetEnemy(null);
 
@@ -3070,7 +3085,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		SetDefaultEyeOffset();
 
-		if ((CapabilitiesGet() & (int)Capability_t.bits_CAP_USE_WEAPONS) != 0) {
+		if ((CapabilitiesGet() & Server.Capability.UseWeapons) != 0) {
 			if (SpawnEquipment != null && SpawnEquipment != "0") {
 				BaseCombatWeapon? weapon = Weapon_Create(SpawnEquipment);
 				if (weapon != null) {
@@ -3080,7 +3095,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 					if (((EntityEffects)Effects & EntityEffects.NoShadow) != 0)
 						weapon.AddEffects(EntityEffects.NoShadow);
 
-					Weapon_Equip(weapon);
+					base.Weapon_Equip(weapon);
 				}
 			}
 		}
@@ -3101,7 +3116,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		CreateVPhysics();
 
 		if (HasSpawnFlags(SF_NPC_START_EFFICIENT))
-			SetEfficiency(AI_Efficiency_t.AIE_EFFICIENT);
+			SetEfficiency(AI_Efficiency.Efficient);
 
 		FadeCorpse = ShouldFadeOnDeath();
 
@@ -3124,17 +3139,17 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		PostNPCInit();
 
-		if (GetSleepState() == AI_SleepState_t.AISS_AUTO_PVS) {
-			AddSleepFlags(AI_SLEEP_FLAG_AUTO_PVS);
-			SetSleepState(AI_SleepState_t.AISS_AWAKE);
+		if (GetSleepState() == AI_SleepState.AutoPVS) {
+			AddSleepFlags(AI_SleepFlags.AutoPVS);
+			SetSleepState(AI_SleepState.Awake);
 		}
 
-		if (GetSleepState() == AI_SleepState_t.AISS_AUTO_PVS_AFTER_PVS) {
-			AddSleepFlags(AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS);
-			SetSleepState(AI_SleepState_t.AISS_AWAKE);
+		if (GetSleepState() == AI_SleepState.AutoPVSAfterPVS) {
+			AddSleepFlags(AI_SleepFlags.AutoPVSAfterPVS);
+			SetSleepState(AI_SleepState.Awake);
 		}
 
-		if (GetSleepState() > AI_SleepState_t.AISS_AWAKE)
+		if (GetSleepState() > AI_SleepState.Awake)
 			Sleep();
 
 		LastRealThinkTime = gpGlobals.CurTime;
@@ -3144,12 +3159,12 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual void StartNPC() {
 		if ((GetMoveType() != Source.MoveType.Fly) && (GetMoveType() != Source.MoveType.FlyGravity) &&
-			 (CapabilitiesGet() & (int)Capability_t.bits_CAP_MOVE_FLY) == 0 &&
+			 (CapabilitiesGet() & Server.Capability.MoveFly) == 0 &&
 			 !HasSpawnFlags(SF_NPC_FALL_TO_GROUND) && !IsWaitingToRappel() && GetMoveParent() == null) {
 			Vector3 origin = GetLocalOrigin();
 
 			if (!GetMoveProbe()!.FloorPoint(origin + new Vector3(0, 0, 0.1f), Mask.NPCSolid, 0, -2048, out origin)) {
-				Warning($"NPC {GetClassname()} stuck in wall--level design error at ({GetAbsOrigin().X:F2} {GetAbsOrigin().Y:F2} {GetAbsOrigin().Z:F2})\n");
+				Warning($"NPC {base.GetClassname()} stuck in wall--level design error at ({GetAbsOrigin().X:F2} {GetAbsOrigin().Y:F2} {GetAbsOrigin().Z:F2})\n");
 				if (developer.GetInt() > 1)
 					DebugOverlays |= DebugOverlayBits.BBox;
 			}
@@ -3189,7 +3204,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		ScriptArrivalSequence = null;
 
 		if (HasSpawnFlags(SF_NPC_WAIT_FOR_SCRIPT)) {
-			SetState(NPC_STATE.NPC_STATE_IDLE);
+			SetState(NPCState.Idle);
 			Activity = IdealActivity;
 			IdealSequence = GetSequence();
 			SetSchedule(SCHED_WAIT_FOR_SCRIPT);
@@ -3211,18 +3226,18 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		string? entityString = tokenIndex < tokens.Length ? tokens[tokenIndex++] : null;
 		while (entityString != null) {
 			string? dispositionString = tokenIndex < tokens.Length ? tokens[tokenIndex++] : null;
-			Disposition_t disposition = Disposition_t.D_NU;
+			Disposition disposition = Disposition.NU;
 			if (dispositionString != null) {
 				if (stricmp(dispositionString, "D_HT") == 0)
-					disposition = Disposition_t.D_HT;
+					disposition = Disposition.HT;
 				else if (stricmp(dispositionString, "D_FR") == 0)
-					disposition = Disposition_t.D_FR;
+					disposition = Disposition.FR;
 				else if (stricmp(dispositionString, "D_LI") == 0)
-					disposition = Disposition_t.D_LI;
+					disposition = Disposition.LI;
 				else if (stricmp(dispositionString, "D_NU") == 0)
-					disposition = Disposition_t.D_NU;
+					disposition = Disposition.NU;
 				else {
-					disposition = Disposition_t.D_NU;
+					disposition = Disposition.NU;
 					Warning($"***ERROR***\nBad relationship type ({dispositionString}) to unknown entity ({entityString})!\n");
 					Assert(false);
 					return;
@@ -3264,8 +3279,8 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		}
 	}
 
-	public void SetState(NPC_STATE state) {
-		NPC_STATE oldState;
+	public void SetState(NPCState state) {
+		NPCState oldState;
 
 		oldState = NPCState;
 
@@ -3273,7 +3288,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 			LastStateChangeTime = gpGlobals.CurTime;
 
 		switch (state) {
-			case NPC_STATE.NPC_STATE_IDLE:
+			case NPCState.Idle:
 				if (GetEnemy() != null) {
 					SetEnemy(null);
 					DevMsg(2, "Stripped\n");
@@ -3293,12 +3308,12 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 			OnStateChange(oldState, NPCState);
 	}
 
-	public void SetIdealState(NPC_STATE idealState) {
+	public void SetIdealState(NPCState idealState) {
 		if (idealState != IdealNPCState)
 			IdealNPCState = idealState;
 	}
 
-	public virtual void OnStateChange(NPC_STATE oldState, NPC_STATE newState) { }
+	public virtual void OnStateChange(NPCState oldState, NPCState newState) { }
 
 	public Activity GetActivity() => Activity;
 
@@ -3367,11 +3382,11 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 				newActivity = Activity.ACT_RANGE_AIM_LOW;
 		}
 
-		if ((CapabilitiesGet() & (int)Capability_t.bits_CAP_DUCK) != 0) {
+		if ((CapabilitiesGet() & Server.Capability.Duck) != 0) {
 			if (newActivity == Activity.ACT_RELOAD)
 				return GetReloadActivity(GetHintNode());
 			else if ((newActivity == Activity.ACT_COVER) ||
-					 (newActivity == Activity.ACT_IDLE && HasMemory(bits_MEMORY_INCOVER))) {
+					 (newActivity == Activity.ACT_IDLE && HasMemory(AI_MemoryFlags.Incover))) {
 				Activity coverActivity = GetCoverActivity(GetHintNode());
 				if (SelectWeightedSequence(coverActivity) == StudioHdr.ACTIVITY_NOT_AVAILABLE)
 					coverActivity = Activity.ACT_IDLE;
@@ -3598,7 +3613,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		ScheduleState.TimeCurTaskStarted = ScheduleState.TimeStarted = 0;
 		ScheduleState.ScheduleWasInterrupted = true;
-		SetTaskStatus(TaskStatus_e.TASKSTATUS_NEW);
+		SetTaskStatus(TaskStatus.New);
 		IdealSchedule = SCHED_NONE;
 		Schedule = null;
 		ResetScheduleCurTaskIndex();
@@ -3653,8 +3668,8 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		SetViewOffset(DefaultEyeOffset);
 	}
 
-	public virtual int CapabilitiesGet() {
-		int capability = Capability;
+	public virtual Capability CapabilitiesGet() {
+		Capability capability = Capability;
 		if (GetActiveWeapon() != null)
 			capability |= GetActiveWeapon()!.CapabilitiesGet();
 		return capability;
@@ -3666,14 +3681,14 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public void ForceGatherConditions() {
 		ForceConditionsGather = true;
-		SetEfficiency(AI_Efficiency_t.AIE_NORMAL);
+		SetEfficiency(AI_Efficiency.Normal);
 	}
 
-	public void SetEfficiency(AI_Efficiency_t efficiency) => Efficiency = efficiency;
+	public void SetEfficiency(AI_Efficiency efficiency) => Efficiency = efficiency;
 
-	public AI_SleepState_t GetSleepState() => SleepState;
-	public void SetSleepState(AI_SleepState_t sleepState) => SleepState = sleepState;
-	public void AddSleepFlags(int flags) => SleepFlags |= flags;
+	public AI_SleepState GetSleepState() => SleepState;
+	public void SetSleepState(AI_SleepState sleepState) => SleepState = sleepState;
+	public void AddSleepFlags(AI_SleepFlags flags) => SleepFlags |= flags;
 
 	public void Sleep() => throw new NotImplementedException();
 
@@ -3714,9 +3729,9 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	}
 
 	public virtual bool InitSquad() {
-		if (Squad == null && (CapabilitiesGet() & (int)Capability_t.bits_CAP_SQUAD) != 0) {
+		if (Squad == null && (CapabilitiesGet() & Server.Capability.Squad) != 0) {
 			if (SquadName == null)
-				DevMsg(2, $"Found {GetClassname()} that isn't in a squad\n");
+				DevMsg(2, $"Found {base.GetClassname()} that isn't in a squad\n");
 			else
 				throw new NotImplementedException();
 		}
@@ -3731,10 +3746,10 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		if (InChoreo)
 			return false;
 
-		if (NPCState == NPC_STATE.NPC_STATE_DEAD)
+		if (NPCState == NPCState.Dead)
 			return false;
 
-		if (GetSleepState() != AI_SleepState_t.AISS_AWAKE)
+		if (GetSleepState() != AI_SleepState.Awake)
 			return false;
 
 		if (!UsingStandardThinkTime)
@@ -3743,7 +3758,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return true;
 	}
 
-	static int ThinkRebalanceCompare(AIRebalanceInfo_t left, AIRebalanceInfo_t right) {
+	static int ThinkRebalanceCompare(AIRebalanceInfo left, AIRebalanceInfo right) {
 		int baseCompare = left.NextThinkTick - right.NextThinkTick;
 		if (baseCompare != 0)
 			return baseCompare;
@@ -3786,7 +3801,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	static long RebalancePrevTick;
 	static int RebalanceThinksInTick;
 	static int RebalanceRebalanceableThinksInTick;
-	static readonly List<AIRebalanceInfo_t> rebalanceCandidates = new(16);
+	static readonly List<AIRebalanceInfo> rebalanceCandidates = new(16);
 
 	public void RebalanceThinks() {
 		bool debugThinkTicks = ai_debug_think_ticks.GetBool();
@@ -3823,7 +3838,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 				if (candidate.CanThinkRebalance() &&
 					(candidate.GetNextThinkTick() >= minTickRebalance &&
 					candidate.GetNextThinkTick() < maxTickRebalance)) {
-					AIRebalanceInfo_t info = default;
+					AIRebalanceInfo info = default;
 
 					info.NPC = candidate;
 					info.NextThinkTick = (int)candidate.GetNextThinkTick();
@@ -3987,7 +4002,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public void Wake(bool fireOutput = true) => throw new NotImplementedException();
 
 	public void UpdateSleepState(bool inPVS) {
-		if (GetSleepState() > AI_SleepState_t.AISS_AWAKE) {
+		if (GetSleepState() > AI_SleepState.Awake) {
 			BasePlayer? localPlayer = AI_GetClosestPlayer();
 			if (localPlayer == null) {
 				Wake();
@@ -3996,11 +4011,11 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 			if (WakeRadius > .1 && (localPlayer.GetFlags() & EntityFlags.NoTarget) == 0 && (localPlayer.GetAbsOrigin() - GetAbsOrigin()).LengthSquared() <= WakeRadius * WakeRadius)
 				Wake();
-			else if (GetSleepState() == AI_SleepState_t.AISS_WAITING_FOR_PVS) {
+			else if (GetSleepState() == AI_SleepState.WaitingForPVS) {
 				if (inPVS)
 					Wake();
 			}
-			else if (GetSleepState() == AI_SleepState_t.AISS_WAITING_FOR_THREAT) {
+			else if (GetSleepState() == AI_SleepState.WaitingForThreat) {
 				if (HasCondition((int)SCOND_t.COND_LIGHT_DAMAGE) || HasCondition((int)SCOND_t.COND_HEAVY_DAMAGE))
 					Wake();
 				else {
@@ -4033,17 +4048,17 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 			}
 		}
 		else {
-			if (!IsInAScript() && NPCState != NPC_STATE.NPC_STATE_SCRIPT) {
-				if (HasSleepFlags(AI_SLEEP_FLAG_AUTO_PVS)) {
+			if (!IsInAScript() && NPCState != NPCState.Script) {
+				if (HasSleepFlags(AI_SleepFlags.AutoPVS)) {
 					if (!HasCondition((int)SCOND_t.COND_IN_PVS)) {
-						SetSleepState(AI_SleepState_t.AISS_WAITING_FOR_PVS);
+						SetSleepState(AI_SleepState.WaitingForPVS);
 						Sleep();
 					}
 				}
-				if (HasSleepFlags(AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS)) {
+				if (HasSleepFlags(AI_SleepFlags.AutoPVSAfterPVS)) {
 					if (HasCondition((int)SCOND_t.COND_IN_PVS)) {
-						AddSleepFlags(AI_SLEEP_FLAG_AUTO_PVS);
-						RemoveSleepFlags(AI_SLEEP_FLAG_AUTO_PVS_AFTER_PVS);
+						AddSleepFlags(AI_SleepFlags.AutoPVS);
+						RemoveSleepFlags(AI_SleepFlags.AutoPVSAfterPVS);
 					}
 				}
 			}
@@ -4056,51 +4071,51 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	static Vector3 UpdateEfficiencyPlayerForward;
 	static long UpdateEfficiencyPrevFrame = -1;
 
-	static readonly AI_Efficiency_t[] EfficiencyMappings = [
-		AI_Efficiency_t.AIE_NORMAL,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_VERY_EFFICIENT,
-		AI_Efficiency_t.AIE_VERY_EFFICIENT,
-		AI_Efficiency_t.AIE_SUPER_EFFICIENT,
-		AI_Efficiency_t.AIE_SUPER_EFFICIENT,
+	static readonly AI_Efficiency[] EfficiencyMappings = [
+		AI_Efficiency.Normal,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.VeryEfficient,
+		AI_Efficiency.VeryEfficient,
+		AI_Efficiency.SuperEfficient,
+		AI_Efficiency.SuperEfficient,
 
-		AI_Efficiency_t.AIE_NORMAL,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_NORMAL,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_VERY_EFFICIENT,
-		AI_Efficiency_t.AIE_SUPER_EFFICIENT,
+		AI_Efficiency.Normal,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Normal,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.VeryEfficient,
+		AI_Efficiency.SuperEfficient,
 
-		AI_Efficiency_t.AIE_NORMAL,
-		AI_Efficiency_t.AIE_NORMAL,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_NORMAL,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_NORMAL,
-		AI_Efficiency_t.AIE_EFFICIENT,
-		AI_Efficiency_t.AIE_VERY_EFFICIENT,
+		AI_Efficiency.Normal,
+		AI_Efficiency.Normal,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Normal,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.Normal,
+		AI_Efficiency.Efficient,
+		AI_Efficiency.VeryEfficient,
 	];
 
 	static readonly int[] EfficiencyStateBase = [0, 9, 18];
 
 	public void UpdateEfficiency(bool inPVS) {
-		if (GetSleepState() != AI_SleepState_t.AISS_AWAKE) {
-			SetEfficiency(AI_Efficiency_t.AIE_DORMANT);
+		if (GetSleepState() != AI_SleepState.Awake) {
+			SetEfficiency(AI_Efficiency.Dormant);
 			return;
 		}
 
-		InChoreo = GetState() == NPC_STATE.NPC_STATE_SCRIPT || IsCurSchedule(SCHED_SCENE_GENERIC, false);
+		InChoreo = GetState() == NPCState.Script || IsCurSchedule(SCHED_SCENE_GENERIC, false);
 
 		if (!ShouldUseEfficiency()) {
-			SetEfficiency(AI_Efficiency_t.AIE_NORMAL);
-			SetMoveEfficiency(AI_MoveEfficiency_t.AIME_NORMAL);
+			SetEfficiency(AI_Efficiency.Normal);
+			SetMoveEfficiency(AI_MoveEfficiency.Normal);
 			return;
 		}
 
@@ -4127,17 +4142,17 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		bool inVisibilityPVS = clientPVSExpanded && Util.FindClientInVisibilityPVS(Edict()) != null;
 
 		if ((inPVS && (playerFacing || playerDist < 25 * 12)) || clientPVSExpanded)
-			SetMoveEfficiency(AI_MoveEfficiency_t.AIME_NORMAL);
+			SetMoveEfficiency(AI_MoveEfficiency.Normal);
 		else
-			SetMoveEfficiency(AI_MoveEfficiency_t.AIME_EFFICIENT);
+			SetMoveEfficiency(AI_MoveEfficiency.Efficient);
 
-		if (ai_efficiency_override.GetInt() > (int)AI_Efficiency_t.AIE_NORMAL && ai_efficiency_override.GetInt() <= (int)AI_Efficiency_t.AIE_DORMANT) {
-			SetEfficiency((AI_Efficiency_t)ai_efficiency_override.GetInt());
+		if (ai_efficiency_override.GetInt() > (int)AI_Efficiency.Normal && ai_efficiency_override.GetInt() <= (int)AI_Efficiency.Dormant) {
+			SetEfficiency((AI_Efficiency)ai_efficiency_override.GetInt());
 			return;
 		}
 
 		if (gpGlobals.CurTime - GetLastAttackTime() < .15) {
-			SetEfficiency(AI_Efficiency_t.AIE_NORMAL);
+			SetEfficiency(AI_Efficiency.Normal);
 			return;
 		}
 
@@ -4146,21 +4161,21 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		if (ForceConditionsGather ||
 			 gpGlobals.CurTime - GetLastAttackTime() < .2 ||
 			 gpGlobals.CurTime - LastDamageTime < .2 ||
-			 (GetState() < NPC_STATE.NPC_STATE_IDLE || GetState() > NPC_STATE.NPC_STATE_SCRIPT) ||
+			 (GetState() < NPCState.Idle || GetState() > NPCState.Script) ||
 			 ((inPVS || inVisibilityPVS) &&
 			   ((GetTask() != null && !TaskIsRunning()) ||
 				 GetTaskInterrupt() > 0 ||
 				 InChoreo))) {
-			SetEfficiency(framerateOk ? AI_Efficiency_t.AIE_NORMAL : AI_Efficiency_t.AIE_EFFICIENT);
+			SetEfficiency(framerateOk ? AI_Efficiency.Normal : AI_Efficiency.Efficient);
 			return;
 		}
 
-		AI_Efficiency_t minEfficiency;
+		AI_Efficiency minEfficiency;
 
 		if (!ShouldDefaultEfficient())
-			minEfficiency = framerateOk ? AI_Efficiency_t.AIE_NORMAL : AI_Efficiency_t.AIE_EFFICIENT;
+			minEfficiency = framerateOk ? AI_Efficiency.Normal : AI_Efficiency.Efficient;
 		else
-			minEfficiency = framerateOk ? AI_Efficiency_t.AIE_EFFICIENT : AI_Efficiency_t.AIE_VERY_EFFICIENT;
+			minEfficiency = framerateOk ? AI_Efficiency.Efficient : AI_Efficiency.VeryEfficient;
 
 		bool potentialDanger = false;
 
@@ -4215,29 +4230,29 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 					(playerDist < 100 * 12) ? DIST_MID : DIST_FAR;
 		}
 
-		NPC_STATE state = GetState();
-		if (state == NPC_STATE.NPC_STATE_SCRIPT)
-			state = NPC_STATE.NPC_STATE_ALERT;
+		NPCState state = GetState();
+		if (state == NPCState.Script)
+			state = NPCState.Alert;
 
 		const int NOT_FACING_OFFSET = 3;
 		const int NO_PVS_OFFSET = 6;
 
-		int stateOffset = EfficiencyStateBase[state - NPC_STATE.NPC_STATE_IDLE];
+		int stateOffset = EfficiencyStateBase[state - NPCState.Idle];
 		int facingOffset = (!inPVS || playerFacing) ? 0 : NOT_FACING_OFFSET;
 		int pvsOffset = inPVS ? 0 : NO_PVS_OFFSET;
 		int mapping = stateOffset + pvsOffset + facingOffset + range;
 
 		Assert(mapping < EfficiencyMappings.Length);
 
-		AI_Efficiency_t efficiency = EfficiencyMappings[mapping];
+		AI_Efficiency efficiency = EfficiencyMappings[mapping];
 
-		AI_Efficiency_t maxEfficiency = AI_Efficiency_t.AIE_SUPER_EFFICIENT;
-		if (inVisibilityPVS && state >= NPC_STATE.NPC_STATE_ALERT)
-			maxEfficiency = AI_Efficiency_t.AIE_EFFICIENT;
+		AI_Efficiency maxEfficiency = AI_Efficiency.SuperEfficient;
+		if (inVisibilityPVS && state >= NPCState.Alert)
+			maxEfficiency = AI_Efficiency.Efficient;
 		else if (inVisibilityPVS || HasCondition((int)SCOND_t.COND_SEE_PLAYER))
-			maxEfficiency = AI_Efficiency_t.AIE_VERY_EFFICIENT;
+			maxEfficiency = AI_Efficiency.VeryEfficient;
 
-		SetEfficiency((AI_Efficiency_t)Math.Clamp((int)efficiency, (int)minEfficiency, (int)maxEfficiency));
+		SetEfficiency((AI_Efficiency)Math.Clamp((int)efficiency, (int)minEfficiency, (int)maxEfficiency));
 	}
 
 	public void GetPlayerAvoidBounds(out Vector3 mins, out Vector3 maxs) {
@@ -4284,12 +4299,12 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 			return false;
 		}
 
-		if ((DebugBits & bits_debugDisableAI) != 0 || !AI_NetworkManager.NetworksLoaded()) {
+		if ((DebugBits & AI_DebugFlags.DisableAI) != 0 || !AI_NetworkManager.NetworksLoaded()) {
 			SetActivity(Activity.ACT_IDLE);
 			return false;
 		}
 
-		if ((DebugBits & bits_debugStepAI) != 0) {
+		if ((DebugBits & AI_DebugFlags.StepAI) != 0) {
 			if (DebugCurIndex >= DebugPauseIndex) {
 				if (!GetNavigator()!.IsGoalActive())
 					PlaybackRate = 0;
@@ -4335,7 +4350,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		if (CheckContacts)
 			CheckPhysicsContacts();
 
-		Assert(!(NPCState == NPC_STATE.NPC_STATE_DEAD && LifeState == (int)Source.LifeState.Alive));
+		Assert(!(NPCState == NPCState.Dead && LifeState == (int)Source.LifeState.Alive));
 
 		SetNextThink(TICK_NEVER_THINK);
 
@@ -4345,7 +4360,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		bool ranDecision = false;
 
-		if (GetEfficiency() < AI_Efficiency_t.AIE_DORMANT && GetSleepState() == AI_SleepState_t.AISS_AWAKE) {
+		if (GetEfficiency() < AI_Efficiency.Dormant && GetSleepState() == AI_SleepState.Awake) {
 			float thinkLimit = ai_show_think_tolerance.GetFloat();
 
 			if (thinkLimit > 0)
@@ -4419,7 +4434,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 			if (ranDecision)
 				NextDecisionTime = gpGlobals.CurTime + g_DecisionIntervals[(int)GetEfficiency()];
 
-			if (GetMoveEfficiency() == AI_MoveEfficiency_t.AIME_NORMAL || GetEfficiency() == AI_Efficiency_t.AIE_NORMAL)
+			if (GetMoveEfficiency() == AI_MoveEfficiency.Normal || GetEfficiency() == AI_Efficiency.Normal)
 				SetNextThink(gpGlobals.CurTime + .1);
 			else
 				SetNextThink(gpGlobals.CurTime + .2);
