@@ -98,7 +98,7 @@ public class AI_BaseActor : AI_ExpresserHost_AI_BaseHumanoid
 		Init(ref FlexweightGestureRightLeft, "gesture_rightleft");
 	}
 
-	public virtual AI_Expresser? GetExpresser() {
+	public override AI_Expresser? GetExpresser() {
 		return Expresser;
 	}
 

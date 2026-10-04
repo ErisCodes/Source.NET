@@ -2627,6 +2627,19 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual BaseEntity? FindNamedEntity(ReadOnlySpan<char> name, IEntityFindFilter? filter = null) => throw new NotImplementedException();
 
+	public virtual AI_Expresser? GetExpresser() => null;
+
+	public virtual bool IsPlayerAlly(BasePlayer? player = null) {
+		if (player == null) {
+			if (!AI_IsSinglePlayer())
+				return false;
+
+			player = Util.GetLocalPlayer();
+		}
+
+		return player == null || IRelationType(player) == Disposition.LI;
+	}
+
 	public void SetTarget(BaseEntity? target) => TargetEnt.Set(target);
 
 	public float GetHullWidth() => NAI_Hull.Width(GetHullType());
