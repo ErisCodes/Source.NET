@@ -893,7 +893,7 @@ public class StudioHeader2
 		br.Read(out NumSrcBoneTransform);
 		br.Read(out SrcBoneTransformIndex);
 		br.Read(out IllumPositionAttachmentIndex);
-		br.Read(out MaxEyeDeflection);
+		br.Read(out MaxEyeDeflectionValue);
 		br.Read(out LinearBoneIndex);
 		br.Read(out SzNameIndex);
 		br.Read(out BoneFlexDriverCount);
@@ -903,7 +903,8 @@ public class StudioHeader2
 	public int NumSrcBoneTransform;
 	public int SrcBoneTransformIndex;
 	public int IllumPositionAttachmentIndex;
-	public float MaxEyeDeflection;
+	public float MaxEyeDeflectionValue;
+	public float MaxEyeDeflection() => MaxEyeDeflectionValue != 0.0f ? MaxEyeDeflectionValue : 0.866f;
 
 	public int LinearBoneIndex;
 	MStudioLinearBone? linearBones;
@@ -1443,6 +1444,63 @@ public class MStudioFlexController
 	}
 }
 
+public enum StudioFlexOpCode : int
+{
+	Const = 1,
+	Fetch1 = 2,
+	Fetch2 = 3,
+	Add = 4,
+	Sub = 5,
+	Mul = 6,
+	Div = 7,
+	Neg = 8,
+	Exp = 9,
+	Open = 10,
+	Close = 11,
+	Comma = 12,
+	Max = 13,
+	Min = 14,
+	TwoWay0 = 15,
+	TwoWay1 = 16,
+	NWay = 17,
+	Combo = 18,
+	Dominate = 19,
+	DmeLowerEyelid = 20,
+	DmeUpperEyelid = 21,
+}
+
+[StructLayout(LayoutKind.Explicit)]
+public struct MStudioFlexOp
+{
+	public const int SIZEOF = 8;
+
+	[FieldOffset(0)] public StudioFlexOpCode Op;
+	[FieldOffset(4)] public int Index;
+	[FieldOffset(4)] public float Value;
+}
+
+public class MStudioFlexRule
+{
+	public const int SIZEOF = 12;
+	public static MStudioFlexRule FACTORY(object caller, Memory<byte> data) => new(data);
+
+	public Memory<byte> Data;
+
+	public int Flex;
+	public int NumOps;
+	public int OpIndex;
+
+	public MStudioFlexRule(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(Data.Span);
+		br.Read(out Flex);
+		br.Read(out NumOps);
+		br.Read(out OpIndex);
+	}
+
+	public Span<MStudioFlexOp> FlexOp(int i) => Data.Span[OpIndex..].Cast<byte, MStudioFlexOp>()[i..];
+}
+
 [Flags]
 public enum StudioMotionFlags
 {
@@ -1900,6 +1958,152 @@ public class StudioHdr
 
 	public LocalFlexController NumFlexControllers() => (LocalFlexController)studioHdr!.NumFlexControllers;
 	public MStudioFlexController FlexController(LocalFlexController i) => studioHdr!.FlexController(i);
+	public int NumFlexDesc() => studioHdr!.NumFlexDesc;
+	public int NumFlexRules() => studioHdr!.NumFlexRules;
+	public MStudioFlexRule FlexRule(int i) => studioHdr!.FlexRule(i);
+	public int GetNumIKChains() => studioHdr!.NumIKChains;
+	public float MaxEyeDeflection() => studioHdr!.MaxEyeDeflection();
+
+	public void RunFlexRules(ReadOnlySpan<float> src, Span<float> dest) {
+		int i, j;
+
+		for (i = 0; i < NumFlexDesc(); i++)
+			dest[i] = 0;
+
+		Span<float> stack = stackalloc float[32];
+		for (i = 0; i < NumFlexRules(); i++) {
+			stack.Clear();
+			int k = 0;
+			MStudioFlexRule rule = FlexRule(i);
+
+			Span<MStudioFlexOp> pops = rule.FlexOp(0);
+
+			for (j = 0; j < rule.NumOps; j++) {
+				ref readonly MStudioFlexOp op = ref pops[j];
+				switch (op.Op) {
+					case StudioFlexOpCode.Add: stack[k - 2] = stack[k - 2] + stack[k - 1]; k--; break;
+					case StudioFlexOpCode.Sub: stack[k - 2] = stack[k - 2] - stack[k - 1]; k--; break;
+					case StudioFlexOpCode.Mul: stack[k - 2] = stack[k - 2] * stack[k - 1]; k--; break;
+					case StudioFlexOpCode.Div:
+						if (stack[k - 1] > 0.0001)
+							stack[k - 2] = stack[k - 2] / stack[k - 1];
+						else
+							stack[k - 2] = 0;
+						k--;
+						break;
+					case StudioFlexOpCode.Neg: stack[k - 1] = -stack[k - 1]; break;
+					case StudioFlexOpCode.Max: stack[k - 2] = stack[k - 2] > stack[k - 1] ? stack[k - 2] : stack[k - 1]; k--; break;
+					case StudioFlexOpCode.Min: stack[k - 2] = stack[k - 2] < stack[k - 1] ? stack[k - 2] : stack[k - 1]; k--; break;
+					case StudioFlexOpCode.Const: stack[k] = op.Value; k++; break;
+					case StudioFlexOpCode.Fetch1: {
+							int m = FlexController((LocalFlexController)op.Index).LocalToGlobal;
+							stack[k] = src[m];
+							k++;
+							break;
+						}
+					case StudioFlexOpCode.Fetch2: {
+							stack[k] = dest[op.Index]; k++; break;
+						}
+					case StudioFlexOpCode.Combo: {
+							int m = op.Index;
+							int km = k - m;
+							for (int n = km + 1; n < k; ++n)
+								stack[km] *= stack[n];
+							k = k - m + 1;
+						}
+						break;
+					case StudioFlexOpCode.Dominate: {
+							int m = op.Index;
+							int km = k - m;
+							float dv = stack[km];
+							for (int n = km + 1; n < k; ++n)
+								dv *= stack[n];
+							stack[km - 1] *= 1.0f - dv;
+							k -= m;
+						}
+						break;
+					case StudioFlexOpCode.TwoWay0: {
+							int m = FlexController((LocalFlexController)op.Index).LocalToGlobal;
+							stack[k] = (float)MathLib.RemapValClamped(src[m], -1.0f, 0.0f, 1.0f, 0.0f);
+							k++;
+						}
+						break;
+					case StudioFlexOpCode.TwoWay1: {
+							int m = FlexController((LocalFlexController)op.Index).LocalToGlobal;
+							stack[k] = (float)MathLib.RemapValClamped(src[m], 0.0f, 1.0f, 0.0f, 1.0f);
+							k++;
+						}
+						break;
+					case StudioFlexOpCode.NWay: {
+							LocalFlexController valueControllerIndex = (LocalFlexController)(int)stack[k - 1];
+							int m = FlexController(valueControllerIndex).LocalToGlobal;
+							float flValue = src[m];
+							int v = FlexController((LocalFlexController)op.Index).LocalToGlobal;
+
+							Vector4 filterRamp = new(stack[k - 5], stack[k - 4], stack[k - 3], stack[k - 2]);
+
+							if (flValue <= filterRamp.X || flValue >= filterRamp.W)
+								flValue = 0.0f;
+							else if (flValue < filterRamp.Y)
+								flValue = (float)MathLib.RemapValClamped(flValue, filterRamp.X, filterRamp.Y, 0.0f, 1.0f);
+							else if (flValue > filterRamp.Z)
+								flValue = (float)MathLib.RemapValClamped(flValue, filterRamp.Z, filterRamp.W, 1.0f, 0.0f);
+							else
+								flValue = 1.0f;
+
+							stack[k - 5] = flValue * src[v];
+
+							k -= 4;
+						}
+						break;
+					case StudioFlexOpCode.DmeLowerEyelid: {
+							MStudioFlexController closeLidV = FlexController((LocalFlexController)op.Index);
+							float flCloseLidV = (float)MathLib.RemapValClamped(src[closeLidV.LocalToGlobal], closeLidV.Min, closeLidV.Max, 0.0f, 1.0f);
+
+							MStudioFlexController closeLid = FlexController((LocalFlexController)(int)stack[k - 1]);
+							float flCloseLid = (float)MathLib.RemapValClamped(src[closeLid.LocalToGlobal], closeLid.Min, closeLid.Max, 0.0f, 1.0f);
+
+							int nEyeUpDownIndex = (int)stack[k - 3];
+							float flEyeUpDown = 0.0f;
+							if (nEyeUpDownIndex >= 0) {
+								MStudioFlexController eyeUpDown = FlexController((LocalFlexController)(int)stack[k - 3]);
+								flEyeUpDown = (float)MathLib.RemapValClamped(src[eyeUpDown.LocalToGlobal], eyeUpDown.Min, eyeUpDown.Max, -1.0f, 1.0f);
+							}
+
+							if (flEyeUpDown > 0.0)
+								stack[k - 3] = (1.0f - flEyeUpDown) * (1.0f - flCloseLidV) * flCloseLid;
+							else
+								stack[k - 3] = (1.0f - flCloseLidV) * flCloseLid;
+							k -= 2;
+						}
+						break;
+					case StudioFlexOpCode.DmeUpperEyelid: {
+							MStudioFlexController closeLidV = FlexController((LocalFlexController)op.Index);
+							float flCloseLidV = (float)MathLib.RemapValClamped(src[closeLidV.LocalToGlobal], closeLidV.Min, closeLidV.Max, 0.0f, 1.0f);
+
+							MStudioFlexController closeLid = FlexController((LocalFlexController)(int)stack[k - 1]);
+							float flCloseLid = (float)MathLib.RemapValClamped(src[closeLid.LocalToGlobal], closeLid.Min, closeLid.Max, 0.0f, 1.0f);
+
+							int nEyeUpDownIndex = (int)stack[k - 3];
+							float flEyeUpDown = 0.0f;
+							if (nEyeUpDownIndex >= 0) {
+								MStudioFlexController eyeUpDown = FlexController((LocalFlexController)(int)stack[k - 3]);
+								flEyeUpDown = (float)MathLib.RemapValClamped(src[eyeUpDown.LocalToGlobal], eyeUpDown.Min, eyeUpDown.Max, -1.0f, 1.0f);
+							}
+
+							if (flEyeUpDown < 0.0f)
+								stack[k - 3] = (1.0f + flEyeUpDown) * flCloseLidV * flCloseLid;
+							else
+								stack[k - 3] = flCloseLidV * flCloseLid;
+							k -= 2;
+						}
+						break;
+				}
+			}
+
+			dest[rule.Flex] = stack[0];
+		}
+	}
 
 	public MStudioBoneController BoneController(int i) => studioHdr!.BoneController(i);
 
@@ -2530,6 +2734,9 @@ public class StudioHeader
 
 	public int NumFlexRules;
 	public int FlexRuleIndex;
+	MStudioFlexRule[]? flexRuleCache;
+	public MStudioFlexRule FlexRule(int i)
+		=> Studio.ProduceArrayIdx(this, ref flexRuleCache, NumFlexRules, FlexRuleIndex, i, MStudioFlexRule.SIZEOF, Data, MStudioFlexRule.FACTORY);
 
 	public int NumIKChains;
 	public int IKChainIndex;
@@ -2597,6 +2804,7 @@ public class StudioHeader
 	public StudioHeader2 StudioHdr2() => studioHdr2 ??= new(Data[StudioHDR2Index..]);
 
 	public MStudioLinearBone? LinearBones() => StudioHDR2Index != 0 ? StudioHdr2().LinearBones() : null;
+	public float MaxEyeDeflection() => StudioHDR2Index != 0 ? StudioHdr2().MaxEyeDeflection() : 0.866f;
 
 	internal VirtualModel? GetVirtualModel() {
 		if (NumIncludeModels == 0)
