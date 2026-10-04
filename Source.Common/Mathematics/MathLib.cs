@@ -1789,6 +1789,21 @@ public static class MathLib
 		Hermite_Spline(p1, p2, e10, e21, t, out output);
 	}
 
+	public static void Hermite_Spline(in Quaternion q0, in Quaternion q1, in Quaternion q2, float t, out Quaternion output) {
+		Quaternion q0a;
+		Quaternion q1a;
+
+		QuaternionAlign(q2, q0, out q0a);
+		QuaternionAlign(q2, q1, out q1a);
+
+		output.X = Hermite_Spline(q0a.X, q1a.X, q2.X, t);
+		output.Y = Hermite_Spline(q0a.Y, q1a.Y, q2.Y, t);
+		output.Z = Hermite_Spline(q0a.Z, q1a.Z, q2.Z, t);
+		output.W = Hermite_Spline(q0a.W, q1a.W, q2.W, t);
+
+		QuaternionNormalize2(ref output);
+	}
+
 	public static void QuaternionAlign(in Quaternion p, in Quaternion q, out Quaternion qt) {
 		qt = default;
 		int i;

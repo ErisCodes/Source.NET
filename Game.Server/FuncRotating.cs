@@ -1,7 +1,11 @@
-﻿using Source.Common;
-using Source;
+﻿using Game.Shared;
 
-using Game.Shared;
+using Source;
+using Source.Common;
+using Source.Common.Mathematics;
+
+using System.Numerics;
+using System.Xml.Linq;
 
 namespace Game.Server;
 
@@ -25,15 +29,22 @@ public class FuncRotating : BaseEntity
 	]);
 
 	private static void SendProxy_FuncRotatingOrigin(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		throw new NotImplementedException();
+		SendProxy_Origin(prop, instance, field, ref outData, element, objectID);
 	}
 
 	private static void SendProxy_FuncRotatingAngle(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		throw new NotImplementedException();
+		FuncRotating? entity = (FuncRotating?)instance;
+		Assert(entity != null);
+
+		ReadOnlySpan<float> qa = field.GetValue < Vector3>(instance).ReadOnlyBase();
+		ReadOnlySpan<float> ea = entity.GetLocalAngles().ReadOnlyBase();
+
+		outData.Float = MathLib.anglemod(qa[0]);
+		Assert(float.IsFinite(outData.Float));
 	}
 
 	private static void SendProxy_FuncRotatingSimulationTime(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		throw new NotImplementedException();
+		SendProxy_SimulationTime(prop, instance, field, ref outData, element, objectID);
 	}
 
 	public static readonly new ServerClass ServerClass = new ServerClass(DT_FuncRotating);

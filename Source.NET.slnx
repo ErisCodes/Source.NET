@@ -72,9 +72,7 @@
     <Project Path="Source.Dedicated/Source.Dedicated.csproj" />
     <Project Path="Source.Launcher/Source.Launcher.csproj" />
   </Folder>
-  <Folder Name="/7. Tools/">
-    <Project Path="Source.DatatableToClassDef/Source.DatatableToClassDef.csproj" />
-  </Folder>
+  <Folder Name="/7. Tools/" />
   <Folder Name="/8. Assets/">
     <Project Path="Game.Assets/Game.Assets.csproj" />
   </Folder>

@@ -661,7 +661,7 @@ public partial class BaseEntity : IServerEntity
 		outData.Int = addt;
 	}
 
-	private static void SendProxy_SimulationTime(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
+	internal static void SendProxy_SimulationTime(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
 		BaseEntity entity = (BaseEntity)instance;
 
 		int tickNumber = TIME_TO_TICKS(entity.SimulationTime);
@@ -693,7 +693,7 @@ public partial class BaseEntity : IServerEntity
 		BaseEntity entity = (BaseEntity)instance;
 		BaseAnimating? animating = entity.GetBaseAnimating();
 
-		if (animating != null /*&& !animating.IsUsingClientSideAnimation()*/)
+		if (animating != null && !animating.IsUsingClientSideAnimation())
 			return instance;
 		else
 			return null;
@@ -962,26 +962,168 @@ public partial class BaseEntity : IServerEntity
 		BaseEntity entity = (BaseEntity)instance;
 		Assert(entity != null);
 
-		QAngle angles;
-		if (true /*entity.UseStepSimulationNetworkAngles*/)
-			angles = entity.GetLocalAngles();
+
+		ref readonly QAngle angles = ref entity.UseStepSimulationNetworkAngles(out bool ok);
+		if (!ok)
+			angles = ref entity.GetLocalAngles();
 
 		outData.Vector[0] = MathLib.AngleMod(angles.X);
 		outData.Vector[1] = MathLib.AngleMod(angles.Y);
 		outData.Vector[2] = MathLib.AngleMod(angles.Z);
 	}
-	private static void SendProxy_Origin(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
+
+	private ref QAngle UseStepSimulationNetworkAngles(out bool ok) {
+		if (Physics.g_bTestMoveTypeStepSimulation && GetMoveType() == Source.MoveType.Step && HasDataObjectType(DataObjectType.StepSimulation)) {
+			ref StepSimulationData step = ref GetDataObject<StepSimulationData>(DataObjectType.StepSimulation);
+			ComputeStepSimulationNetwork(ref step);
+			
+			ok = step.AnglesActive;
+			return ref step.NetworkAngles;
+		}
+
+		ok = false;
+		return ref Unsafe.NullRef<QAngle>();
+	}
+
+	internal static void SendProxy_Origin(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
 		BaseEntity entity = (BaseEntity)instance;
 		Assert(entity != null);
 
-		Vector3 vector3;
-		if (true /*entity.UseStepSimulationNetworkAngles*/)
-			vector3 = entity.GetLocalOrigin();
+		ref readonly Vector3 vector3 = ref entity.UseStepSimulationNetworkOrigin(out bool ok);
+		if (!ok)
+			vector3 = ref entity.GetLocalOrigin();
 
 		outData.Vector[0] = vector3.X;
 		outData.Vector[1] = vector3.Y;
 		outData.Vector[2] = vector3.Z;
 	}
+
+	private ref Vector3 UseStepSimulationNetworkOrigin(out bool ok) {
+		if (Physics.g_bTestMoveTypeStepSimulation && GetMoveType() == Source.MoveType.Step && HasDataObjectType(DataObjectType.StepSimulation)) {
+			ref StepSimulationData step = ref GetDataObject<StepSimulationData>(DataObjectType.StepSimulation);
+			ComputeStepSimulationNetwork(ref step);
+			ok = step.OriginActive;
+			return ref step.NetworkOrigin;
+		}
+
+		ok = false;
+		return ref Unsafe.NullRef<Vector3>();
+	}
+
+	private void ComputeStepSimulationNetwork(ref StepSimulationData step) {
+		if (Unsafe.IsNullRef(ref step)) {
+			AssertMsg(false, "ComputeStepSimulationNetworkOriginAndAngles with NULL step\n");
+			return;
+		}
+
+		// Don't run again if we've already calculated this tick
+		if (step.LastProcessTickCount == gpGlobals.TickCount) {
+			return;
+		}
+
+		step.LastProcessTickCount = (int)gpGlobals.TickCount;
+
+		// Origin
+		// It's inactive
+		if (step.OriginActive) {
+			// First see if any external code moved the entity
+			if (GetStepOrigin() != step.Next.Origin) {
+				step.OriginActive = false;
+			}
+			else {
+				// Compute interpolated info based on tick interval
+				float frac = 1.0f;
+				long tickdelta = step.Next.TickCount - step.Previous.TickCount;
+				if (tickdelta > 0) {
+					frac = (float)((int)gpGlobals.TickCount - step.Previous.TickCount) / (float)tickdelta;
+					frac = Math.Clamp(frac, 0.0f, 1.0f);
+				}
+
+				if (step.Previous2.TickCount == 0 || step.Previous2.TickCount >= step.Previous.TickCount) {
+					Vector3 delta = step.Next.Origin - step.Previous.Origin;
+					MathLib.VectorMA(step.Previous.Origin, frac, delta, out step.NetworkOrigin);
+				}
+				else if (!step_spline.GetBool()) {
+					ref StepSimulationStep pOlder = ref step.Previous;
+					ref StepSimulationStep pNewer = ref step.Next;
+
+					if (step.Discontinuity.TickCount > step.Previous.TickCount) {
+						if (gpGlobals.TickCount > step.Discontinuity.TickCount)
+							pOlder = ref step.Discontinuity;
+						else
+							pNewer = ref step.Discontinuity;
+
+						tickdelta = pNewer.TickCount - pOlder.TickCount;
+						if (tickdelta > 0) {
+							frac = (float)(gpGlobals.TickCount - pOlder.TickCount) / (float)tickdelta;
+							frac = Math.Clamp(frac, 0.0f, 1.0f);
+						}
+					}
+
+					Vector3 delta = pNewer.Origin - pOlder.Origin;
+					MathLib.VectorMA(pOlder.Origin, frac, delta, out step.NetworkOrigin);
+				}
+				else {
+					MathLib.Hermite_Spline(step.Previous2.Origin, step.Previous.Origin, step.Next.Origin, frac, out step.NetworkOrigin);
+				}
+			}
+		}
+
+		// Angles
+		if (step.AnglesActive) {
+			// See if external code changed the orientation of the entity
+			if (GetStepAngles() != step.NextRotation) {
+				step.AnglesActive = false;
+			}
+			else {
+				// Compute interpolated info based on tick interval
+				float frac = 1.0f;
+				long tickdelta = step.Next.TickCount - step.Previous.TickCount;
+				if (tickdelta > 0) {
+					frac = (float)(gpGlobals.TickCount - step.Previous.TickCount) / (float)tickdelta;
+					frac = Math.Clamp(frac, 0.0f, 1.0f);
+				}
+
+				if (step.Previous2.TickCount == 0 || step.Previous2.TickCount >= step.Previous.TickCount) {
+					// Pure blend between start/end orientations
+					Quaternion outangles;
+					MathLib.QuaternionBlend(step.Previous.Rotation, step.Next.Rotation, frac, out outangles);
+					MathLib.QuaternionAngles(outangles, out step.NetworkAngles);
+				}
+				else if (!step_spline.GetBool()) {
+					ref StepSimulationStep pOlder = ref step.Previous;
+					ref StepSimulationStep pNewer = ref step.Next;
+
+					if (step.Discontinuity.TickCount > step.Previous.TickCount) {
+						if (gpGlobals.TickCount > step.Discontinuity.TickCount)
+							pOlder = ref step.Discontinuity;
+						else
+							pNewer = ref step.Discontinuity;
+
+						tickdelta = pNewer.TickCount - pOlder.TickCount;
+						if (tickdelta > 0) {
+							frac = (float)(gpGlobals.TickCount - pOlder.TickCount) / (float)tickdelta;
+							frac = Math.Clamp(frac, 0.0f, 1.0f);
+						}
+					}
+
+					// Pure blend between start/end orientations
+					Quaternion outangles;
+					MathLib.QuaternionBlend(pOlder.Rotation, pNewer.Rotation, frac, out outangles);
+					MathLib.QuaternionAngles(outangles, out step.NetworkAngles);
+				}
+				else {
+					// FIXME: enable spline interpolation when turning is debounced.
+					Quaternion outangles;
+					MathLib.Hermite_Spline(step.Previous2.Rotation, step.Previous.Rotation, step.Next.Rotation, frac, out outangles);
+					MathLib.QuaternionAngles(outangles, out step.NetworkAngles);
+				}
+			}
+		}
+	}
+	static readonly ConVar step_spline = new("step_spline", "0");
+
+
 	protected static object? SendProxy_SendPredictableId(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {
 		BaseEntity entity = (BaseEntity)instance;
 		if (entity == null || !entity.PredictableId.IsActive())
@@ -1330,7 +1472,7 @@ public partial class BaseEntity : IServerEntity
 	public byte MoveCollide;
 	public Vector3 AbsOrigin;
 	public QAngle AbsRotation;
-	[NetworkName("m_vecOrigin")]
+	[NetworkName("m_Origin")]
 	[NetworkVar] public partial Vector3 Origin { get; set; }
 	[NetworkName("m_angRotation")]
 	[NetworkVar] public partial QAngle Rotation { get; set; }
@@ -2232,7 +2374,7 @@ public partial class BaseEntity : IServerEntity
 			}
 		}
 
-		DevMsg(2, $"unhandled input: ({inputName}) -> ({GetClassname()},{GetDebugName()})\n");
+		DevMsg(2, $"unhandled input: ({inputName}) . ({GetClassname()},{GetDebugName()})\n");
 		return false;
 	}
 	public virtual void Spawn() { }

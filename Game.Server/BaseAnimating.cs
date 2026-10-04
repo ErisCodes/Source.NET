@@ -788,4 +788,8 @@ public class BaseAnimating : BaseEntity
 	}
 
 	public override BaseAnimating? GetBaseAnimating() => this;
+
+	public bool IsUsingClientSideAnimation() {
+		return ClientSideAnimation;
+	}
 }
