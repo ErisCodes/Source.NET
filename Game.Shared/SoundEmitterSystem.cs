@@ -133,8 +133,10 @@ public class SoundEmitterSystem : BaseGameSystem
 		if (ep.SoundScriptHandle == SOUNDEMITTER_INVALID_HANDLE)
 			ep.SoundScriptHandle = (HSOUNDSCRIPTHANDLE)soundemitterbase.GetSoundIndex(ep.SoundName);
 
-		if (ep.SoundScriptHandle == -1)
+		if (ep.SoundScriptHandle == -1) {
+			DevMsg($"CSoundEmitterSystem::EmitSound:  No such sound {ep.SoundName}\n");
 			return;
+		}
 
 		EmitSoundByHandle(filter, entindex, ep, ref ep.SoundScriptHandle);
 	}
