@@ -387,6 +387,9 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public int GetCurrentAdapter() => 0;
 	public MaterialSystem_Config GetCurrentConfigForVideoCard() => g_dummyConfig;
 	public IMaterial? GetCurrentMaterial() => null;
+	public object? GetCurrentProxy() => null;
+	public int GetCurrentNumBones() => 0;
+	public bool EnableClipping(bool enable) => true;
 	public int GetDisplayAdapterCount() => 0;
 	public IMesh GetDynamicMesh(bool buffered, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => GetDummyMesh();
 	public void BeginBatch(IMesh indices) { }

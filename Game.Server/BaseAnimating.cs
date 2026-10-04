@@ -167,6 +167,94 @@ public class BaseAnimating : BaseEntity
 
 	public bool ComputeHitboxSurroundingBox(out Vector3 vecWorldMins, out Vector3 vecWorldMaxs) => throw new NotImplementedException();
 
+	public const int NUM_POSEPAREMETERS = 24;
+	public const int NUM_BONECTRLS = 4;
+
+	public virtual void InitBoneControllers() {
+		int i;
+
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return;
+
+		int boneControllerCount = studioHdr.NumBoneControllers();
+		if (boneControllerCount > NUM_BONECTRLS) {
+			boneControllerCount = NUM_BONECTRLS;
+#if DEBUG
+			Warning($"Model {studioHdr.Name()} has too many bone controllers! (Max {NUM_BONECTRLS} allowed)\n");
+#endif
+		}
+
+		for (i = 0; i < boneControllerCount; i++)
+			SetBoneController(i, 0.0f);
+
+		Assert(studioHdr.SequencesAvailable());
+
+		if (studioHdr.SequencesAvailable()) {
+			for (i = 0; i < studioHdr.GetNumPoseParameters(); i++)
+				SetPoseParameter(i, 0.0f);
+		}
+	}
+
+	public float SetBoneController(int controller, float value) {
+		Assert(GetModelPtr() != null);
+
+		StudioHdr? model = GetModelPtr();
+
+		Assert(controller >= 0 && controller < NUM_BONECTRLS);
+
+		float retVal = BoneSetup.Studio_SetController(model, controller, value, out float newValue);
+		EncodedController[controller] = newValue;
+
+		return retVal;
+	}
+
+	public float GetBoneController(int controller) {
+		Assert(GetModelPtr() != null);
+
+		StudioHdr? model = GetModelPtr();
+
+		return BoneSetup.Studio_GetController(model, controller, EncodedController[controller]);
+	}
+
+	public void ResetActivityIndexes() {
+		Assert(GetModelPtr() != null);
+		Animation.ResetActivityIndexes(GetModelPtr());
+	}
+
+	public void ResetEventIndexes() {
+		Assert(GetModelPtr() != null);
+		Animation.ResetEventIndexes(GetModelPtr());
+	}
+
+	public LocalFlexController GetNumFlexControllers() {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return 0;
+
+		return studioHdr.NumFlexControllers();
+	}
+
+	public string? GetFlexControllerName(LocalFlexController flexController) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return null;
+
+		MStudioFlexController flexcontroller = studioHdr.FlexController(flexController);
+
+		return flexcontroller.Name();
+	}
+
+	public string? GetFlexControllerType(LocalFlexController flexController) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return null;
+
+		MStudioFlexController flexcontroller = studioHdr.FlexController(flexController);
+
+		return flexcontroller.Type();
+	}
+
 	public Activity LookupActivity(ReadOnlySpan<char> label) {
 		return Animation.LookupActivity(GetModelPtr(), label);
 	}
@@ -376,22 +464,47 @@ public class BaseAnimating : BaseEntity
 		return pcache;
 	}
 
-	private void SetupBones(Span<Matrix3x4> bonetoworld, int boneMask) {
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// REALLY important todo, I am just already porting a lot in this commit, don't really want to deal with it right now
+	public bool IsRagdoll() => RenderFX == (byte)RenderFx.Ragdoll;
+
+	public virtual void GetSkeleton(StudioHdr? studioHdr, Span<Vector3> pos, Span<Quaternion> q, int boneMask) {
+		if (studioHdr == null) {
+			AssertMsg(false, "BaseAnimating.GetSkeleton() without a model");
+			return;
+		}
+
+		BoneSetup boneSetup = new(studioHdr, boneMask, PoseParameter);
+		boneSetup.InitPose(pos, q);
+
+		boneSetup.AccumulatePose(pos, q, GetSequence(), GetCycle(), 1.0f, gpGlobals.CurTime, null);
+
+		if (!IsRagdoll())
+			boneSetup.CalcAutoplaySequences(pos, q, gpGlobals.CurTime, null);
+	}
+
+	public virtual void SetupBones(Span<Matrix3x4> boneToWorld, int boneMask) {
+		Assert(GetModelPtr() != null);
+
+		StudioHdr? studioHdr = GetModelPtr();
+
+		if (studioHdr == null) {
+			AssertMsg(false, "BaseAnimating.GetSkeleton() without a model");
+			return;
+		}
+
+		Assert(!IsEFlagSet(EFL.SettingUpBones));
+
+		AddEFlags(EFL.SettingUpBones);
+
+		Span<Vector3> pos = stackalloc Vector3[Studio.MAXSTUDIOBONES];
+		Span<Quaternion> q = stackalloc Quaternion[Studio.MAXSTUDIOBONES];
+
+		Vector3 adjOrigin = GetAbsOrigin();
+
+		GetSkeleton(studioHdr, pos, q, boneMask);
+
+		BoneSetup.Studio_BuildMatrices(studioHdr, GetAbsAngles(), adjOrigin, pos, q, -1, GetModelScale(), boneToWorld, boneMask);
+
+		RemoveEFlags(EFL.SettingUpBones);
 	}
 
 	public int LookupAttachment(ReadOnlySpan<char> name) {
@@ -421,7 +534,7 @@ public class BaseAnimating : BaseEntity
 
 	public bool GetAttachment(int attachment, out Matrix3x4 attachmentToWorld) {
 		StudioHdr? studioHdr = GetModelPtr();
-		if (studioHdr != null) {
+		if (studioHdr == null) {
 			MathLib.MatrixCopy(EntityToWorldTransform(), out attachmentToWorld);
 			AssertMsg(false, "BaseAnimating.GetAttachment: model missing");
 			return false;

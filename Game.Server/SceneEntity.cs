@@ -1,3 +1,5 @@
+global using static Game.Server.SceneEntityGlobals;
+
 using Game.Shared;
 using Source.Common;
 using Source;
@@ -5,6 +7,11 @@ using Source;
 namespace Game.Server;
 
 using FIELD = FIELD<SceneEntity>;
+
+public static class SceneEntityGlobals
+{
+	public static void PrecacheInstancedScene(ReadOnlySpan<char> scene) => throw new NotImplementedException();
+}
 
 [LinkEntityToClass("logic_choreographed_scene")]
 [LinkEntityToClass("scripted_scene")]

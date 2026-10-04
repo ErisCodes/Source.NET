@@ -60,4 +60,7 @@ public static class GameTraceExts
 	public static bool IsNull(this ref GameTrace tr) => Unsafe.IsNullRef(ref tr);
 }
 
-public class TraceListData;
+public class TraceListData
+{
+	public bool IsEmpty() => throw new NotImplementedException();
+}

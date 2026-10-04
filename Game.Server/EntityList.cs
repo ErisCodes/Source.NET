@@ -225,6 +225,14 @@ public class GlobalEntityList : BaseEntityList
 		return null;
 	}
 
+	public T? NextEntByClass<T>(T? start) where T : BaseEntity {
+		for (BaseEntity? x = NextEnt(start); x != null; x = NextEnt(x)) {
+			if (x is T found)
+				return found;
+		}
+		return null;
+	}
+
 	public void AddListenerEntity(IEntityListener listener) {
 		if (EntityListeners.Contains(listener)) {
 			Assert(false, "Can't add listeners multiple times\n");

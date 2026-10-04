@@ -147,6 +147,7 @@ public interface IShaderDynamicAPI
 	void CommitPixelShaderLighting(int lightInfoArray);
 	void SetPixelShaderStateAmbientLightCube(int ambientCube, bool v);
 	float GetLightMapScaleFactor();
+	float GetAmbientLightCubeLuminance();
 }
 
 public struct LightState

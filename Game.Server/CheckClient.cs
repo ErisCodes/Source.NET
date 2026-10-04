@@ -2,6 +2,7 @@ using Game.Shared;
 
 using Source;
 using Source.Common;
+using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
 
@@ -133,6 +134,36 @@ public static partial class Util
 
 		return ent;
 	}
+
+	public static bool ClientPVSIsExpanded() => CheckClient.g_CheckClient.ClientPVSIsExpanded;
+
+	public static readonly ConVar sv_strict_notarget = new("sv_strict_notarget", "0", 0, "If set, notarget will cause entities to never think they are in the pvs");
+
+	static Edict? FindClientInPVSGuts(Edict? edict, ReadOnlySpan<byte> pvs) {
+		Vector3 view;
+
+		Edict? ent = GetCurrentCheckClient();
+		if (ent == null)
+			return null;
+
+		BaseEntity? playerEntity = BaseEntity.GetContainingEntity(ent);
+		if ((playerEntity == null || (playerEntity.GetFlags() & EntityFlags.NoTarget) != 0) && sv_strict_notarget.GetBool())
+			return null;
+
+		BaseEntity? pe = BaseEntity.GetContainingEntity(edict);
+		if (pe != null) {
+			view = pe.EyePosition();
+
+			if (!engine.CheckOriginInPVS(view, pvs))
+				return null;
+		}
+
+		return ent;
+	}
+
+	public static Edict? FindClientInPVS(Edict? edict) => FindClientInPVSGuts(edict, CheckClient.g_CheckClient.CheckPVS);
+
+	public static Edict? FindClientInVisibilityPVS(Edict? edict) => FindClientInPVSGuts(edict, CheckClient.g_CheckClient.CheckVisibilityPVS);
 
 	public static BaseEntity? FindClientInPVS(in Vector3 vecBoxMins, in Vector3 vecBoxMaxs) {
 		Edict? ent = GetCurrentCheckClient();

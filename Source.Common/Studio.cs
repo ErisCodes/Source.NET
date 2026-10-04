@@ -550,6 +550,61 @@ public class MStudioMesh
 		return VertexData;
 	}
 }
+public class MStudioEyeball
+{
+	public const int SIZEOF = 172;
+	public static MStudioEyeball FACTORY(object caller, Memory<byte> data) => new(data);
+
+	public Memory<byte> Data;
+
+	public int NameIndex;
+	public string? nameCache;
+	public string Name() => Studio.ProduceASCIIString(ref nameCache, Data.Span[NameIndex..]);
+
+	public int Bone;
+	public Vector3 Org;
+	public float ZOffset;
+	public float Radius;
+	public Vector3 Up;
+	public Vector3 Forward;
+	public int Texture;
+
+	public float IrisScale;
+
+	public InlineArray3<int> UpperFlexDesc;
+	public InlineArray3<int> LowerFlexDesc;
+	public InlineArray3<float> UpperTarget;
+	public InlineArray3<float> LowerTarget;
+
+	public int UpperLidFlexDesc;
+	public int LowerLidFlexDesc;
+	public bool NonFACS;
+
+	public MStudioEyeball(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(Data.Span);
+		br.Read(out NameIndex);
+		br.Read(out Bone);
+		br.Read(out Org);
+		br.Read(out ZOffset);
+		br.Read(out Radius);
+		br.Read(out Up);
+		br.Read(out Forward);
+		br.Read(out Texture);
+		br.Read<int>();
+		br.Read(out IrisScale);
+		br.Read<int>();
+		br.ReadInto<int>(UpperFlexDesc);
+		br.ReadInto<int>(LowerFlexDesc);
+		br.ReadInto<float>(UpperTarget);
+		br.ReadInto<float>(LowerTarget);
+		br.Read(out UpperLidFlexDesc);
+		br.Read(out LowerLidFlexDesc);
+		br.Advance(sizeof(int) * 4);
+		NonFACS = br.Read<byte>() != 0;
+	}
+}
+
 /// <summary>
 /// analog of mstudiomodel_t
 /// </summary>
@@ -608,6 +663,10 @@ public class MStudioModel
 
 	string? nameCache;
 	public string Name() => Studio.ProduceASCIIString(ref nameCache, name);
+
+	MStudioEyeball[]? eyeballCache;
+	public MStudioEyeball Eyeball(int i)
+		=> Studio.ProduceArrayIdx(this, ref eyeballCache, NumEyeballs, EyeballIndex, i, MStudioEyeball.SIZEOF, Data, MStudioEyeball.FACTORY);
 
 	public MStudioModelVertexData? GetVertexData(IStudioDataCache dataCache, StudioHeader studioHdr) {
 		VertexFileHeader? vertexHdr = CacheVertexData(dataCache, studioHdr);
@@ -1026,7 +1085,7 @@ public class MStudioAnimDesc
 
 		Memory<byte> animBlock = Studiohdr().GetAnimBlock(block);
 		if (!animBlock.IsEmpty)
-			return CacheOffBlockIndex(0, index, animBlock);
+			return CacheOffBlockIndex(block, index, animBlock);
 
 		return null;
 	}
@@ -1248,6 +1307,92 @@ public class MStudioPoseParamDesc
 		br.Read(out Loop);
 	}
 }
+
+public enum LocalFlexController
+{
+	DummyFlexController = 0x7fffffff
+}
+
+public class MStudioFlexController
+{
+	public const int SIZEOF = 20;
+	public static MStudioFlexController FACTORY(object caller, Memory<byte> data) => new(data);
+
+	public Memory<byte> Data;
+
+	public int TypeIndex;
+	public string? typeCache;
+	public string Type() => Studio.ProduceASCIIString(ref typeCache, Data.Span[TypeIndex..]);
+
+	public int NameIndex;
+	public string? nameCache;
+	public string Name() => Studio.ProduceASCIIString(ref nameCache, Data.Span[NameIndex..]);
+
+	public int LocalToGlobal;
+	public float Min;
+	public float Max;
+
+	public MStudioFlexController(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(Data.Span);
+		br.Read(out TypeIndex);
+		br.Read(out NameIndex);
+		br.Read(out LocalToGlobal);
+		br.Read(out Min);
+		br.Read(out Max);
+	}
+}
+
+[Flags]
+public enum StudioMotionFlags
+{
+	X = 0x00000001,
+	Y = 0x00000002,
+	Z = 0x00000004,
+	XR = 0x00000008,
+	YR = 0x00000010,
+	ZR = 0x00000020,
+
+	LX = 0x00000040,
+	LY = 0x00000080,
+	LZ = 0x00000100,
+	LXR = 0x00000200,
+	LYR = 0x00000400,
+	LZR = 0x00000800,
+
+	Linear = 0x00001000,
+
+	Types = 0x0003FFFF,
+	RLoop = 0x00040000
+}
+
+public class MStudioBoneController
+{
+	public const int SIZEOF = 56;
+	public static MStudioBoneController FACTORY(object caller, Memory<byte> data) => new(data);
+
+	public Memory<byte> Data;
+
+	public int Bone;
+	private int type;
+	public StudioMotionFlags Type => (StudioMotionFlags)type;
+	public float Start;
+	public float End;
+	public int Rest;
+	public int InputField;
+
+	public MStudioBoneController(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(Data.Span);
+		br.Read(out Bone);
+		br.Read(out type);
+		br.Read(out Start);
+		br.Read(out End);
+		br.Read(out Rest);
+		br.Read(out InputField);
+	}
+}
+
 public enum StudioAutolayerFlags
 {
 	Post = 0x0010,
@@ -1623,6 +1768,45 @@ public class StudioHdr
 		}
 	}
 
+	public int GetEventListVersion() {
+		if (vModel == null)
+			return studioHdr!.EventsIndexed;
+
+		int version = studioHdr!.EventsIndexed;
+
+		int i;
+		for (i = 1; i < vModel.Group.Count; i++) {
+			StudioHeader studioHdr = GroupStudioHdr(i)!;
+			Assert(studioHdr != null);
+			version = Math.Min(version, studioHdr.EventsIndexed);
+		}
+
+		return version;
+	}
+
+	public void SetEventListVersion(int version) {
+		studioHdr!.EventsIndexed = version;
+
+		if (vModel == null)
+			return;
+
+		int i;
+		for (i = 1; i < vModel.Group.Count; i++) {
+			StudioHeader studioHdr = GroupStudioHdr(i)!;
+			Assert(studioHdr != null);
+			studioHdr.EventsIndexed = version;
+		}
+	}
+
+	public LocalFlexController NumFlexControllers() => (LocalFlexController)studioHdr!.NumFlexControllers;
+	public MStudioFlexController FlexController(LocalFlexController i) => studioHdr!.FlexController(i);
+
+	public MStudioBoneController BoneController(int i) => studioHdr!.BoneController(i);
+
+	public float Mass() => studioHdr!.Mass;
+
+	public Vector3 EyePosition() => studioHdr!.EyePosition;
+
 	public MStudioAnimDesc Animdesc(int i) {
 		if (vModel == null)
 			return this.studioHdr!.LocalAnimdesc(i);
@@ -1832,8 +2016,25 @@ public class StudioHdr
 			}
 		}
 
+		public int NumSequencesForActivity(int forActivity) {
+			if (SequenceTuples == null)
+				return 0;
+
+			if (ActToSeqHash.TryGetValue(forActivity, out HashValueType entry))
+				return entry.Count;
+			else
+				return 0;
+		}
+
 		public SequenceTuple[]? SequenceTuples;
 		public readonly Dictionary<int, HashValueType> ActToSeqHash = [];
+	}
+
+	public bool HaveSequenceForActivity(int activity) {
+		if (!ActivityToSequence.IsInitialized())
+			ActivityToSequence.Initialize(this);
+
+		return ActivityToSequence.NumSequencesForActivity(activity) > 0;
 	}
 
 
@@ -2091,6 +2292,9 @@ public class StudioHeader
 
 	public int NumBoneControllers;
 	public int BoneControllerIndex;
+	MStudioBoneController[]? boneControllerCache;
+	public MStudioBoneController BoneController(int i)
+		=> Studio.ProduceArrayIdx(this, ref boneControllerCache, NumBoneControllers, BoneControllerIndex, i, MStudioBoneController.SIZEOF, Data, MStudioBoneController.FACTORY);
 
 	public int NumHitboxSets;
 	public int HitboxSetIndex;
@@ -2218,6 +2422,11 @@ public class StudioHeader
 
 	public int NumFlexControllers;
 	public int FlexControllerIndex;
+	MStudioFlexController[]? flexControllerCache;
+	public MStudioFlexController FlexController(LocalFlexController i) {
+		Assert(NumFlexControllers == 0 || (i >= 0 && (int)i < NumFlexControllers));
+		return Studio.ProduceArrayIdx(this, ref flexControllerCache, NumFlexControllers, FlexControllerIndex, (int)i, MStudioFlexController.SIZEOF, Data, MStudioFlexController.FACTORY);
+	}
 
 	public int NumFlexRules;
 	public int FlexRuleIndex;

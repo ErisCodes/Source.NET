@@ -27,6 +27,7 @@ namespace Game;
 public static partial class Util_Globals
 {
 	public static readonly ConVar developer = new("developer", "0", 0, "Set developer message level"); // developer mode
+	public static readonly ConVar r_visualizetraces = new("r_visualizetraces", "0", FCvar.Cheat);
 
 	public static int SeedFileLineHash(int seedvalue, ReadOnlySpan<char> sharedname, int additionalSeed) {
 		CRC32_t retval = default;
@@ -293,6 +294,13 @@ public static partial class Util
 
 		enginetrace.TraceRay(ray, mask, ref traceFilter, out ptr);
 		// todo: visualize
+	}
+
+	public static void TraceLineFilterEntity(BaseEntity entity, in Vector3 absStart, in Vector3 absEnd, Mask mask, CollisionGroup collisionGroup, out Trace ptr) {
+		TraceFilterEntity traceFilter = new(entity, collisionGroup);
+		Ray ray = default;
+		ray.Init(absStart, absEnd);
+		enginetrace.TraceRay(ray, mask, ref traceFilter, out ptr);
 	}
 
 	public static void TraceLine(in Vector3 absStart, in Vector3 absEnd, Mask mask, IHandleEntity? ignore, CollisionGroup collisionGroup, out Trace ptr) {

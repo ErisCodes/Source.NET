@@ -47,11 +47,14 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 		RC.Config.SupportsVertexAndPixelShaders = hardwareConfig.SupportsVertexAndPixelShaders();
 
 
+		studioRenderImp.PrecacheGlint();
 	}
 
 	public void EndFrame() {
 		throw new NotImplementedException();
 	}
+
+	public void UpdateConfig(in StudioRenderConfig config) => RC.Config = config;
 
 	public int GetMaterialList(StudioHeader studioHDR, Span<IMaterial> materials) {
 		AssertMsg(studioHDR != null, "Don't ignore this assert! StudioRenderContext.GetMaterialList() has null studioHDR.");

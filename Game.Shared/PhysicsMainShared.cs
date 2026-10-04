@@ -6,6 +6,7 @@ using Game.Shared;
 
 using Source.Common;
 using Source.Common.Commands;
+using Source.Common.Formats.BSP;
 using Source.Common.Mathematics;
 using Source.Common.Physics;
 
@@ -690,16 +691,105 @@ namespace Game.Server
 			// todo
 		}
 
+		public int PhysicsClipVelocity(in Vector3 inVec, in Vector3 normal, out Vector3 outVec, float overbounce) {
+			float backoff;
+			float change;
+			float angle;
+			int i, blocked;
+
+			blocked = 0;
+
+			angle = normal[2];
+
+			if (angle > 0)
+				blocked |= 1;
+			if (angle == 0)
+				blocked |= 2;
+
+			backoff = Vector3.Dot(inVec, normal) * overbounce;
+
+			outVec = default;
+			for (i = 0; i < 3; i++) {
+				change = normal[i] * backoff;
+				outVec[i] = inVec[i] - change;
+				if (outVec[i] > -GameMovement.STOP_EPSILON && outVec[i] < GameMovement.STOP_EPSILON)
+					outVec[i] = 0;
+			}
+
+			return blocked;
+		}
+
 		public void PhysicsCheckVelocity() {
-			throw new NotImplementedException();
+			Vector3 origin = GetAbsOrigin();
+			Vector3 vecAbsVelocity = GetAbsVelocity();
+
+			bool reset = false;
+			for (int i = 0; i < 3; i++) {
+				if (float.IsNaN(vecAbsVelocity[i])) {
+					Msg($"Got a NaN velocity on {GetClassname()}\n");
+					vecAbsVelocity[i] = 0;
+					reset = true;
+				}
+				if (float.IsNaN(origin[i])) {
+					Msg($"Got a NaN origin on {GetClassname()}\n");
+					origin[i] = 0;
+					reset = true;
+				}
+
+				if (vecAbsVelocity[i] > sv_maxvelocity.GetFloat()) {
+#if DEBUG
+					DevWarning(2, $"Got a velocity too high on {GetClassname()}\n");
+#endif
+					vecAbsVelocity[i] = sv_maxvelocity.GetFloat();
+					reset = true;
+				}
+				else if (vecAbsVelocity[i] < -sv_maxvelocity.GetFloat()) {
+#if DEBUG
+					DevWarning(2, $"Got a velocity too low on {GetClassname()}\n");
+#endif
+					vecAbsVelocity[i] = -sv_maxvelocity.GetFloat();
+					reset = true;
+				}
+			}
+
+			if (reset) {
+				SetAbsOrigin(origin);
+				SetAbsVelocity(vecAbsVelocity);
+			}
 		}
 
 		private bool PhysicsCheckWater() {
-			throw new NotImplementedException();
+			if (GetMoveParent() != null)
+				return GetWaterLevel() > Shared.WaterLevel.Feet;
+
+			Contents cont = GetWaterType();
+
+			if ((cont & (Contents)(Mask.Water | Mask.Current)) != (Contents)(Mask.Water | Mask.Current))
+				return GetWaterLevel() > Shared.WaterLevel.Feet;
+
+			Vector3 v = new(0, 0, 0);
+			if ((cont & Contents.Current0) != 0)
+				v[0] += 1;
+			if ((cont & Contents.Current90) != 0)
+				v[1] += 1;
+			if ((cont & Contents.Current180) != 0)
+				v[0] -= 1;
+			if ((cont & Contents.Current270) != 0)
+				v[1] -= 1;
+			if ((cont & Contents.CurrentUp) != 0)
+				v[2] += 1;
+			if ((cont & Contents.CurrentDown) != 0)
+				v[2] -= 1;
+
+			MathLib.VectorMA(GetBaseVelocity(), 50.0f * (int)GetWaterLevel(), v, out Vector3 newBaseVelocity);
+			SetBaseVelocity(newBaseVelocity);
+
+			return GetWaterLevel() > Shared.WaterLevel.Feet;
 		}
 
 		public void SimulateAngles(TimeUnit_t frameTime) {
-			throw new NotImplementedException();
+			QAngle angles = GetLocalAngles() + GetLocalAngularVelocity() * (float)frameTime;
+			SetLocalAngles(angles);
 		}
 	}
 }

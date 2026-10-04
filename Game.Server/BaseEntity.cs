@@ -468,9 +468,9 @@ public static class BaseEntity_ConCommands
 			player.EyeVectors(out Vector3 forward);
 			Util.TraceLine(player.EyePosition(), player.EyePosition() + forward * MAX_TRACE_LENGTH, Mask.Solid, player, CollisionGroup.None, out Trace tr);
 			if (tr.Fraction != 1.0) {
-				// tr.EndPos.Z += 12;
-				// entity.Teleport(tr.EndPos, null, null);
-				// Util.DropToFloor(entity, Mask.Solid);
+				tr.EndPos.Z += 12;
+				entity.Teleport(tr.EndPos, null, null);
+				Util.DropToFloor(entity, Mask.Solid);
 			}
 
 			entity.Activate();
@@ -841,6 +841,28 @@ public partial class BaseEntity : IServerEntity
 
 		return false;
 	}
+
+	public bool IsStandable() {
+		if ((GetSolidFlags() & SolidFlags.NotStandable) != 0)
+			return false;
+
+		if (GetSolid() == SolidType.BSP || GetSolid() == SolidType.VPhysics || GetSolid() == SolidType.BBox)
+			return true;
+
+		return IsBSPModel();
+	}
+
+	public virtual bool CanStandOn(BaseEntity? surface) => (surface != null && !surface.IsStandable()) ? false : true;
+
+	float GroundChangeTime;
+	public void SetGroundChangeTime(float time) => GroundChangeTime = time;
+	public float GetGroundChangeTime() => GroundChangeTime;
+
+	public bool IsEdictFree() => Edict()!.IsFree();
+
+	public virtual DamageType GetDamageType() => DamageType.Generic;
+
+	public virtual Mask PhysicsSolidMaskForEntity() => Mask.Solid;
 
 	public bool IsViewable() {
 		if (IsEffectActive(EntityEffects.NoDraw))
@@ -1901,6 +1923,12 @@ public partial class BaseEntity : IServerEntity
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public bool IsMarkedForDeletion() => (eflags & EFL.KillMe) != 0;
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void SetEFlags(EFL flags) {
+		eflags = flags;
+		if ((flags & (EFL.ForceCheckTransmit | EFL.InSkybox)) != 0)
+			DispatchUpdateTransmitState();
+	}
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void AddEFlags(EFL flags) {
 		eflags |= flags;
 		if ((flags & (EFL.ForceCheckTransmit | EFL.InSkybox)) != 0)
@@ -1914,6 +1942,13 @@ public partial class BaseEntity : IServerEntity
 	}
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public bool IsEFlagSet(EFL mask) => (eflags & mask) != 0;
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public EFL GetEFlags() => eflags;
+
+	public void SetBlocksLOS(bool blocksLOS) {
+		if (blocksLOS)
+			RemoveEFlags(EFL.DontBlockLOS);
+		else
+			AddEFlags(EFL.DontBlockLOS);
+	}
 
 	public Vector3 AbsVelocity;
 	public QAngle AngVelocity;
@@ -1933,7 +1968,7 @@ public partial class BaseEntity : IServerEntity
 
 	public Edict Edict() => NetworkProp().Edict();
 
-	public void PostConstructor(ReadOnlySpan<char> classname) {
+	public virtual void PostConstructor(ReadOnlySpan<char> classname) {
 		if (!classname.IsEmpty)
 			SetClassname(classname);
 
@@ -2585,6 +2620,14 @@ public partial class BaseEntity : IServerEntity
 			Parent.Get()?.Use(activator, caller, useType, value);
 	}
 
+	public int ShouldToggle(UseType useType, int currentState) {
+		if (useType != UseType.Toggle && useType != UseType.Set) {
+			if ((currentState != 0 && useType == UseType.On) || (currentState == 0 && useType == UseType.Off))
+				return 0;
+		}
+		return 1;
+	}
+
 	public string? Target;
 	public BaseEntity? GetNextTarget() {
 		if (Target == null)
@@ -2801,6 +2844,32 @@ public partial class BaseEntity : IServerEntity
 		g_TeleportStack.Remove(this);
 	}
 	public bool IsWorld() => EntIndex() == 0;
+
+	public virtual bool FVisible(BaseEntity entity) => throw new NotImplementedException();
+
+	public TimeUnit_t NavIgnoreUntilTime;
+
+	public bool IsNavIgnored() => gpGlobals.CurTime <= NavIgnoreUntilTime;
+
+	public BasePlayer? AI_GetClosestPlayer() {
+		Vector3 pos = GetAbsOrigin();
+		float closestDistSqr = float.MaxValue;
+		BasePlayer? closest = null;
+
+		for (int i = 1; i <= gpGlobals.MaxClients; i++) {
+			BasePlayer? player = Util.PlayerByIndex(i);
+			if (player == null)
+				continue;
+
+			float distSqr = (player.GetAbsOrigin() - pos).LengthSquared();
+			if (distSqr < closestDistSqr) {
+				closestDistSqr = distSqr;
+				closest = player;
+			}
+		}
+
+		return closest;
+	}
 
 	public virtual void StartTouch(BaseEntity? other) {
 		// notify parent
