@@ -1147,6 +1147,8 @@ public class BaseFlex : BaseAnimatingOverlay {
 	public void SetPermitResponse(TimeUnit_t endtime) => AllowResponsesEndTime = endtime;
 
 	public bool HasSceneEvents() => SceneEvents.Count != 0;
+
+	public virtual int GetSpecialDSP() => 0;
 }
 
 public class FlexSceneFileManager(ReadOnlySpan<char> name) : AutoGameSystem(name)

@@ -519,6 +519,8 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	public BaseEntity? GetViewEntity() => ViewEntity.Get();
 
+	public virtual ReadOnlySpan<char> GetSceneSoundToken() => "";
+
 	public void SetViewEntity(BaseEntity? entity) {
 		ViewEntity.Set(entity);
 
