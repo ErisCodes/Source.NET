@@ -656,9 +656,7 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 
 	public void NotifyEdictFlagsChange(int edict) => CL.LocalNetworkBackdoor?.NotifyEdictFlagsChange((uint)edict);
 
-	public ReadOnlySpan<char> ParseFile(ReadOnlySpan<char> data, Span<char> token) {
-		throw new NotImplementedException();
-	}
+	public ReadOnlySpan<char> ParseFile(ReadOnlySpan<char> data, Span<char> token) => FilesystemHelpers.ParseFile(data, token, out _);
 
 	public Edict? PEntityOfEntIndex(int iEntIndex) {
 		if (iEntIndex >= 0 && iEntIndex < sv.MaxEdicts) {
