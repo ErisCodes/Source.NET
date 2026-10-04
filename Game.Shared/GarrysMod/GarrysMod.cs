@@ -9,6 +9,7 @@ using Source;
 using Source.Common;
 using Source.Common.Bitbuffers;
 using Source.Common.Commands;
+using Source.Common.Filesystem;
 using Source.Common.GarrysMod;
 using Source.Common.MaterialSystem;
 using Source.Common.Networking;
@@ -76,6 +77,12 @@ public class GarrysMod : IGarrysMod
 		Directory.CreateDirectory(Path.Combine(absPath, "lua"));
 		Directory.CreateDirectory(Path.Combine(absPath, "workshop"));
 		filesystem.AddSearchPath(absPath, "CACHE");
+
+		filesystem.CreateDirHierarchy("data/", "MOD");
+		Span<char> dataPath = stackalloc char[0x104];
+		ReadOnlySpan<char> dataFullPath = filesystem.RelativePathToFullPath("data", "MOD", dataPath);
+		filesystem.AddSearchPath(dataFullPath, "DATA", SearchPathAdd.ToTail, PathGroupName.Fallbacks);
+		filesystem.MarkPathIDByRequestOnly("DATA", true);
 	}
 
 #if CLIENT_DLL
@@ -362,7 +369,22 @@ public class GarrysMod : IGarrysMod
 	}
 
 	public void Think() {
-
+		if (g_Lua != null) {
+			// CheckForFilesystemChanges();
+			g_Lua.Cycle();
+			// if (g_LuaNetworkedVars != null)
+			// 	g_LuaNetworkedVars.Cycle();
+			// Timer.Cycle();
+#if CLIENT_DLL
+			LuaFileLibrary.AsyncCycle();
+#else
+			Game.Server.GarrysMod.LuaFileLibrary.AsyncCycle();
+#endif
+			// HTTP.Cycle();
+			// ErrorReporter.RunQueue();
+		}
+		// AutoRefresh.Cycle();
+		// GMOD_SpewBufferFlush();
 	}
 }
 
