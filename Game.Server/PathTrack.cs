@@ -28,9 +28,9 @@ public class PathTrack : PointEntity
 	public const int SF_PATH_DOWNHILL = 0x00000040;
 	public const int SF_PATH_ALTERNATE = 0x00008000;
 
-	public readonly Handle<PathTrack> Next = new();
-	public readonly Handle<PathTrack> Previous = new();
-	public readonly Handle<PathTrack> AltPath = new();
+	public Handle<PathTrack> Next = new();
+	public Handle<PathTrack> Previous = new();
+	public Handle<PathTrack> AltPath = new();
 
 	float Radius;
 	float Length;

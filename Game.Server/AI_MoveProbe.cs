@@ -95,5 +95,5 @@ public class AI_MoveProbe : AI_Component
 
 	bool IgnoreTransientEntities;
 	TraceListData? TraceListData;
-	readonly EHANDLE LastBlockingEnt = new();
+	EHANDLE LastBlockingEnt = new();
 }

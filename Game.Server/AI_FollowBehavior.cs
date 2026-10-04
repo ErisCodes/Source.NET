@@ -63,7 +63,7 @@ public class AI_FollowBehavior : AI_Behavior_AI_BaseNPC_100000
 
 	protected override int SelectSchedule() => throw new NotImplementedException();
 
-	protected readonly EHANDLE FollowTarget = new();
+	protected EHANDLE FollowTarget = new();
 
 	protected AI_FollowManagerInfoHandle_t FollowManagerInfo;
 	protected AI_FollowParams Params = new();

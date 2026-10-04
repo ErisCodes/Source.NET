@@ -348,7 +348,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public TimeUnit_t LastAttackTime;
 	public TimeUnit_t LastDamageTime;
 	public float InteractionYaw;
-	public readonly EHANDLE OpeningDoor = new();
+	public EHANDLE OpeningDoor = new();
 	public int DebugCurIndex;
 	public bool PlayerAvoidState;
 
