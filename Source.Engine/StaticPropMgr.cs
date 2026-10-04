@@ -703,7 +703,7 @@ public class StaticProp : IClientUnknown, IClientRenderable, ICollideable
 		boneToWorldOut[0] = ModelToWorld;
 		return true;
 	}
-	public void SetupWeights(Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights) => throw new NotImplementedException();
+	public void SetupWeights(Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights) { }
 	public bool UsesFlexDelayedWeights() => false;
 	public void DoAnimationEvents() => throw new NotImplementedException();
 	public IPVSNotify? GetPVSNotifyInterface() => null;
