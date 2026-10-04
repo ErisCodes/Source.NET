@@ -828,12 +828,9 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Untested...
-	public unsafe bool LoadFromBuffer(ReadOnlySpan<char> resourceName, ReadOnlySpan<char> buffer) {
-		fixed (char* bytes = buffer) {
-			byte* input = (byte*)bytes;
-			using UnmanagedMemoryStream stream = new(input, buffer.Length * sizeof(char));
-			return LoadFromStream(stream);
-		}
+	public bool LoadFromBuffer(ReadOnlySpan<char> resourceName, ReadOnlySpan<char> buffer) {
+		using MemoryStream stream = new(System.Text.Encoding.UTF8.GetBytes(buffer.ToArray()));
+		return LoadFromStream(stream);
 	}
 
 	public KeyValues AddSubKey(KeyValues subkey) {
