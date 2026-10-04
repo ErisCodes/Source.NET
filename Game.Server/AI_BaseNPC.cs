@@ -4461,6 +4461,8 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public virtual void CheckAmmo() { }
 
+	public void NotifyPushMove() => CheckOnGroundTimer.Set(0.5f);
+
 	public bool IsMovingToPickupWeapon() => IsCurSchedule(SCHED_NEW_WEAPON);
 
 	public bool ShouldLookForBetterWeapon() {
