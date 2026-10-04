@@ -3306,6 +3306,224 @@ public static class MathLib
 		// matrix row 4
 		output += p2;    // p2
 	}
+
+	public static float ExponentialDecay(float decayTo, float decayTime, float dt) => MathF.Exp(MathF.Log(decayTo) / decayTime * dt);
+
+	public static void Spline_Normalize(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, out Vector3 p1n, out Vector3 p4n) {
+		float dt = p3.X - p2.X;
+
+		p1n = p1;
+		p4n = p4;
+
+		if (dt != 0.0) {
+			if (p1.X != p2.X)
+				MathLib.VectorLerp(p2, p1, dt / (p2.X - p1.X), out p1n);
+			if (p4.X != p3.X)
+				MathLib.VectorLerp(p3, p4, dt / (p4.X - p3.X), out p4n);
+		}
+	}
+
+	public static void Catmull_Rom_Spline_Tangent(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float tOne = 3 * t * t * 0.5f;
+		float tTwo = 2 * t * 0.5f;
+		float tThree = 0.5f;
+
+		output = default;
+
+		Vector3 a, b, c, d;
+
+		MathLib.VectorScale(p1, -tOne, out a);
+		MathLib.VectorScale(p2, tOne * 3, out b);
+		MathLib.VectorScale(p3, tOne * -3, out c);
+		MathLib.VectorScale(p4, tOne, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, tTwo * 2, out a);
+		MathLib.VectorScale(p2, tTwo * -5, out b);
+		MathLib.VectorScale(p3, tTwo * 4, out c);
+		MathLib.VectorScale(p4, -tTwo, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, -tThree, out a);
+		MathLib.VectorScale(p3, tThree, out b);
+
+		output += a;
+		output += b;
+	}
+
+	public static void Catmull_Rom_Spline_Integral(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		output = p2 * t
+				- 0.25f * (p1 - p3) * t * t
+				+ (1.0f / 6.0f) * (2.0f * p1 - 5.0f * p2 + 4.0f * p3 - p4) * t * t * t
+				- 0.125f * (p1 - 3.0f * p2 + 3.0f * p3 - p4) * t * t * t * t;
+	}
+
+	public static void Catmull_Rom_Spline_Normalize(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float dt = Vector3.Distance(p3, p2);
+
+		MathLib.VectorSubtract(p1, p2, out Vector3 p1n);
+		MathLib.VectorSubtract(p4, p3, out Vector3 p4n);
+
+		MathLib.VectorNormalize(ref p1n);
+		MathLib.VectorNormalize(ref p4n);
+
+		MathLib.VectorMA(p2, dt, p1n, out p1n);
+		MathLib.VectorMA(p3, dt, p4n, out p4n);
+
+		MathLib.Catmull_Rom_Spline(p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void Catmull_Rom_Spline_Integral_Normalize(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float dt = Vector3.Distance(p3, p2);
+
+		MathLib.VectorSubtract(p1, p2, out Vector3 p1n);
+		MathLib.VectorSubtract(p4, p3, out Vector3 p4n);
+
+		MathLib.VectorNormalize(ref p1n);
+		MathLib.VectorNormalize(ref p4n);
+
+		MathLib.VectorMA(p2, dt, p1n, out p1n);
+		MathLib.VectorMA(p3, dt, p4n, out p4n);
+
+		Catmull_Rom_Spline_Integral(p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void Catmull_Rom_Spline_NormalizeX(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		Spline_Normalize(p1, p2, p3, p4, out Vector3 p1n, out Vector3 p4n);
+		MathLib.Catmull_Rom_Spline(p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void Kochanek_Bartels_Spline(float tension, float bias, float continuity, in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float ffa, ffb, ffc, ffd;
+
+		ffa = (1.0f - tension) * (1.0f + continuity) * (1.0f + bias);
+		ffb = (1.0f - tension) * (1.0f - continuity) * (1.0f - bias);
+		ffc = (1.0f - tension) * (1.0f - continuity) * (1.0f + bias);
+		ffd = (1.0f - tension) * (1.0f + continuity) * (1.0f - bias);
+
+		float tSqr = t * t * 0.5f;
+		float tSqrSqr = t * tSqr;
+		t *= 0.5f;
+
+		output = default;
+
+		Vector3 a, b, c, d;
+
+		MathLib.VectorScale(p1, tSqrSqr * -ffa, out a);
+		MathLib.VectorScale(p2, tSqrSqr * (4.0f + ffa - ffb - ffc), out b);
+		MathLib.VectorScale(p3, tSqrSqr * (-4.0f + ffb + ffc - ffd), out c);
+		MathLib.VectorScale(p4, tSqrSqr * ffd, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, tSqr * 2 * ffa, out a);
+		MathLib.VectorScale(p2, tSqr * (-6 - 2 * ffa + 2 * ffb + ffc), out b);
+		MathLib.VectorScale(p3, tSqr * (6 - 2 * ffb - ffc + ffd), out c);
+		MathLib.VectorScale(p4, tSqr * -ffd, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, t * -ffa, out a);
+		MathLib.VectorScale(p2, t * (ffa - ffb), out b);
+		MathLib.VectorScale(p3, t * ffb, out c);
+
+		output += a;
+		output += b;
+		output += c;
+
+		output += p2;
+	}
+
+	public static void Kochanek_Bartels_Spline_NormalizeX(float tension, float bias, float continuity, in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		Spline_Normalize(p1, p2, p3, p4, out Vector3 p1n, out Vector3 p4n);
+		Kochanek_Bartels_Spline(tension, bias, continuity, p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void Cubic_Spline(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float tSqr = t * t;
+		float tSqrSqr = t * tSqr;
+
+		output = default;
+
+		Vector3 b, c;
+
+		MathLib.VectorScale(p2, tSqrSqr * 2, out b);
+		MathLib.VectorScale(p3, tSqrSqr * -2, out c);
+
+		output += b;
+		output += c;
+
+		MathLib.VectorScale(p2, tSqr * -3, out b);
+		MathLib.VectorScale(p3, tSqr * 3, out c);
+
+		output += b;
+		output += c;
+
+		output += p2;
+	}
+
+	public static void Cubic_Spline_NormalizeX(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		Spline_Normalize(p1, p2, p3, p4, out Vector3 p1n, out Vector3 p4n);
+		Cubic_Spline(p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void BSpline(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float oneOver6 = 1.0f / 6.0f;
+
+		float tSqr = t * t * oneOver6;
+		float tSqrSqr = t * tSqr;
+		t *= oneOver6;
+
+		output = default;
+
+		Vector3 a, b, c, d;
+
+		MathLib.VectorScale(p1, -tSqrSqr, out a);
+		MathLib.VectorScale(p2, tSqrSqr * 3.0f, out b);
+		MathLib.VectorScale(p3, tSqrSqr * -3.0f, out c);
+		MathLib.VectorScale(p4, tSqrSqr, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, tSqr * 3.0f, out a);
+		MathLib.VectorScale(p2, tSqr * -6.0f, out b);
+		MathLib.VectorScale(p3, tSqr * 3.0f, out c);
+
+		output += a;
+		output += b;
+		output += c;
+
+		MathLib.VectorScale(p1, t * -3.0f, out a);
+		MathLib.VectorScale(p3, t * 3.0f, out c);
+
+		output += a;
+		output += c;
+
+		MathLib.VectorScale(p1, oneOver6, out a);
+		MathLib.VectorScale(p2, 4.0f * oneOver6, out b);
+		MathLib.VectorScale(p3, oneOver6, out c);
+
+		output += a;
+		output += b;
+		output += c;
+	}
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 16, Size = sizeof(float) * 4 * 3)]
