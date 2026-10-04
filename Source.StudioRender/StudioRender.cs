@@ -598,7 +598,7 @@ public unsafe class StudioRender
 				return 0.0f;
 		}
 
-		float total = float.Epsilon;
+		float total = FLT_EPSILON;
 
 		LightTypeOptimizationFlags flags = (LightTypeOptimizationFlags)wl.Flags;
 

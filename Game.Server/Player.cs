@@ -666,7 +666,7 @@ public partial class BasePlayer : BaseCombatCharacter
 	public TimeUnit_t ConsumeMovementTimeForUserCmdProcessing(TimeUnit_t timeNeeded) {
 		if (MovementTimeForUserCmdProcessingRemaining <= 0.0)
 			return 0.0;
-		else if (timeNeeded > MovementTimeForUserCmdProcessingRemaining + TimeUnit_t.Epsilon) {
+		else if (timeNeeded > MovementTimeForUserCmdProcessingRemaining + DBL_EPSILON) {
 			TimeUnit_t result = MovementTimeForUserCmdProcessingRemaining;
 			MovementTimeForUserCmdProcessingRemaining = 0.0;
 			return result;
