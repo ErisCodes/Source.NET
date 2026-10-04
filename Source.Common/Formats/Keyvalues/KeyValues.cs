@@ -102,8 +102,26 @@ public class KeyValues : IEnumerable<KeyValues>
 		// Clear();
 		if (stream == null) return false;
 
-		using StreamReader reader = new StreamReader(stream);
+		using KeyValuesReader reader = new KeyValuesReader(stream);
 		return LoadFromBuffer(reader);
+	}
+
+	public sealed class KeyValuesReader(Stream stream) : StreamReader(stream)
+	{
+		int Pushback = -1;
+
+		public void Unread(char c) => Pushback = c;
+
+		public override int Peek() => Pushback != -1 ? Pushback : base.Peek();
+
+		public override int Read() {
+			if (Pushback != -1) {
+				int c = Pushback;
+				Pushback = -1;
+				return c;
+			}
+			return base.Read();
+		}
 	}
 
 	public bool WriteToStream(Stream? stream) {
@@ -164,7 +182,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 
-	private bool LoadFromBuffer(StreamReader reader) {
+	private bool LoadFromBuffer(KeyValuesReader reader) {
 		LinkedList<KeyValues> peers = [];
 		KeyValues? current = this;
 		while (SkipUntilParseableTextOrEOF(reader)) {
@@ -180,7 +198,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Returns true if we did anything at all to skip whitespace.
-	public static bool SkipWhitespace(StreamReader reader) {
+	public static bool SkipWhitespace(KeyValuesReader reader) {
 		bool didAnything = false;
 		while (true) {
 			int c = reader.Peek();
@@ -200,7 +218,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Returns true if we can read something. False if we can't.
-	private bool SkipUntilParseableTextOrEOF(StreamReader reader) {
+	private bool SkipUntilParseableTextOrEOF(KeyValuesReader reader) {
 		// We read either
 		//    1. A quote mark, in which case we need to read up to a quote
 		//    2. Anything else, we read until whitespace
@@ -262,7 +280,7 @@ public class KeyValues : IEnumerable<KeyValues>
 
 		return false;
 	}
-	public static bool ReadConditional(StreamReader reader, Span<char> condition, out bool match) {
+	public static bool ReadConditional(KeyValuesReader reader, Span<char> condition, out bool match) {
 		// Zero out if it's existing memory
 		for (int si = 0; si < condition.Length; si++)
 			condition[si] = '\0';
@@ -338,7 +356,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return notSupported;
 	}
 
-	private bool ReadKV(StreamReader reader) {
+	private bool ReadKV(KeyValuesReader reader) {
 		SkipUntilParseableTextOrEOF(reader);
 
 		bool quoteTerminated = (char)reader.Peek() == '"';
@@ -390,7 +408,7 @@ public class KeyValues : IEnumerable<KeyValues>
 
 	void AddToTail(KeyValues kv) => children.AddLast(kv.node);
 
-	private void ReadKVPairs(StreamReader reader, bool matches) {
+	private void ReadKVPairs(KeyValuesReader reader, bool matches) {
 		int rd = reader.Read();
 
 		while (reader.Peek() != -1) {
@@ -414,7 +432,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Returns true if we did anything at all to skip comments.
-	public static bool SkipComments(StreamReader reader) {
+	public static bool SkipComments(KeyValuesReader reader) {
 		bool didAnything = false;
 		if (reader.Peek() == '/') {
 			// We need to check the stream for another /
@@ -429,10 +447,8 @@ public class KeyValues : IEnumerable<KeyValues>
 						break;
 				}
 			}
-			else {
-				// What...
-				throw new InvalidOperationException("Expected comment");
-			}
+			else
+				reader.Unread('/');
 		}
 
 		return didAnything;
@@ -463,7 +479,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		Type = Types.String;
 	}
 
-	public static string ReadWhitespaceTerminatedString(StreamReader reader) {
+	public static string ReadWhitespaceTerminatedString(KeyValuesReader reader) {
 		Span<char> work = stackalloc char[1024];
 		int i, len;
 		for (i = 0, len = work.Length; i < len; i++) {
@@ -483,7 +499,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return new(work[..i]);
 	}
 
-	public static string ReadQuoteTerminatedString(StreamReader reader, bool useEscapeSequences) {
+	public static string ReadQuoteTerminatedString(KeyValuesReader reader, bool useEscapeSequences) {
 		int rd = reader.Read();
 		Debug.Assert(rd == '"', "invalid quote-terminated string");
 		Span<char> work = stackalloc char[1024];
