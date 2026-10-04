@@ -579,6 +579,81 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		idSpace.AddTask("TASK_PRE_SCRIPT", TASK_PRE_SCRIPT, "CAI_BaseNPC");
 	}
 
+	public static void InitDefaultConditionSR() {
+		AI_ClassScheduleIdSpace idSpace = ClassScheduleIdSpace;
+
+		idSpace.AddCondition("COND_NONE", (int)SCOND_t.COND_NONE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_IN_PVS", (int)SCOND_t.COND_IN_PVS, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_IDLE_INTERRUPT", (int)SCOND_t.COND_IDLE_INTERRUPT, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_LOW_PRIMARY_AMMO", (int)SCOND_t.COND_LOW_PRIMARY_AMMO, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_NO_PRIMARY_AMMO", (int)SCOND_t.COND_NO_PRIMARY_AMMO, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_NO_SECONDARY_AMMO", (int)SCOND_t.COND_NO_SECONDARY_AMMO, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_NO_WEAPON", (int)SCOND_t.COND_NO_WEAPON, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_SEE_HATE", (int)SCOND_t.COND_SEE_HATE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_SEE_FEAR", (int)SCOND_t.COND_SEE_FEAR, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_SEE_DISLIKE", (int)SCOND_t.COND_SEE_DISLIKE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_SEE_ENEMY", (int)SCOND_t.COND_SEE_ENEMY, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_LOST_ENEMY", (int)SCOND_t.COND_LOST_ENEMY, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_ENEMY_WENT_NULL", (int)SCOND_t.COND_ENEMY_WENT_NULL, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HAVE_ENEMY_LOS", (int)SCOND_t.COND_HAVE_ENEMY_LOS, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HAVE_TARGET_LOS", (int)SCOND_t.COND_HAVE_TARGET_LOS, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_ENEMY_OCCLUDED", (int)SCOND_t.COND_ENEMY_OCCLUDED, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_TARGET_OCCLUDED", (int)SCOND_t.COND_TARGET_OCCLUDED, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_ENEMY_TOO_FAR", (int)SCOND_t.COND_ENEMY_TOO_FAR, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_LIGHT_DAMAGE", (int)SCOND_t.COND_LIGHT_DAMAGE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAVY_DAMAGE", (int)SCOND_t.COND_HEAVY_DAMAGE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_PHYSICS_DAMAGE", (int)SCOND_t.COND_PHYSICS_DAMAGE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_REPEATED_DAMAGE", (int)SCOND_t.COND_REPEATED_DAMAGE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_CAN_RANGE_ATTACK1", (int)SCOND_t.COND_CAN_RANGE_ATTACK1, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_CAN_RANGE_ATTACK2", (int)SCOND_t.COND_CAN_RANGE_ATTACK2, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_CAN_MELEE_ATTACK1", (int)SCOND_t.COND_CAN_MELEE_ATTACK1, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_CAN_MELEE_ATTACK2", (int)SCOND_t.COND_CAN_MELEE_ATTACK2, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_PROVOKED", (int)SCOND_t.COND_PROVOKED, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_NEW_ENEMY", (int)SCOND_t.COND_NEW_ENEMY, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_ENEMY_FACING_ME", (int)SCOND_t.COND_ENEMY_FACING_ME, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_BEHIND_ENEMY", (int)SCOND_t.COND_BEHIND_ENEMY, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_ENEMY_DEAD", (int)SCOND_t.COND_ENEMY_DEAD, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_ENEMY_UNREACHABLE", (int)SCOND_t.COND_ENEMY_UNREACHABLE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_SEE_PLAYER", (int)SCOND_t.COND_SEE_PLAYER, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_LOST_PLAYER", (int)SCOND_t.COND_LOST_PLAYER, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_SEE_NEMESIS", (int)SCOND_t.COND_SEE_NEMESIS, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_TASK_FAILED", (int)SCOND_t.COND_TASK_FAILED, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_SCHEDULE_DONE", (int)SCOND_t.COND_SCHEDULE_DONE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_SMELL", (int)SCOND_t.COND_SMELL, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_TOO_CLOSE_TO_ATTACK", (int)SCOND_t.COND_TOO_CLOSE_TO_ATTACK, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_TOO_FAR_TO_ATTACK", (int)SCOND_t.COND_TOO_FAR_TO_ATTACK, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_NOT_FACING_ATTACK", (int)SCOND_t.COND_NOT_FACING_ATTACK, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_WEAPON_HAS_LOS", (int)SCOND_t.COND_WEAPON_HAS_LOS, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_WEAPON_BLOCKED_BY_FRIEND", (int)SCOND_t.COND_WEAPON_BLOCKED_BY_FRIEND, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_WEAPON_PLAYER_IN_SPREAD", (int)SCOND_t.COND_WEAPON_PLAYER_IN_SPREAD, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_WEAPON_PLAYER_NEAR_TARGET", (int)SCOND_t.COND_WEAPON_PLAYER_NEAR_TARGET, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_WEAPON_SIGHT_OCCLUDED", (int)SCOND_t.COND_WEAPON_SIGHT_OCCLUDED, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_BETTER_WEAPON_AVAILABLE", (int)SCOND_t.COND_BETTER_WEAPON_AVAILABLE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEALTH_ITEM_AVAILABLE", (int)SCOND_t.COND_HEALTH_ITEM_AVAILABLE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_FLOATING_OFF_GROUND", (int)SCOND_t.COND_FLOATING_OFF_GROUND, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_MOBBED_BY_ENEMIES", (int)SCOND_t.COND_MOBBED_BY_ENEMIES, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_GIVE_WAY", (int)SCOND_t.COND_GIVE_WAY, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_WAY_CLEAR", (int)SCOND_t.COND_WAY_CLEAR, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAR_DANGER", (int)SCOND_t.COND_HEAR_DANGER, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAR_THUMPER", (int)SCOND_t.COND_HEAR_THUMPER, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAR_COMBAT", (int)SCOND_t.COND_HEAR_COMBAT, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAR_WORLD", (int)SCOND_t.COND_HEAR_WORLD, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAR_PLAYER", (int)SCOND_t.COND_HEAR_PLAYER, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAR_BULLET_IMPACT", (int)SCOND_t.COND_HEAR_BULLET_IMPACT, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAR_BUGBAIT", (int)SCOND_t.COND_HEAR_BUGBAIT, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAR_PHYSICS_DANGER", (int)SCOND_t.COND_HEAR_PHYSICS_DANGER, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_HEAR_MOVE_AWAY", (int)SCOND_t.COND_HEAR_MOVE_AWAY, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_NO_HEAR_DANGER", (int)SCOND_t.COND_NO_HEAR_DANGER, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_PLAYER_PUSHING", (int)SCOND_t.COND_PLAYER_PUSHING, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_RECEIVED_ORDERS", (int)SCOND_t.COND_RECEIVED_ORDERS, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_PLAYER_ADDED_TO_SQUAD", (int)SCOND_t.COND_PLAYER_ADDED_TO_SQUAD, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_PLAYER_REMOVED_FROM_SQUAD", (int)SCOND_t.COND_PLAYER_REMOVED_FROM_SQUAD, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_NPC_FREEZE", (int)SCOND_t.COND_NPC_FREEZE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_NPC_UNFREEZE", (int)SCOND_t.COND_NPC_UNFREEZE, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_TALKER_RESPOND_TO_QUESTION", (int)SCOND_t.COND_TALKER_RESPOND_TO_QUESTION, "CAI_BaseNPC");
+		idSpace.AddCondition("COND_NO_CUSTOM_INTERRUPTS", (int)SCOND_t.COND_NO_CUSTOM_INTERRUPTS, "CAI_BaseNPC");
+	}
+
 	public NPC_STATE GetState() => NPCState;
 
 	public bool IsInAScript() => InAScript;
