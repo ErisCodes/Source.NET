@@ -72,8 +72,9 @@ public unsafe class MeshGl46 : IMesh
 
 	}
 
-	private void SetIndexStreamState(int firstIndex) {
-
+	int BaseVertexIndex;
+	private void SetIndexStreamState(int firstVertexIdx) {
+		BaseVertexIndex = firstVertexIdx;
 	}
 
 	private void ResetMeshRenderState() {
@@ -364,7 +365,7 @@ public unsafe class MeshGl46 : IMesh
 					glVertexArrayElementBuffer(vao, IndexBuffer!.IBO());
 					bound = true;
 				}
-				glDrawElements(Mode, pPrim->NumIndices, GL_UNSIGNED_SHORT, (void*)(pPrim->FirstIndex * 2));
+				glDrawElementsBaseVertex(Mode, pPrim->NumIndices, GL_UNSIGNED_SHORT, (void*)(pPrim->FirstIndex * 2), BaseVertexIndex);
 			}
 		}
 	}
