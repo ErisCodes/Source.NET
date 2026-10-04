@@ -820,7 +820,7 @@ namespace Game.Shared
 			//TouchLink
 			new EntityDataInstantiator<TouchLink>(),
 			//StepSimulation
-			null!,
+			new EntityDataInstantiator<StepSimulationData>(),
 			//ModelScale
 			null!,
 			//PositionWatcher
