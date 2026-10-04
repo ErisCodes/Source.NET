@@ -42,6 +42,7 @@ public class World : BaseEntity
 		NetworkProp().AttachEdict(INDEXENT(RequiredEdictIndex()));
 
 		ActivityList.Init();
+		EventList.Init();
 		SetSolid(Source.SolidType.BSP);
 		SetMoveType(Source.MoveType.None);
 		ColdWorld = false;
