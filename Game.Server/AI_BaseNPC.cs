@@ -266,6 +266,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public AI_MemoryFlags Memory;
 	public float DistTooFar;
 	public AI_ScheduleBits Conditions;
+	public bool ConditionsGatheredValue;
 	public bool ForceConditionsGather;
 	public Capability Capability;
 	public string? SpawnEquipment;
@@ -327,6 +328,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public AIScheduleState ScheduleState;
 	public AI_Schedule? Schedule;
 	public int IdealSchedule;
+	public int FailSchedule;
 	public AI_ScheduleBits ConditionsPreIgnore;
 	public AI_ScheduleBits InverseIgnoreConditions;
 	public TimeUnit_t TimeEnemyAcquired;
@@ -3479,6 +3481,28 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	}
 
 	public virtual bool SetSchedule(int localScheduleID) => throw new NotImplementedException();
+
+	public void SetSchedule(AI_Schedule newSchedule) {
+		Assert(newSchedule != null);
+
+		ScheduleState.TimeCurTaskStarted = ScheduleState.TimeStarted = gpGlobals.CurTime;
+		ScheduleState.ScheduleWasInterrupted = false;
+
+		Schedule = newSchedule;
+		ResetScheduleCurTaskIndex();
+		SetTaskStatus(TaskStatus.New);
+		FailSchedule = SCHED_NONE;
+		bool condInPVS = HasCondition((int)SCOND_t.COND_IN_PVS);
+		Conditions.ClearAll();
+		if (condInPVS)
+			SetCondition((int)SCOND_t.COND_IN_PVS);
+		ConditionsGatheredValue = false;
+		InverseIgnoreConditions.SetAll();
+		Forget(AI_MemoryFlags.Turning);
+
+		if ((DebugOverlays & DebugOverlayBits.TaskText) != 0)
+			DevMsg($"Schedule: {newSchedule.GetName()} (time: {gpGlobals.CurTime:F2})\n");
+	}
 
 	public void SetHintNode(AI_Hint? hintNode) => HintNode.Set(hintNode);
 
