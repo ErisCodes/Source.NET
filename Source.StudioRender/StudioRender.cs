@@ -1000,7 +1000,7 @@ public unsafe class StudioRender
 			VertexFormat fmt = ComputeSWSkinVertexFormat(pMaterial!);
 			bool dx8Vertex = fmt.GetUserDataSize() != 0;
 
-			IMesh mesh = renderContext.GetDynamicMesh(false, null, pGroup.Mesh);
+			IMesh mesh = renderContext.GetDynamicMeshEx(fmt, false, null, pGroup.Mesh);
 
 			MeshBuilder meshBuilder = new();
 			meshBuilder.Begin(mesh, MaterialPrimitiveType.Heterogenous, pGroup.NumVertices, 0);
@@ -1107,7 +1107,7 @@ public unsafe class StudioRender
 		VertexFormat fmt = ComputeSWSkinVertexFormat(pMaterial!);
 		bool dx8Vertex = fmt.GetUserDataSize() != 0;
 
-		IMesh mesh = renderContext.GetDynamicMesh(false, null, pGroup.Mesh);
+		IMesh mesh = renderContext.GetDynamicMeshEx(fmt, false, null, pGroup.Mesh);
 
 		MeshBuilder meshBuilder = new();
 		meshBuilder.Begin(mesh, MaterialPrimitiveType.Heterogenous, pGroup.NumVertices, 0);
