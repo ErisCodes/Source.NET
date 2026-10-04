@@ -489,9 +489,130 @@ public class ChoreoScene : ICurveDataAccessor
 		SoundSystemLatency = time;
 	}
 
-	public void Think(float curtime) => throw new NotImplementedException();
-	public float LoopThink(float curtime) => throw new NotImplementedException();
-	void ProcessActiveListEntry(ref ActiveList entry) => throw new NotImplementedException();
+	public void Think(TimeUnit_t curtime) {
+		ChoreoEvent e;
+
+		TimeUnit_t oldt = CurrentTime;
+		TimeUnit_t dt;
+
+		ActiveEvents = 0;
+
+		ClearPauseEventDependencies();
+
+		List<ActiveList> pending = [];
+
+		LoopThink(curtime);
+		if (CurrentTime != oldt) {
+			curtime = CurrentTime;
+			Assert(curtime > 0.0f);
+		}
+
+		dt = curtime - oldt;
+		oldt = CurrentTime;
+
+		bool playing_forward = dt >= 0.0f;
+
+		int i;
+		for (i = 0; i < Events.Count; i++) {
+			e = Events[i];
+			if (e == null)
+				continue;
+
+			ActiveEvents += EventThink(e, CurrentTime, curtime, playing_forward, out ProcessingType disposition);
+
+			if (disposition != ProcessingType.Ignore) {
+				ActiveList entry;
+
+				entry.E = e;
+				entry.Pt = disposition;
+
+				int lo = 0;
+				int hi = pending.Count;
+				while (lo < hi) {
+					int mid = (lo + hi) >> 1;
+					if (EventLess(in entry, pending[mid]))
+						hi = mid;
+					else
+						lo = mid + 1;
+				}
+
+				pending.Insert(lo, entry);
+			}
+		}
+
+		Span<ActiveList> sorted = CollectionsMarshal.AsSpan(pending);
+		for (i = 0; i < sorted.Length; i++) {
+			ref ActiveList entry = ref sorted[i];
+
+			Assert(entry.E);
+
+			ProcessActiveListEntry(ref entry);
+		}
+
+		if (oldt == CurrentTime)
+			CurrentTime = curtime;
+
+		if (ActiveEvents != 0)
+			LastActiveTime = CurrentTime;
+	}
+
+	public float LoopThink(TimeUnit_t curtime) {
+		TimeUnit_t oldt = CurrentTime;
+		TimeUnit_t dt = curtime - oldt;
+
+		bool playing_forward = dt >= 0.0f;
+
+		ChoreoEvent e;
+		int i;
+		for (i = 0; i < Events.Count; i++) {
+			e = Events[i];
+			if (e == null || e.GetType() != ChoreoEvent.EventType.Loop)
+				continue;
+
+			ActiveEvents += EventThink(e, CurrentTime, curtime, playing_forward, out ProcessingType disposition);
+
+			if (disposition != ProcessingType.Ignore) {
+				ActiveList entry;
+
+				entry.E = e;
+				entry.Pt = disposition;
+
+				float ret = e.GetStartTime();
+				ProcessActiveListEntry(ref entry);
+
+				return ret;
+			}
+		}
+
+		return 0.0f;
+	}
+
+	void ProcessActiveListEntry(ref ActiveList entry) {
+		switch (entry.Pt) {
+			default:
+			case ProcessingType.Ignore:
+				Assert(false);
+				break;
+			case ProcessingType.Start:
+			case ProcessingType.StartResumeCondition:
+				entry.E.StartProcessing(IChoreoEventCallback, this, CurrentTime);
+
+				if (entry.Pt == ProcessingType.StartResumeCondition) {
+					Assert(entry.E.IsResumeCondition());
+					ActiveResumeConditions.Add(entry.E);
+				}
+
+				if (entry.E.GetType() == ChoreoEvent.EventType.Section)
+					LastPauseEvent = PauseEvents.IndexOf(entry.E);
+				break;
+			case ProcessingType.Continue:
+				entry.E.ContinueProcessing(IChoreoEventCallback, this, CurrentTime);
+				break;
+			case ProcessingType.Stop:
+				entry.E.StopProcessing(IChoreoEventCallback, this, CurrentTime);
+				break;
+		}
+	}
 
 	public TimeUnit_t GetTime() => CurrentTime;
 
@@ -503,8 +624,52 @@ public class ChoreoScene : ICurveDataAccessor
 	public void SetTime(TimeUnit_t t) => CurrentTime = t;
 	public void LoopToTime(TimeUnit_t t) => CurrentTime = t;
 
-	public bool SimulationFinished() => throw new NotImplementedException();
-	public void ResetSimulation(bool forward = true, float starttime = 0.0f, float endtime = 0.0f) => throw new NotImplementedException();
+	public bool SimulationFinished() {
+		if (CurrentTime > LatestTime) {
+			if (ActiveEvents != 0)
+				return false;
+
+			return true;
+		}
+		if (CurrentTime < EarliestTime)
+			return true;
+
+		return false;
+	}
+
+	public void ResetSimulation(bool forward = true, float starttime = 0.0f, float endtime = 0.0f) {
+		ChoreoEvent e;
+
+		ActiveResumeConditions.Clear();
+		ResumeConditions.Clear();
+		PauseEvents.Clear();
+
+		for (int i = 0; i < Events.Count; i++) {
+			e = Events[i];
+			e.ResetProcessing();
+
+			if (e.GetType() == ChoreoEvent.EventType.Section) {
+				PauseEvents.Add(e);
+				continue;
+			}
+
+			if (e.IsResumeCondition()) {
+				ResumeConditions.Add(e);
+				continue;
+			}
+		}
+
+		EarliestTime = FindAdjustedStartTime();
+		LatestTime = FindAdjustedEndTime();
+
+		CurrentTime = forward ? EarliestTime : LatestTime;
+
+		LastActiveTime = 0.0f;
+		ActiveEvents = Events.Count;
+
+		StartTime = starttime;
+		EndTime = endtime;
+	}
 
 	public float FindStopTime() {
 		if (PrecomputedStopTime != 0.0f)
@@ -525,8 +690,40 @@ public class ChoreoScene : ICurveDataAccessor
 		return lasttime;
 	}
 
-	public void ResumeSimulation() => throw new NotImplementedException();
-	public bool CheckEventCompletion() => throw new NotImplementedException();
+	public void ResumeSimulation() {
+		if (LastPauseEvent >= 0 && LastPauseEvent < PauseEvents.Count) {
+			List<ChoreoEvent> deps = [];
+			ChoreoEvent pauseEvent = PauseEvents[LastPauseEvent];
+			Assert(pauseEvent);
+
+			TimeUnit_t timeSincePaused = CurrentTime - pauseEvent.GetStartTime();
+			if (Math.Abs(timeSincePaused) > 1.0)
+				AssertMsg(false, "Resume simulation with unexpected pause event");
+
+			pauseEvent.GetEventDependencies(deps);
+			for (int j = 0; j < deps.Count; ++j) {
+				ChoreoEvent startEvent = deps[j];
+				Assert(startEvent);
+				startEvent.StartProcessing(IChoreoEventCallback, this, CurrentTime);
+			}
+		}
+
+		LastPauseEvent = -1;
+
+		ActiveResumeConditions.Clear();
+	}
+
+	public bool CheckEventCompletion() {
+		ChoreoEvent e;
+
+		bool allCompleted = true;
+		for (int i = 0; i < ActiveResumeConditions.Count; i++) {
+			e = ActiveResumeConditions[i];
+
+			allCompleted = allCompleted && e.CheckProcessing(IChoreoEventCallback, this, CurrentTime);
+		}
+		return allCompleted;
+	}
 
 	public ChoreoActor? FindActor(ReadOnlySpan<char> name) {
 		for (int i = 0; i < Actors.Count; i++) {
@@ -862,7 +1059,14 @@ public class ChoreoScene : ICurveDataAccessor
 	public void SetBackground(bool isBackground) => IsBackgroundValue = isBackground;
 	public bool IsBackground() => IsBackgroundValue;
 
-	public void ClearPauseEventDependencies() => throw new NotImplementedException();
+	public void ClearPauseEventDependencies() {
+		int c = PauseEvents.Count;
+		for (int i = 0; i < c; ++i) {
+			ChoreoEvent pause = PauseEvents[i];
+			Assert(pause);
+			pause.ClearEventDependencies();
+		}
+	}
 
 	public bool HasEventsOfType(ChoreoEvent.EventType type) => BitvecHasEventOfType.IsBitSet((int)type);
 
@@ -922,16 +1126,188 @@ public class ChoreoScene : ICurveDataAccessor
 	public void IgnorePhonemes(bool ignore) => IgnorePhonemesValue = ignore;
 	public bool ShouldIgnorePhonemes() => IgnorePhonemesValue;
 
-	TimeRange IsTimeInRange(float t, float starttime, float endtime) => throw new NotImplementedException();
+	TimeRange IsTimeInRange(TimeUnit_t t, TimeUnit_t starttime, TimeUnit_t endtime) {
+		if (t > endtime)
+			return TimeRange.AfterRange;
+		else if (t < starttime)
+			return TimeRange.BeforeRange;
 
-	static bool EventLess(in ActiveList al0, in ActiveList al1) => throw new NotImplementedException();
+		return TimeRange.InRange;
+	}
 
-	int EventThink(ChoreoEvent e, float frame_start_time, float frame_end_time, bool playing_forward, out PROCESSING_TYPE disposition) => throw new NotImplementedException();
+	static bool EventLess(in ActiveList al0, in ActiveList al1) {
+		ChoreoEvent event0, event1;
+		event0 = al0.E;
+		event1 = al1.E;
 
-	float FindAdjustedStartTime() => throw new NotImplementedException();
-	float FindAdjustedEndTime() => throw new NotImplementedException();
+		if (event0.GetStartTime() < event1.GetStartTime())
+			return true;
 
-	ChoreoEvent? FindPauseBetweenTimes(float starttime, float endtime) => throw new NotImplementedException();
+		if (event0.GetStartTime() > event1.GetStartTime())
+			return false;
+
+		if (event0.HasEndTime() && event1.HasEndTime()) {
+			if (event0.GetEndTime() > event1.GetEndTime())
+				return true;
+			else if (event0.GetEndTime() < event1.GetEndTime())
+				return false;
+		}
+
+		ChoreoActor? a0, a1;
+		a0 = event0.GetActor();
+		a1 = event1.GetActor();
+
+		if (a0 == null || a1 == null || a0 != a1)
+			return strcmp(event0.GetName(), event1.GetName()) < 0;
+
+		ChoreoChannel? c0 = event0.GetChannel();
+		ChoreoChannel? c1 = event1.GetChannel();
+
+		if (c0 == null || c1 == null || c0 != c1)
+			return strcmp(event0.GetName(), event1.GetName()) < 0;
+
+		int index0 = a0.FindChannelIndex(c0);
+		int index1 = a1.FindChannelIndex(c1);
+
+		return index0 < index1;
+	}
+
+	int EventThink(ChoreoEvent e, TimeUnit_t frame_start_time, TimeUnit_t frame_end_time, bool playing_forward, out ProcessingType disposition) {
+		disposition = ProcessingType.Ignore;
+		int iret = 0;
+
+		bool hasend = e.HasEndTime();
+		float starttime, endtime;
+
+		starttime = e.GetStartTime();
+		endtime = hasend ? e.GetEndTime() : e.GetStartTime();
+
+		if (!playing_forward)
+			(frame_start_time, frame_end_time) = (frame_end_time, frame_start_time);
+
+		bool suppressed = false;
+
+		switch (e.GetType()) {
+			default:
+				break;
+			case ChoreoEvent.EventType.Speak:
+				if (playing_forward) {
+					starttime -= SoundSystemLatency;
+
+					ChoreoEvent? pauseEvent = FindPauseBetweenTimes(starttime, starttime + SoundSystemLatency);
+					if (pauseEvent != null && frame_start_time <= pauseEvent.GetStartTime()) {
+						pauseEvent.AddEventDependency(e);
+
+						suppressed = true;
+					}
+				}
+				break;
+			case ChoreoEvent.EventType.SubScene:
+				if (IsSubScene())
+					suppressed = true;
+				break;
+		}
+
+		if (suppressed) {
+			if (e.IsProcessing())
+				disposition = ProcessingType.Stop;
+			return iret;
+		}
+
+		TimeRange where_is_event;
+
+		if (e.IsProcessing()) {
+			where_is_event = IsTimeInRange(frame_start_time, starttime, endtime);
+			if (where_is_event == TimeRange.InRange) {
+				disposition = ProcessingType.Continue;
+				iret = 1;
+			}
+			else
+				disposition = ProcessingType.Stop;
+		}
+		else {
+			where_is_event = IsTimeInRange(frame_start_time, starttime, endtime);
+
+			if (where_is_event == TimeRange.InRange) {
+				if (e.IsResumeCondition())
+					disposition = ProcessingType.StartResumeCondition;
+				else
+					disposition = ProcessingType.Start;
+				iret = 1;
+			}
+			else if (!hasend) {
+				where_is_event = IsTimeInRange(starttime, frame_start_time, frame_end_time);
+				if (where_is_event == TimeRange.InRange) {
+					disposition = ProcessingType.Start;
+					iret = 1;
+				}
+			}
+		}
+
+		return iret;
+	}
+
+	float FindAdjustedStartTime() {
+		float earliest_time = 0.0f;
+
+		ChoreoEvent e;
+
+		for (int i = 0; i < Events.Count; i++) {
+			e = Events[i];
+
+			float starttime = e.GetStartTime();
+
+			if (e.GetType() == ChoreoEvent.EventType.Speak)
+				starttime -= SoundSystemLatency;
+
+			if (starttime < earliest_time)
+				earliest_time = starttime;
+		}
+
+		return earliest_time;
+	}
+
+	float FindAdjustedEndTime() {
+		float latest_time = 0.0f;
+
+		ChoreoEvent e;
+
+		for (int i = 0; i < Events.Count; i++) {
+			e = Events[i];
+
+			float endtime = e.GetStartTime();
+			if (e.HasEndTime())
+				endtime = e.GetEndTime();
+
+			if (e.GetType() == ChoreoEvent.EventType.Speak)
+				endtime += SoundSystemLatency;
+
+			if (endtime > latest_time)
+				latest_time = endtime;
+		}
+
+		return latest_time;
+	}
+
+	ChoreoEvent? FindPauseBetweenTimes(float starttime, float endtime) {
+		ChoreoEvent e;
+
+		for (int i = 0; i < PauseEvents.Count; i++) {
+			e = PauseEvents[i];
+			if (e == null)
+				continue;
+
+			Assert(e.GetType() == ChoreoEvent.EventType.Section);
+
+			TimeRange time_is = IsTimeInRange(e.GetStartTime(), starttime, endtime);
+			if (time_is != TimeRange.InRange)
+				continue;
+
+			return e;
+		}
+
+		return null;
+	}
 
 	void DestroyActor(ChoreoActor actor) {
 		int size = Actors.Count;
@@ -960,7 +1336,11 @@ public class ChoreoScene : ICurveDataAccessor
 		}
 	}
 
-	void AddPauseEventDependency(ChoreoEvent pauseEvent, ChoreoEvent suppressed) => throw new NotImplementedException();
+	void AddPauseEventDependency(ChoreoEvent pauseEvent, ChoreoEvent suppressed) {
+		Assert(pauseEvent);
+		Assert(pauseEvent != suppressed);
+		pauseEvent.AddEventDependency(suppressed);
+	}
 
 	void InternalDetermineEventTypes() {
 		BitvecHasEventOfType.ClearAll();
