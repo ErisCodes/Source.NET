@@ -585,6 +585,8 @@ public struct MStudioVertAnim
 
 	public readonly Vector3 GetDeltaFixed() => new(delta[0] * Studio.VertAnimFixedPointScale, delta[1] * Studio.VertAnimFixedPointScale, delta[2] * Studio.VertAnimFixedPointScale);
 	public readonly Vector3 GetNDeltaFixed() => new(ndelta[0] * Studio.VertAnimFixedPointScale, ndelta[1] * Studio.VertAnimFixedPointScale, ndelta[2] * Studio.VertAnimFixedPointScale);
+	public readonly Vector4 GetDeltaFixed4DAligned() => new(delta[0] * Studio.VertAnimFixedPointScale, delta[1] * Studio.VertAnimFixedPointScale, delta[2] * Studio.VertAnimFixedPointScale, 0.0f);
+	public readonly Vector4 GetNDeltaFixed4DAligned() => new(ndelta[0] * Studio.VertAnimFixedPointScale, ndelta[1] * Studio.VertAnimFixedPointScale, ndelta[2] * Studio.VertAnimFixedPointScale, 0.0f);
 
 	public void SetDeltaFixed(in Vector3 input) {
 		delta[0] = (short)(input.X * Studio.VertAnimFixedPointScaleInv);
@@ -604,6 +606,12 @@ public struct MStudioVertAnimWrinkle
 {
 	public MStudioVertAnim VertAnim;
 	public short WrinkleDelta;
+
+	public readonly Vector4 GetDeltaFixed4DAligned() {
+		Vector3 delta = VertAnim.GetDeltaFixed();
+		return new(delta.X, delta.Y, delta.Z, WrinkleDelta * Studio.VertAnimFixedPointScale);
+	}
+	public readonly Vector4 GetNDeltaFixed4DAligned() => VertAnim.GetNDeltaFixed4DAligned();
 }
 
 public class MStudioFlex
