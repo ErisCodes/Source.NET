@@ -502,6 +502,7 @@ public static class SendPropHelpers
 				// todo: make sure this is okay...
 			}
 			else {
+				indexedData.ElementFieldInfo = (IFieldAccessor)Activator.CreateInstance(typeof(ListElementAccessor<>).MakeGenericType(field.FieldType.GetGenericArguments()[0]), i - 1)!;
 				props[i].SetProxyFn(SendProxy_UtlVectorElement);
 			}
 		}
@@ -543,7 +544,16 @@ public static class SendPropHelpers
 	}
 
 	private static void SendProxy_UtlVectorElement(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		throw new NotImplementedException();
+		SendPropExtra_UtlVector extra = (SendPropExtra_UtlVector)prop.GetExtraData()!;
+		Assert(extra != null);
+
+		int iElement = extra.Index;
+
+		ICollection utlVec = (ICollection)instance;
+		if (iElement >= utlVec.Count) 
+			outData = default;
+		else 
+			extra.ProxyFn(prop, instance, extra.ElementFieldInfo, ref outData, 0, objectID);
 	}
 
 	private static object? SendProxy_LengthTable(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {

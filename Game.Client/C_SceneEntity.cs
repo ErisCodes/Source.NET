@@ -36,7 +36,7 @@ public class C_SceneEntity : C_BaseEntity
 
 	static void ResizeActorList(object instance, object list, int len) {
 		var vec = (List<EHANDLE>)list;
-		while (vec.Count < len) vec.Add(default);
+		while (vec.Count < len) vec.Add(new());
 		while (vec.Count > len) vec.RemoveAt(vec.Count - 1);
 	}
 }

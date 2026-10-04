@@ -301,6 +301,18 @@ namespace Source.Common
 					break;
 				case IndexInfo index:
 					switch (index.Behavior) {
+						case IndexInfoBehavior.GenericArrayType:
+							MethodInfo setter = index.Container.GetMethod("set_Item", (BindingFlags)~0, [typeof(int), index.ElementType]) ?? index.Container.GetMethod("Set", (BindingFlags)~0, [typeof(int), index.ElementType]) ?? throw new Exception();
+							il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
+
+							LoadValue(accessor, il);
+							PerformAutocast(accessor, il);
+
+							if (setter.IsVirtual)
+								il.LoggedEmit(OpCodes.Callvirt, setter);
+							else
+								il.LoggedEmit(OpCodes.Call, setter);
+							break;
 						case IndexInfoBehavior.NetworkArray:
 							il.LoggedEmit(OpCodes.Ldfld, (accessor.Members[^2] as FieldInfo)!.FieldType!.GetField("Value")!);
 							il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
@@ -483,6 +495,45 @@ namespace Source.Common
 			BaseArrayAccessor = baseArray;
 			Index = Math.Abs(index);
 			IsAVectorElement = isVectorElem;
+		}
+	}
+
+	public class ListElementAccessor<TElement>(int index) : IFieldAccessor
+	{
+		public string Name { get; } = $"[{index}]";
+		public Type DeclaringType => typeof(List<TElement>);
+		public Type FieldType => typeof(TElement);
+		public int Length => 1;
+		public int Index => index;
+
+		public T GetValue<T>(object instance) {
+			TElement value = ((List<TElement>)instance)[index];
+			if (typeof(T) == typeof(TElement))
+				return Unsafe.As<TElement, T>(ref value);
+
+			ILAssembler.DynamicCast(in value, out T ret);
+			return ret;
+		}
+
+		public bool SetValue<T>(object instance, in T value) {
+			TElement converted;
+			if (typeof(T) == typeof(TElement))
+				converted = Unsafe.As<T, TElement>(ref Unsafe.AsRef(in value));
+			else
+				ILAssembler.DynamicCast(in value, out converted);
+
+			((List<TElement>)instance)[index] = converted;
+			return true;
+		}
+
+		public void CopyFrom<T>(object instanceFrom, Span<T> target) {
+			SetValue<T>(instanceFrom, target.Length == 0 ? default! : target[0]);
+		}
+
+		public void CopyTo<T>(object instanceFrom, Span<T> target) {
+			if (target.Length <= 0)
+				return;
+			target[0] = GetValue<T>(instanceFrom);
 		}
 	}
 
