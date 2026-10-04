@@ -98,6 +98,8 @@ public class World : BaseEntity
 		// BaseCombatCharacter.InitInteractionSystem();
 
 		PrecacheRegister.Precache();
+
+		g_iszFuncBrushClassname = "func_brush";
 	}
 
 	public static ReadOnlySpan<char> GetDefaultLightstyleString(int styleIndex) => styleIndex < g_DefaultLightstyles.Length ? g_DefaultLightstyles[styleIndex] : "m";

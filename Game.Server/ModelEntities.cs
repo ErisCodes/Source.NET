@@ -10,5 +10,6 @@ namespace Game.Server;
 [LinkEntityToClass("func_brush")]
 [LinkEntityToClass("func_simpleladder")]
 public class FuncBrush : BaseEntity {
-
+	public string? ExcludedClass;
+	public bool InvertExclusion;
 }

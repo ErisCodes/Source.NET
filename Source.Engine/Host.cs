@@ -50,6 +50,7 @@ public partial class Host
 	public static readonly ConVar host_name = new("hostname", "", 0, "Hostname for server.");
 	public static readonly ConVar host_map = new("host_map", "", 0, "Current map name.");
 	public static readonly ConVar developer = new("developer", "0", 0, "Set developer message level");
+	public static readonly ConVar host_timescale = new("host_timescale", "1.0", FCvar.Replicated, "Prescale the clock by this amount.");
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 	public static GameClient? Client;

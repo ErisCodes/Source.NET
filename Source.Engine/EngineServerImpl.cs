@@ -91,7 +91,21 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 
 	public bool CheckOriginInPVS(in Vector3 org, ReadOnlySpan<byte> checkpvs) {
-		throw new NotImplementedException();
+		int clusterIndex = CM.LeafCluster(CM.PointLeafnum(org));
+
+		if (clusterIndex < 0)
+			return false;
+
+		int offset = clusterIndex >> 3;
+		if (offset > checkpvs.Length) {
+			Sys.Error($"CheckOriginInPVS:  cluster would read past end of pvs data ({offset}:{checkpvs.Length})\n");
+			return false;
+		}
+
+		if ((checkpvs[offset] & (1 << (clusterIndex & 7))) == 0)
+			return false;
+
+		return true;
 	}
 
 	public void CleanUpEntityClusterList(ref PVSInfo pvsInfo) {
@@ -675,9 +689,7 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 
 	public void NotifyEdictFlagsChange(int edict) => CL.LocalNetworkBackdoor?.NotifyEdictFlagsChange((uint)edict);
 
-	public ReadOnlySpan<char> ParseFile(ReadOnlySpan<char> data, Span<char> token) {
-		throw new NotImplementedException();
-	}
+	public ReadOnlySpan<char> ParseFile(ReadOnlySpan<char> data, Span<char> token) => FilesystemHelpers.ParseFile(data, token, out _);
 
 	public Edict? PEntityOfEntIndex(int iEntIndex) {
 		if (iEntIndex >= 0 && iEntIndex < sv.MaxEdicts) {

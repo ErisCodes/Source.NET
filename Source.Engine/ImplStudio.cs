@@ -184,6 +184,45 @@ public class ModelRender : IModelRender
 	static readonly ConVar r_modelwireframedecal = new("r_modelwireframedecal", "0", FCvar.Cheat);
 	static readonly ConVar r_maxmodeldecal = new("r_maxmodeldecal", "50", 0);
 
+	static StudioRenderConfig s_StudioRenderConfig;
+
+	public static void UpdateStudioRenderConfig() {
+		IStudioRender? studioRender = Singleton<IStudioRender>();
+		if (studioRender == null)
+			return;
+
+		s_StudioRenderConfig = default;
+
+		s_StudioRenderConfig.EyeMove = r_eyemove.GetInt() != 0;
+		s_StudioRenderConfig.EyeShiftX = r_eyeshift_x.GetFloat();
+		s_StudioRenderConfig.EyeShiftY = r_eyeshift_y.GetFloat();
+		s_StudioRenderConfig.EyeShiftZ = r_eyeshift_z.GetFloat();
+		s_StudioRenderConfig.EyeSize = r_eyesize.GetFloat();
+		if (mat_softwareskin.GetInt() != 0 || ShouldDrawInWireFrameMode())
+			s_StudioRenderConfig.SoftwareSkin = true;
+		else
+			s_StudioRenderConfig.SoftwareSkin = false;
+		s_StudioRenderConfig.NoHardware = r_nohw.GetInt() != 0;
+		s_StudioRenderConfig.NoSoftware = r_nosw.GetInt() != 0;
+		s_StudioRenderConfig.Teeth = r_teeth.GetInt() != 0;
+		s_StudioRenderConfig.DrawEntities = r_drawentities.GetInt();
+		s_StudioRenderConfig.Flex = r_flex.GetInt() != 0;
+		s_StudioRenderConfig.Eyes = r_eyes.GetInt() != 0;
+		s_StudioRenderConfig.Wireframe = ShouldDrawInWireFrameMode();
+		s_StudioRenderConfig.DrawNormals = mat_normals.GetBool();
+		s_StudioRenderConfig.Skin = r_skin.GetInt();
+		s_StudioRenderConfig.MaxDecalsPerModel = r_maxmodeldecal.GetInt();
+		s_StudioRenderConfig.WireframeDecals = r_modelwireframedecal.GetInt() != 0;
+
+		s_StudioRenderConfig.FullBright = MatSysInterface.MaterialSystemConfig.Fullbright;
+		s_StudioRenderConfig.SoftwareLighting = MatSysInterface.MaterialSystemConfig.SoftwareLighting;
+
+		s_StudioRenderConfig.ShowEnvCubemapOnly = r_showenvcubemap.GetInt() != 0;
+		s_StudioRenderConfig.EyeGlintPixelWidthLODThreshold = r_eyeglintlodpixels.GetFloat();
+
+		studioRender.UpdateConfig(in s_StudioRenderConfig);
+	}
+
 	ModelInstanceHandle_t curModelHandle;
 	readonly Dictionary<ModelInstanceHandle_t, ModelInstance> ModelInstances = [];
 

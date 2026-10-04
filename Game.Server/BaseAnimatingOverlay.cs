@@ -3,6 +3,8 @@ using Game.Shared;
 using Source.Common;
 using Source.Common.Commands;
 
+using System.Numerics;
+
 namespace Game.Server;
 
 using FIELD = Source.FIELD<BaseAnimatingOverlay>;
@@ -12,7 +14,7 @@ public class BaseAnimatingOverlay : BaseAnimating
 {
 	public const int MAX_OVERLAYS = 15;
 
-	static readonly ConVar ai_sequence_debug = new("ai_sequence_debug", "0");
+	internal static readonly ConVar ai_sequence_debug = new("ai_sequence_debug", "0");
 
 	public static readonly SendTable DT_OverlayVars = new(nameof(DT_OverlayVars), [
 		SendPropList(FIELD.OF(nameof(AnimOverlay)), MAX_OVERLAYS, SendPropDataTable(null, AnimationLayerRef.DT_Animationlayer))
@@ -39,6 +41,41 @@ public class BaseAnimatingOverlay : BaseAnimating
 		else if (AnimOverlay.Count > num)
 			for (int i = 0, diff = AnimOverlay.Count - num; i < diff; i++)
 				AnimOverlay.RemoveAt(AnimOverlay.Count - 1);
+	}
+
+	public override void GetSkeleton(StudioHdr? studioHdr, Span<Vector3> pos, Span<Quaternion> q, int boneMask) {
+		if (studioHdr == null) {
+			AssertMsg(false, "BaseAnimating.GetSkeleton() without a model");
+			return;
+		}
+
+		if (!studioHdr.SequencesAvailable())
+			return;
+
+		BoneSetup boneSetup = new(studioHdr, boneMask, PoseParameter);
+		boneSetup.InitPose(pos, q);
+
+		boneSetup.AccumulatePose(pos, q, GetSequence(), GetCycle(), 1.0f, gpGlobals.CurTime, null);
+
+		Span<int> layer = stackalloc int[MAX_OVERLAYS];
+		int i;
+		for (i = 0; i < AnimOverlay.Count; i++)
+			layer[i] = MAX_OVERLAYS;
+
+		for (i = 0; i < AnimOverlay.Count; i++) {
+			AnimationLayerRef pLayer = AnimOverlay[i];
+			if ((pLayer.Weight > 0) && pLayer.IsActive() && pLayer.Order >= 0 && pLayer.Order < AnimOverlay.Count)
+				layer[pLayer.Order] = i;
+		}
+
+		for (i = 0; i < AnimOverlay.Count; i++) {
+			if (layer[i] >= 0 && layer[i] < AnimOverlay.Count) {
+				AnimationLayerRef pLayer = AnimOverlay[layer[i]];
+				boneSetup.AccumulatePose(pos, q, pLayer.Sequence, pLayer.Cycle, pLayer.Weight, gpGlobals.CurTime, null);
+			}
+		}
+
+		boneSetup.CalcAutoplaySequences(pos, q, gpGlobals.CurTime, null);
 	}
 
 	public void VerifyOrder() {

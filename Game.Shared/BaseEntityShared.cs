@@ -671,6 +671,13 @@ public partial class
 	public MoveCollide GetMoveCollide() => (MoveCollide)MoveCollide;
 	public CollisionGroup GetCollisionGroup() => (CollisionGroup)CollisionGroup;
 
+	public void SetCollisionGroup(CollisionGroup collisionGroup) {
+		if ((CollisionGroup)CollisionGroup != collisionGroup) {
+			CollisionGroup = (int)collisionGroup;
+			CollisionRulesChanged();
+		}
+	}
+
 	public void CollisionRulesChanged() { } // TODO
 
 	public void SetSimulatedEveryTick(bool sim) {

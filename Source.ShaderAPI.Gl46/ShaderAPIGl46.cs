@@ -2869,4 +2869,15 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			_ => MathLib.GammaToLinearFullRange(2.0f),
 		};
 	}
+
+	public float GetAmbientLightCubeLuminance() {
+		Vector4 luminance = new(0.3f, 0.59f, 0.11f, 0.0f);
+		float fLuminance = 0.0f;
+
+		Span<Vector4> cube = AmbientLightCube;
+		for (int i = 0; i < 6; i++)
+			fLuminance += Vector4.Dot(luminance, cube[i]);
+
+		return fLuminance / 6.0f;
+	}
 }

@@ -327,6 +327,9 @@ public interface IMatRenderContext
 	void LoadIdentity();
 	void Bind(IMaterial material, object? proxyData);
 	IMaterial? GetCurrentMaterial();
+	object? GetCurrentProxy();
+	int GetCurrentNumBones();
+	bool EnableClipping(bool enable);
 	IShaderAPI GetShaderAPI();
 	bool InFlashlightMode();
 	IMesh GetDynamicMesh(bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null);
@@ -420,6 +423,9 @@ public readonly struct MatRenderContextPtr : IDisposable, IMatRenderContext
 	public void BindLightmap(Sampler sampler) => ctx.BindLightmap(sampler);
 	public void BindLightmapPage(int lightmapPageID) => ctx.BindLightmapPage(lightmapPageID);
 	public IMaterial? GetCurrentMaterial() => ctx.GetCurrentMaterial();
+	public object? GetCurrentProxy() => ctx.GetCurrentProxy();
+	public int GetCurrentNumBones() => ctx.GetCurrentNumBones();
+	public bool EnableClipping(bool enable) => ctx.EnableClipping(enable);
 	public void PopMatrix() => ctx.PopMatrix();
 	public IShaderAPI GetShaderAPI() => ctx.GetShaderAPI();
 	public IMesh GetDynamicMesh(bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) =>

@@ -223,7 +223,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 
 	void StartZooming() { }
 
-	void StopZooming() { }
+	public void StopZooming() { }
 
 	bool IsZooming() {
 		throw new NotImplementedException();
@@ -352,7 +352,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 		throw new NotImplementedException();
 	}
 
-	void Weapon_Equip(BaseCombatWeapon weapon) { }
+	public override void Weapon_Equip(BaseCombatWeapon weapon) { }
 
 	bool BumpWeapon(BaseCombatWeapon weapon) {
 		throw new NotImplementedException();
