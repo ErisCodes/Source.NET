@@ -290,6 +290,10 @@ BaseEntity
 #endif
 {
 	public static void StopSound(int entIndex, int channel, ReadOnlySpan<char> sample) => g_SoundEmitterSystem.StopSound(entIndex, channel, sample);
+	public static void StopSound(int entIndex, ReadOnlySpan<char> soundname) => g_SoundEmitterSystem.StopSound(entIndex, soundname);
+#if GAME_DLL
+	public void StopSound(ReadOnlySpan<char> soundname) => StopSound(EntIndex(), soundname);
+#endif
 
 	public static SoundLevel LookupSoundLevel(ReadOnlySpan<char> soundname) {
 		return soundemitterbase.LookupSoundLevel(soundname);
