@@ -36,10 +36,9 @@ public class FuncRotating : BaseEntity
 		FuncRotating? entity = (FuncRotating?)instance;
 		Assert(entity != null);
 
-		ReadOnlySpan<float> qa = field.GetValue < Vector3>(instance).ReadOnlyBase();
-		ReadOnlySpan<float> ea = entity.GetLocalAngles().ReadOnlyBase();
+		float qa = field.GetValue<float>(instance);
 
-		outData.Float = MathLib.anglemod(qa[0]);
+		outData.Float = MathLib.anglemod(qa);
 		Assert(float.IsFinite(outData.Float));
 	}
 
