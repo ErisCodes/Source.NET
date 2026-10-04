@@ -81,7 +81,8 @@ public class ZipPackFileSearchPath : BaseSearchPath
 		if (entry == null)
 			return null;
 
-		return new ZipArchiveEntryHandle(filesystem, filesystem.FindOrAddFileName(path), entry);
+		lock (archive)
+			return new ZipArchiveEntryHandle(filesystem, filesystem.FindOrAddFileName(path), entry);
 	}
 
 	public override bool RemoveFile(ReadOnlySpan<char> path) => false;

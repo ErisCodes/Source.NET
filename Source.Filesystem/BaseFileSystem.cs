@@ -19,8 +19,11 @@ using System.Text;
 namespace Source.FileSystem;
 
 // Maybe we redo this one day...
-public class BaseFileSystem : IFileSystem
+public partial class BaseFileSystem : IFileSystem
 {
+	readonly Lock SearchPathLock = new();
+	readonly Lock FileNameLock = new();
+
 	readonly record struct searchPathInternal(ISearchPath path, string pathID);
 	private readonly SearchPathIDCollection SearchPaths = [];
 	private readonly List<searchPathInternal>[] SearchPathGroups = new List<searchPathInternal>[(int)PathGroupName.Fallbacks + 1];
@@ -35,6 +38,7 @@ public class BaseFileSystem : IFileSystem
 		=> GetSearchPathGroupsFor(searchPath.GetGroupName()).Remove(new(searchPath, new(pathID.SliceNullTerminatedString())));
 
 	private void AddSearchPathFinal(ISearchPath searchPath, SearchPathAdd addType, SearchPathCollection collection, PathGroupName groupName, ReadOnlySpan<char> pathID) {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		if (addType == SearchPathAdd.ToHead)
 			collection.GetAddOrder().Insert(0, searchPath);
 		else
@@ -166,6 +170,7 @@ public class BaseFileSystem : IFileSystem
 	}
 
 	public void AddSearchPath(ISearchPath path, ReadOnlySpan<char> pathID, SearchPathAdd addType = SearchPathAdd.ToTail, PathGroupName groupName = PathGroupName.Default) {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		if (!SearchPaths.OpenOrCreateCollection(pathID, out SearchPathCollection collection)) {
 			for (int i = 0, c = collection.Count; i < c; i++) {
 				var searchPath = collection.GetAddOrder()[i];
@@ -277,6 +282,7 @@ public class BaseFileSystem : IFileSystem
 		T? loseDefault,
 		[NotNullWhen(true)] out ISearchPath? winner
 	) where TOp : struct, IFirstToThePostOp<T>, allows ref struct {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		filename = filename.SliceNullTerminatedString();
 		Span<char> filenameNormalizedBuffer = stackalloc char[MAX_PATH];
 		ReadOnlySpan<char> filenameNormalized = ISearchPath.Normalize(filename, filenameNormalizedBuffer);
@@ -383,6 +389,7 @@ public class BaseFileSystem : IFileSystem
 	}
 
 	public void MarkPathIDByRequestOnly(ReadOnlySpan<char> pathID, bool requestOnly) {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		ulong hashID = pathID.Hash();
 
 		if (!SearchPaths.TryGetValue(hashID, out var collection))
@@ -433,6 +440,7 @@ public class BaseFileSystem : IFileSystem
 
 
 	public void RemoveAllSearchPaths() {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		SearchPaths.Clear();
 	}
 
@@ -447,6 +455,7 @@ public class BaseFileSystem : IFileSystem
 		return FirstToThePost(relativePath, pathID, new RemoveFile_Op(), false, out _);
 	}
 	public bool RemoveSearchPath(ReadOnlySpan<char> path, ReadOnlySpan<char> pathID) {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		ulong hash = pathID.Hash();
 		if (hash == 0) return false;
 
@@ -468,6 +477,7 @@ public class BaseFileSystem : IFileSystem
 	}
 
 	public void RemoveSearchPaths(ReadOnlySpan<char> pathID) {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		ulong hash = pathID.Hash();
 		if (hash == 0) return;
 		SearchPaths.Remove(hash);
@@ -667,10 +677,12 @@ public class BaseFileSystem : IFileSystem
 	}
 
 	public FileNameHandle_t FindFileName(ReadOnlySpan<char> name) {
+		using Lock.Scope scope = FileNameLock.EnterScope();
 		ulong hash = FormatFileName(name, stackalloc char[name.Length]).Hash();
 		return fileNameHandles.TryGetValue(hash, out FileNameHandle_t handle) ? handle : FILENAMEHANDLE_INVALID;
 	}
 	public FileNameHandle_t FindOrAddFileName(ReadOnlySpan<char> name) {
+		using Lock.Scope scope = FileNameLock.EnterScope();
 		ulong hash = FormatFileName(name, stackalloc char[name.Length]).Hash();
 		if (!fileNameHandles.TryGetValue(hash, out var handle)) {
 			handle = fileNameHandles[hash] = ++currentHandle;
@@ -853,6 +865,7 @@ public class BaseFileSystem : IFileSystem
 	}
 
 	public ReadOnlySpan<char> String(FileNameHandle_t handle) {
+		using Lock.Scope scope = FileNameLock.EnterScope();
 		return fileNameStrings.TryGetValue(handle, out string? v) ? v : null;
 	}
 
@@ -872,6 +885,7 @@ public class BaseFileSystem : IFileSystem
 	}
 
 	public bool RemoveSearchPath(ISearchPath searchPathImpl, ReadOnlySpan<char> pathID) {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		ulong hash = pathID.Hash();
 		if (hash == 0) return false;
 
@@ -893,6 +907,7 @@ public class BaseFileSystem : IFileSystem
 	}
 
 	public bool RemoveSearchPath(Predicate<ISearchPath> search, ReadOnlySpan<char> pathID) {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		ulong hash = pathID.Hash();
 		if (hash == 0) return false;
 

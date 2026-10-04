@@ -56,6 +56,55 @@ public enum FSAsyncStatus
 	StatusUnserviced,
 }
 
+[Flags]
+public enum FSAsyncFlags
+{
+	// do the allocation for dataPtr, but don't free
+	AllocNoFree = 1 << 0,
+	// free the memory for the dataPtr post callback
+	FreeDataPtr = 1 << 1,
+	// Actually perform the operation synchronously. Used to simplify client code paths
+	Sync = 1 << 2,
+	// allocate an extra byte and null terminate the buffer read in
+	NullTerminate = 1 << 3,
+}
+
+/// <summary>
+/// Optional completion callback for each async file serviced (or failed)
+/// call is not reentrant, async i/o guaranteed suspended until return
+/// </summary>
+public delegate void FSAsyncCallbackFunc(in FileAsyncRequest request, int bytesRead, FSAsyncStatus err);
+public delegate byte[] FSAllocFunc(string fileName, int bytes);
+
+/// <summary>
+/// Description of an async request
+/// </summary>
+public struct FileAsyncRequest
+{
+	// file system name
+	public string? FileName;
+	// optional, system will alloc/free if NULL
+	public byte[]? Data;
+	// optional initial seek_set, 0=beginning
+	public int Offset;
+	// optional read clamp, -1=exist test, 0=full read
+	public int Bytes;
+	// optional completion callback
+	public FSAsyncCallbackFunc? Callback;
+	// caller's unique file identifier
+	public object? Context;
+	// inter list priority, 0=lowest
+	public int Priority;
+	// behavior modifier
+	public FSAsyncFlags Flags;
+	// path ID (NOTE: this field is here to remain binary compatible with release HL2 filesystem interface)
+	public string? PathID;
+	// custom allocator. can be null. not compatible with FSASYNC_FLAGS_FREEDATAPTR
+	public FSAllocFunc? Alloc;
+}
+
+public abstract class FSAsyncControl;
+
 public interface ISearchPath
 {
 	bool Exists(scoped ReadOnlySpan<char> path); // Returns if the file or directory exists
@@ -268,6 +317,18 @@ public interface IFileSystem : IBaseFileSystem
 	void FindClose(ulong findHandle);
 
 	ReadOnlySpan<char> String(FileNameHandle_t nameHandle);
+
+	FSAsyncStatus AsyncRead(in FileAsyncRequest request) => AsyncReadMultiple(new ReadOnlySpan<FileAsyncRequest>(in request), default);
+	FSAsyncStatus AsyncRead(in FileAsyncRequest request, out FSAsyncControl? control) {
+		control = null;
+		return AsyncReadMultiple(new ReadOnlySpan<FileAsyncRequest>(in request), new Span<FSAsyncControl?>(ref control));
+	}
+	FSAsyncStatus AsyncReadMultiple(ReadOnlySpan<FileAsyncRequest> requests, Span<FSAsyncControl?> controls);
+	void AsyncFinishAll(int toPriority = 0);
+
+	FSAsyncStatus AsyncFinish(FSAsyncControl control, bool wait = true);
+	FSAsyncStatus AsyncGetResult(FSAsyncControl control, out byte[]? data, out int size);
+	FSAsyncStatus AsyncStatus(FSAsyncControl control);
 
 	public enum KeyValuesPreloadType
 	{
