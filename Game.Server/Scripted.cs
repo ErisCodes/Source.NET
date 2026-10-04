@@ -1,9 +1,20 @@
 namespace Game.Server;
 
+public enum ScriptMoveTo
+{
+	Wait = 0,
+	Walk = 1,
+	Run = 2,
+	Custom = 3,
+	Teleport = 4,
+	WaitFacing = 5,
+}
+
 public class AI_ScriptedSequence : BaseEntity
 {
 	public const int SF_SCRIPT_START_ON_SPAWN = 16;
 
+	public ScriptMoveTo MoveTo;
 	public string? PreIdle;
 	public string? Entity;
 
