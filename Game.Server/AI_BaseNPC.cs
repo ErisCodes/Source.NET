@@ -278,6 +278,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public Handle<AI_Hint> HintNode = new();
 	public TimeUnit_t LastRealThinkTime;
 	public TimeUnit_t NextEyeLookTime;
+	public Handle<AI_ScriptedSequence> Cine = new();
 	public Activity ScriptArrivalActivity;
 	public string? ScriptArrivalSequence;
 
@@ -2568,6 +2569,8 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public bool IsInAScript() => InAScript;
 	public void SetInAScript(bool script) => InAScript = script;
+
+	public bool CineCleanup() => throw new NotImplementedException();
 
 	public bool IsInLockedScene() => SceneTime > gpGlobals.CurTime;
 
