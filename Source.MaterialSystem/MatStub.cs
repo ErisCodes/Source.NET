@@ -453,6 +453,9 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public void PopRenderTargetAndViewport() { }
 	public void PushMatrix() { }
 	public void PushRenderTargetAndViewport(ITexture? thisTexture) { }
+	public void CopyRenderTargetToTexture(ITexture texture) { }
+	public void SetFrameBufferCopyTexture(ITexture? texture, int textureIndex = 0) { }
+	public void CopyRenderTargetToTextureEx(ITexture texture, int renderTargetID, System.Drawing.Rectangle? srcRect, System.Drawing.Rectangle? dstRect = null) { }
 	public void PushRenderTargetAndViewport(ITexture? renderTarget, int x, int y, int width, int height) { }
 	public void PushRenderTargetAndViewport(ITexture? renderTarget, ITexture? depthTarget, int x, int y, int width, int height) { }
 	public void RestoreShaderObjects(IServiceProvider services, int changeFlags) { }

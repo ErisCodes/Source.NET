@@ -103,6 +103,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	private bool ready;
 
 	uint renderFBO;
+	uint copyFBO;
 
 	public bool OnDeviceInit() {
 		AcquireInternalRenderTargets();
@@ -243,6 +244,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	private void AcquireInternalRenderTargets() {
 		renderFBO = glCreateFramebuffer();
+		copyFBO = glCreateFramebuffer();
 	}
 
 	public void InitRenderState() {
@@ -2474,6 +2476,36 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		var status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 		Assert(status == GL_FRAMEBUFFER_COMPLETE, "Framebuffer incomplete");
 		// glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+
+	public void CopyRenderTargetToTextureEx(ShaderAPITextureHandle_t textureHandle, int renderTargetID, System.Drawing.Rectangle? srcRect = null, System.Drawing.Rectangle? dstRect = null) {
+		if (!TextureIsAllocated(textureHandle))
+			return;
+
+		FlushBufferedPrimitives();
+
+		InternalTextureInfo tex = GetTexture(textureHandle);
+
+		int srcWidth, srcHeight;
+		if (UsingTextureRenderTarget) {
+			srcWidth = ViewportMaxWidth;
+			srcHeight = ViewportMaxHeight;
+		}
+		else
+			GetBackBufferDimensions(out srcWidth, out srcHeight);
+
+		System.Drawing.Rectangle src = srcRect ?? new(0, 0, srcWidth, srcHeight);
+		System.Drawing.Rectangle dst = dstRect ?? new(0, 0, tex.Width, tex.Height);
+
+		int srcY0 = srcHeight - (src.Y + src.Height);
+		int dstY0 = tex.Height - (dst.Y + dst.Height);
+
+		glNamedFramebufferTexture(copyFBO, GL_COLOR_ATTACHMENT0, GetGL46Texture(textureHandle), 0);
+		glBlitNamedFramebuffer(UsingTextureRenderTarget ? renderFBO : 0, copyFBO,
+			src.X, srcY0, src.X + src.Width, srcY0 + src.Height,
+			dst.X, dstY0, dst.X + dst.Width, dstY0 + dst.Height,
+			GL_COLOR_BUFFER_BIT, GL_LINEAR);
+		glNamedFramebufferTexture(copyFBO, GL_COLOR_ATTACHMENT0, 0, 0);
 	}
 
 	public IMesh CreateStaticMesh(VertexFormat format, ReadOnlySpan<char> textureGroup, IMaterial? material) {

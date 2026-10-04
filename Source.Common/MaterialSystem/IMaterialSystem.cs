@@ -344,6 +344,9 @@ public interface IMatRenderContext
 	void Scale(float x, float y, float z);
 	void Ortho(double left, double top, double right, double bottom, double near, double far);
 	void PushRenderTargetAndViewport(ITexture? thisTexture);
+	void CopyRenderTargetToTexture(ITexture texture);
+	void SetFrameBufferCopyTexture(ITexture? texture, int textureIndex = 0);
+	void CopyRenderTargetToTextureEx(ITexture texture, int renderTargetID, System.Drawing.Rectangle? srcRect, System.Drawing.Rectangle? dstRect = null);
 	void PopRenderTargetAndViewport();
 	void PushRenderTargetAndViewport(ITexture? renderTarget, int x, int y, int width, int height);
 	void PushRenderTargetAndViewport(ITexture? renderTarget, ITexture? depthTarget, int x, int y, int width, int height);
@@ -446,6 +449,9 @@ public readonly struct MatRenderContextPtr : IDisposable, IMatRenderContext
 	public void Scale(float x, float y, float z) => ctx.Scale(x, y, z);
 	public void Ortho(double left, double top, double right, double bottom, double near, double far) => ctx.Ortho(left, top, right, bottom, near, far);
 	public void PushRenderTargetAndViewport(ITexture? thisTexture) => ctx.PushRenderTargetAndViewport(thisTexture);
+	public void CopyRenderTargetToTexture(ITexture texture) => ctx.CopyRenderTargetToTexture(texture);
+	public void SetFrameBufferCopyTexture(ITexture? texture, int textureIndex = 0) => ctx.SetFrameBufferCopyTexture(texture, textureIndex);
+	public void CopyRenderTargetToTextureEx(ITexture texture, int renderTargetID, System.Drawing.Rectangle? srcRect, System.Drawing.Rectangle? dstRect = null) => ctx.CopyRenderTargetToTextureEx(texture, renderTargetID, srcRect, dstRect);
 	public void PopRenderTargetAndViewport() => ctx.PopRenderTargetAndViewport();
 
 	public void PushRenderTargetAndViewport(ITexture? renderTarget, int x, int y, int width, int height)
