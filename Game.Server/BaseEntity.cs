@@ -1803,6 +1803,37 @@ public partial class BaseEntity : IServerEntity
 
 	public ref readonly QAngle GetLocalAngularVelocity() => ref AngVelocity;
 
+	public EHANDLE Blocker = new();
+	public TimeUnit_t LocalTime;
+	public TimeUnit_t VPhysicsUpdateLocalTime;
+	public TimeUnit_t MoveDoneTime;
+	public int PushEnumCount;
+	public BASEPTR? FnMoveDone;
+
+	public TimeUnit_t GetLocalTime() => LocalTime;
+	public void IncrementLocalTime(TimeUnit_t timeDelta) => LocalTime += timeDelta;
+	public TimeUnit_t GetMoveDoneTime() => (MoveDoneTime >= 0) ? MoveDoneTime - GetLocalTime() : -1;
+
+	public void SetMoveDoneTime(TimeUnit_t delay) {
+		if (delay >= 0)
+			MoveDoneTime = GetLocalTime() + delay;
+		else
+			MoveDoneTime = -1;
+		CheckHasGamePhysicsSimulation();
+	}
+
+	public void SetMoveDone(Action? a) => FnMoveDone = a == null ? null : _ => a();
+	public virtual void MoveDone() => FnMoveDone?.Invoke(this);
+
+	public void SUB_CallUseToggle() => Use(this, this, UseType.Toggle, 0);
+
+	public void UpdatePhysicsShadowToCurrentPosition(TimeUnit_t deltaTime) {
+		if (GetMoveType() != Source.MoveType.VPhysics) {
+			IPhysicsObject? phys = VPhysicsGetObject();
+			phys?.UpdateShadow(GetAbsOrigin(), GetAbsAngles(), false, (float)deltaTime);
+		}
+	}
+
 	public void ComputeAbsPosition(in Vector3 localPosition, out Vector3 absPosition) {
 		BaseEntity? moveParent = GetMoveParent();
 		if (moveParent == null)
@@ -2136,6 +2167,8 @@ public partial class BaseEntity : IServerEntity
 	public Vector3 AbsVelocity;
 	public QAngle AngVelocity;
 
+	public ref readonly Vector3 GetLocalVelocity() => ref Velocity;
+
 	public ref readonly Vector3 GetAbsVelocity() {
 		return ref AbsVelocity;
 	}
@@ -2252,12 +2285,12 @@ public partial class BaseEntity : IServerEntity
 		// DEFINE.ARRAY(nameof(CoordinateFrame), FieldType.Float, 12),
 		DEFINE.KEYFIELD(nameof(WaterLevel), FieldType.Character, "waterlevel"),
 		DEFINE.FIELD(nameof(WaterType), FieldType.Character),
-		// DEFINE.FIELD(nameof(Blocker), FieldType.EHandle),
+		DEFINE.FIELD(nameof(Blocker), FieldType.EHandle),
 		DEFINE.KEYFIELD(nameof(Gravity), FieldType.Float, "gravity"),
 		DEFINE.KEYFIELD(nameof(Friction), FieldType.Float, "friction"),
-		// DEFINE.KEYFIELD(nameof(LocalTime), FieldType.Float, "ltime"),
-		// DEFINE.FIELD(nameof(VPhysicsUpdateLocalTime), FieldType.Float),
-		// DEFINE.FIELD(nameof(MoveDoneTime), FieldType.Float),
+		DEFINE.KEYFIELD(nameof(LocalTime), FieldType.Float, "ltime"),
+		DEFINE.FIELD(nameof(VPhysicsUpdateLocalTime), FieldType.Float),
+		DEFINE.FIELD(nameof(MoveDoneTime), FieldType.Float),
 		DEFINE.FIELD(nameof(AbsOrigin), FieldType.PositionVector),
 		DEFINE.KEYFIELD(nameof(Velocity), FieldType.Vector, "velocity"),
 		DEFINE.KEYFIELD(nameof(TextureFrameIndex), FieldType.Character, "texframeindex"),

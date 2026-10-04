@@ -485,7 +485,7 @@ public partial class
 				return false;
 
 #if !CLIENT_DLL
-			if (movetype == Source.MoveType.Push /* && GetMoveDoneTime() <= 0 */)
+			if (movetype == Source.MoveType.Push && GetMoveDoneTime() <= 0)
 				return false;
 #endif
 		}
