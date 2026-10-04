@@ -38,6 +38,17 @@ public class AI_SchedulesManager
 	int CurLoadSig;
 	AI_Schedule? allSchedules;
 
+	public bool LoadAllSchedules() {
+		if (allSchedules == null) {
+			AI_BaseNPC.InitSchedulingTables();
+			if (!AI_BaseNPC.LoadDefaultSchedules()) {
+				AI_BaseNPC.DebugBits |= bits_debugDisableAI;
+				DevMsg("ERROR:  Mistake in default schedule definitions, AI Disabled.\n");
+			}
+		}
+		return true;
+	}
+
 	AI_Schedule CreateSchedule(ReadOnlySpan<char> name, int scheduleID) {
 		AI_Schedule sched = new(name, scheduleID, allSchedules);
 		allSchedules = sched;
