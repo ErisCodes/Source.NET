@@ -34,6 +34,7 @@ static class AssetUtils
 			new("hl2/maps", "garrysmod/maps", IsDirectory: true),
 			new("hl2/materials", "garrysmod/materials", IsDirectory: true),
 			new("hl2/resource", "garrysmod/resource", IsDirectory: true),
+			new("hl2/scenes", "garrysmod/scenes", IsDirectory: true),
 			#if GMOD_DLL
 			new("hl2/gamemodes", "garrysmod/gamemodes", IsDirectory: true),
 			new("hl2/lua", "garrysmod/lua", IsDirectory: true),
