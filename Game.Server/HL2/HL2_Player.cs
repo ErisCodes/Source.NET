@@ -396,7 +396,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 
 	void OnRestore() { }
 
-	Vector3 EyeDirection2D() {
+	public override Vector3 EyeDirection2D() {
 		throw new NotImplementedException();
 	}
 

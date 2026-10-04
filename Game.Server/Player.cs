@@ -513,7 +513,7 @@ public partial class BasePlayer : BaseCombatCharacter
 	readonly List<Handle<BaseEntity>> SimulatedByThisPlayer = [];
 
 	public IServerVehicle? GetVehicle() => Vehicle.Get()?.GetServerVehicle();
-	public BaseEntity? GetVehicleEntity() => Vehicle.Get();
+	public override BaseEntity? GetVehicleEntity() => Vehicle.Get();
 	public override bool IsInAVehicle() => Vehicle.Get() != null;
 	public float GetStepSize() => Local.StepSize;
 

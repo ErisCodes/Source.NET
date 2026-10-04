@@ -109,6 +109,64 @@ public class BaseFlex : BaseAnimatingOverlay {
 
 	public void Blink() => BlinkToggle = BlinkToggle == 0 ? 1 : 0;
 
+	public virtual void SetViewtarget(in Vector3 viewtarget) => ViewTarget = viewtarget;
+	public Vector3 GetViewtarget() => ViewTarget;
+
+	public Vector3 PrevOrigin;
+	public Vector3 PrevVelocity;
+
+	public override void Teleport(Vector3? newPosition, QAngle? newAngles, Vector3? newVelocity) {
+		base.Teleport(newPosition, newAngles, newVelocity);
+		PrevOrigin = vec3_origin;
+	}
+
+	public void DoBodyLean() {
+		AI_BaseNPC? myNpc = MyNPCPointer();
+
+		if (myNpc != null) {
+			Vector3 delta;
+			Vector3 pos;
+			Vector3 origin = GetAbsOrigin();
+
+			if (PrevOrigin == vec3_origin)
+				PrevOrigin = origin;
+
+			delta = origin - PrevOrigin;
+			delta.X = Math.Clamp(delta.X, -50, 50);
+			delta.Y = Math.Clamp(delta.Y, -50, 50);
+			delta.Z = Math.Clamp(delta.Z, -50, 50);
+
+			TimeUnit_t dt = gpGlobals.CurTime - GetLastThink(default);
+			bool skip = ((GetFlags() & (EntityFlags.Fly | EntityFlags.Swim)) != 0) || (GetMoveParent() != null) || (GetGroundEntity() == null) || (GetGroundEntity()!.IsMoving());
+			skip |= myNpc.ScheduleState.TaskRanAutomovement || (myNpc.GetVehicleEntity() != null);
+
+			if (!skip) {
+				if (delta.LengthSquared() > PrevVelocity.LengthSquared()) {
+					float decay = MathLib.ExponentialDecay(0.6f, 0.1f, (float)dt);
+					PrevVelocity = PrevVelocity * decay + delta * (1.0f - decay);
+				}
+				else {
+					float decay = MathLib.ExponentialDecay(0.4f, 0.1f, (float)dt);
+					PrevVelocity = PrevVelocity * decay + delta * (1.0f - decay);
+				}
+
+				pos = PrevOrigin + PrevVelocity;
+
+				float decay2 = MathLib.ExponentialDecay(0.5f, 0.1f, (float)dt);
+				Shift = Shift * decay2 + (origin - pos) * (1.0f - decay2);
+				Lean = (origin - pos) * 1.0f;
+			}
+			else {
+				PrevVelocity = delta;
+				float decay = MathLib.ExponentialDecay(0.5f, 0.1f, (float)dt);
+				Shift = Lean * decay;
+				Lean = Shift * decay;
+			}
+
+			PrevOrigin = origin;
+		}
+	}
+
 	public void StartChoreoScene(ChoreoScene scene) {
 		if (ActiveChoreoScenes.Contains(scene))
 			return;

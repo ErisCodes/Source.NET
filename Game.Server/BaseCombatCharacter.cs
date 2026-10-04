@@ -2,9 +2,12 @@
 
 using Source;
 using Source.Common;
+using Source.Common.Commands;
 using Source.Common.Engine;
+using Source.Common.Formats.BSP;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Game.Server;
 
@@ -88,10 +91,31 @@ public partial class BaseCombatCharacter : BaseFlex
 		return bodyDir;
 	}
 
+	public virtual Vector3 HeadDirection2D() => BodyDirection2D();
 	public virtual Vector3 HeadDirection3D() => BodyDirection2D(); // No head motion so just return body dir
+	public virtual Vector3 EyeDirection2D() => HeadDirection2D();
 	public virtual Vector3 EyeDirection3D() => HeadDirection3D(); // No eye motion so just return head dir
 
-	public virtual bool FInViewCone(BaseEntity entity) => throw new NotImplementedException();
+
+	public virtual bool FInViewCone(BaseEntity entity) => FInViewCone(entity.WorldSpaceCenter());
+
+	public virtual bool FInViewCone(in Vector3 spot) {
+		Vector3 los = spot - EyePosition();
+
+		los.Z = 0;
+		Source.Common.Mathematics.MathLib.VectorNormalize(ref los);
+
+		Vector3 facingDir = EyeDirection2D();
+
+		float dot = Vector3.Dot(los, facingDir);
+
+		if (dot > FieldOfView)
+			return true;
+
+		return false;
+	}
+
+	public virtual BaseEntity? GetVehicleEntity() => null;
 
 	public virtual bool IsInAVehicle() => false;
 	public virtual bool ExitVehicle() => false;
