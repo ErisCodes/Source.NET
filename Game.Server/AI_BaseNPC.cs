@@ -2661,6 +2661,29 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return scheduleType;
 	}
 
+	public AI_Schedule? GetScheduleOfType(int scheduleType) {
+		scheduleType = TranslateSchedule(scheduleType);
+
+		AI_Schedule? schedule = GetSchedule(scheduleType);
+
+		if (schedule == null) {
+			DevMsg($"GetScheduleOfType(): No CASE for Schedule Type {scheduleType}!\n");
+			return GetSchedule(SCHED_IDLE_STAND);
+		}
+		return schedule;
+	}
+
+	public virtual AI_Schedule? GetSchedule(int schedule) {
+		if (!GetClassScheduleIdSpace().IsGlobalBaseSet()) {
+			Warning($"ERROR: {GetSchedulingErrorName()} missing schedule!\n");
+			return g_AI_SchedulesManager.GetScheduleFromID(SCHED_IDLE_STAND);
+		}
+		if (AI_IdIsLocal(schedule))
+			schedule = GetClassScheduleIdSpace().ScheduleLocalToGlobal(schedule);
+
+		return g_AI_SchedulesManager.GetScheduleFromID(schedule);
+	}
+
 	public bool IsCurSchedule(int schedId, bool ideal = true) {
 		if (Schedule == null)
 			return schedId == SCHED_NONE || schedId == AI_RemapToGlobal(SCHED_NONE);
