@@ -347,6 +347,13 @@ public partial class BasePlayer : BaseCombatCharacter
 	public bool ForcedObserverMode;
 	PlayerPhysFlag PhysicsFlags;
 
+	public void SetPhysicsFlag(PlayerPhysFlag flag, bool set) {
+		if (set)
+			PhysicsFlags |= flag;
+		else
+			PhysicsFlags &= ~flag;
+	}
+
 	int LastDmageAmount;
 	Vector3 DmgOrigin;
 	Vector3 OldOrigin;
