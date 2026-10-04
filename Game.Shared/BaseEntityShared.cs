@@ -52,6 +52,7 @@ using FIELD = Source.FIELD<BaseEntity>;
 
 using System.Runtime.CompilerServices;
 
+using Source.Common.Commands;
 using Source.Common.Formats.BSP;
 using Source.Common.Physics;
 
@@ -59,6 +60,12 @@ using System.Text;
 
 public static class BaseEntityConstants
 {
+#if HL2_EPISODIC
+	public static readonly ConVar hl2_episodic = new("hl2_episodic", "1", FCvar.Replicated);
+#else
+	public static readonly ConVar hl2_episodic = new("hl2_episodic", "0", FCvar.Replicated);
+#endif
+
 	public const int NUM_PARENTATTACHMENT_BITS = 8; // < gmod increased 6 . 8
 	public const int VPHYSICS_MAX_OBJECT_LIST_COUNT = 1024;
 }
@@ -747,6 +754,8 @@ public partial class
 	internal static short PrecacheScriptSound(ReadOnlySpan<char> sound) {
 		return g_SoundEmitterSystem.PrecacheScriptSound(sound);
 	}
+
+	public static void PrefetchScriptSound(ReadOnlySpan<char> soundname) => g_SoundEmitterSystem.PrefetchScriptSound(soundname);
 
 	public static bool PrecacheSound(ReadOnlySpan<char> name) {
 #if GAME_DLL

@@ -197,6 +197,21 @@ public class SoundEmitterSystem : BaseGameSystem
 		}
 	}
 
+	internal void InternalPrefetchWaves(int soundIndex) {
+		ref SoundParametersInternal internalParms = ref soundemitterbase.InternalGetParametersForSound(soundIndex);
+		if (Unsafe.IsNullRef(ref internalParms))
+			return;
+
+		int waveCount = internalParms.NumSoundNames();
+		if (waveCount == 0) {
+			DevMsg($"CSoundEmitterSystem:  sounds.txt entry '{soundemitterbase.GetSoundName(soundIndex)}' has no waves listed under 'wave' or 'rndwave' key!!!\n");
+		}
+		else {
+			for (int wave = 0; wave < waveCount; wave++)
+				BaseEntity.PrefetchSound(soundemitterbase.GetWaveName(internalParms.GetSoundNames()[wave].Symbol));
+		}
+	}
+
 	public HSOUNDSCRIPTHANDLE PrecacheScriptSound(ReadOnlySpan<char> soundname) {
 		int soundIndex = soundemitterbase.GetSoundIndex(soundname);
 		if (!soundemitterbase.IsValidIndex(soundIndex)) {
@@ -216,6 +231,17 @@ public class SoundEmitterSystem : BaseGameSystem
 
 		InternalPrecacheWaves(soundIndex);
 		return (HSOUNDSCRIPTHANDLE)soundIndex;
+	}
+
+	public void PrefetchScriptSound(ReadOnlySpan<char> soundname) {
+		int soundIndex = soundemitterbase.GetSoundIndex(soundname);
+		if (!soundemitterbase.IsValidIndex(soundIndex)) {
+			if (!stristr(soundname, ".wav").IsEmpty || !strstr(soundname, ".mp3").IsEmpty)
+				BaseEntity.PrefetchSound(soundname);
+			return;
+		}
+
+		InternalPrefetchWaves(soundIndex);
 	}
 
 #if !CLIENT_DLL
