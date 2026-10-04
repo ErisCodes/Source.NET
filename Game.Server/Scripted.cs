@@ -1,3 +1,5 @@
+using Source;
+
 namespace Game.Server;
 
 public enum ScriptMoveTo
@@ -17,6 +19,11 @@ public class AI_ScriptedSequence : BaseEntity
 	public ScriptMoveTo MoveTo;
 	public string? PreIdle;
 	public string? Entity;
+	public EntityFlags SavedFlags;
+
+	public bool CanInterrupt() => throw new NotImplementedException();
+
+	public void CancelScript() => throw new NotImplementedException();
 
 	public static string? GetSpawnPreIdleSequenceForScript(BaseEntity entity) {
 		AI_ScriptedSequence? script = gEntList.NextEntByClass<AI_ScriptedSequence>(null);
