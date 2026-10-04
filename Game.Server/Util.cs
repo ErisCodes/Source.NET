@@ -204,6 +204,23 @@ public ref struct FlaggedEntitiesEnum : IPartitionEnumerator
 
 public static partial class Util
 {
+	public static float AngleMod(float a) => MathLib.AngleMod(a);
+
+	public static float AngleDiff(float destAngle, float srcAngle) {
+		float delta;
+
+		delta = (destAngle - srcAngle) % 360.0f;
+		if (destAngle > srcAngle) {
+			if (delta >= 180)
+				delta -= 360;
+		}
+		else {
+			if (delta <= -180)
+				delta += 360;
+		}
+		return delta;
+	}
+
 	public static void ClearTrace(ref Trace trace) {
 		trace = default;
 		trace.Fraction = 1.0f;
