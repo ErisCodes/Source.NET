@@ -42,6 +42,7 @@ public class World : BaseEntity
 		NetworkProp().AttachEdict(INDEXENT(RequiredEdictIndex()));
 
 		ActivityList.Init();
+		EventList.Init();
 		SetSolid(Source.SolidType.BSP);
 		SetMoveType(Source.MoveType.None);
 		ColdWorld = false;
@@ -91,8 +92,8 @@ public class World : BaseEntity
 		// 63 testing
 		engine.LightStyle(63, "a");
 
-		// AI_NetworkManager.InitializeAINetworks();
-		// g_AI_SchedulesManager.LoadAllSchedules();
+		AI_NetworkManager.InitializeAINetworks();
+		g_AI_SchedulesManager.LoadAllSchedules();
 		// g_pGameRules.InitDefaultAIRelationships();
 
 		// BaseCombatCharacter.InitInteractionSystem();

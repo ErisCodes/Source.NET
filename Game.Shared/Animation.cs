@@ -156,9 +156,105 @@ static Animation(){
 			return;
 
 		for (int index = 0; index < (int)seqdesc.NumEvents; index++) {
-			// TODO
-			// Studio doesn't have events (yet)
+			MStudioEvent? pevent = seqdesc.Event(index);
+
+			if (pevent == null)
+				continue;
+
+			if (((AnimEventType)pevent.Type & AnimEventType.NewEventSystem) != 0) {
+				string eventName = pevent.EventName();
+
+				int eventIndex = EventList.IndexForName(eventName);
+
+				if (eventIndex == -1)
+					pevent.Event = (int)EventList.RegisterPrivateEvent(eventName);
+				else {
+					pevent.Event = eventIndex;
+					pevent.Type |= (int)EventList.GetEventType(eventIndex);
+				}
+			}
 		}
+	}
+
+	public static MStudioEvent? GetEventIndexForSequence(MStudioSeqDesc seqdesc) {
+		if ((seqdesc.Flags & StudioAnimSeqFlags.Event) == 0)
+			SetEventIndexForSequence(seqdesc);
+
+		return seqdesc.NumEvents > 0 ? seqdesc.Event(0) : null;
+	}
+
+	public static void BuildAllAnimationEventIndexes(StudioHdr? studiohdr) {
+		if (studiohdr == null)
+			return;
+
+		if (studiohdr.GetEventListVersion() != EventList.g_EventListVersion) {
+			for (int i = 0; i < studiohdr.GetNumSeq(); i++)
+				SetEventIndexForSequence(studiohdr.Seqdesc(i));
+
+			studiohdr.SetEventListVersion(EventList.g_EventListVersion);
+		}
+	}
+
+	public static int SelectHeaviestSequence(StudioHdr? studiohdr, Activity activity) {
+		if (studiohdr == null)
+			return 0;
+
+		VerifySequenceIndex(studiohdr);
+
+		int maxweight = 0;
+		int seq = StudioHdr.ACTIVITY_NOT_AVAILABLE;
+		for (int i = 0; i < studiohdr.GetNumSeq(); i++) {
+			int curActivity = GetSequenceActivity(studiohdr, i, out int weight);
+			if (curActivity == (int)activity) {
+				if (Math.Abs(weight) > maxweight) {
+					maxweight = Math.Abs(weight);
+					seq = i;
+				}
+			}
+		}
+
+		return seq;
+	}
+
+	public static int GetAnimationEvent(StudioHdr? studiohdr, int sequence, ref AnimEvent npcEvent, float start, float end, int index) {
+		if (studiohdr == null || sequence >= studiohdr.GetNumSeq())
+			return 0;
+
+		MStudioSeqDesc seqdesc = studiohdr.Seqdesc(sequence);
+		if (seqdesc.NumEvents == 0 || index >= (int)seqdesc.NumEvents)
+			return 0;
+
+		GetEventIndexForSequence(seqdesc);
+		for (; index < (int)seqdesc.NumEvents; index++) {
+			MStudioEvent pevent = seqdesc.Event(index);
+
+			if (((AnimEventType)pevent.Type & AnimEventType.NewEventSystem) != 0) {
+				if (((AnimEventType)pevent.Type & AnimEventType.Server) == 0)
+					continue;
+			}
+			else if (pevent.Event >= EVENT_CLIENT)
+				continue;
+
+			bool overlapEvent = false;
+
+			if (pevent.Cycle >= start && pevent.Cycle < end)
+				overlapEvent = true;
+			else if ((seqdesc.Flags & StudioAnimSeqFlags.Looping) != 0 && end < start) {
+				if (pevent.Cycle >= start || pevent.Cycle < end)
+					overlapEvent = true;
+			}
+
+			if (overlapEvent) {
+				npcEvent.Source = null;
+				npcEvent.Cycle = pevent.Cycle;
+				npcEvent.EventTime = gpGlobals.CurTime;
+				npcEvent.Event = pevent.Event;
+				npcEvent.Options = Encoding.ASCII.GetString(((ReadOnlySpan<byte>)pevent.Options()).SliceNullTerminatedString());
+				npcEvent.Type = (AnimEventType)pevent.Type;
+				return index + 1;
+			}
+		}
+		return 0;
 	}
 	public static int FindTransitionSequence(StudioHdr? studiohdr, int currentSequence, int goalSequence, ref int dir){
 		if (studiohdr == null)

@@ -1,6 +1,10 @@
 namespace Game.Server;
 
-public class AI_Hint : ServerOnlyEntity;
+public class AI_Hint : ServerOnlyEntity
+{
+	public short HintType() => throw new NotImplementedException();
+	public void Unlock(float delay) => throw new NotImplementedException();
+}
 
 [Flags]
 public enum AI_HintNodeFlags {

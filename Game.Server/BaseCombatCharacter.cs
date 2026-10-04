@@ -2,9 +2,12 @@
 
 using Source;
 using Source.Common;
+using Source.Common.Commands;
 using Source.Common.Engine;
+using Source.Common.Formats.BSP;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Game.Server;
 
@@ -54,6 +57,14 @@ public enum Disposition
 	NU
 }
 
+public class Relationship
+{
+	public EHANDLE Entity = new();
+	public Class_T ClassType;
+	public Disposition Disposition;
+	public int Priority;
+}
+
 [NetworkName("CBaseCombatCharacter")]
 public partial class BaseCombatCharacter : BaseFlex
 {
@@ -80,8 +91,34 @@ public partial class BaseCombatCharacter : BaseFlex
 		return bodyDir;
 	}
 
+	public virtual Vector3 HeadDirection2D() => BodyDirection2D();
 	public virtual Vector3 HeadDirection3D() => BodyDirection2D(); // No head motion so just return body dir
+	public virtual Vector3 EyeDirection2D() => HeadDirection2D();
 	public virtual Vector3 EyeDirection3D() => HeadDirection3D(); // No eye motion so just return head dir
+
+
+	public virtual bool FInViewCone(BaseEntity entity) => FInViewCone(entity.WorldSpaceCenter());
+
+	public virtual bool FInViewCone(in Vector3 spot) {
+		Vector3 los = spot - EyePosition();
+
+		los.Z = 0;
+		Source.Common.Mathematics.MathLib.VectorNormalize(ref los);
+
+		Vector3 facingDir = EyeDirection2D();
+
+		float dot = Vector3.Dot(los, facingDir);
+
+		if (dot > FieldOfView)
+			return true;
+
+		return false;
+	}
+
+	public virtual BaseEntity? GetVehicleEntity() => null;
+
+	public virtual bool IsInAVehicle() => false;
+	public virtual bool ExitVehicle() => false;
 
 	public static readonly SendTable DT_BCCLocalPlayerExclusive = new(nameof(DT_BCCLocalPlayerExclusive), [
 		SendPropTime64(FIELD.OF(nameof(NextAttack))),
@@ -141,10 +178,81 @@ public partial class BaseCombatCharacter : BaseFlex
 
 	public const int DEF_RELATIONSHIP_PRIORITY = int.MinValue;
 
-	public virtual Disposition IRelationType(BaseEntity? target) => throw new NotImplementedException();
+	public static Relationship[][]? DefaultRelationship;
+	public readonly List<Relationship> Relationship = [];
 
 	public virtual void AddEntityRelationship(BaseEntity entity, Disposition disposition, int priority) => throw new NotImplementedException();
 	public virtual void AddClassRelationship(Class_T classType, Disposition disposition, int priority) => throw new NotImplementedException();
+
+	public virtual bool RemoveEntityRelationship(BaseEntity? entity) {
+		for (int i = Relationship.Count - 1; i >= 0; i--) {
+			if (Relationship[i].Entity.Get() == entity) {
+				Relationship.RemoveAt(i);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static void AllocateDefaultRelationships() {
+		if (DefaultRelationship == null) {
+			DefaultRelationship = new Relationship[(int)Class_T.NumAIClasses][];
+
+			for (int i = 0; i < (int)Class_T.NumAIClasses; ++i) {
+				DefaultRelationship[i] = new Relationship[(int)Class_T.NumAIClasses];
+				for (int j = 0; j < (int)Class_T.NumAIClasses; ++j)
+					DefaultRelationship[i][j] = new();
+			}
+		}
+	}
+
+	public static void SetDefaultRelationship(Class_T classType, Class_T classTarget, Disposition disposition, int priority) {
+		if (DefaultRelationship != null) {
+			DefaultRelationship[(int)classType][(int)classTarget].Disposition = disposition;
+			DefaultRelationship[(int)classType][(int)classTarget].Priority = priority;
+		}
+	}
+
+	public Disposition GetDefaultRelationshipDisposition(Class_T classTarget) {
+		Assert(DefaultRelationship != null);
+
+		return DefaultRelationship![(int)Classify()][(int)classTarget].Disposition;
+	}
+
+	static readonly Relationship DummyRelationship = new();
+
+	public Relationship FindEntityRelationship(BaseEntity? target) {
+		if (target == null)
+			return DummyRelationship;
+
+		int i;
+		for (i = 0; i < Relationship.Count; i++) {
+			if (target == Relationship[i].Entity.Get())
+				return Relationship[i];
+		}
+
+		if (target.Classify() != Class_T.None) {
+			for (i = 0; i < Relationship.Count; i++) {
+				if (target.Classify() == Relationship[i].ClassType)
+					return Relationship[i];
+			}
+		}
+		AllocateDefaultRelationships();
+		return DefaultRelationship![(int)Classify()][(int)target.Classify()];
+	}
+
+	public virtual Disposition IRelationType(BaseEntity? target) {
+		if (target != null)
+			return FindEntityRelationship(target).Disposition;
+		return Disposition.NU;
+	}
+
+	public virtual int IRelationPriority(BaseEntity? target) {
+		if (target != null)
+			return FindEntityRelationship(target).Priority;
+		return 0;
+	}
 
 	public void SetImpactEnergyScale(float scale) => ImpactEnergyScale = scale;
 

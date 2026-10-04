@@ -81,6 +81,10 @@ public class ServerNetworkProperty : IServerNetworkable, IEventRegisterCallback
 		// timerevent todo
 	}
 
+	internal void NetworkStateForceUpdate() {
+		Pev?.StateChanged();
+	}
+
 	internal void NetworkStateChanged() {
 		Pev?.StateChanged();
 	}

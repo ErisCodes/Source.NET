@@ -98,6 +98,7 @@ public interface IShaderAPI : IShaderDynamicAPI
 	bool DoRenderTargetsNeedSeparateDepthBuffer();
 	void EnableLinearColorSpaceFrameBuffer(bool v);
 	void SetRenderTargetEx(int rt, ShaderAPITextureHandle_t colorTextureHandle = (ShaderAPITextureHandle_t)ShaderRenderTarget.Backbuffer, ShaderAPITextureHandle_t depthTextureHandle = (ShaderAPITextureHandle_t)ShaderRenderTarget.Depthbuffer);
+	void CopyRenderTargetToTextureEx(ShaderAPITextureHandle_t textureHandle, int renderTargetID, System.Drawing.Rectangle? srcRect = null, System.Drawing.Rectangle? dstRect = null);
 	void InvalidateDelayedShaderConstants();
 	void SetSkinningMatrices();
 	void ShadeMode(ShadeMode flat);

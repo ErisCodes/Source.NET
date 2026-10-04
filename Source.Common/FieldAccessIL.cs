@@ -453,6 +453,8 @@ namespace Source.Common
 		const int IS_NETWORK_ARRAY = -2;
 
 		public DynamicArrayAccessor(Type targetType, ReadOnlySpan<char> expression, int isList = IS_LIST) : base(targetType, expression) {
+			UseNetworkVarBackingField();
+
 			var arrayAttr = StoringType.GetCustomAttribute<InlineArrayAttribute>();
 			if (arrayAttr != null) {
 				Info = new(StoringType.GetGenericArguments()[0], () => arrayAttr.Length);
@@ -688,7 +690,12 @@ namespace Source.Common
 		Type IFieldAccessor.DeclaringType => TargetType;
 		Type IFieldAccessor.FieldType => StoringType;
 
+		protected void UseNetworkVarBackingField() {
+			if (Members[^1] is PropertyInfo prop && prop.DeclaringType!.GetField("__nv_" + prop.Name, BindingFlags.Instance | BindingFlags.NonPublic) is FieldInfo backing)
+				Members[^1] = backing;
+		}
 		void HandleIndex(ReadOnlySpan<char> index) {
+			UseNetworkVarBackingField();
 			Members.Add(new IndexInfo(Members.Last(), int.Parse(index)));
 		}
 		void HandleFieldProp(ReadOnlySpan<char> index) {

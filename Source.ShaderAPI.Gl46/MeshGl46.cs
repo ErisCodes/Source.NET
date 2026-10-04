@@ -1,5 +1,6 @@
 using Source.Common.MaterialSystem;
 using Source.Common.ShaderAPI;
+using Source.Common.ShaderLib;
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -67,9 +68,17 @@ public unsafe class MeshGl46 : IMesh
 		return true;
 	}
 
-	// What do these do...
 	private void SetVertexStreamState(int vertexOffsetInBytes) {
+		if (HasFlexMesh()) {
+			Span<float> c = [1.0f, 1.0f, 0.0f, 0.0f];
+			ShaderAPI.SetVertexShaderConstant(VertexShaderConst.FlexScale, c);
+		}
+		else {
+			Assert(vertexOffsetInBytes == 0);
 
+			Span<float> c = [0.0f, 0.0f, 0.0f, 0.0f];
+			ShaderAPI.SetVertexShaderConstant(VertexShaderConst.FlexScale, c);
+		}
 	}
 
 	int BaseVertexIndex;
@@ -362,6 +371,11 @@ public unsafe class MeshGl46 : IMesh
 					if (colorMesh != null)
 						glVertexArrayVertexBuffer(vao, 1, colorMesh.VertexBuffer!.VBO(), ColorMeshVertOffsetInBytes, colorMesh.VertexBuffer.VertexSize);
 
+					if (FlexVertexBuffer != null)
+						glVertexArrayVertexBuffer(vao, 2, FlexVertexBuffer.VBO(), FlexVertOffsetInBytes, FlexVertexBuffer.VertexSize);
+					else
+						glVertexArrayVertexBuffer(vao, 2, MeshMgr.GetZeroVertexBuffer(), 0, 4);
+
 					glVertexArrayElementBuffer(vao, IndexBuffer!.IBO());
 					bound = true;
 				}
@@ -423,8 +437,34 @@ public unsafe class MeshGl46 : IMesh
 	}
 
 	internal bool HasFlexMesh() {
-		return false;
+		return HasFlexVerts;
 	}
+
+	VertexBufferGl46? FlexVertexBuffer;
+	int FlexVertOffsetInBytes;
+	int FlexVertCount;
+	bool HasFlexVerts;
+
+	public virtual void SetFlexMesh(IMesh? mesh, int vertexOffsetInBytes) {
+		FlexVertOffsetInBytes = vertexOffsetInBytes;
+
+		if (mesh != null) {
+			FlexVertCount = mesh.VertexCount();
+			mesh.MarkAsDrawn();
+
+			MeshGl46 baseMesh = (MeshGl46)mesh;
+			FlexVertexBuffer = baseMesh.GetVertexBuffer();
+
+			HasFlexVerts = true;
+		}
+		else {
+			FlexVertCount = 0;
+			FlexVertexBuffer = null;
+			HasFlexVerts = false;
+		}
+	}
+
+	public virtual void DisableFlexMesh() => SetFlexMesh(null, 0);
 
 	public virtual bool NeedsVertexFormatReset(VertexFormat fmt) {
 		return VertexFormat != fmt;

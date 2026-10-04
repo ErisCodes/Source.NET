@@ -287,7 +287,7 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 #if !SWDS
 		materials.BeginRenderTargetAllocation();
 		FullFrameFBTexture0.Init(CreateFullFrameFBTexture(0));
-		FullFrameFBTexture0.Init(CreateFullFrameFBTexture(1));
+		FullFrameFBTexture1.Init(CreateFullFrameFBTexture(1));
 		materials.EndRenderTargetAllocation();
 #endif
 	}

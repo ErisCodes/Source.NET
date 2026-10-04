@@ -583,6 +583,12 @@ public partial class BaseEntity : IServerEntity
 	public virtual bool IsPlayer() => false;
 	public virtual bool IsBaseCombatCharacter() => false;
 	public virtual bool IsNPC() => false;
+	public AI_BaseNPC? MyNPCPointer() {
+		if (IsNPC())
+			return (AI_BaseNPC)this;
+
+		return null;
+	}
 	public bool IsTransparent() => RenderMode != (byte)Source.RenderMode.Normal;
 	public virtual bool IsNextBot() => false;
 	public virtual bool IsBaseCombatWeapon() => false;
@@ -863,6 +869,10 @@ public partial class BaseEntity : IServerEntity
 	public virtual DamageType GetDamageType() => DamageType.Generic;
 
 	public virtual Mask PhysicsSolidMaskForEntity() => Mask.Solid;
+
+	public BaseEntity? Link;
+
+	public virtual bool CanBeSeenBy(AI_BaseNPC npc) => true;
 
 	public bool IsViewable() {
 		if (IsEffectActive(EntityEffects.NoDraw))
@@ -1406,7 +1416,36 @@ public partial class BaseEntity : IServerEntity
 
 		return physicsObject;
 	}
-	public int VPhysicsGetObjectList(Span<IPhysicsObject> list) => throw new NotImplementedException();
+	public int VPhysicsGetObjectList(Span<IPhysicsObject> list) {
+		IPhysicsObject? phys = VPhysicsGetObject();
+		if (phys != null) {
+			Assert((phys.GetGameFlags() & PhysicsFlags.MultiObjectEntity) == 0);
+			if (list.Length > 0) {
+				list[0] = phys;
+				return 1;
+			}
+		}
+		return 0;
+	}
+
+	public class TimedOverlay
+	{
+		public string Msg = "";
+		public TimeUnit_t MsgEndTime;
+		public TimeUnit_t MsgStartTime;
+		public TimedOverlay? NextTimedOverlay;
+	}
+
+	public TimedOverlay? TimedOverlayList;
+
+	public void AddTimedOverlay(string msg, int endTime) {
+		TimedOverlay newTO = new();
+		newTO.Msg = msg;
+		newTO.MsgEndTime = gpGlobals.CurTime + endTime;
+		newTO.MsgStartTime = gpGlobals.CurTime;
+		newTO.NextTimedOverlay = TimedOverlayList;
+		TimedOverlayList = newTO;
+	}
 
 	public bool IsFloating() {
 		if (!IsEFlagSet(EFL.TouchingFluid))
@@ -1764,6 +1803,37 @@ public partial class BaseEntity : IServerEntity
 
 	public ref readonly QAngle GetLocalAngularVelocity() => ref AngVelocity;
 
+	public EHANDLE Blocker = new();
+	public TimeUnit_t LocalTime;
+	public TimeUnit_t VPhysicsUpdateLocalTime;
+	public TimeUnit_t MoveDoneTime;
+	public int PushEnumCount;
+	public BASEPTR? FnMoveDone;
+
+	public TimeUnit_t GetLocalTime() => LocalTime;
+	public void IncrementLocalTime(TimeUnit_t timeDelta) => LocalTime += timeDelta;
+	public TimeUnit_t GetMoveDoneTime() => (MoveDoneTime >= 0) ? MoveDoneTime - GetLocalTime() : -1;
+
+	public void SetMoveDoneTime(TimeUnit_t delay) {
+		if (delay >= 0)
+			MoveDoneTime = GetLocalTime() + delay;
+		else
+			MoveDoneTime = -1;
+		CheckHasGamePhysicsSimulation();
+	}
+
+	public void SetMoveDone(Action? a) => FnMoveDone = a == null ? null : _ => a();
+	public virtual void MoveDone() => FnMoveDone?.Invoke(this);
+
+	public void SUB_CallUseToggle() => Use(this, this, UseType.Toggle, 0);
+
+	public void UpdatePhysicsShadowToCurrentPosition(TimeUnit_t deltaTime) {
+		if (GetMoveType() != Source.MoveType.VPhysics) {
+			IPhysicsObject? phys = VPhysicsGetObject();
+			phys?.UpdateShadow(GetAbsOrigin(), GetAbsAngles(), false, (float)deltaTime);
+		}
+	}
+
 	public void ComputeAbsPosition(in Vector3 localPosition, out Vector3 absPosition) {
 		BaseEntity? moveParent = GetMoveParent();
 		if (moveParent == null)
@@ -2092,8 +2162,12 @@ public partial class BaseEntity : IServerEntity
 			AddEFlags(EFL.DontBlockLOS);
 	}
 
+	public bool BlocksLOS() => !IsEFlagSet(EFL.DontBlockLOS);
+
 	public Vector3 AbsVelocity;
 	public QAngle AngVelocity;
+
+	public ref readonly Vector3 GetLocalVelocity() => ref Velocity;
 
 	public ref readonly Vector3 GetAbsVelocity() {
 		return ref AbsVelocity;
@@ -2153,7 +2227,7 @@ public partial class BaseEntity : IServerEntity
 	public static readonly DataMap DataDesc = new(typeof(BaseEntity), [
 		DEFINE.KEYFIELD(nameof(Classname), FieldType.String, "classname"),
 		DEFINE.GLOBAL_KEYFIELD(nameof(GlobalName), FieldType.String, "globalname"),
-		DEFINE.KEYFIELD(nameof(Parent), FieldType.String, "parentname"),
+		DEFINE.KEYFIELD(nameof(ParentName), FieldType.String, "parentname"),
 		DEFINE.KEYFIELD(nameof(HammerID), FieldType.Integer, "hammerid"),
 		DEFINE.KEYFIELD(nameof(Speed), FieldType.Float, "speed"),
 		DEFINE.KEYFIELD(nameof(RenderFX), FieldType.Character, "renderfx"),
@@ -2211,12 +2285,12 @@ public partial class BaseEntity : IServerEntity
 		// DEFINE.ARRAY(nameof(CoordinateFrame), FieldType.Float, 12),
 		DEFINE.KEYFIELD(nameof(WaterLevel), FieldType.Character, "waterlevel"),
 		DEFINE.FIELD(nameof(WaterType), FieldType.Character),
-		// DEFINE.FIELD(nameof(Blocker), FieldType.EHandle),
+		DEFINE.FIELD(nameof(Blocker), FieldType.EHandle),
 		DEFINE.KEYFIELD(nameof(Gravity), FieldType.Float, "gravity"),
 		DEFINE.KEYFIELD(nameof(Friction), FieldType.Float, "friction"),
-		// DEFINE.KEYFIELD(nameof(LocalTime), FieldType.Float, "ltime"),
-		// DEFINE.FIELD(nameof(VPhysicsUpdateLocalTime), FieldType.Float),
-		// DEFINE.FIELD(nameof(MoveDoneTime), FieldType.Float),
+		DEFINE.KEYFIELD(nameof(LocalTime), FieldType.Float, "ltime"),
+		DEFINE.FIELD(nameof(VPhysicsUpdateLocalTime), FieldType.Float),
+		DEFINE.FIELD(nameof(MoveDoneTime), FieldType.Float),
 		DEFINE.FIELD(nameof(AbsOrigin), FieldType.PositionVector),
 		DEFINE.KEYFIELD(nameof(Velocity), FieldType.Vector, "velocity"),
 		DEFINE.KEYFIELD(nameof(TextureFrameIndex), FieldType.Character, "texframeindex"),
@@ -2841,7 +2915,7 @@ public partial class BaseEntity : IServerEntity
 			otherProp.GetCollisionOrigin(), otherProp.GetCollisionAngles(), otherProp.OBBMins(), otherProp.OBBMaxs());
 	}
 
-	public bool IsMoving() {
+	public virtual bool IsMoving() {
 		GetVelocity(out Vector3 velocity, out _);
 		return velocity != vec3_origin;
 	}
@@ -2988,6 +3062,17 @@ public partial class BaseEntity : IServerEntity
 	public bool IsWorld() => EntIndex() == 0;
 
 	public virtual bool FVisible(BaseEntity entity) => throw new NotImplementedException();
+
+	public virtual void GetVectors(out Vector3 forward, out Vector3 right, out Vector3 up) {
+		ref readonly Matrix3x4 entityToWorld = ref EntityToWorldTransform();
+
+		MathLib.MatrixGetColumn(entityToWorld, 0, out forward);
+
+		MathLib.MatrixGetColumn(entityToWorld, 1, out right);
+		right *= -1.0f;
+
+		MathLib.MatrixGetColumn(entityToWorld, 2, out up);
+	}
 
 	public TimeUnit_t NavIgnoreUntilTime;
 

@@ -39,7 +39,7 @@ public class C_World : C_BaseEntity
 	public override bool Init(int entNum, int serialNum) {
 		WaveHeight = 0.0f;
 		ActivityList.Init();
-		// TODO: EventList.Init();
+		EventList.Init();
 
 		return base.Init(entNum, serialNum);
 	}

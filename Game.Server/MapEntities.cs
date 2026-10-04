@@ -291,7 +291,26 @@ public static class MapEntities
 	}
 
 	static void SetupParentsForSpawnList(int entities, HierarchicalSpawn_t[] spawnList) {
+		int nEntity;
+		for (nEntity = entities - 1; nEntity >= 0; nEntity--) {
+			BaseEntity? entity = spawnList[nEntity].Entity;
+			if (entity != null) {
+				if (entity.ParentName != null && entity.ParentName.Contains(',')) {
+					nexttoken(out ReadOnlySpan<char> token, entity.ParentName, ',', out ReadOnlySpan<char> attachmentName);
+					entity.ParentName = new(token);
+					BaseEntity? parent = gEntList.FindEntityByName(null, entity.ParentName);
 
+					spawnList[nEntity].DeferredParent = parent!;
+					spawnList[nEntity].DeferredParentAttachment = new(attachmentName);
+				}
+				else {
+					BaseEntity? parent = gEntList.FindEntityByName(null, entity.ParentName);
+
+					if (parent != null && parent.Edict() != null)
+						entity.SetParent(parent);
+				}
+			}
+		}
 	}
 
 	static void SpawnHierarchicalList(int entities, HierarchicalSpawn_t[] spawnList, bool activateEntities) {

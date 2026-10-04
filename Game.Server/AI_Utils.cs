@@ -14,6 +14,8 @@ namespace Game.Server;
 public static class AI_UtilsGlobals
 {
 	public static string? g_iszFuncBrushClassname;
+
+	public static bool AI_IsSinglePlayer() => gpGlobals.MaxClients == 1;
 }
 
 public class AI_MoveMonitor

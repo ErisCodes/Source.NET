@@ -347,6 +347,13 @@ public partial class BasePlayer : BaseCombatCharacter
 	public bool ForcedObserverMode;
 	PlayerPhysFlag PhysicsFlags;
 
+	public void SetPhysicsFlag(PlayerPhysFlag flag, bool set) {
+		if (set)
+			PhysicsFlags |= flag;
+		else
+			PhysicsFlags &= ~flag;
+	}
+
 	int LastDmageAmount;
 	Vector3 DmgOrigin;
 	Vector3 OldOrigin;
@@ -513,11 +520,13 @@ public partial class BasePlayer : BaseCombatCharacter
 	readonly List<Handle<BaseEntity>> SimulatedByThisPlayer = [];
 
 	public IServerVehicle? GetVehicle() => Vehicle.Get()?.GetServerVehicle();
-	public BaseEntity? GetVehicleEntity() => Vehicle.Get();
-	public bool IsInAVehicle() => Vehicle.Get() != null;
+	public override BaseEntity? GetVehicleEntity() => Vehicle.Get();
+	public override bool IsInAVehicle() => Vehicle.Get() != null;
 	public float GetStepSize() => Local.StepSize;
 
 	public BaseEntity? GetViewEntity() => ViewEntity.Get();
+
+	public virtual ReadOnlySpan<char> GetSceneSoundToken() => "";
 
 	public void SetViewEntity(BaseEntity? entity) {
 		ViewEntity.Set(entity);

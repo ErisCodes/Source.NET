@@ -152,7 +152,11 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 
 	public int CompareFileTime(ReadOnlySpan<char> filename1, ReadOnlySpan<char> filename2, ref int compare) {
-		throw new NotImplementedException();
+		DateTime ft1 = g_pFileSystem.GetFileTime(filename1);
+		DateTime ft2 = g_pFileSystem.GetFileTime(filename2);
+
+		compare = ft1.CompareTo(ft2);
+		return 1;
 	}
 
 #if SWDS
@@ -539,9 +543,7 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 		throw new NotImplementedException();
 	}
 
-	public int IsInEditMode() {
-		throw new NotImplementedException();
-	}
+	public int IsInEditMode() => InEditMode() ? 1 : 0;
 
 	public bool IsInternalBuild() => false;
 

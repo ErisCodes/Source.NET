@@ -103,7 +103,10 @@ public interface IStudioRender {
 	int GetMaterialList(StudioHeader studioHDR, Span<IMaterial> materials);
 	Span<Matrix3x4> LockBoneMatrices(int boneCount);
 	void UnlockBoneMatrices();
-	void DrawModel(ref DrawModelResults results, ref DrawModelInfo info, Span<Matrix3x4> boneToWorld, Span<byte> flexWeights, Span<byte> flexDelayedWeights, in Vector3 modelOrigin, StudioRenderFlags flags = StudioRenderFlags.DrawEntireModel);
+	void LockFlexWeights(int weightCount, out Span<float> flexWeights);
+	void LockFlexWeights(int weightCount, out Span<float> flexWeights, out Span<float> flexDelayedWeights);
+	void UnlockFlexWeights();
+	void DrawModel(ref DrawModelResults results, ref DrawModelInfo info, Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights, in Vector3 modelOrigin, StudioRenderFlags flags = StudioRenderFlags.DrawEntireModel);
 	void SetViewState(in Vector3 currentViewOrigin, in Vector3 currentViewRight, in Vector3 currentViewUp, in Vector3 currentViewForward);
 	void SetColorModulation(Vector3 r_colormod);
 	void SetAlphaModulation(float r_blend);

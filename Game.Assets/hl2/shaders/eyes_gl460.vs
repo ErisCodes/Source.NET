@@ -14,6 +14,7 @@ layout(location = 0) in vec3 v_Position;
 layout(location = 7) in ivec4 v_BoneIndex;
 layout(location = 8) in vec2 v_BoneWeights;
 layout(location = 10) in vec4 v_TexCoord0;
+layout(location = 14) in vec4 v_FlexPosition;
 
 layout(std140, binding = 0) uniform source_matrices {
     mat4 viewMatrix;
@@ -81,6 +82,8 @@ void main()
 
     vec4 vPosition = vec4(v_Position, 1.0);
     vec3 dummy = v_Position;
+
+    ApplyMorph(v_FlexPosition.xyz, vPosition.xyz);
 
     vec3 worldNormal, worldPos;
     SkinPositionAndNormal(

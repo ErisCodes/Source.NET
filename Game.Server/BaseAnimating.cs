@@ -5,6 +5,7 @@ using Source.Common;
 using Source.Common.Commands;
 using Source.Common.DataCache;
 using Source.Common.Engine;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.Mathematics;
 
 using System.Numerics;
@@ -261,6 +262,28 @@ public class BaseAnimating : BaseEntity
 
 	public int LookupSequence(ReadOnlySpan<char> label) {
 		return Animation.LookupSequence(GetModelPtr(), label);
+	}
+
+	static string? Studio_GetKeyValueText(StudioHdr? studioHdr, int sequence) {
+		if (studioHdr != null && studioHdr.SequencesAvailable()) {
+			if (sequence >= 0 && sequence < studioHdr.GetNumSeq()) {
+				MStudioSeqDesc seqdesc = studioHdr.Seqdesc(sequence);
+				if (seqdesc.KeyValueSize != 0)
+					return System.Text.Encoding.ASCII.GetString(((ReadOnlySpan<byte>)seqdesc.Data.Span[seqdesc.KeyValueIndex..]).SliceNullTerminatedString());
+			}
+		}
+		return null;
+	}
+
+	public KeyValues? GetSequenceKeyValues(int sequence) {
+		string? text = Studio_GetKeyValueText(GetModelPtr(), sequence);
+
+		if (text != null) {
+			KeyValues seqKeyValues = new("");
+			if (seqKeyValues.LoadFromBuffer(modelinfo.GetModelName(GetModel()), text))
+				return seqKeyValues;
+		}
+		return null;
 	}
 	public TimeUnit_t GetSequenceGroundSpeed(int sequence) => GetSequenceGroundSpeed(GetModelPtr(), sequence);
 
@@ -565,6 +588,35 @@ public class BaseAnimating : BaseEntity
 		return true;
 	}
 
+	public bool GetAttachment(ReadOnlySpan<char> attachmentName, out Vector3 absOrigin, out Vector3 forward, out Vector3 right, out Vector3 up) {
+		return GetAttachment(LookupAttachment(attachmentName), out absOrigin, out forward, out right, out up);
+	}
+
+	public bool GetAttachment(int attachment, out Vector3 absOrigin, out Vector3 forward, out Vector3 right, out Vector3 up) {
+		bool bRet = GetAttachment(attachment, out Matrix3x4 attachmentToWorld);
+		MathLib.MatrixPosition(attachmentToWorld, out absOrigin);
+		MathLib.MatrixGetColumn(attachmentToWorld, 0, out forward);
+		MathLib.MatrixGetColumn(attachmentToWorld, 1, out right);
+		MathLib.MatrixGetColumn(attachmentToWorld, 2, out up);
+		return bRet;
+	}
+
+	public float EdgeLimitPoseParameter(int parameter, float value, float baseValue = 0.0f) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return value;
+
+		if (parameter < 0 || parameter >= studioHdr.GetNumPoseParameters())
+			return value;
+
+		MStudioPoseParamDesc pose = studioHdr.PoseParameter(parameter);
+
+		if (pose.Loop != 0 || pose.Start == pose.End)
+			return value;
+
+		return MathLibShared.RangeCompressor(value, pose.Start, pose.End, baseValue);
+	}
+
 	public float GetPoseParameter(ReadOnlySpan<char> name) => GetPoseParameter(LookupPoseParameter(name));
 	public float GetPoseParameter(int parameter) {
 		StudioHdr? pStudioHdr = GetModelPtr();
@@ -720,6 +772,79 @@ public class BaseAnimating : BaseEntity
 	}
 	public int SelectWeightedSequence(Activity activity) {
 		return Animation.SelectWeightedSequence(GetModelPtr(), activity, GetSequence());
+	}
+	public int SelectHeaviestSequence(Activity activity) {
+		Assert(GetModelPtr() != null);
+		return Animation.SelectHeaviestSequence(GetModelPtr(), activity);
+	}
+
+	public virtual void DispatchAnimEvents(BaseAnimating eventHandler) {
+		if (PlaybackRate == 0.0)
+			return;
+
+		AnimEvent animEvent = default;
+
+		StudioHdr? studiohdr = GetModelPtr();
+
+		if (studiohdr == null) {
+			AssertMsg(false, "BaseAnimating.DispatchAnimEvents: model missing");
+			return;
+		}
+
+		if (!studiohdr.SequencesAvailable())
+			return;
+
+		if (studiohdr.Seqdesc(GetSequence()).NumEvents == 0)
+			return;
+
+		float cycleRate = GetSequenceCycleRate(GetSequence()) * (float)PlaybackRate;
+		float start = (float)LastEventCheck;
+		float end = (float)GetCycle();
+
+		if (!SequenceLoops && SequenceFinished)
+			end = 1.01f;
+		LastEventCheck = end;
+
+		int index = 0;
+		while ((index = Animation.GetAnimationEvent(studiohdr, GetSequence(), ref animEvent, start, end, index)) != 0) {
+			animEvent.Source = this;
+			if (cycleRate > 0.0f) {
+				float cycle = animEvent.Cycle;
+				if (cycle > GetCycle())
+					cycle = cycle - 1.0f;
+				animEvent.EventTime = AnimTime + (cycle - GetCycle()) / cycleRate + GetAnimTimeInterval();
+			}
+
+			eventHandler.HandleAnimEvent(ref animEvent);
+
+			StudioHdr? nowStudioHdr = GetModelPtr();
+			if (nowStudioHdr != studiohdr) {
+				AssertMsg(false, $"{GetDebugName()} has changed its model while processing AnimEvents on sequence {GetSequence()}. Aborting dispatch.\n");
+				Warning($"{GetDebugName()} has changed its model while processing AnimEvents on sequence {GetSequence()}. Aborting dispatch.\n");
+				break;
+			}
+		}
+	}
+
+	public virtual void HandleAnimEvent(ref AnimEvent animEvent) {
+		if ((animEvent.Type & AnimEventType.NewEventSystem) != 0 && (animEvent.Type & AnimEventType.Server) != 0) {
+			if (animEvent.Event == (int)Animevent.AE_SV_PLAYSOUND) {
+				EmitSound(animEvent.Options);
+				return;
+			}
+			else if (animEvent.Event == (int)Animevent.AE_RAGDOLL) {
+				throw new NotImplementedException();
+			}
+			else if (animEvent.Event == (int)Animevent.AE_SV_DUSTTRAIL) {
+				throw new NotImplementedException();
+			}
+		}
+
+		string? name = EventList.NameForIndex(animEvent.Event);
+		if (name != null)
+			DevWarning(1, $"Unhandled animation event {name} for {GetClassname()}\n");
+		else
+			DevWarning(1, $"Unhandled animation event {animEvent.Event} for {GetClassname()}\n");
 	}
 	public float GroundSpeed;
 	public bool SequenceLoops;

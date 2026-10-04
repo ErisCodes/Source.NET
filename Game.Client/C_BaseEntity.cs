@@ -555,7 +555,7 @@ public partial class C_BaseEntity : IClientEntity
 		RecvPropFloat(FIELD.OF(nameof(ShadowCastDistance))),
 		RecvPropEHandle(FIELD.OF(nameof(OwnerEntity))),
 		RecvPropEHandle(FIELD.OF(nameof(EffectEntity))),
-		RecvPropInt(FIELD.OF(nameof(MoveParent)), 0, RecvProxy_IntToMoveParent),
+		RecvPropInt(FIELD.OF(nameof(NetworkMoveParent)), 0, RecvProxy_IntToMoveParent),
 		RecvPropInt(FIELD.OF(nameof(ParentAttachment))),
 
 		RecvPropInt(FIELD.OF(nameof(MoveType)), 0, RecvProxy_MoveType),
@@ -816,6 +816,7 @@ public partial class C_BaseEntity : IClientEntity
 	public EHANDLE EffectEntity = new();
 	[NetworkName("m_hGroundEntity")]
 	public EHANDLE GroundEntity = new();
+	[NetworkName("moveparent")]
 	public EHANDLE NetworkMoveParent = new();
 	public EHANDLE OldMoveParent = new();
 	public string? ModelName;
@@ -1129,7 +1130,6 @@ public partial class C_BaseEntity : IClientEntity
 		SetGroundEntity(null);
 	}
 
-	[NetworkName("moveparent")]
 	public EHANDLE MoveParent = new();
 	public EHANDLE MoveChild = new();
 	public EHANDLE MovePeer = new();
@@ -1138,6 +1138,21 @@ public partial class C_BaseEntity : IClientEntity
 	public void UnlinkFromHierarchy() {
 		if (MoveParent.IsValid())
 			UnlinkChild(MoveParent.Get(), this);
+	}
+
+	public void HierarchySetParent(C_BaseEntity? newParent) {
+		EHANDLE newParentHandle = default;
+		newParentHandle.Set(newParent);
+		if (newParentHandle.Index == MoveParent.Index)
+			return;
+
+		if (MoveParent.IsValid())
+			UnlinkChild(MoveParent.Get(), this);
+
+		if (newParent != null)
+			LinkChild(newParent, this);
+
+		InvalidatePhysicsRecursive(InvalidatePhysicsBits.PositionChanged | InvalidatePhysicsBits.AnglesChanged | InvalidatePhysicsBits.VelocityChanged);
 	}
 
 	public void LinkChild(C_BaseEntity parent, C_BaseEntity child) {
@@ -1451,7 +1466,8 @@ public partial class C_BaseEntity : IClientEntity
 		else if (predictable)
 			OnStoreLastNetworkedValue();
 
-		// HierarchySetParent(NetworkMoveParent);
+		Assert(NetworkMoveParent.Get() != null || !NetworkMoveParent.IsValid());
+		HierarchySetParent(NetworkMoveParent.Get());
 
 		MarkMessageReceived();
 
@@ -2363,7 +2379,8 @@ public partial class C_BaseEntity : IClientEntity
 
 
 	public void OnDataUnchangedInPVS() {
-		// HierarchySetParent(NetworkMoveParent);
+		Assert(NetworkMoveParent.Get() != null || !NetworkMoveParent.IsValid());
+		HierarchySetParent(NetworkMoveParent.Get());
 		MarkMessageReceived();
 	}
 

@@ -605,7 +605,7 @@ public partial class C_BasePlayer : C_BaseCombatCharacter, IGameEventListener2
 					FOVStart = (int)fFOV;
 				}
 				else {
-					fFOV = (int)MathLib.SimpleSplineRemapValClamped(deltaTime, 0.0f, 1.0f, (float)FOVStart, fFOV);
+					fFOV = (float)MathLib.SimpleSplineRemapValClamped(deltaTime, 0.0f, 1.0f, (float)FOVStart, fFOV);
 				}
 			}
 		}

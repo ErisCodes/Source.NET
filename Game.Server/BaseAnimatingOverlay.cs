@@ -424,6 +424,16 @@ public class BaseAnimatingOverlay : BaseAnimating
 			AnimOverlay[layer].Flags &= ~AnimLayerFlags.AutoKill;
 	}
 
+	public void SetLayerNoRestore(int layer, bool noRestore) {
+		if (!IsValidLayer(layer))
+			return;
+
+		if (noRestore)
+			AnimOverlay[layer].Flags |= AnimLayerFlags.DontRestore;
+		else
+			AnimOverlay[layer].Flags &= ~AnimLayerFlags.DontRestore;
+	}
+
 	public void SetLayerLooping(int layer, bool looping) {
 		if (!IsValidLayer(layer))
 			return;

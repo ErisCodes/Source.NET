@@ -103,6 +103,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	private bool ready;
 
 	uint renderFBO;
+	uint copyFBO;
 
 	public bool OnDeviceInit() {
 		AcquireInternalRenderTargets();
@@ -243,6 +244,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	private void AcquireInternalRenderTargets() {
 		renderFBO = glCreateFramebuffer();
+		copyFBO = glCreateFramebuffer();
 	}
 
 	public void InitRenderState() {
@@ -983,10 +985,17 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			offset += elementSize;
 		}
 
-		if ((format & VertexFormat.Position) != 0)
+		if ((format & VertexFormat.Position) != 0) {
 			ConfigureAttribute(bindings, OpenGL_ShaderInputAttribute.Position, VertexElement.Position, 1);
-		else
+			if ((format & VertexFormat.Wrinkle) != 0)
+				ConfigureAttribute(bindings, OpenGL_ShaderInputAttribute.Wrinkle, VertexElement.Wrinkle, 1);
+			else
+				glDisableVertexArrayAttrib(vao, (uint)OpenGL_ShaderInputAttribute.Wrinkle);
+		}
+		else {
 			glDisableVertexArrayAttrib(vao, (uint)OpenGL_ShaderInputAttribute.Position);
+			glDisableVertexArrayAttrib(vao, (uint)OpenGL_ShaderInputAttribute.Wrinkle);
+		}
 
 		if ((format & VertexFormat.BoneIndex) != 0) {
 			int numBoneWeights = format.GetBoneWeightsSize();
@@ -1054,18 +1063,32 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		else
 			glDisableVertexArrayAttrib(vao, (uint)OpenGL_ShaderInputAttribute.UserData);
 
-		// todo
-		glDisableVertexArrayAttrib(vao, (uint)OpenGL_ShaderInputAttribute.Wrinkle);
-
 		Assert(bindingsPtr < bindings.Length);
 		for (int i = 0; i < bindingsPtr; i++)
 			glVertexArrayAttribBinding(vao, bindings[i], 0);
+
+		int normalOffset = (int)(VertexElement.Position.GetSize() + VertexElement.Wrinkle.GetSize());
+
+		glEnableVertexArrayAttrib(vao, (uint)OpenGL_ShaderInputAttribute.FlexPosition);
+		glVertexArrayAttribFormat(vao, (uint)OpenGL_ShaderInputAttribute.FlexPosition, 4, GL_FLOAT, false, 0);
+		glVertexArrayAttribBinding(vao, (uint)OpenGL_ShaderInputAttribute.FlexPosition, 2);
+
+		glEnableVertexArrayAttrib(vao, (uint)OpenGL_ShaderInputAttribute.FlexNormal);
+		glVertexArrayAttribFormat(vao, (uint)OpenGL_ShaderInputAttribute.FlexNormal, 3, GL_FLOAT, false, (uint)normalOffset);
+		glVertexArrayAttribBinding(vao, (uint)OpenGL_ShaderInputAttribute.FlexNormal, 2);
 	}
 
 	public IMesh GetDynamicMesh(IMaterial material, int hwSkinBoneCount, bool buffered, IMesh? vertexOverride, IMesh? indexOverride) {
 		Assert(material == null || material.IsRealTimeVersion());
 		return MeshMgr.GetDynamicMesh(material, 0, hwSkinBoneCount, buffered, vertexOverride, indexOverride);
 	}
+
+	public IMesh GetDynamicMeshEx(IMaterial material, VertexFormat vertexFormat, int hwSkinBoneCount, bool buffered, IMesh? vertexOverride, IMesh? indexOverride) {
+		Assert(material == null || material.IsRealTimeVersion());
+		return MeshMgr.GetDynamicMesh(material, vertexFormat, hwSkinBoneCount, buffered, vertexOverride, indexOverride);
+	}
+
+	public IMesh GetFlexMesh() => MeshMgr.GetFlexMesh();
 
 	public void Bind(IMaterial? material) {
 		IMaterialInternal? matInt = (IMaterialInternal?)material;
@@ -2453,6 +2476,36 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		var status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 		Assert(status == GL_FRAMEBUFFER_COMPLETE, "Framebuffer incomplete");
 		// glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+
+	public void CopyRenderTargetToTextureEx(ShaderAPITextureHandle_t textureHandle, int renderTargetID, System.Drawing.Rectangle? srcRect = null, System.Drawing.Rectangle? dstRect = null) {
+		if (!TextureIsAllocated(textureHandle))
+			return;
+
+		FlushBufferedPrimitives();
+
+		InternalTextureInfo tex = GetTexture(textureHandle);
+
+		int srcWidth, srcHeight;
+		if (UsingTextureRenderTarget) {
+			srcWidth = ViewportMaxWidth;
+			srcHeight = ViewportMaxHeight;
+		}
+		else
+			GetBackBufferDimensions(out srcWidth, out srcHeight);
+
+		System.Drawing.Rectangle src = srcRect ?? new(0, 0, srcWidth, srcHeight);
+		System.Drawing.Rectangle dst = dstRect ?? new(0, 0, tex.Width, tex.Height);
+
+		int srcY0 = srcHeight - (src.Y + src.Height);
+		int dstY0 = tex.Height - (dst.Y + dst.Height);
+
+		glNamedFramebufferTexture(copyFBO, GL_COLOR_ATTACHMENT0, GetGL46Texture(textureHandle), 0);
+		glBlitNamedFramebuffer(UsingTextureRenderTarget ? renderFBO : 0, copyFBO,
+			src.X, srcY0, src.X + src.Width, srcY0 + src.Height,
+			dst.X, dstY0, dst.X + dst.Width, dstY0 + dst.Height,
+			GL_COLOR_BUFFER_BIT, GL_LINEAR);
+		glNamedFramebufferTexture(copyFBO, GL_COLOR_ATTACHMENT0, 0, 0);
 	}
 
 	public IMesh CreateStaticMesh(VertexFormat format, ReadOnlySpan<char> textureGroup, IMaterial? material) {

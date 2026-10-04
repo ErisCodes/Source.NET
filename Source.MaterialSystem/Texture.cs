@@ -279,6 +279,13 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 		return (InternalFlags & (int)InternalTextureFlags.Allocated) != 0;
 	}
 
+	public void CopyFrameBufferToMe(int renderTargetID = 0, Rectangle? srcRect = null, Rectangle? dstRect = null) {
+		Assert(TextureHandles != null && FrameCount >= 1);
+
+		if (TextureHandles != null && FrameCount >= 1)
+			materials.ShaderAPI.CopyRenderTargetToTextureEx(TextureHandles[0], renderTargetID, srcRect, dstRect);
+	}
+
 	public void Bind(Sampler sampler) => Bind(sampler, 0);
 	public void Bind(Sampler sampler, int frame) {
 		if (HasBeenAllocated())

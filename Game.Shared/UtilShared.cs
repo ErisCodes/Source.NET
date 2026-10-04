@@ -289,6 +289,15 @@ public static partial class Util
 #endif
 	}
 
+	public static void TraceEntity<IF>(BaseEntity entity, in Vector3 absStart, in Vector3 absEnd, Mask mask, scoped ref IF filter, out Trace ptr) where IF : struct, ITraceFilter {
+		ICollideable collision = entity.GetCollideable()!;
+
+		Assert(collision.GetCollisionAngles() == vec3_angle);
+
+		ptr = default;
+		enginetrace.SweepCollideable(collision, absStart, absEnd, collision.GetCollisionAngles(), mask, ref filter, ref ptr);
+	}
+
 	public static void TraceRay(in Ray ray, Mask mask, IHandleEntity? ignore, CollisionGroup collisionGroup, out Trace ptr) {
 		TraceFilterSimple traceFilter = new(ignore, collisionGroup);
 

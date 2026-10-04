@@ -65,6 +65,9 @@ public ref struct MapLoadHelper
 
 		LoadName = new(loadName);
 
+		if (0 == serverGlobalVariables.MapVersion)
+			serverGlobalVariables.MapVersion = MapHeader.MapRevision;
+
 #if !SWDS
 		InitDLightGlobals(MapHeader.Version);
 #endif

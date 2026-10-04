@@ -253,6 +253,20 @@ public class MatRenderContext : IMatRenderContextInternal
 		return true;
 	}
 
+	public IMesh GetFlexMesh() => shaderAPI.GetFlexMesh();
+
+	public IMesh GetDynamicMeshEx(VertexFormat vertexFormat, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) {
+		if (autoBind != null)
+			Bind(autoBind, null);
+
+		int nCurrentBoneCount = shaderAPI.GetCurrentNumBones();
+		Assert(nCurrentBoneCount <= 4);
+		if (nCurrentBoneCount > 1)
+			--nCurrentBoneCount;
+
+		return shaderAPI.GetDynamicMeshEx(GetCurrentMaterialInternal()!, vertexFormat, nCurrentBoneCount, buffered, vertexOverride, indexOverride);
+	}
+
 	public IMesh GetDynamicMesh(bool buffered, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) {
 		if (autoBind != null) {
 			Bind(autoBind, null);
@@ -479,6 +493,18 @@ public class MatRenderContext : IMatRenderContextInternal
 		CommitRenderTargetAndViewport();
 	}
 
+	public void CopyRenderTargetToTexture(ITexture texture) => CopyRenderTargetToTextureEx(texture, 0, null, null);
+
+	public void CopyRenderTargetToTextureEx(ITexture texture, int renderTargetID, System.Drawing.Rectangle? srcRect, System.Drawing.Rectangle? dstRect = null) {
+		if (texture == null) {
+			Assert(false);
+			return;
+		}
+
+		Flush(false);
+		((ITextureInternal)texture).CopyFrameBufferToMe(renderTargetID, srcRect, dstRect);
+	}
+
 	public void PushRenderTargetAndViewport(ITexture? thisTexture) {
 		RenderTargetStackElement element = new(thisTexture, 0, 0, -1, -1);
 		RenderTargetStack.Push(element);
@@ -650,8 +676,30 @@ public class MatRenderContext : IMatRenderContextInternal
 			case StandardTextureId.Grey: shaderAPI.BindTexture(sampler, GetGreyTextureHandle()); break;
 			case StandardTextureId.GreyAlphaZero: shaderAPI.BindTexture(sampler, GetGreyAlphaZeroTextureHandle()); break;
 			case StandardTextureId.NormalizationCubemapSigned: TextureSystem.SignedNormalizationCubemap().Bind(sampler); break;
+			case StandardTextureId.FrameBufferFullTexture0:
+			case StandardTextureId.FrameBufferFullTexture1: {
+					int textureIndex = id - StandardTextureId.FrameBufferFullTexture0;
+					if (CurrentFrameBufferCopyTexture[textureIndex] != null)
+						((ITextureInternal)CurrentFrameBufferCopyTexture[textureIndex]!).Bind(sampler);
+				}
+				break;
 			default: Assert(false); break;
 		}
+	}
+
+	public const int MAX_FB_TEXTURES = 4;
+	readonly ITexture?[] CurrentFrameBufferCopyTexture = new ITexture?[MAX_FB_TEXTURES];
+
+	public void SetFrameBufferCopyTexture(ITexture? texture, int textureIndex = 0) {
+		if (textureIndex < 0 || textureIndex >= MAX_FB_TEXTURES) {
+			Assert(false);
+			return;
+		}
+
+		if (CurrentFrameBufferCopyTexture[textureIndex] != texture)
+			shaderAPI.FlushBufferedPrimitives();
+
+		CurrentFrameBufferCopyTexture[textureIndex] = texture;
 	}
 
 	ITexture? LocalCubemapTexture;
