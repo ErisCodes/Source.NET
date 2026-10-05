@@ -109,7 +109,10 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 
 	public void CleanUpEntityClusterList(ref PVSInfo pvsInfo) {
-		throw new NotImplementedException();
+		if (pvsInfo.ClusterCount > CheckTransmitInfo.MAX_FAST_ENT_CLUSTERS) {
+			pvsInfo.Clusters = null;
+			pvsInfo.ClusterCount = 0;
+		}
 	}
 
 	public void ClearSaveDir() {
