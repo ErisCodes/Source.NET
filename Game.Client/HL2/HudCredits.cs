@@ -7,6 +7,7 @@ using Source.Common;
 using Source.Common.Bitbuffers;
 using Source.Common.Formats.Keyvalues;
 using Source.Common.GUI;
+using Source.Common.Mathematics;
 using Source.GUI.Controls;
 
 namespace Game.Client.HUD;
@@ -132,7 +133,7 @@ public class HudCredits : Panel, IHudElement
 		while (kvNames != null) {
 			CreditName Credits = default;
 			strcpy(Credits.Name, kvNames.Name);
-			strcpy(Credits.FontName, keyValue.GetString(Credits.Name, "Default"));
+			strcpy(Credits.FontName, keyValue.GetString(kvNames.Name, "Default"));
 
 			CreditsList.Add(Credits);
 			kvNames = kvNames.GetNextKey();
@@ -190,6 +191,8 @@ public class HudCredits : Panel, IHudElement
 		GetHudSize(out iWidth, out iTall);
 		SetSize(iWidth, iTall);
 
+		Span<char> unicode = stackalloc char[256];
+
 		for (int i = 0; i < CreditsList.Count; i++) {
 			ref CreditName credit = ref CreditsList.AsSpan()[i];
 
@@ -222,7 +225,7 @@ public class HudCredits : Panel, IHudElement
 				else {
 					if (FadeTime <= gpGlobals.CurTime) {
 						if (Alpha > 0) {
-							Alpha -= (int)(float)(gpGlobals.FrameTime * (ScrollTime * 2));
+							Alpha = (int)(Alpha - gpGlobals.FrameTime * (ScrollTime * 2));
 
 							if (Alpha <= 0) {
 								credit.Active = false;
@@ -243,17 +246,17 @@ public class HudCredits : Panel, IHudElement
 			surface.DrawSetTextFont(m_hTFont);
 			surface.DrawSetTextColor(color[0], color[1], color[2], color[3]);
 
-			Span<char> unicode = stackalloc char[256];
+			unicode.Clear();
 
-			if (credit.Name[0] == '#') 
+			if (credit.Name[0] == '#')
 				localize.ConstructString(unicode, localize.Find(credit.Name));
-			else 
+			else
 				strcpy(unicode, credit.Name);
 
 			int iStringWidth = GetStringPixelWidth(unicode, m_hTFont);
 
 			surface.DrawSetTextPos((iWidth / 2) - (iStringWidth / 2), (int)credit.YPos);
-			surface.DrawString(unicode);
+			surface.DrawString(unicode.SliceNullTerminatedString());
 		}
 	}
 	private void DrawIntroCreditsName() {
@@ -277,10 +280,10 @@ public class HudCredits : Panel, IHudElement
 			TimeUnit_t localTime = gpGlobals.CurTime - credit.TimeStart;
 
 			surface.DrawSetTextFont(m_hTFont);
-			surface.DrawSetTextColor(Color[0], Color[1], Color[2], (int)FadeBlend(FadeInTime, FadeOutTime, FadeHoldTime + credit.TimeAdd, localTime) * Color[3]);
+			surface.DrawSetTextColor(Color[0], Color[1], Color[2], (int)(FadeBlend(FadeInTime, FadeOutTime, FadeHoldTime + credit.TimeAdd, localTime) * Color[3]));
 
 			surface.DrawSetTextPos((int)XRES(credit.XPos), (int)YRES(credit.YPos));
-			surface.DrawString(credit.Name);
+			surface.DrawString(((ReadOnlySpan<char>)credit.Name).SliceNullTerminatedString());
 
 			if (LogoTime > gpGlobals.CurTime)
 				continue;
@@ -318,7 +321,82 @@ public class HudCredits : Panel, IHudElement
 		}
 	}
 	private void DrawLogo() {
+		if (LogoState == LogoState.FadeOff) {
+			((IHudElement)this).SetActive(false);
+			return;
+		}
 
+		switch (LogoState) {
+			case LogoState.FadeIn: {
+					TimeUnit_t flDeltaTime = (FadeTime - gpGlobals.CurTime);
+
+					Alpha = (int)Math.Max(0, MathLib.RemapValClamped(flDeltaTime, 5.0f, 0, -128, 255));
+
+					if (flDeltaTime <= 0.0f) {
+						LogoState = LogoState.FadeHold;
+						FadeTime = gpGlobals.CurTime + LogoDesiredLength;
+					}
+
+					break;
+				}
+
+			case LogoState.FadeHold: {
+					if (FadeTime <= gpGlobals.CurTime) {
+						LogoState = LogoState.FadeOut;
+						FadeTime = gpGlobals.CurTime + 2.0f;
+					}
+					break;
+				}
+
+			case LogoState.FadeOut: {
+					TimeUnit_t flDeltaTime = (FadeTime - gpGlobals.CurTime);
+
+					Alpha = (int)MathLib.RemapValClamped(flDeltaTime, 0.0f, 2.0f, 0, 255);
+
+					if (flDeltaTime <= 0.0f) {
+						LogoState = LogoState.FadeOff;
+						((IHudElement)this).SetActive(false);
+					}
+
+					break;
+				}
+		}
+
+		int iWidth, iTall;
+		GetHudSize(out iWidth, out iTall);
+		SetSize(iWidth, iTall);
+
+		string szLogoFont;
+
+		if (hl2_episodic.GetBool())
+			szLogoFont = "ClientTitleFont";
+		else
+			szLogoFont = "WeaponIcons";
+
+		IScheme scheme = SchemeManager.GetScheme("ClientScheme")!;
+		IFont m_hTFont = scheme.GetFont(szLogoFont)!;
+
+		int iFontTall = surface.GetFontTall(m_hTFont);
+
+		Color cColor = TextColor;
+		cColor[3] = (byte)Alpha;
+
+		surface.DrawSetTextFont(m_hTFont);
+		surface.DrawSetTextColor(cColor[0], cColor[1], cColor[2], cColor[3]);
+
+		ReadOnlySpan<char> logo = ((ReadOnlySpan<char>)Logo).SliceNullTerminatedString();
+		int iStringWidth = GetStringPixelWidth(logo, m_hTFont);
+
+		surface.DrawSetTextPos((iWidth / 2) - (iStringWidth / 2), (iTall / 2) - (iFontTall / 2));
+		surface.DrawString(logo);
+
+		ReadOnlySpan<char> logo2 = ((ReadOnlySpan<char>)Logo2).SliceNullTerminatedString();
+		if (logo2.Length > 0) {
+			iStringWidth = GetStringPixelWidth(logo2, m_hTFont);
+
+			surface.DrawSetTextPos((iWidth / 2) - (iStringWidth / 2), (iTall / 2) + (iFontTall / 2));
+			surface.DrawString(logo2);
+		}
 	}
 
 	private void PrepareLogo(TimeUnit_t time) {

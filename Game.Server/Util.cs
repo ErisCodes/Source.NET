@@ -311,6 +311,23 @@ public static partial class Util
 		partition.EnumerateElementsInSphere((int)PartitionListMask.EngineNonStaticEdicts, center, radius, false, ref enumerator);
 		return enumerator.GetCount();
 	}
+	public static void ShowMessage(ReadOnlySpan<char> str, BasePlayer? player) {
+		RecipientFilter filter = new();
+
+		if (player != null) 
+			filter.AddRecipient(player);
+		else 
+			filter.AddAllPlayers();
+
+		filter.MakeReliable();
+
+		UserMessageBegin(filter, "HudText");
+		WRITE_STRING(str);
+		MessageEnd();
+	}
+	public static void ShowMessageAll(ReadOnlySpan<char> str) {
+		ShowMessage(str, null);
+	}
 
 	public static void SayTextFilter<T>(scoped in T filter, ReadOnlySpan<char> pText, BasePlayer? player, bool chat) where T : IRecipientFilter {
 		UserMessageBegin(filter, "SayText");

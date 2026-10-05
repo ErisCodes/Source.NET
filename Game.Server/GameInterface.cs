@@ -1,4 +1,5 @@
 ﻿global using static Game.Server.EngineCallbacks;
+global using static Game.Server.GameInterfaceGlobals;
 
 using Game.Server.GarrysMod;
 using Game.Shared;
@@ -20,6 +21,10 @@ using Source.Common.Server;
 using System.Numerics;
 
 namespace Game.Server;
+
+public static class GameInterfaceGlobals {
+	public static readonly ConVar sv_unlockedchapters = new( "sv_unlockedchapters", "1", FCvar.Archive | FCvar.ArchiveXbox);
+}
 
 [EngineComponent]
 public static class GameInterface
