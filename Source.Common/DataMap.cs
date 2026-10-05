@@ -158,6 +158,7 @@ namespace Source.Common
 	public delegate DiffType COMPARE_FUNC<T>(in T o, in T i) where T : unmanaged;
 	public delegate DiffType COMPARE_FUNC_TOL<T>(bool usetolerance, double tolerance, in T o, in T i) where T : unmanaged;
 	public delegate void WatchMsgFn(ref PredictionCopy self, ReadOnlySpan<char> msg);
+	public delegate void PredictionCopyFieldsFn(ref PredictionCopy self, int chainCount, DataMap rootMap, TypeDescription[] fields);
 	/// <summary>
 	/// The base class lives in Source.Common now, since the delegates require a ref to the prediction copy state.
 	/// A lot of the logic lives in Game.Client, where the IL compilation process occurs.
@@ -690,6 +691,8 @@ namespace Source.Common
 	public class DataMap
 	{
 		public DataMap() { }
+
+		public PredictionCopyFieldsFn? PredictionCopyFields;
 
 		/// <summary>
 		/// Old API, the other constructors are better and closer to the macros... fixme
