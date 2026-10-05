@@ -45,8 +45,8 @@ in vec2 vs_BaseTexCoord;
 in vec4 vs_DetailOrBumpAndEnvmapMaskTexCoord;
 #endif
 #endif
-in vec4 vs_LightmapTexCoord1And2;
-in vec4 vs_LightmapTexCoord3;
+centroid in vec4 vs_LightmapTexCoord1And2;
+centroid in vec4 vs_LightmapTexCoord3;
 in vec4 vs_WorldPos_ProjPosZ;
 #if CUBEMAP || (LIGHTING_PREVIEW)
 in mat3 vs_TangentSpaceTranspose;
