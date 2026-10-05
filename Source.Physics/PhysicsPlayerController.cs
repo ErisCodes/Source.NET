@@ -16,14 +16,11 @@ internal class PhysicsPlayerController : IPhysicsPlayerController
 
 	public PhysicsPlayerController(PhysicsObject obj) {
 		Object = obj;
-		Object.BecomeController();
+		Object.EnableGravity(false);
 	}
 
 	public void Update(in Vector3 position, in Vector3 velocity, float secondsToArrival, bool onground, IPhysicsObject ground) {
-		if (Object.Body == null)
-			return;
-
-		float dt = secondsToArrival > 1e-4f ? secondsToArrival : Object.Env.GetSimulationTimestepSeconds();
+		float dt = secondsToArrival > 1e-4f ? secondsToArrival : (float)Object.Env.GetSimulationTimestep();
 		Object.GetPosition(out Vector3 current, out _);
 		Vector3 targetVelocity = velocity + (position - current) / dt;
 
@@ -38,7 +35,7 @@ internal class PhysicsPlayerController : IPhysicsPlayerController
 
 	public void SetObject(IPhysicsObject obj) {
 		Object = (PhysicsObject)obj;
-		Object.BecomeController();
+		Object.EnableGravity(false);
 	}
 
 	public int GetShadowPosition(out Vector3 position, out QAngle angles) {
