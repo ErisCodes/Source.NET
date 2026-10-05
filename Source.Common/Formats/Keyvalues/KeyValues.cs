@@ -648,7 +648,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return keyob.Value is int i
 			? i
 			: keyob.Value is string str
-				? int.TryParse(str, out int r)
+				? int.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out int r)
 					? r
 					: defaultValue
 				: defaultValue;
@@ -672,7 +672,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return Convert.ToSingle(keyob.Value is double i
 			? i
 			: keyob.Value is string str
-				? double.TryParse(str, out double r)
+				? double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double r)
 					? r
 					: defaultValue
 				: defaultValue);
@@ -687,7 +687,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return keyob.Value is double i
 			? i
 			: keyob.Value is string str
-				? double.TryParse(str, out double r)
+				? double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double r)
 					? r
 					: defaultValue
 				: defaultValue;
@@ -722,7 +722,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return dat.Value is ulong u
 			? u
 			: dat.Value is string str
-				? ulong.TryParse(str, out ulong r)
+				? ulong.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong r)
 					? r
 					: defaultValue
 				: Convert.ToUInt64(dat.Value);
@@ -779,7 +779,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	// TODO: We should cache these!!!!
 	public int GetInt() {
 		if (Value is string str)
-			return int.TryParse(str, out int i) ? i : float.TryParse(str, out float f) ? (int)f : 0;
+			return int.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out int i) ? i : float.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? (int)f : 0;
 		else if (Value is int i)
 			return i;
 		else
@@ -787,7 +787,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 	public float GetFloat() {
 		if (Value is string str)
-			return float.TryParse(str, out float f) ? f : 0;
+			return float.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? f : 0;
 		else if (Value is float f)
 			return f;
 		else
@@ -795,7 +795,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 	public double GetDouble() {
 		if (Value is string str)
-			return double.TryParse(str, out double d) ? d : 0;
+			return double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) ? d : 0;
 		else if (Value is double d)
 			return d;
 		else
