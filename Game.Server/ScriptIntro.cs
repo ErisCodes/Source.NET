@@ -150,6 +150,7 @@ public class ScriptIntro : BaseEntity
 		CameraView = entity.GetAbsOrigin();
 		QAngle angles = entity.GetAbsAngles();
 		CameraViewAngles = new(angles.X, angles.Y, angles.Z);
+		NetworkStateChanged();
 	}
 
 	public bool GetIncludedPVSOrigin(out Vector3 origin, out BaseEntity? camera) {
@@ -169,6 +170,7 @@ public class ScriptIntro : BaseEntity
 		BlendStartTime = NextBlendTime = gpGlobals.CurTime;
 		QueuedBlendMode = -1;
 		SetContextThink(null, gpGlobals.CurTime, "BlendComplete");
+		NetworkStateChanged();
 
 		if (cl_spewscriptintro.GetInt() != 0)
 			DevMsg(1, $"{gpGlobals.CurTime:F2} INPUT: Blend mode set to {BlendMode}\n");
@@ -181,7 +183,10 @@ public class ScriptIntro : BaseEntity
 			DevMsg(1, $"{gpGlobals.CurTime:F2} INPUT: Next Blend mode set to {QueuedNextBlendMode}\n");
 	}
 
-	public void InputSetNextFOV(InputData inputdata) => NextFOV = inputdata.Value.Int();
+	public void InputSetNextFOV(InputData inputdata) {
+		NextFOV = inputdata.Value.Int();
+		NetworkStateChanged();
+	}
 
 	public void InputSetFOVBlendTime(InputData inputdata) {
 		if (NextFOVBlendTime >= gpGlobals.CurTime)
@@ -196,11 +201,13 @@ public class ScriptIntro : BaseEntity
 
 		NextFOVBlendTime = gpGlobals.CurTime + inputdata.Value.Float();
 		FOVBlendStartTime = gpGlobals.CurTime;
+		NetworkStateChanged();
 	}
 
 	public void InputSetFOV(InputData inputdata) {
 		FOV = inputdata.Value.Int();
 		StartFOV = FOV;
+		NetworkStateChanged();
 	}
 
 	public void InputSetNextBlendTime(InputData inputdata) {
@@ -219,6 +226,7 @@ public class ScriptIntro : BaseEntity
 		QueuedNextBlendMode = -1;
 
 		QueuedBlendMode = NextBlendMode;
+		NetworkStateChanged();
 
 		if (cl_spewscriptintro.GetInt() != 0)
 			DevMsg(1, $"{gpGlobals.CurTime:F2} BLEND STARTED: {BlendMode} to {NextBlendMode}, end at {NextBlendTime:F2}\n");
@@ -231,14 +239,19 @@ public class ScriptIntro : BaseEntity
 		BlendStartTime = NextBlendTime = gpGlobals.CurTime;
 		QueuedBlendMode = -1;
 		SetContextThink(null, gpGlobals.CurTime, "BlendComplete");
+		NetworkStateChanged();
 	}
 
 	public void InputActivate(InputData inputdata) {
 		Active = true;
 		g_hIntroScript.Set(this);
+		NetworkStateChanged();
 	}
 
-	public void InputDeactivate(InputData inputdata) => Active = false;
+	public void InputDeactivate(InputData inputdata) {
+		Active = false;
+		NetworkStateChanged();
+	}
 
 	public void InputFadeTo(InputData inputdata) {
 		string[] parameters = new string(inputdata.Value.String()).Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -255,6 +268,7 @@ public class ScriptIntro : BaseEntity
 
 		FadeAlpha = alpha;
 		FadeDuration = (float)atof(parameters[1]);
+		NetworkStateChanged();
 	}
 
 	public void InputSetFadeColor(InputData inputdata) {
@@ -267,5 +281,6 @@ public class ScriptIntro : BaseEntity
 		FadeColor[0] = (float)atof(parameters[0]);
 		FadeColor[1] = (float)atof(parameters[1]);
 		FadeColor[2] = (float)atof(parameters[2]);
+		NetworkStateChanged();
 	}
 }
