@@ -50,6 +50,11 @@ public static class PhysicsHookGlobals {
 	public static void PhysAddShadow(BaseEntity entity) => g_ShadowEntities!.AddEntity(entity);
 	public static void PhysRemoveShadow(BaseEntity entity) => g_ShadowEntities!.DeleteEntity(entity);
 
+	public static void PhysOnCleanupDeleteList() {
+		g_Collisions.FlushQueuedOperations();
+		physenv?.CleanupDeleteList();
+	}
+
 	public static void PhysCallbackRemove(IServerNetworkable remove){
 		if (PhysIsInCallback()) 
 			g_Collisions.AddRemoveObject(remove);
