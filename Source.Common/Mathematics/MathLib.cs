@@ -318,6 +318,14 @@ public struct CollisionNode
 	public InlineArray2<int> Children;
 }
 
+public struct CollisionArea
+{
+	public int NumAreaPortals;
+	public int FirstAreaPortal;
+	public int FloodNum;
+	public int FloodValid;
+}
+
 
 /// <summary>
 /// Analog of cplane_t
