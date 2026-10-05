@@ -354,6 +354,8 @@ public class MDLCache : IMDLCache, IStudioDataCache
 				ConvertFlexData(hdr);
 				hdr.Flags |= StudioHdrFlags.FlexesConverted;
 			}
+
+			CacheNotify?.OnDataLoaded(MDLCacheDataType.StudioHDR, handle);
 		}
 
 		return hdr;
