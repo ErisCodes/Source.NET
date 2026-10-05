@@ -80,9 +80,11 @@ public struct LagRecord
 
 public class LagRecordList
 {
-	LagRecord[] Records = new LagRecord[16];
+	LagRecord[] Records;
 	int HeadIndex;
 	int Num;
+
+	public LagRecordList(int capacity) => Records = new LagRecord[capacity];
 
 	public int Count => Num;
 
@@ -127,10 +129,10 @@ public class LagCompensationManager(ReadOnlySpan<char> name) : AutoGameSystemPer
 
 	const float FractionScale = 0.95f;
 
-	class EntityLagData
+	class EntityLagData(int capacity)
 	{
 		public bool RestoreEntity;
-		public readonly LagRecordList LagRecords = new();
+		public readonly LagRecordList LagRecords = new(capacity);
 		public LagRecord RestoreData = new();
 		public LagRecord ChangeData = new();
 	}
@@ -161,6 +163,8 @@ public class LagCompensationManager(ReadOnlySpan<char> name) : AutoGameSystemPer
 		eh.Set(entity);
 		return eh;
 	}
+
+	static int RecordCapacity() => (int)Math.Ceiling((sv_maxunlag.GetDouble() + 1.0) / TICK_INTERVAL) + 1;
 
 	bool HasCompensatedAncestor(BaseEntity entity) {
 		for (BaseEntity? parent = entity.GetMoveParent(); parent != null; parent = parent.GetMoveParent()) {
@@ -222,7 +226,7 @@ public class LagCompensationManager(ReadOnlySpan<char> name) : AutoGameSystemPer
 			EHANDLE eh = ToHandle(entity);
 
 			if (!CompensatedEntities.TryGetValue(eh, out EntityLagData? ld)) {
-				ld = new EntityLagData();
+				ld = new EntityLagData(RecordCapacity());
 				CompensatedEntities[eh] = ld;
 			}
 
