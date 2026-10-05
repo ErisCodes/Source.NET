@@ -660,9 +660,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		if (keyob == null)
 			return defaultValue;
 
-		return keyob.Value is Color c
-			? c
-			: default;
+		return keyob.GetColor();
 	}
 
 	public float GetFloat(ReadOnlySpan<char> key, float defaultValue = default) {
@@ -892,10 +890,23 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	public Color GetColor() {
-		if (Value is Color c) {
-			return c;
+		switch (Value) {
+			case Color c: return c;
+			case int i: return new(i, 0, 0, 0);
+			case double d: return new((int)d, 0, 0, 0);
+			case string str: {
+					// parse the colors out of the string
+					Span<float> rgba = stackalloc float[4];
+					int n = 0;
+					foreach (string part in str.Split(' ', StringSplitOptions.RemoveEmptyEntries)) {
+						if (n >= 4) break;
+						if (!float.TryParse(part, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out rgba[n])) break;
+						n++;
+					}
+					return new((byte)rgba[0], (byte)rgba[1], (byte)rgba[2], (byte)rgba[3]);
+				}
+			default: return new(0, 0, 0, 0);
 		}
-		return new(); // todo: proper implementation of this
 	}
 
 	public void SetName(ReadOnlySpan<char> name) => Name = name.SliceNullTerminatedString().ToString();

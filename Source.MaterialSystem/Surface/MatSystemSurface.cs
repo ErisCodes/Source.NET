@@ -2143,7 +2143,7 @@ public class MatSystemSurface : IMatSystemSurface
 
 		Span<TextureID> pTextureIDs_ignored = stackalloc TextureID[numChars];
 		Span<CharTexCoord> pTexCoords_ignored = stackalloc CharTexCoord[numChars];
-		FontTextureCache.GetTextureForChars(CurrentFont, FontDrawType.Default, characterString, pTextureIDs_ignored, pTexCoords_ignored);
+		FontTextureCache.GetTextureForChars(CurrentFont, FontDrawType.Default, characterString[..numChars], pTextureIDs_ignored, pTexCoords_ignored);
 
 		FinishDrawing();
 	}
