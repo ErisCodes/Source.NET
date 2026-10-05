@@ -29,6 +29,7 @@ public interface IShader
 	void InitShaderParams(IMaterialVar[] vars, IShaderAPI shaderAPI, ReadOnlySpan<char> materialName);
 	void InitShaderInstance(IMaterialVar[] shaderParams, IShaderAPI shaderAPI, IShaderInit shaderManager, ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName);
 	void DrawElements(IMaterialVar[] shaderParams, IShaderShadow? shadow, IShaderDynamicAPI? shaderAPI, VertexCompressionType none, ref BasePerMaterialContextData? contextData);
+	ShaderUsingFlags ComputeModulationFlags(IMaterialVar[] shaderParams, IShaderDynamicAPI shaderAPI);
 	bool IsTranslucent(IMaterialVar[]? shaderParams);
 	bool NeedsPowerOfTwoFrameBufferTexture(IMaterialVar[]? shaderParams, bool checkSpecificToThisFrame);
 	bool NeedsFullFrameBufferTexture(IMaterialVar[]? shaderParams, bool checkSpecificToThisFrame);

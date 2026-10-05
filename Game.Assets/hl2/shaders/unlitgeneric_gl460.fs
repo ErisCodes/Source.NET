@@ -1,4 +1,5 @@
 #version 460
+// STATIC: "BASETEXTURE"				"0..1"
 
 in vec2 vs_TexCoord;
 in vec4 vs_Color;
@@ -19,7 +20,11 @@ out vec4 fragColor;
 
 void main()
 {
+#if BASETEXTURE
     vec4 texelColor = texture(basetexture, vs_TexCoord);
+#else
+    vec4 texelColor = vec4(1.0, 1.0, 1.0, 1.0);
+#endif
     if(isAlphaTesting){
         switch(alphaTestFunc){
             case 0: discard; break;

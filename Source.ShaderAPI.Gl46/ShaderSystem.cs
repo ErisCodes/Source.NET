@@ -42,6 +42,13 @@ public class ShaderSystem : IShaderSystemInternal
 
 	public void DrawElements(IShader shader, IMaterialVar[] parms, IShaderShadow renderState, VertexCompressionType vertexCompression, uint materialVarTimeStamp) {
 		ShaderAPI.InvalidateDelayedShaderConstants();
+		// Compute modulation...
+		ShaderUsingFlags mod = shader.ComputeModulationFlags(parms, ShaderAPI);
+		ShadowStateGl46 shadowState = (ShadowStateGl46)renderState;
+		if (shadowState.ModulationFlags != mod) {
+			shadowState.ModulationFlags = mod;
+			InitState(shader, parms, ref renderState);
+		}
 
 		int materialVarFlags = parms[(int)ShaderMaterialVars.Flags].GetIntValue();
 		if (((materialVarFlags & (int)MaterialVarFlags.Model) != 0) || (IsFlag2Set(parms, MaterialVarFlags2.SupportsHardwareSkinning) && (ShaderAPI.GetCurrentNumBones() > 0))) {
@@ -278,6 +285,7 @@ public class ShaderSystem : IShaderSystemInternal
 	public bool InitRenderState(IShader shader, IMaterialVar[] shaderParams, ref IShaderShadow renderState, ReadOnlySpan<char> materialName) {
 		Assert(RenderState == null);
 		InitRenderStateFlags(ref renderState, shaderParams);
+		((ShadowStateGl46)renderState).ModulationFlags = shader.ComputeModulationFlags(shaderParams, ShaderAPI);
 		InitState(shader, shaderParams, ref renderState);
 		ComputeRenderStateFlagsFromSnapshot(renderState);
 		return true;

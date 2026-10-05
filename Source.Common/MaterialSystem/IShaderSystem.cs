@@ -3,6 +3,16 @@ using Source.Common.ShaderAPI;
 
 namespace Source.Common.MaterialSystem;
 
+[Flags]
+public enum ShaderUsingFlags
+{
+	ColorModulation = 0x1,
+	AlphaModulation = 0x2,
+	Flashlight = 0x4,
+	FixedFunctionBakedLighting = 0x8,
+	Editor = 0x10,
+}
+
 public interface IShaderSystem
 {
 	public static bool IsTranslucent(IShaderShadow renderState) {

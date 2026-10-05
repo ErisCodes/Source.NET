@@ -60,6 +60,7 @@ public class ShadowStateGl46 : IShaderShadow
 	public PixelShaderHandle PixelShader;
 
 	public BasePerMaterialContextData? ContextData;
+	public ShaderUsingFlags ModulationFlags;
 
 	List<IMaterialVar> shaderUniforms = [];
 
