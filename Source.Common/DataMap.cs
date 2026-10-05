@@ -75,7 +75,7 @@ namespace Source.Common
 		public readonly FieldType FieldType;
 		public readonly string FieldName = "";
 		public readonly FieldInfo FieldInfo;
-		public IFieldAccessor Accessor => field ??= new DynamicAccessor(FieldInfo.DeclaringType!, FieldInfo.Name, FieldName);
+		public DynamicAccessor Accessor => field ??= FieldAccessorRegistry.Create(FieldInfo.DeclaringType!, FieldInfo.Name, null);
 		public nuint PackedOffset = nuint.MaxValue;
 		public readonly ushort FieldSize;
 		public readonly FieldTypeDescFlags Flags;
@@ -158,6 +158,7 @@ namespace Source.Common
 	public delegate DiffType COMPARE_FUNC<T>(in T o, in T i) where T : unmanaged;
 	public delegate DiffType COMPARE_FUNC_TOL<T>(bool usetolerance, double tolerance, in T o, in T i) where T : unmanaged;
 	public delegate void WatchMsgFn(ref PredictionCopy self, ReadOnlySpan<char> msg);
+	public delegate void PredictionCopyFieldsFn(ref PredictionCopy self, int chainCount, DataMap rootMap, TypeDescription[] fields);
 	/// <summary>
 	/// The base class lives in Source.Common now, since the delegates require a ref to the prediction copy state.
 	/// A lot of the logic lives in Game.Client, where the IL compilation process occurs.
@@ -677,13 +678,6 @@ namespace Source.Common
 		#endregion
 	}
 
-	// These functions are for prediction copies. They are stored per data map, since that's their responsibility.
-	// The client DLL should pass us these if it's applicable (on validation)
-	public delegate int PredictionCopyFn_ObjectToObjectFn(ref PredictionCopy predCopy);
-	public delegate int PredictionCopyFn_ObjectToDataFrameFn(ref PredictionCopy predCopy);
-	public delegate int PredictionCopyFn_DataFrameToObjectFn(ref PredictionCopy predCopy);
-	public delegate int PredictionCopyFn_DataFrameToDataFrameFn(ref PredictionCopy predCopy);
-
 	/*
 		Make sure that DEFINE is defined in the C# file as using DEFINE = Source.DEFINE<YOURCLASSHERE>;
 
@@ -698,11 +692,7 @@ namespace Source.Common
 	{
 		public DataMap() { }
 
-
-		public PredictionCopyFn_ObjectToObjectFn? PredictionCopyFn_ObjectToObject;
-		public PredictionCopyFn_ObjectToDataFrameFn? PredictionCopyFn_ObjectToDataFrame;
-		public PredictionCopyFn_DataFrameToObjectFn? PredictionCopyFn_DataFrameToObject;
-		public PredictionCopyFn_DataFrameToDataFrameFn? PredictionCopyFn_DataFrameToDataFrame;
+		public PredictionCopyFieldsFn? PredictionCopyFields;
 
 		/// <summary>
 		/// Old API, the other constructors are better and closer to the macros... fixme

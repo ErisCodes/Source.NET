@@ -452,8 +452,7 @@ public static class SendPropHelpers
 
 		return ret;
 	}
-	delegate void EnsureCapacityBasicFn(int length);
-	public static SendProp SendPropList(IFieldAccessor field, int maxElements, SendProp arrayProp, SendTableProxyFn? proxyFn = null) {
+	public static SendProp SendPropList<T>(IFieldAccessor field, int maxElements, SendProp arrayProp, SendTableProxyFn? proxyFn = null) {
 		proxyFn ??= SendProxy_DataTableToDataTable;
 
 		SendProp ret = new();
@@ -464,13 +463,9 @@ public static class SendPropHelpers
 		if (proxyFn == SendProxy_DataTableToDataTable)
 			ret.SetFlags(PropFlags.ProxyAlwaysYes);
 
-		// Hack to get this to work. This is also rather slow. I'm just lazy and need it to work
-		MethodInfo ensureCapacity = field.FieldType.GetMethod("EnsureCapacity")!;
 		SendPropExtra_UtlVector extraData = new() {
 			MaxElements = maxElements,
-			EnsureCapacityFn = ensureCapacity.ReturnType == typeof(int)
-				? (instance, list, size) => ensureCapacity.CreateDelegate<Func<int, int>>(list)(size)
-				: (instance, list, size) => ensureCapacity.CreateDelegate<EnsureCapacityBasicFn>(list)(size)
+			EnsureCapacityFn = static (instance, list, size) => ((List<T>)list).EnsureCapacity(size)
 		};
 
 		if (arrayProp.Type == SendPropType.DataTable)
@@ -502,7 +497,7 @@ public static class SendPropHelpers
 				// todo: make sure this is okay...
 			}
 			else {
-				indexedData.ElementFieldInfo = (IFieldAccessor)Activator.CreateInstance(typeof(ListElementAccessor<>).MakeGenericType(field.FieldType.GetGenericArguments()[0]), i - 1)!;
+				indexedData.ElementFieldInfo = new ListElementAccessor<T>(i - 1);
 				props[i].SetProxyFn(SendProxy_UtlVectorElement);
 			}
 		}

@@ -276,7 +276,7 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 		SendPropBool(FIELD.OF(nameof(Paused))),
 		SendPropBool(FIELD.OF(nameof(Multiplayer))),
 		SendPropFloat(FIELD.OF(nameof(ForceClientTime)), 0, PropFlags.NoScale),
-		SendPropList(FIELD.OF(nameof(ActorList)), MAX_ACTORS_IN_SCENE, SendPropEHandle()),
+		SendPropList<EHANDLE>(FIELD.OF(nameof(ActorList)), MAX_ACTORS_IN_SCENE, SendPropEHandle()),
 	]);
 	public static new readonly ServerClass ServerClass = new ServerClass(DT_SceneEntity);
 
