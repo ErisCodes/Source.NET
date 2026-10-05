@@ -413,37 +413,21 @@ public partial class Render(
 		ModVis.Map_VisSetup(host_state.WorldModel, origins, novis, out returnFlags);
 	}
 
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal void RenderOneMesh(MatRenderContextPtr renderContext, in MatSysInterface.MeshList meshList) {
-		renderContext.Bind(meshList.Material);
-		renderContext.BindLightmapPage(meshList.LightmapPageID);
-		meshList.Mesh.Draw();
-	}
-
 	static ConVar r_drawskybox = new("1", FCvar.Cheat);
 
 	static readonly int[] SkyTexOrder = [0, 2, 1, 3, 4, 5];
 	static readonly int[] FakePlaneType = [1, -1, 2, -2, 3, -3];
+	ConVar fov_desired { get => field ??= cvar.FindVar("fov_desired")!; }
 	public void DrawSkybox(float zFar, int drawFlags = 0x3F) {
 		if (!r_drawskybox.GetBool())
 			return;
 
 		MatRenderContextPtr renderContext = new(materials);
 
-		// Before drawing the skybox, draw any meshes in the skybox lists only to the depth texture.
-		// This deviates from Source rendering but is necessary since we aren't using the PVS to calculate
-		// visible surfaces at runtime, and we need other sky-rooms to not be visible
-
-		Span<int> skyboxMeshesIndices = MaterialSystem.SkyboxMeshesIndices.AsSpan();
-		Span<MeshList> meshes = MaterialSystem.Meshes.AsSpan();
-		renderContext.Bind(SkyboxOcclude!); // If Init() ran, this isn't null
-		for (int i = 0; i < skyboxMeshesIndices.Length; i++) {
-			ref MeshList meshList = ref meshes[skyboxMeshesIndices[i]];
-			meshList.Mesh.Draw();
-		}
-
 		Vector3 normal;
+		Span<Vector3> positionArray = stackalloc Vector3[4];
+		Span<Vector2> texCoordArray = stackalloc Vector2[4];
+
 		for (int i = 0; i < 6; i++, drawFlags >>= 1) {
 			// Don't draw this panel of the skybox if the flag isn't set:
 			if ((drawFlags & 1) == 0)
@@ -476,11 +460,9 @@ public partial class Render(
 					break;
 			}
 
-			if (Vector3.Dot(CurrentViewForward, normal) < -0.29289f)
+			if (Vector3.Dot(CurrentViewForward, normal) < MathF.Cos(MathLib.DEG2RAD(MathF.Min(180.0f, fov_desired.GetFloat() + 26.0f))))
 				continue;
 
-			Span<Vector3> positionArray = stackalloc Vector3[4];
-			Span<Vector2> texCoordArray = stackalloc Vector2[4];
 			if (skyboxMaterials[SkyTexOrder[i]] != null) {
 				renderContext.Bind(skyboxMaterials[SkyTexOrder[i]]!);
 
@@ -523,7 +505,7 @@ public partial class Render(
 	};
 	private void MakeSkyVec(float s, float t, int axis, float zFar, out Vector3 position, out Vector2 texCoord) {
 		Vector3 v = default, b = default;
-		int j = default, k = default;
+		int j, k;
 		float width = zFar * SQRT3INV;
 
 		if (s < -1)
