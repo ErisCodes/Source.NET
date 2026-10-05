@@ -75,7 +75,7 @@ namespace Source.Common
 		public readonly FieldType FieldType;
 		public readonly string FieldName = "";
 		public readonly FieldInfo FieldInfo;
-		public IFieldAccessor Accessor => field ??= new DynamicAccessor(FieldInfo.DeclaringType!, FieldInfo.Name, FieldName);
+		public IFieldAccessor Accessor => field ??= FieldAccessorRegistry.Create(FieldInfo.DeclaringType!, FieldInfo.Name, null);
 		public nuint PackedOffset = nuint.MaxValue;
 		public readonly ushort FieldSize;
 		public readonly FieldTypeDescFlags Flags;

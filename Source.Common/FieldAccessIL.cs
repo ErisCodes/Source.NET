@@ -1,399 +1,13 @@
 // #define LOGGED_EMIT_ENABLE
 
 using Source.Common;
-using Source.Common.Mathematics;
 
-using System.Collections.Frozen;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-using System.Numerics;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace Source.Common
 {
-	file static class ILCast<From, To>
-	{
-		public delegate void DynamicCastFn(in From from, out To to);
-		public static readonly DynamicCastFn Cast;
-
-
-		static ILCast() {
-			if (typeof(From) == typeof(To))
-				AssertMsg(false, "Tried to ILCast<From, To> where From == To. Re-evaluate.");
-
-			DynamicMethod method = new DynamicMethod($"ILCast<{typeof(From)}, {typeof(To)}", typeof(void), [typeof(From).MakeByRefType(), typeof(To).MakeByRefType()]);
-			ILGenerator generator = method.GetILGenerator();
-
-			generator.Emit(OpCodes.Ldarg_1);
-			generator.Emit(OpCodes.Ldarg_0);
-
-			// Try to implicitly cast.
-			MethodInfo? implicitCheck = ILAssembler.TryGetImplicitConversion(typeof(From), typeof(To));
-			if (implicitCheck != null) {
-				generator.Emit(OpCodes.Ldobj, typeof(From));
-				generator.Emit(OpCodes.Call, implicitCheck);
-				generator.Emit(OpCodes.Stobj, typeof(To));
-				goto compile;
-			}
-
-			// Generic value type conversion.
-			Type from = typeof(From), to = typeof(To);
-			if (from.IsPrimitive && to.IsPrimitive) {
-				var convOp = ILAssembler.GetConvOpcode(from, to, out OpCode code, out _);
-				if (convOp) {
-					generator.Emit(OpCodes.Ldobj, from);
-					generator.Emit(code);
-					generator.Emit(OpCodes.Stobj, to);
-					goto compile;
-				}
-				else {
-					throw new NotImplementedException("Could not find a way to cast these two types.");
-				}
-			}
-
-
-			// Generic reference type conversion.
-			if (!from.IsValueType && !to.IsValueType) {
-				generator.Emit(OpCodes.Ldind_Ref);
-				if (to != typeof(object))
-					generator.Emit(OpCodes.Castclass, to);
-				generator.Emit(OpCodes.Stind_Ref);
-				goto compile;
-			}
-
-			throw new NotImplementedException("You should never get to this point!");
-		compile:
-			generator.Emit(OpCodes.Ret);
-			Cast = method.CreateDelegate<DynamicCastFn>();
-		}
-	}
-
-	file static class ILAccess<T>
-	{
-		public delegate T GetFn(object instance);
-		public delegate void SetFn(object instance, in T value);
-		static readonly ConditionalWeakTable<DynamicAccessor, GetFn> getFns = [];
-		static readonly ConditionalWeakTable<DynamicAccessor, SetFn> setFns = [];
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static GetFn Get(DynamicAccessor accessor) {
-			if (getFns.TryGetValue(accessor, out GetFn? fn))
-				return fn;
-
-			DynamicMethod method = new DynamicMethod($"ILAccess<{typeof(T).Name}>_GetFn", typeof(T), [typeof(object)]);
-			ILGenerator il = method.GetILGenerator();
-
-			il.LoggedEmit(OpCodes.Ldarg_0);
-			if (accessor.TargetType != typeof(object))
-				il.LoggedEmit(OpCodes.Castclass, accessor.TargetType);
-			for (int i = 0, c = accessor.Members.Count; i < c; i++) {
-				MemberInfo member = accessor.Members[i];
-				switch (member) {
-					case FieldInfo field:
-						if (i == c - 1)
-							il.LoggedEmit(OpCodes.Ldfld, field);
-						else if (field.FieldType.IsValueType)
-							il.LoggedEmit(OpCodes.Ldflda, field);
-						else
-							il.LoggedEmit(OpCodes.Ldfld, field);
-						break;
-					case IndexInfo index:
-						switch (index.Behavior) {
-							case IndexInfoBehavior.GenericArrayType:
-								MethodInfo getter = index.Container.GetMethod("get_Item", (BindingFlags)~0, [typeof(int)]) ?? index.Container.GetMethod("Get", (BindingFlags)~0, [typeof(int)]) ?? throw new Exception();
-								il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
-								if (getter.IsVirtual)
-									il.LoggedEmit(OpCodes.Callvirt, getter);
-								else
-									il.LoggedEmit(OpCodes.Call, getter);
-								break;
-							case IndexInfoBehavior.NetworkArray:
-								il.LoggedEmit(OpCodes.Ldfld, (accessor.Members[^2] as FieldInfo)!.FieldType!.GetField("Value")!);
-								il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
-
-								if (index.ElementType.IsValueType && !index.ElementType.IsPrimitive) {
-									il.LoggedEmit(OpCodes.Ldelema, index.ElementType);
-
-									il.LoggedEmit(OpCodes.Ldobj, index.ElementType);
-								}
-								else {
-									if (index.ElementType == typeof(bool)) il.LoggedEmit(OpCodes.Ldelem_I1);
-									else if (index.ElementType == typeof(sbyte)) il.LoggedEmit(OpCodes.Ldelem_I1);
-									else if (index.ElementType == typeof(byte)) il.LoggedEmit(OpCodes.Ldelem_I1);
-									else if (index.ElementType == typeof(short)) il.LoggedEmit(OpCodes.Ldelem_I2);
-									else if (index.ElementType == typeof(ushort)) il.LoggedEmit(OpCodes.Ldelem_I2);
-									else if (index.ElementType == typeof(char)) il.LoggedEmit(OpCodes.Ldelem_I2);
-									else if (index.ElementType == typeof(int)) il.LoggedEmit(OpCodes.Ldelem_I4);
-									else if (index.ElementType == typeof(uint)) il.LoggedEmit(OpCodes.Ldelem_I4);
-									else if (index.ElementType == typeof(ulong)) il.LoggedEmit(OpCodes.Ldelem_I8);
-									else if (index.ElementType == typeof(long)) il.LoggedEmit(OpCodes.Ldelem_I8);
-									else if (index.ElementType == typeof(float)) il.LoggedEmit(OpCodes.Ldelem_R4);
-									else if (index.ElementType == typeof(double)) il.LoggedEmit(OpCodes.Ldelem_R8);
-									else if (index.ElementType.IsClass) il.LoggedEmit(OpCodes.Ldelem_Ref);
-									else throw new NotSupportedException($"Unsupported element type: {index.ElementType}");
-								}
-								break;
-							case IndexInfoBehavior.InlineArray:
-								if (index.Index > 0) {
-									// Push the index
-									il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
-									// Push the size of one element
-									il.LoggedEmit(OpCodes.Sizeof, index.ElementType);
-									// Multiply: index * sizeof(element)
-									il.LoggedEmit(OpCodes.Mul);
-									// Add to the base address
-									il.LoggedEmit(OpCodes.Add);
-								}
-
-								if (i == c - 1) {
-									if (index.ElementType.IsValueType && !index.ElementType.IsPrimitive) il.LoggedEmit(OpCodes.Ldobj, index.ElementType);
-									else if (index.ElementType == typeof(bool)) il.LoggedEmit(OpCodes.Ldind_I1);
-									else if (index.ElementType == typeof(sbyte)) il.LoggedEmit(OpCodes.Ldind_I1);
-									else if (index.ElementType == typeof(byte)) il.LoggedEmit(OpCodes.Ldind_U1);
-									else if (index.ElementType == typeof(short)) il.LoggedEmit(OpCodes.Ldind_I2);
-									else if (index.ElementType == typeof(ushort)) il.LoggedEmit(OpCodes.Ldind_U2);
-									else if (index.ElementType == typeof(char)) il.LoggedEmit(OpCodes.Ldind_U2);
-									else if (index.ElementType == typeof(int)) il.LoggedEmit(OpCodes.Ldind_I4);
-									else if (index.ElementType == typeof(uint)) il.LoggedEmit(OpCodes.Ldind_U4);
-									else if (index.ElementType == typeof(ulong)) il.LoggedEmit(OpCodes.Ldind_I8);
-									else if (index.ElementType == typeof(long)) il.LoggedEmit(OpCodes.Ldind_I8);
-									else if (index.ElementType == typeof(float)) il.LoggedEmit(OpCodes.Ldind_R4);
-									else if (index.ElementType == typeof(double)) il.LoggedEmit(OpCodes.Ldind_R8);
-									else if (index.ElementType.IsClass) {
-										il.LoggedEmit(OpCodes.Ldind_Ref);
-									}
-									else throw new NotSupportedException($"Unsupported element type: {index.ElementType}");
-								}
-
-								break;
-
-							default: throw new NotImplementedException($"Unsupported IndexInfoBehavior value '{index.Behavior}' (implement me!)");
-						}
-						break;
-					default: throw new NotImplementedException("Cannot support the current member info");
-				}
-			}
-
-			MethodInfo? implicitCheck = ILAssembler.TryGetImplicitConversion(accessor.StoringType, typeof(T));
-			if (implicitCheck != null) {
-				il.LoggedEmit(OpCodes.Call, implicitCheck);
-			}
-			else if (ILAssembler.GetConvOpcode(accessor.StoringType, typeof(T), out OpCode convCode, out _))
-				il.LoggedEmit(convCode);
-
-			else if (typeof(T) != accessor.StoringType) {
-				if (accessor.StoringType.IsAssignableTo(typeof(Enum)) && typeof(T).IsValueType) {
-					var enumTypeUnderflying = Enum.GetUnderlyingType(accessor.StoringType);
-					if (typeof(T) == typeof(bool)) il.LoggedEmit(OpCodes.Conv_I1);
-					else if (typeof(T) == typeof(sbyte)) il.LoggedEmit(OpCodes.Conv_I1);
-					else if (typeof(T) == typeof(byte)) il.LoggedEmit(OpCodes.Conv_U1);
-					else if (typeof(T) == typeof(short)) il.LoggedEmit(OpCodes.Conv_I2);
-					else if (typeof(T) == typeof(ushort)) il.LoggedEmit(OpCodes.Conv_U2);
-					else if (typeof(T) == typeof(char)) il.LoggedEmit(OpCodes.Conv_U2);
-					else if (typeof(T) == typeof(int)) il.LoggedEmit(OpCodes.Conv_I4);
-					else if (typeof(T) == typeof(uint)) il.LoggedEmit(OpCodes.Conv_U4);
-					else if (typeof(T) == typeof(ulong)) il.LoggedEmit(OpCodes.Conv_I8);
-					else if (typeof(T) == typeof(long)) il.LoggedEmit(OpCodes.Conv_I8);
-					else if (typeof(T) == typeof(float)) il.LoggedEmit(OpCodes.Conv_R4);
-					else if (typeof(T) == typeof(double)) il.LoggedEmit(OpCodes.Conv_R8);
-					else if (!typeof(T).IsValueType && accessor.StoringType.IsValueType)
-						throw new NotImplementedException("Value type cannot be boxed here, please refactor.");
-					else il.LoggedEmit(OpCodes.Castclass, enumTypeUnderflying);
-				}
-				// Converting an InlineArray to a string involves casting the inline array to ReadOnlySpan<char>,
-				// null terminating it, then creating an interned string
-				else if(accessor.StoringType.GetCustomAttribute<InlineArrayAttribute>() != null && typeof(T) == typeof(string) && accessor.StoringType.IsConstructedGenericType && accessor.StoringType.GetGenericArguments()[0] == typeof(char)){
-					var inlineArrayAttr = accessor.StoringType.GetCustomAttribute<InlineArrayAttribute>()!;
-					var elementField = accessor.StoringType.GetFields((BindingFlags)~0).First();
-
-					var local = il.DeclareLocal(accessor.StoringType);
-					il.LoggedEmit(OpCodes.Stloc, local.LocalIndex);
-					il.LoggedEmit(OpCodes.Ldloca, local.LocalIndex);
-					il.LoggedEmit(OpCodes.Ldflda, elementField);
-					il.LoggedEmit(OpCodes.Ldc_I4, inlineArrayAttr.Length);
-
-					var createSpanMethod = typeof(System.Runtime.InteropServices.MemoryMarshal)
-						.GetMethod("CreateReadOnlySpan")!
-						.MakeGenericMethod(typeof(char));
-					il.LoggedEmit(OpCodes.Call, createSpanMethod);
-
-					var sliceMethod = typeof(Source.UnmanagedUtils).GetMethod("SliceNullTerminatedString", BindingFlags.Public | BindingFlags.Static, [typeof(ReadOnlySpan<char>)])!;
-					il.LoggedEmit(OpCodes.Call, sliceMethod);
-
-					var stringCtor = typeof(string).GetConstructor([typeof(ReadOnlySpan<char>)])!;
-					il.LoggedEmit(OpCodes.Newobj, stringCtor);
-
-					var internMethod = typeof(string).GetMethod("Intern", BindingFlags.Public | BindingFlags.Static, [typeof(string)])!;
-					il.LoggedEmit(OpCodes.Call, internMethod);
-				}
-				else {
-					if (!typeof(T).IsValueType && accessor.StoringType.IsValueType)
-						throw new NotImplementedException("Value type cannot be boxed here, please refactor.");
-
-					il.LoggedEmit(OpCodes.Castclass, typeof(T));
-				}
-			}
-
-			il.LoggedEmit(OpCodes.Ret);
-
-			getFns.Add(accessor, fn = method.CreateDelegate<GetFn>());
-			return fn;
-		}
-
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static SetFn? Set(DynamicAccessor accessor) {
-			if (setFns.TryGetValue(accessor, out SetFn? fn))
-				return fn;
-
-			DynamicMethod method = new DynamicMethod($"ILAccess<{typeof(T).Name}>_SetFn", typeof(void), [typeof(object), typeof(T).MakeByRefType()]);
-			ILGenerator il = method.GetILGenerator();
-
-			il.LoggedEmit(OpCodes.Ldarg_0);
-			il.LoggedEmit(OpCodes.Castclass, accessor.Members[0]!.DeclaringType!);
-
-			for (int i = 0, c = accessor.Members.Count - 1; i < c; i++) {
-				MemberInfo member = accessor.Members[i];
-				switch (member) {
-					case FieldInfo field:
-						if (field.FieldType.IsValueType)
-							il.LoggedEmit(OpCodes.Ldflda, field);
-						else
-							il.LoggedEmit(OpCodes.Ldfld, field);
-
-						break;
-					default: throw new NotImplementedException("Cannot support the current member info");
-				}
-			}
-
-			switch (accessor.Members[^1]) {
-				case FieldInfo field:
-					LoadValue(accessor, il);
-					PerformAutocast(accessor, il);
-					il.LoggedEmit(OpCodes.Stfld, field);
-					break;
-				case IndexInfo index:
-					switch (index.Behavior) {
-						case IndexInfoBehavior.GenericArrayType:
-							MethodInfo setter = index.Container.GetMethod("set_Item", (BindingFlags)~0, [typeof(int), index.ElementType]) ?? index.Container.GetMethod("Set", (BindingFlags)~0, [typeof(int), index.ElementType]) ?? throw new Exception();
-							il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
-
-							LoadValue(accessor, il);
-							PerformAutocast(accessor, il);
-
-							if (setter.IsVirtual)
-								il.LoggedEmit(OpCodes.Callvirt, setter);
-							else
-								il.LoggedEmit(OpCodes.Call, setter);
-							break;
-						case IndexInfoBehavior.NetworkArray:
-							il.LoggedEmit(OpCodes.Ldfld, (accessor.Members[^2] as FieldInfo)!.FieldType!.GetField("Value")!);
-							il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
-
-
-							if (index.ElementType.IsValueType && !index.ElementType.IsPrimitive) {
-								il.LoggedEmit(OpCodes.Ldelema, index.ElementType);
-
-								LoadValue(accessor, il);
-								PerformAutocast(accessor, il);
-
-								il.LoggedEmit(OpCodes.Stobj, index.ElementType);
-							}
-							else {
-								LoadValue(accessor, il);
-								PerformAutocast(accessor, il);
-
-								if (index.ElementType == typeof(bool)) il.LoggedEmit(OpCodes.Stelem_I1);
-								else if (index.ElementType == typeof(sbyte)) il.LoggedEmit(OpCodes.Stelem_I1);
-								else if (index.ElementType == typeof(byte)) il.LoggedEmit(OpCodes.Stelem_I1);
-								else if (index.ElementType == typeof(short)) il.LoggedEmit(OpCodes.Stelem_I2);
-								else if (index.ElementType == typeof(ushort)) il.LoggedEmit(OpCodes.Stelem_I2);
-								else if (index.ElementType == typeof(char)) il.LoggedEmit(OpCodes.Stelem_I2);
-								else if (index.ElementType == typeof(int)) il.LoggedEmit(OpCodes.Stelem_I4);
-								else if (index.ElementType == typeof(uint)) il.LoggedEmit(OpCodes.Stelem_I4);
-								else if (index.ElementType == typeof(ulong)) il.LoggedEmit(OpCodes.Stelem_I8);
-								else if (index.ElementType == typeof(long)) il.LoggedEmit(OpCodes.Stelem_I8);
-								else if (index.ElementType == typeof(float)) il.LoggedEmit(OpCodes.Stelem_R4);
-								else if (index.ElementType == typeof(double)) il.LoggedEmit(OpCodes.Stelem_R8);
-								else if (index.ElementType.IsClass) il.LoggedEmit(OpCodes.Stelem_Ref);
-								else throw new NotSupportedException($"Unsupported element type: {index.ElementType}");
-							}
-							break;
-						case IndexInfoBehavior.InlineArray:
-							if (index.Index > 0) {
-								// Push the index
-								il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
-								// Push the size of one element
-								il.LoggedEmit(OpCodes.Sizeof, index.ElementType);
-								// Multiply: index * sizeof(element)
-								il.LoggedEmit(OpCodes.Mul);
-								// Add to the base address
-								il.LoggedEmit(OpCodes.Add);
-							}
-
-							LoadValue(accessor, il);
-							PerformAutocast(accessor, il);
-
-							if (index.ElementType.IsValueType && !index.ElementType.IsPrimitive)
-								il.LoggedEmit(OpCodes.Stobj, index.ElementType);
-							else if (index.ElementType == typeof(bool)) il.LoggedEmit(OpCodes.Stind_I1);
-							else if (index.ElementType == typeof(sbyte)) il.LoggedEmit(OpCodes.Stind_I1);
-							else if (index.ElementType == typeof(byte)) il.LoggedEmit(OpCodes.Stind_I1);
-							else if (index.ElementType == typeof(short)) il.LoggedEmit(OpCodes.Stind_I2);
-							else if (index.ElementType == typeof(ushort)) il.LoggedEmit(OpCodes.Stind_I2);
-							else if (index.ElementType == typeof(char)) il.LoggedEmit(OpCodes.Stind_I2);
-							else if (index.ElementType == typeof(int)) il.LoggedEmit(OpCodes.Stind_I4);
-							else if (index.ElementType == typeof(uint)) il.LoggedEmit(OpCodes.Stind_I4);
-							else if (index.ElementType == typeof(ulong)) il.LoggedEmit(OpCodes.Stind_I8);
-							else if (index.ElementType == typeof(long)) il.LoggedEmit(OpCodes.Stind_I8);
-							else if (index.ElementType == typeof(float)) il.LoggedEmit(OpCodes.Stind_R4);
-							else if (index.ElementType == typeof(double)) il.LoggedEmit(OpCodes.Stind_R8);
-							else if (index.ElementType.IsClass) il.LoggedEmit(OpCodes.Stind_Ref);
-							else throw new NotSupportedException($"Unsupported element type: {index.ElementType}");
-
-							break;
-						default: throw new NotImplementedException("Cannot support the current index behavior");
-					}
-					break;
-				default: throw new NotImplementedException("Cannot support the current member info");
-			}
-			il.LoggedEmit(OpCodes.Ret);
-
-			setFns.Add(accessor, fn = method.CreateDelegate<SetFn>());
-			return fn;
-		}
-
-		private static void LoadValue(DynamicAccessor accessor, ILGenerator il) {
-			il.LoggedEmit(OpCodes.Ldarg_1);
-		}
-
-		static void PerformAutocast(DynamicAccessor accessor, ILGenerator il) {
-			MethodInfo? implicitCheck = ILAssembler.TryGetImplicitConversion(typeof(T), accessor.StoringType);
-			if (implicitCheck != null) {
-				il.LoggedEmit(OpCodes.Ldobj, typeof(T));
-				il.LoggedEmit(OpCodes.Call, implicitCheck);
-			}
-			else if (
-				ILAssembler.GetLoadOpcode(typeof(T), out OpCode loadCode)
-				&& ILAssembler.GetConvOpcode(typeof(T), accessor.StoringType, out OpCode convCode, out bool unsignedInput)
-				) {
-				if (unsignedInput && (convCode == OpCodes.Conv_R4 || convCode == OpCodes.Conv_R8))
-					il.LoggedEmit(OpCodes.Conv_R_Un);
-				else
-					il.LoggedEmit(loadCode);
-				il.LoggedEmit(convCode);
-			}
-			else {
-				if (typeof(T).IsValueType)
-					il.LoggedEmit(OpCodes.Ldobj, typeof(T));
-				else
-					il.LoggedEmit(OpCodes.Ldind_Ref);
-			}
-		}
-	}
 	public class DynamicArrayInfo(Type containedType, Func<int> length, bool isList = false)
 	{
 		public Type ContainedType => containedType;
@@ -401,15 +15,7 @@ namespace Source.Common
 		public bool IsList => isList;
 	}
 
-	public static class DynamicArrayHelp
-	{
-		public static readonly FrozenDictionary<Type, DynamicArrayInfo> AcceptableTypes = new Dictionary<Type, DynamicArrayInfo>() {
-			{ typeof(Vector3), new(typeof(float), () => 3) },
-			{ typeof(QAngle), new(typeof(float), () => 3) },
-		}.ToFrozenDictionary();
-	}
-
-	public class DynamicArrayAccessor : DynamicAccessor, IFieldAccessorIndexable
+	public abstract class DynamicArrayAccessor : DynamicAccessor, IFieldAccessorIndexable
 	{
 		IFieldAccessor IFieldAccessorIndexable.AtIndex(int idx) => AtIndex(idx)!;
 
@@ -425,31 +31,15 @@ namespace Source.Common
 			for (int i = 0; i < Math.Min(Length, target.Length); i++)
 				target[i] = AtIndex(i)!.GetValue<T>(instanceFrom);
 		}
-		const int IS_LIST = -1;
-		const int IS_NETWORK_ARRAY = -2;
 
-		public DynamicArrayAccessor(Type targetType, ReadOnlySpan<char> expression, int isList = IS_LIST) : base(targetType, expression) {
-			UseNetworkVarBackingField();
-
-			var arrayAttr = StoringType.GetCustomAttribute<InlineArrayAttribute>();
-			if (arrayAttr != null) {
-				Info = new(StoringType.GetGenericArguments()[0], () => arrayAttr.Length);
-			}
-			else if (isList > 0) {
-				Info = new(StoringType.GetGenericArguments()[0], () => isList, true);
-			}
-			else {
-				var lastType = Members.Last();
-				NetworkArraySizeAttribute? netArraySize;
-				if (lastType is FieldInfo field && StoringType.IsGenericType && StoringType.GetGenericTypeDefinition() == typeof(NetworkArray<>) && (netArraySize = field.GetCustomAttribute<NetworkArraySizeAttribute>()) != null) {
-					Info = new(StoringType.GetGenericArguments()[0], () => netArraySize.Size);
-				}
-				else if (!DynamicArrayHelp.AcceptableTypes.TryGetValue(StoringType, out Info!))
-					throw new Exception("Uh oh, we need a type def override");
-			}
-
+		protected DynamicArrayAccessor(Type targetType, Type storingType, string name, string networkName, DynamicArrayInfo info) : base(targetType, storingType, name, networkName) {
+			Info = info;
 			ArrayIndexers = new DynamicArrayIndexAccessor?[Info.MaxLength];
 		}
+
+		public abstract string ElementNetworkName(int index);
+		public abstract T GetElement<T>(object instance, int index);
+		public abstract bool SetElement<T>(object instance, int index, in T value);
 
 		public override DynamicAccessor? AtIndex(int index) {
 			if (index < 0)
@@ -469,11 +59,15 @@ namespace Source.Common
 
 		public override int Index { get; }
 
-		public DynamicArrayIndexAccessor(DynamicArrayAccessor baseArray, int index, bool isVectorElem = false) : base(baseArray.TargetType, $"{baseArray.Name}[{Math.Abs(index)}]") {
+		public DynamicArrayIndexAccessor(DynamicArrayAccessor baseArray, int index, bool isVectorElem = false)
+			: base(baseArray.TargetType, baseArray.Info.ContainedType, $"{baseArray.Name}[{Math.Abs(index)}]", baseArray.ElementNetworkName(Math.Abs(index))) {
 			BaseArrayAccessor = baseArray;
 			Index = Math.Abs(index);
 			IsAVectorElement = isVectorElem;
 		}
+
+		public override T GetValue<T>(object instance) => BaseArrayAccessor.GetElement<T>(instance, Index);
+		public override bool SetValue<T>(object instance, in T value) => BaseArrayAccessor.SetElement(instance, Index, in value);
 	}
 
 	public class ListElementAccessor<TElement>(int index) : IFieldAccessor
@@ -486,21 +80,11 @@ namespace Source.Common
 
 		public T GetValue<T>(object instance) {
 			TElement value = ((List<TElement>)instance)[index];
-			if (typeof(T) == typeof(TElement))
-				return Unsafe.As<TElement, T>(ref value);
-
-			ILAssembler.DynamicCast(in value, out T ret);
-			return ret;
+			return FieldConvert<TElement, T>.Convert(in value);
 		}
 
 		public bool SetValue<T>(object instance, in T value) {
-			TElement converted;
-			if (typeof(T) == typeof(TElement))
-				converted = Unsafe.As<T, TElement>(ref Unsafe.AsRef(in value));
-			else
-				ILAssembler.DynamicCast(in value, out converted);
-
-			((List<TElement>)instance)[index] = converted;
+			((List<TElement>)instance)[index] = FieldConvert<T, TElement>.Convert(in value);
 			return true;
 		}
 
@@ -515,85 +99,9 @@ namespace Source.Common
 		}
 	}
 
-	public enum IndexInfoBehavior
-	{
-		DirectElement,
-		InlineArray,
-		GenericArrayType,
-		NetworkArray
-	}
-
-	public sealed class IndexInfo : MemberInfo
-	{
-		Type container;
-		MemberInfo containerMember;
-		int index;
-		public Type Container => container;
-		public MemberInfo ContainerMember => containerMember;
-		public IndexInfo(MemberInfo containedField, int index) {
-			containerMember = containedField;
-			container = containedField switch {
-				FieldInfo i => i.FieldType,
-				PropertyInfo i => i.PropertyType,
-				IndexInfo i => i.DeclaringType,
-				_ => throw new NotImplementedException()
-			};
-			this.index = index;
-		}
-
-		public override string ToString() {
-			return $"{container}[{index}]";
-		}
-		Type? insideType;
-		IndexInfoBehavior behavior;
-		[MemberNotNull(nameof(insideType))]
-		void Process() {
-			insideType = container.GetElementType();
-			if (insideType != null) {
-				behavior = IndexInfoBehavior.DirectElement;
-				return;
-			}
-
-			insideType = container.GetCustomAttribute<InlineArrayAttribute>() == null ? null : (container.GetFields((BindingFlags)~0).FirstOrDefault() ?? container.GetFields().FirstOrDefault() ?? throw new NullReferenceException("Container had no fields..?")).FieldType;
-			if (insideType != null) {
-				behavior = IndexInfoBehavior.InlineArray;
-				return;
-			}
-
-			insideType = container.GetGenericArguments().FirstOrDefault();
-			if (insideType != null) {
-				if (container.GetGenericTypeDefinition() == typeof(NetworkArray<>))
-					behavior = IndexInfoBehavior.NetworkArray;
-				else
-					behavior = IndexInfoBehavior.GenericArrayType;
-				return;
-			}
-
-			if (DynamicArrayHelp.AcceptableTypes.TryGetValue(container, out var info)) {
-				behavior = IndexInfoBehavior.InlineArray;
-				insideType = info!.ContainedType;
-				return;
-			}
-
-			throw new Exception("Uh oh!");
-		}
-		public int Index => index;
-		public Type ElementType { get { Process(); return insideType; } }
-		public IndexInfoBehavior Behavior { get { Process(); return behavior; } }
-		public override Type DeclaringType => container;
-		public override MemberTypes MemberType => MemberTypes.Custom;
-		public override string Name => throw new NotImplementedException();
-		public override Type ReflectedType => container;
-		public override object[] GetCustomAttributes(bool inherit) => throw new NotImplementedException();
-		public override object[] GetCustomAttributes(Type attributeType, bool inherit) => throw new NotImplementedException();
-		public override bool IsDefined(Type attributeType, bool inherit) => throw new NotImplementedException();
-	}
-
-	public class DynamicAccessor : IDynamicAccessor
+	public abstract class DynamicAccessor : IDynamicAccessor
 	{
 		IFieldAccessor IFieldAccessorIndexable.AtIndex(int idx) => this;
-
-		public readonly List<MemberInfo> Members = [];
 
 		/// <summary>
 		/// How many items
@@ -606,9 +114,6 @@ namespace Source.Common
 		/// <returns></returns>
 		public virtual DynamicAccessor? AtIndex(int index) => this;
 
-		internal string FirstName { get; set; } // testing function
-
-		Type? buildingTargetType;
 		/// <summary>
 		/// The object target.
 		/// </summary>
@@ -622,130 +127,22 @@ namespace Source.Common
 
 		public string Name { get; }
 
-		string? networkName;
-		public string? NetworkNameOverride { init => networkName = value; }
-		public string NetworkName => networkName ??= BuildNetworkName();
+		string networkName;
+		public string NetworkNameOverride { init => networkName = value; }
+		public string NetworkName => networkName;
 
-		string BuildNetworkName() {
-			bool anyNamed = false;
-			foreach (MemberInfo member in Members) {
-				if (member is IndexInfo)
-					continue;
-				MemberInfo target = member.Name.StartsWith("__nv_") ? member.DeclaringType!.GetProperty(member.Name[5..], BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static) ?? member : member;
-				if (target is not IndexInfo && target.GetCustomAttribute<NetworkNameAttribute>() != null)
-					anyNamed = true;
-			}
-			if (!anyNamed)
-				return Name;
-
-			StringBuilder name = new();
-			for (int i = 0; i < Members.Count; i++) {
-				MemberInfo member = Members[i];
-				if (member is IndexInfo index) {
-					name.Append('[').Append(index.Index).Append(']');
-					continue;
-				}
-
-				if (member.Name.StartsWith("__nv_"))
-					member = member.DeclaringType!.GetProperty(member.Name[5..], BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static) ?? member;
-
-				string memberName = member.GetCustomAttribute<NetworkNameAttribute>()?.Name ?? member.Name;
-				if (i + 1 < Members.Count && Members[i + 1] is IndexInfo next && memberName.Contains("{0}")) {
-					memberName = string.Format(memberName, next.Index);
-					i++;
-				}
-
-				if (memberName.Length == 0)
-					continue;
-				if (name.Length > 0)
-					name.Append('.');
-				name.Append(memberName);
-			}
-			return name.ToString();
-		}
 		Type IFieldAccessor.DeclaringType => TargetType;
 		Type IFieldAccessor.FieldType => StoringType;
 
-		protected void UseNetworkVarBackingField() {
-			if (Members[^1] is PropertyInfo prop && prop.DeclaringType!.GetField("__nv_" + prop.Name, BindingFlags.Instance | BindingFlags.NonPublic) is FieldInfo backing)
-				Members[^1] = backing;
-		}
-		void HandleIndex(ReadOnlySpan<char> index) {
-			UseNetworkVarBackingField();
-			Members.Add(new IndexInfo(Members.Last(), int.Parse(index)));
-		}
-		void HandleFieldProp(ReadOnlySpan<char> index) {
-			if (index.IsEmpty)
-				return;
-
-			MemberInfo[] memberInfos = buildingTargetType!.GetMember(new string(index), BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic);
-			foreach (var member in memberInfos) {
-				switch (member) {
-					case FieldInfo field:
-						Members.Add(field);
-						buildingTargetType = field.FieldType;
-						return;
-					case PropertyInfo prop:
-						Members.Add(prop);
-						buildingTargetType = prop.PropertyType;
-						return;
-				}
-			}
-
-			throw new KeyNotFoundException($"Cannot find an appropriate member named '{index}' in the current target type '{buildingTargetType.Name}'. Ensure naming is correct.");
-		}
-		public DynamicAccessor(Type targetType, ReadOnlySpan<char> expression, ReadOnlySpan<char> name) : this(targetType, expression) {
-			Name = new(name);
-		}
-		public DynamicAccessor(Type targetType, ReadOnlySpan<char> expression) {
-			Name = new(expression);
-
+		protected DynamicAccessor(Type targetType, Type storingType, string name, string networkName) {
+			Name = name;
 			TargetType = targetType;
-			buildingTargetType = targetType;
-			int lastPeriod = 0;
-			for (int i = 0; i < expression.Length + 1; i++) {
-				// Final chance to handle a string index
-				if (i == expression.Length) {
-					ReadOnlySpan<char> index = expression[lastPeriod..i];
-					HandleFieldProp(index);
-					break;
-				}
-				char c = expression[i];
-				if (c == '.') {
-					ReadOnlySpan<char> index = expression[lastPeriod..i];
-					HandleFieldProp(index);
-					lastPeriod = i + 1; // advance past the period for string reading
-				}
-
-				if (c == '[') {
-					ReadOnlySpan<char> index = expression[lastPeriod..i];
-					HandleFieldProp(index);
-					// Start reading until ]
-					string work = "";
-					while (expression[++i] != ']')
-						work += expression[i];
-					HandleIndex(work);
-					lastPeriod = i + 1; // advance past the period for string reading
-				}
-			}
-
-			StoringType = Members.Last() switch {
-				FieldInfo f => f.FieldType,
-				PropertyInfo p => p.PropertyType,
-				IndexInfo i => i.ElementType,
-				_ => throw new Exception()
-			};
-			FirstName = Members[0].Name;
+			StoringType = storingType;
+			this.networkName = networkName;
 		}
-		[MethodImpl(MethodImplOptions.AggressiveInlining)] public T GetValue<T>(object instance) => ILAccess<T>.Get(this)(instance);
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool SetValue<T>(object instance, in T value) {
-			var fn = ILAccess<T>.Set(this);
-			if (fn == null)
-				return false;
-			fn(instance, in value);
-			return true;
-		}
+
+		public abstract T GetValue<T>(object instance);
+		public abstract bool SetValue<T>(object instance, in T value);
 
 		public virtual void CopyFrom<T>(object instanceFrom, Span<T> target) {
 			SetValue<T>(instanceFrom, target.Length == 0 ? default : target[0]);
@@ -904,9 +301,6 @@ namespace Source.Common
 			}
 			return opcode != OpCodes.Nop;
 		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void DynamicCast<From, To>(in From from, out To to) => ILCast<From, To>.Cast(in from, out to);
 	}
 }
 
@@ -914,15 +308,15 @@ namespace Source
 {
 	public static class FIELD<T>
 	{
-		public static DynamicAccessor OF(ReadOnlySpan<char> expression) => new(typeof(T), expression);
-		public static DynamicAccessor OF_NAMED(ReadOnlySpan<char> expression, ReadOnlySpan<char> name) => new(typeof(T), expression, name) { NetworkNameOverride = new(name) };
-		public static DynamicArrayAccessor OF_ARRAY(ReadOnlySpan<char> expression) => new(typeof(T), expression);
+		public static DynamicAccessor OF(ReadOnlySpan<char> expression) => FieldAccessorRegistry.Create(typeof(T), new(expression), null);
+		public static DynamicAccessor OF_NAMED(ReadOnlySpan<char> expression, ReadOnlySpan<char> name) => FieldAccessorRegistry.Create(typeof(T), new(expression), new(name));
+		public static DynamicArrayAccessor OF_ARRAY(ReadOnlySpan<char> expression) => FieldAccessorRegistry.CreateArray(typeof(T), new(expression), -1);
 		public static DynamicArrayIndexAccessor OF_ARRAYINDEX(ReadOnlySpan<char> expression, int index = 0) => new(OF_ARRAY(expression), index);
 		public static DynamicArrayIndexAccessor OF_SENDINFO_ARRAY(ReadOnlySpan<char> expression) {
 			DynamicArrayAccessor array = OF_ARRAY(expression);
 			return new(array, 0) { NetworkNameOverride = array.NetworkName };
 		}
 		public static DynamicArrayIndexAccessor OF_VECTORELEM(ReadOnlySpan<char> expression, int index) => new(OF_ARRAY(expression), index, isVectorElem: true);
-		public static DynamicArrayAccessor OF_LIST(ReadOnlySpan<char> expression, int max) => new(typeof(T), expression, isList: max);
+		public static DynamicArrayAccessor OF_LIST(ReadOnlySpan<char> expression, int max) => FieldAccessorRegistry.CreateArray(typeof(T), new(expression), max);
 	}
 }
