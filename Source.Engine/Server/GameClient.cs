@@ -202,7 +202,7 @@ public class GameClient : BaseClient
 		Edict = sv.Edicts![EntityIndex];
 
 		PackInfo.ClientEnt = Edict;
-		PackInfo.PVSSize = Marshal.SizeOf(PackInfo.PVS);
+		PackInfo.PVSSize = PackInfo.PVS.Length;
 
 		IGameEvent? evnt = gameEventManager.CreateEvent("player_connect");
 		if (evnt != null) {

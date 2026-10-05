@@ -22,14 +22,88 @@ namespace Source.Engine;
 
 internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 {
-	public void AddOriginToPVS(in Vector3 origin) {
-		throw new NotImplementedException();
-	}
+	public void AddOriginToPVS(in Vector3 origin) => SV.AddOriginToPVS(origin);
 
 	public void AllowImmediateEdictReuse() => ED.AllowImmediateReuse();
 
+	const int MAX_TOTAL_ENT_LEAFS = 128;
+
 	public void BuildEntityClusterList(Edict edict, ref PVSInfo pvsInfo) {
-		throw new NotImplementedException();
+		int i, j;
+		int area;
+
+		CleanUpEntityClusterList(ref pvsInfo);
+		pvsInfo.Clusters = null;
+		pvsInfo.ClusterCount = 0;
+		pvsInfo.AreaNum = 0;
+		pvsInfo.AreaNum2 = 0;
+		if (edict == null)
+			return;
+
+		ICollideable? collideable = edict.GetCollideable();
+		Assert(collideable != null);
+		if (collideable == null)
+			return;
+
+		Span<int> leafs = stackalloc int[MAX_TOTAL_ENT_LEAFS];
+		Span<int> clusters = stackalloc int[MAX_TOTAL_ENT_LEAFS];
+
+		collideable.WorldSpaceSurroundingBounds(out Vector3 worldMins, out Vector3 worldMaxs);
+		int leafCount = CM.BoxLeafnums(worldMins, worldMaxs, leafs, out int topnode);
+
+		for (i = 0; i < leafCount; i++) {
+			clusters[i] = CM.LeafCluster(leafs[i]);
+			area = CM.LeafArea(leafs[i]);
+			if (area == 0)
+				continue;
+
+			if (pvsInfo.AreaNum != 0 && pvsInfo.AreaNum != area) {
+				if (pvsInfo.AreaNum2 != 0 && pvsInfo.AreaNum2 != area && sv.IsLoading())
+					ConDMsg($"Object touching 3 areas at {worldMins.X} {worldMins.Y} {worldMins.Z}\n");
+				pvsInfo.AreaNum2 = (short)area;
+			}
+			else
+				pvsInfo.AreaNum = (short)area;
+		}
+
+		pvsInfo.HeadNode = (short)topnode;
+		pvsInfo.Center = (worldMins + worldMaxs) * 0.5f;
+
+		if (leafCount >= MAX_TOTAL_ENT_LEAFS) {
+			pvsInfo.ClusterCount = -1;
+			return;
+		}
+
+		if (leafCount >= 16) {
+			clusters[..leafCount].Sort();
+			for (i = 0; i < leafCount; i++) {
+				if (clusters[i] == -1)
+					continue;
+
+				if ((i > 0) && (clusters[i] == clusters[i - 1]))
+					continue;
+
+				if (!pvsInfo.AddCluster((ushort)clusters[i]))
+					break;
+			}
+			return;
+		}
+
+		for (i = 0; i < leafCount; i++) {
+			if (clusters[i] == -1)
+				continue;
+
+			for (j = 0; j < i; j++) {
+				if (clusters[j] == clusters[i])
+					break;
+			}
+
+			if (j != i)
+				continue;
+
+			if (!pvsInfo.AddCluster((ushort)clusters[i]))
+				break;
+		}
 	}
 
 	static readonly SharedEdictChangeInfo g_SharedEdictChangeInfo = new();
@@ -86,9 +160,7 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 		return true;
 	}
 
-	public int CheckHeadnodeVisible(int nodenum, Span<byte> pvs) {
-		throw new NotImplementedException();
-	}
+	public int CheckHeadnodeVisible(int nodenum, ReadOnlySpan<byte> pvs) =>CM.HeadnodeVisible(nodenum, pvs) ? 1 : 0;
 
 	public bool CheckOriginInPVS(in Vector3 org, ReadOnlySpan<byte> checkpvs) {
 		int clusterIndex = CM.LeafCluster(CM.PointLeafnum(org));
@@ -339,17 +411,11 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 		throw new NotImplementedException();
 	}
 
-	public int GetArea(in Vector3 origin) {
-		throw new NotImplementedException();
-	}
+	public int GetArea(in Vector3 origin) => CM.LeafArea(CM.PointLeafnum(origin));
 
-	public void GetAreaBits(int area, Span<byte> bits) {
-		throw new NotImplementedException();
-	}
+	public void GetAreaBits(int area, Span<byte> bits) => CM.WriteAreaBits(bits, area);
 
-	public bool GetAreaPortalPlane(in Vector3 viewOrigin, int portalKey, out VPlane plane) {
-		throw new NotImplementedException();
-	}
+	public bool GetAreaPortalPlane(in Vector3 viewOrigin, int portalKey, out VPlane plane) => CM.GetAreaPortalPlane(viewOrigin, portalKey, out plane);
 
 	public IChangeInfoAccessor GetChangeAccessor(Edict edict) => sv.EdictChangeInfo[NUM_FOR_EDICT(edict)];
 
@@ -755,9 +821,7 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 		ED.Free(e);
 	}
 
-	public void ResetPVS(Span<byte> pvs) {
-		throw new NotImplementedException();
-	}
+	public void ResetPVS(byte[] pvs, int pvssize) => SV.ResetPVS(pvs, pvssize);
 
 #if !SWDS
 	public ReadOnlySpan<char> SentenceGrounameFromIndex(int groupIndex) {
@@ -824,13 +888,9 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 
 	public void ServerExecute() => Cbuf.Execute();
 
-	public void SetAreaPortalState(int portalNumber, int isOpen) {
-		throw new NotImplementedException();
-	}
+	public void SetAreaPortalState(int portalNumber, int isOpen) => CM.SetAreaPortalState(portalNumber, isOpen);
 
-	public void SetAreaPortalStates(ReadOnlySpan<int> portalNumbers, ReadOnlySpan<int> isOpen) {
-		throw new NotImplementedException();
-	}
+	public void SetAreaPortalStates(ReadOnlySpan<int> portalNumbers, ReadOnlySpan<int> isOpen) => CM.SetAreaPortalStates(portalNumbers, isOpen);
 
 	public void SetDedicatedServerBenchmarkMode(bool benchmarkMode) {
 		throw new NotImplementedException();
