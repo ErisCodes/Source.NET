@@ -209,6 +209,18 @@ public static class MapEntities
 		SpawnHierarchicalList(numEntities, spawnList, activateEntities);
 	}
 
+	public static void FreeContainingEntity(Edict? ed) {
+		if (ed != null) {
+			BaseEntity? ent = BaseEntity.GetContainingEntity(ed);
+			if (ent != null) {
+				ed.SetEdict(null, false);
+				BaseEntity.PhysicsRemoveTouchedList(ent);
+				BaseEntity.PhysicsRemoveGroundList(ent);
+				Util.RemoveImmediate(ent);
+			}
+		}
+	}
+
 	static string ExtractParentName(string parentName) {
 		if (strstr(parentName, ",").IsEmpty)
 			return parentName;

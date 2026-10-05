@@ -2569,6 +2569,8 @@ public partial class BaseEntity : IServerEntity
 		LuaCalcAbsolutePosition.UnReference();
 
 		CollisionProp().DestroyPartitionHandle();
+
+		NetworkProp().Term();
 	}
 
 	public ReadOnlySpan<char> GetModelName() => ModelName;
