@@ -814,7 +814,7 @@ public partial class BaseEntity : IServerEntity
 		if (serverOnly)
 			AddEFlags(EFL.ServerOnly);
 
-		// NetworkProp().MarkPVSInformationDirty();
+		NetworkProp().MarkPVSInformationDirty();
 
 		AddEFlags(EFL.UsePartitionWhenNotSolid);
 	}

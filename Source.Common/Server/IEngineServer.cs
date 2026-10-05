@@ -162,7 +162,7 @@ public interface IEngineServer
 
 	// Reset the pvs, pvssize is the size in bytes of the buffer pointed to by pvs.
 	// This should be called right before any calls to AddOriginToPVS
-	void ResetPVS(Span<byte> pvs);
+	void ResetPVS(byte[] pvs, int pvssize);
 	// Merge the pvs bits into the current accumulated pvs based on the specified origin ( not that each pvs origin has an 8 world unit fudge factor )
 	void AddOriginToPVS(in Vector3 origin);
 
@@ -173,7 +173,7 @@ public interface IEngineServer
 	// Queue a temp entity for transmission
 	void PlaybackTempEntity(IRecipientFilter filter, float delay, object sender, SendTable st, int classID);
 	// Given a node number and the specified PVS, return with the node is in the PVS
-	int CheckHeadnodeVisible(int nodenum, Span<byte> pvs);
+	int CheckHeadnodeVisible(int nodenum, ReadOnlySpan<byte> pvs);
 	// Using area bits, cheeck whether area1 flows into area2 and vice versa (depends on area portal state)
 	int CheckAreasConnected(int area1, int area2);
 	// Given an origin, determine which area index the origin is within

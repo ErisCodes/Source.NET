@@ -136,8 +136,7 @@ public partial class
 			dirtyFlags |= EFL.DirtyAbsTransform;
 
 #if !CLIENT_DLL
-			// todo
-			// NetworkProp().MarkPVSInformationDirty();
+			NetworkProp().MarkPVSInformationDirty();
 #endif
 
 			CollisionProp().MarkPartitionHandleDirty();
@@ -664,7 +663,7 @@ public partial class
 		Effects &= ~(int)effects;
 		if ((effects & EntityEffects.NoDraw) != 0) {
 #if !CLIENT_DLL
-			// NetworkProp().MarkPVSInformationDirty();
+			NetworkProp().MarkPVSInformationDirty();
 			// DispatchUpdateTransmitState();
 #else
 			UpdateVisibility();

@@ -20,6 +20,13 @@ public struct WorldListInfo
 	public List<LeafFogVolume_t> LeafFogVolume;
 }
 
+public enum DrawBrushModelMode
+{
+	DrawAll = 0,
+	DrawOpaqueOnly,
+	DrawTranslucentOnly,
+}
+
 public struct VisOverrideData
 {
 	public Vector3 VisOrigin;
@@ -68,6 +75,7 @@ public interface IRenderView
 	public const uint VIEW_SETUP_VIS_EX_RETURN_FLAGS_USES_RADIAL_VIS = 1;
 	void TouchLight(DLight light);
 	void DrawBrushModel(IClientEntity baseentity, Model model, in Vector3 origin, in QAngle angles);
+	void DrawBrushModelEx(IClientEntity baseentity, Model model, in Vector3 origin, in QAngle angles, DrawBrushModelMode mode);
 	void DrawIdentityBrushModel(IWorldRenderList list, Model model);
 	void DrawBrushModelShadow(IClientRenderable renderable);
 	void VGui_Paint(PaintMode mode);
@@ -79,6 +87,7 @@ public interface IRenderView
 	void Draw3DDebugOverlays();
 	void ViewSetupVisEx(bool novis, ReadOnlySpan<Vector3> origins, out uint visFlags);
 	Span<byte> GetAreaBits();
+	void SetAreaState(ReadOnlySpan<byte> areaBits, ReadOnlySpan<byte> areaPortalBits);
 	IWorldRenderList? CreateWorldList();
 	void BuildWorldLists(IWorldRenderList? list, ref WorldListInfo info, int forceViewLeaf, ReadOnlySpan<VisOverrideData> visData, bool shadowDepth, Span<float> reflectionWaterHeight);
 	void DrawWorldLists(IWorldRenderList? list, uint flags, float waterZAdjust);

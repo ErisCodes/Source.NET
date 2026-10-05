@@ -660,6 +660,16 @@ public partial class BasePlayer : BaseCombatCharacter
 		return fFOV;
 	}
 
+	public float GetFOVDistanceAdjustFactorForNetworking() {
+		float defaultFOV = GetDefaultFOV();
+		float localFOV = GetFOVForNetworking();
+
+		if (localFOV == defaultFOV || defaultFOV < 0.001f)
+			return 1.0f;
+
+		return localFOV / defaultFOV;
+	}
+
 	public int GetFOV() {
 		int defaultFOV;
 
@@ -1381,6 +1391,21 @@ public partial class BasePlayer : BaseCombatCharacter
 	public bool IsPredictingWeapons() => false; // todo
 
 	TimeUnit_t GetTimeSinceLastUserCommand() => /*(!IsConnected() || IsFakeClient() || IsBot()) ? 0.0f :*/ gpGlobals.CurTime - LastUserCommandTime;
+
+	public virtual void SetupVisibility(BaseEntity? viewEntity, byte[] pvs, int pvssize) {
+		if (viewEntity != null)
+			return;
+
+		Vector3 org = EyePosition();
+
+#if GMOD_DLL
+		BaseEntity? observerTarget = GetObserverTarget();
+		if (observerTarget != null)
+			engine.AddOriginToPVS(observerTarget.EyePosition());
+#endif
+
+		engine.AddOriginToPVS(org);
+	}
 
 	public override EdictFlags UpdateTransmitState() => SetTransmitState(EdictFlags.FullCheck);
 

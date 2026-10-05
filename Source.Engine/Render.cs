@@ -388,7 +388,7 @@ public partial class Render(
 		RebuildLightmaps();
 	}
 	private void Surface_LevelInit() { }
-	private void Areaportal_LevelInit() { }
+	private void Areaportal_LevelInit() => R_Areaportal_LevelInit();
 
 
 	public void Init() {
@@ -1416,7 +1416,7 @@ public partial class Render(
 	}
 
 	public void LevelShutdown() {
-
+		R_Areaportal_LevelShutdown();
 	}
 
 	public void ViewDrawFade(Span<byte> color, IMaterial? fadeMaterial) {

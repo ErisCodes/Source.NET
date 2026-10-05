@@ -3,6 +3,7 @@
 using CommunityToolkit.HighPerformance;
 
 using Source.Common;
+using Source.Common.Commands;
 using Source.Common.Formats.BSP;
 using Source.Common.Mathematics;
 
@@ -1502,7 +1503,123 @@ public static partial class CM
 		g_TraceInfoPool.Free(traceInfo);
 	}
 
+	static readonly ConVar map_noareas = new("map_noareas", "0", 0, "Disable area to area connection testing.");
+
+	public static void SetAreaPortalState(int portalnum, int isOpen) {
+		CollisionBSPData bspData = GetCollisionBSPData();
+
+		if (portalnum > bspData.NumAreaPortals)
+			Sys.Error("portalnum > numareaportals");
+
+		bspData.PortalOpen[portalnum] = isOpen != 0;
+		FloodAreaConnections(bspData);
+	}
+
+	public static void SetAreaPortalStates(ReadOnlySpan<int> portalnums, ReadOnlySpan<int> isOpen) {
+		if (portalnums.Length == 0)
+			return;
+
+		CollisionBSPData bspData = GetCollisionBSPData();
+
+		for (int i = 0; i < portalnums.Length; i++) {
+			if (portalnums[i] > bspData.NumAreaPortals)
+				Sys.Error("portalnum > numareaportals");
+
+			bspData.PortalOpen[portalnums[i]] = isOpen[i] != 0;
+		}
+
+		FloodAreaConnections(bspData);
+	}
+
 	internal static int AreasConnected(int area1, int area2) {
-		throw new NotImplementedException();
+		CollisionBSPData bspData = GetCollisionBSPData();
+
+		if (map_noareas.GetInt() != 0)
+			return 1;
+
+		if (area1 >= bspData.NumAreas || area2 >= bspData.NumAreas)
+			Sys.Error($"area(1=={area1}, 2=={area2}) >= numareas ({bspData.NumAreas}):  Check if engine->ResetPVS() was called from ClientSetupVisibility");
+
+		return bspData.MapAreas[area1].FloodNum == bspData.MapAreas[area2].FloodNum ? 1 : 0;
+	}
+
+	public static int WriteAreaBits(Span<byte> buffer, int area) {
+		CollisionBSPData bspData = GetCollisionBSPData();
+
+		int bytes = (bspData.NumAreas + 7) >> 3;
+
+		if (map_noareas.GetInt() != 0)
+			buffer[..3].Fill(255);
+		else {
+			if (buffer.Length < 32)
+				Sys.Error($"CM_WriteAreaBits with buffer {buffer.Length} size < 32\n");
+
+			buffer[..32].Clear();
+
+			int floodnum = bspData.MapAreas[area].FloodNum;
+			for (int i = 0; i < bspData.NumAreas; i++) {
+				if (bspData.MapAreas[i].FloodNum == floodnum || area == 0)
+					buffer[i >> 3] |= (byte)(1 << (i & 7));
+			}
+		}
+
+		return bytes;
+	}
+
+	public static bool GetAreaPortalPlane(in Vector3 viewOrigin, int portalKey, out VPlane plane) {
+		plane = default;
+		CollisionBSPData bspData = GetCollisionBSPData();
+
+		int leaf = PointLeafnum(viewOrigin);
+		if (leaf < 0 || leaf >= bspData.NumLeafs)
+			return false;
+
+		int areaIndex = bspData.MapLeafs.AsSpan()[leaf].Area;
+		if (areaIndex < 0 || areaIndex >= bspData.NumAreas)
+			return false;
+
+		ref CollisionArea area = ref bspData.MapAreas[areaIndex];
+		for (int i = 0; i < area.NumAreaPortals; i++) {
+			ref BSPDAreaPortal portal = ref bspData.MapAreaPortals[area.FirstAreaPortal + i];
+
+			if (portal.PortalKey == portalKey) {
+				CollisionPlane mapPlane = bspData.MapPlanes[portal.PlaneNum];
+				plane.Normal = mapPlane.Normal;
+				plane.Dist = mapPlane.Dist;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static bool HeadnodeVisible(int nodenum, ReadOnlySpan<byte> visbits) {
+		CollisionBSPData bspData = GetCollisionBSPData();
+
+		if (nodenum < 0) {
+			int leafnum = -1 - nodenum;
+			int cluster = bspData.MapLeafs.AsSpan()[leafnum].Cluster;
+			if (cluster == -1)
+				return false;
+			return (visbits[cluster >> 3] & (1 << (cluster & 7))) != 0;
+		}
+
+		ref CollisionNode node = ref bspData.MapNodes.AsSpan()[bspData.MapRootNode + nodenum];
+		if (HeadnodeVisible(node.Children[0], visbits))
+			return true;
+		return HeadnodeVisible(node.Children[1], visbits);
+	}
+
+	public static void SetupAreaFloodNums(Span<byte> areaFloodNums, out int numAreas) {
+		CollisionBSPData bspData = GetCollisionBSPData();
+
+		numAreas = bspData.NumAreas;
+		if (bspData.NumAreas > BSPFileCommon.MAX_MAP_AREAS)
+			Error("pBSPData->numareas > MAX_MAP_AREAS");
+
+		for (int i = 0; i < bspData.NumAreas; i++) {
+			Assert(bspData.MapAreas[i].FloodNum < BSPFileCommon.MAX_MAP_AREAS);
+			areaFloodNums[i] = (byte)bspData.MapAreas[i].FloodNum;
+		}
 	}
 }

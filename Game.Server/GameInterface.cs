@@ -686,8 +686,66 @@ public class ServerGameClients : IServerGameClients
 		g_pGameRules.ClientSettingsChanged(player);
 	}
 
-	public void ClientSetupVisibility(Edict viewEntity, Edict client, Span<byte> pvs) {
-		throw new NotImplementedException();
+	public void ClientSetupVisibility(Edict? viewEntity, Edict client, byte[] pvs, int pvssize) {
+		Vector3 org = default;
+
+		engine.ResetPVS(pvs, pvssize);
+
+		BaseEntity? ve = null;
+		if (viewEntity != null) {
+			ve = BaseEntity.GetContainingEntity(viewEntity);
+			if (ve != null) {
+				org = ve.EyePosition();
+				engine.AddOriginToPVS(org);
+			}
+		}
+
+		float fovDistanceAdjustFactor = 1;
+
+		BasePlayer? player = BaseEntity.GetContainingEntity(client) as BasePlayer;
+		if (player != null) {
+			org = player.EyePosition();
+			player.SetupVisibility(ve, pvs, pvssize);
+			Util.SetClientVisibilityPVS(client, pvs.AsSpan(0, pvssize));
+			fovDistanceAdjustFactor = player.GetFOVDistanceAdjustFactorForNetworking();
+		}
+
+		Span<byte> portalBits = stackalloc byte[Constants.MAX_AREA_PORTAL_STATE_BYTES];
+		portalBits.Clear();
+
+		Span<int> portalNums = stackalloc int[512];
+		Span<int> isOpen = stackalloc int[512];
+		int outPortal = 0;
+
+		foreach (FuncAreaPortalBase cur in FuncAreaPortalBase.g_AreaPortals) {
+			bool isOpenOnClient = true;
+
+			portalNums[outPortal] = cur.PortalNumber;
+			isOpen[outPortal] = cur.UpdateVisibility(org, fovDistanceAdjustFactor, ref isOpenOnClient) ? 1 : 0;
+
+			++outPortal;
+			if (outPortal >= portalNums.Length) {
+				engine.SetAreaPortalStates(portalNums, isOpen);
+				outPortal = 0;
+			}
+
+			if (cur.PortalVersion == 0)
+				isOpenOnClient = true;
+
+			if (isOpenOnClient) {
+				if (cur.PortalNumber < 0)
+					continue;
+				else if (cur.PortalNumber >= portalBits.Length * 8)
+					Error($"ClientSetupVisibility: portal number ({cur.PortalNumber}) too large");
+				else
+					portalBits[cur.PortalNumber >> 3] |= (byte)(1 << (cur.PortalNumber & 7));
+			}
+		}
+
+		engine.SetAreaPortalStates(portalNums[..outPortal], isOpen[..outPortal]);
+
+		if (player != null)
+			player.Local.UpdateAreaBits(player, portalBits);
 	}
 
 	public void ClientSpawned(Edict player) => g_pGameRules?.ClientSpawned(player);

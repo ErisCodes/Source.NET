@@ -255,7 +255,15 @@ public class HL2_Player : BaseMultiplayerPlayer
 
 	void CheatImpulseCommands(int impulse) { }
 
-	void SetupVisibility(BaseEntity viewEntity, byte pvs, int pvssize) { }
+	public override void SetupVisibility(BaseEntity? viewEntity, byte[] pvs, int pvssize) {
+		base.SetupVisibility(viewEntity, pvs, pvssize);
+
+		ScriptIntro? introScript = ScriptIntro.g_hIntroScript.Get();
+		if (introScript != null) {
+			if (introScript.GetIncludedPVSOrigin(out Vector3 origin, out _))
+				engine.AddOriginToPVS(origin);
+		}
+	}
 
 	void SuitPower_Update() { }
 

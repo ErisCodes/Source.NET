@@ -83,6 +83,12 @@ public class RenderView(EngineVGui EngineVGui, Render engineRenderer) : IRenderV
 		R_DrawBrushModel(baseentity, model, origin, angles, RenderDepthMode.Normal, true, true);
 	}
 
+	public void DrawBrushModelEx(IClientEntity baseentity, Model model, in Vector3 origin, in QAngle angles, DrawBrushModelMode mode) {
+		bool drawOpaque = mode != DrawBrushModelMode.DrawTranslucentOnly;
+		bool drawTranslucent = mode != DrawBrushModelMode.DrawOpaqueOnly;
+		R_DrawBrushModel(baseentity, model, origin, angles, RenderDepthMode.Normal, drawOpaque, drawTranslucent);
+	}
+
 	public void DrawBrushModelShadow(IClientRenderable renderable) => R_DrawBrushModelShadow(renderable);
 
 	public void DrawIdentityBrushModel(IWorldRenderList list, Model model) {
@@ -95,6 +101,12 @@ public class RenderView(EngineVGui EngineVGui, Render engineRenderer) : IRenderV
 	public void ViewSetupVisEx(bool novis, ReadOnlySpan<Vector3> origins, out uint returnFlags) => engineRenderer.ViewSetupVisEx(novis, origins, out returnFlags);
 
 	public Span<byte> GetAreaBits() => cl.AreaBits;
+
+	public void SetAreaState(ReadOnlySpan<byte> areaBits, ReadOnlySpan<byte> areaPortalBits) {
+		areaBits[..Constants.MAX_AREA_STATE_BYTES].CopyTo(cl.AreaBits);
+		areaPortalBits[..Constants.MAX_AREA_PORTAL_STATE_BYTES].CopyTo(cl.AreaPortalBits);
+		cl.AreaBitsValid = true;
+	}
 
 	public IWorldRenderList? CreateWorldList() => engineRenderer.CreateWorldList();
 	public void BuildWorldLists(IWorldRenderList? list, ref WorldListInfo info, int forceViewLeaf, ReadOnlySpan<VisOverrideData> visData, bool shadowDepth, Span<float> reflectionWaterHeight) => engineRenderer.BuildWorldLists(list, ref info, forceViewLeaf, visData, shadowDepth, reflectionWaterHeight);

@@ -7,6 +7,7 @@ using Source.Common.Engine;
 using Source.Common.Formats.BSP;
 
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Game.Server
 {
@@ -133,6 +134,38 @@ public static partial class Util
 			return null;
 
 		return ent;
+	}
+
+	public static void SetClientVisibilityPVS(Edict client, ReadOnlySpan<byte> pvs) {
+		if (client == GetCurrentCheckClient()) {
+			CheckClient g_CheckClient = CheckClient.g_CheckClient;
+			Assert(pvs.Length <= g_CheckClient.CheckVisibilityPVS.Length);
+
+			g_CheckClient.ClientPVSIsExpanded = false;
+
+			ReadOnlySpan<uint> from = MemoryMarshal.Cast<byte, uint>(pvs);
+			ReadOnlySpan<uint> mask = MemoryMarshal.Cast<byte, uint>(g_CheckClient.CheckPVS);
+			Span<uint> to = MemoryMarshal.Cast<byte, uint>(g_CheckClient.CheckVisibilityPVS.AsSpan());
+
+			int limit = pvs.Length / 4;
+			int i;
+
+			for (i = 0; i < limit; i++) {
+				to[i] = from[i] & ~mask[i];
+
+				if (from[i] != 0)
+					g_CheckClient.ClientPVSIsExpanded = true;
+			}
+
+			int remainder = pvs.Length % 4;
+			for (i = 0; i < remainder; i++) {
+				int index = limit * 4 + i;
+				g_CheckClient.CheckVisibilityPVS[index] = (byte)(pvs[index] & (g_CheckClient.CheckPVS[index] == 0 ? 1 : 0));
+
+				if (pvs[index] != 0)
+					g_CheckClient.ClientPVSIsExpanded = true;
+			}
+		}
 	}
 
 	public static bool ClientPVSIsExpanded() => CheckClient.g_CheckClient.ClientPVSIsExpanded;

@@ -5,9 +5,12 @@ using Source.Common;
 using Source.Common.Bitbuffers;
 using Source.Common.Commands;
 using Source.Common.Engine;
+using Source.Common.Formats.BSP;
 using Source.Common.Networking;
 using Source.Common.Server;
 using Source.Engine.Server;
+
+using System.Numerics;
 
 using static Source.Common.OptimizedModel;
 
@@ -49,6 +52,40 @@ public partial class SV(IServiceProvider services, Cbuf Cbuf, ED ED, Host Host, 
 
 	private static void SV_CheatsChanged(IConVar var, in ConVarChangeContext ctx) {
 
+	}
+
+	static int FatBytes;
+	static byte[]? FatPVS;
+
+	public static readonly List<int> g_AreasNetworked = [];
+
+	static void AddToFatPVS(in Vector3 org) {
+		Span<byte> pvs = stackalloc byte[BSPFileCommon.MAX_MAP_LEAFS / 8];
+
+		CM.Vis(pvs, pvs.Length, CM.LeafCluster(CM.PointLeafnum(org)), CM.DVIS_PVS);
+		for (int i = 0; i < FatBytes; i++)
+			FatPVS![i] |= pvs[i];
+	}
+
+	public static void ResetPVS(byte[] pvs, int pvssize) {
+		FatPVS = pvs;
+		FatBytes = Protocol.Bits2Bytes(CM.NumClusters());
+
+		if (FatBytes > pvssize)
+			Sys.Error($"SV_ResetPVS:  Size {FatBytes} too big for buffer {pvssize}\n");
+
+		FatPVS.AsSpan(0, FatBytes).Clear();
+		g_AreasNetworked.Clear();
+	}
+
+	public static void AddOriginToPVS(in Vector3 origin) {
+		AddToFatPVS(origin);
+		int area = CM.LeafArea(CM.PointLeafnum(origin));
+		for (int i = 0; i < g_AreasNetworked.Count; i++) {
+			if (g_AreasNetworked[i] == area)
+				return;
+		}
+		g_AreasNetworked.Add(area);
 	}
 
 	internal void DumpStringTables() {

@@ -47,6 +47,13 @@ public class CollisionBSPData
 	public byte[]? MapVis;
 	public int NumVisibility;
 
+	public CollisionArea[] MapAreas = [];
+	public BSPDAreaPortal[] MapAreaPortals = [];
+	public bool[] PortalOpen = [];
+	public int NumAreaPortals;
+	public int NumPortalOpen;
+	public int FloodValid;
+
 	public int MapRootNode;
 	public int SolidLeaf;
 	public int EmptyLeaf;
@@ -96,9 +103,9 @@ public class CollisionBSPData
 		MapPlanes.Clear();
 		TextureNames.Clear();
 		MapSurfaces.Clear();
-		// MapAreaPortals.Clear();
-		// PortalOpen.Clear();
-		// MapAreas.Clear();
+		MapAreaPortals = [];
+		PortalOpen = [];
+		MapAreas = [];
 		MapEntityString = null;
 		MapBrushes.Clear();
 		MapDispList.Clear();
@@ -115,11 +122,11 @@ public class CollisionBSPData
 		NumLeafs = 0;
 		NumAreas = 0;
 		NumTextures = 0;
-		// FloodValid = 0;
-		// NumAreaPortals = 0;
+		FloodValid = 0;
+		NumAreaPortals = 0;
 		NumClusters = 0;
 		NumVisibility = 0;
-		// NumPortalOpen = 0;
+		NumPortalOpen = 0;
 		MapName = null;
 		MapRootNode = 0;
 	}
@@ -490,10 +497,33 @@ public class CollisionBSPData
 	}
 
 	internal void LoadAreas() {
+		MapLoadHelper lh = new MapLoadHelper(LumpIndex.Areas);
+		BSPDArea[] inData = lh.LoadLumpData<BSPDArea>(maxElements: BSPFileCommon.MAX_MAP_AREAS, sysErrorIfOOB: true);
 
+		int count = inData.Length;
+		MapAreas = new CollisionArea[count];
+		NumAreas = count;
+
+		for (int i = 0; i < count; i++) {
+			ref CollisionArea output = ref MapAreas[i];
+			output.NumAreaPortals = inData[i].NumAreaPortals;
+			output.FirstAreaPortal = inData[i].FirstAreaPortal;
+			output.FloodValid = 0;
+			output.FloodNum = 0;
+		}
 	}
 	internal void LoadAreaPortals() {
+		MapLoadHelper lh = new MapLoadHelper(LumpIndex.AreaPortals);
+		BSPDAreaPortal[] inData = lh.LoadLumpData<BSPDAreaPortal>(maxElements: BSPFileCommon.MAX_MAP_AREAPORTALS, sysErrorIfOOB: true);
 
+		int count = inData.Length + 1;
+
+		NumPortalOpen = count;
+		PortalOpen = new bool[count];
+
+		NumAreaPortals = count;
+		MapAreaPortals = new BSPDAreaPortal[count];
+		inData.CopyTo(MapAreaPortals, 0);
 	}
 	internal void LoadVisibility() {
 		MapLoadHelper lh = new MapLoadHelper(LumpIndex.Visibility);
@@ -780,12 +810,38 @@ public static partial class CM
 		bspData.Destroy();
 	}
 
-	private static void FloodAreaConnections(CollisionBSPData bspData) {
+	static void FloodArea_r(CollisionBSPData bspData, ref CollisionArea area, int floodnum) {
+		if (area.FloodValid == bspData.FloodValid) {
+			if (area.FloodNum == floodnum)
+				return;
+			Sys.Error("FloodArea_r: reflooded");
+		}
 
+		area.FloodNum = floodnum;
+		area.FloodValid = bspData.FloodValid;
+		for (int i = 0; i < area.NumAreaPortals; i++) {
+			ref BSPDAreaPortal p = ref bspData.MapAreaPortals[area.FirstAreaPortal + i];
+			if (bspData.PortalOpen[p.PortalKey])
+				FloodArea_r(bspData, ref bspData.MapAreas[p.OtherArea], floodnum);
+		}
+	}
+
+	internal static void FloodAreaConnections(CollisionBSPData bspData) {
+		bspData.FloodValid++;
+		int floodnum = 0;
+
+		for (int i = 1; i < bspData.NumAreas; i++) {
+			ref CollisionArea area = ref bspData.MapAreas[i];
+			if (area.FloodValid == bspData.FloodValid)
+				continue;
+			floodnum++;
+			FloodArea_r(bspData, ref area, floodnum);
+		}
 	}
 
 	private static void InitPortalOpenState(CollisionBSPData bspData) {
-
+		for (int i = 0; i < bspData.NumPortalOpen; i++)
+			bspData.PortalOpen[i] = false;
 	}
 
 	private static void DispTreeLeafnum(CollisionBSPData bspData) {
