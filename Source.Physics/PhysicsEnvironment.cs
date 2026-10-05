@@ -22,7 +22,7 @@ internal static class PhysicsEnvironmentGlobals
 	internal static IPhysicsObjectPairHash CreateObjectPairHash() => new ObjectPairHash();
 }
 
-internal unsafe class PhysicsEnvironment : IPhysicsEnvironment
+internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 {
 	static readonly ConVar vbox_substeps = new("vbox_substeps", "16", 0, "Solver substeps per physics step.", 1.0, 1024.0);
 	static readonly ConVar vbox_contact_hertz = new("vbox_contact_hertz", "240", 0, "Contact stiffness in Hz. Lower is softer/smushier.", 1.0, 480.0);
@@ -78,6 +78,11 @@ internal unsafe class PhysicsEnvironment : IPhysicsEnvironment
 	readonly List<PhysicsObject> DeadObjects = [];
 	bool DeleteQueueEnabled;
 
+	readonly List<PhysicsShadowController> ShadowControllers = [];
+	readonly List<PhysicsPlayerController> PlayerControllers = [];
+	readonly List<PhysicsMotionController> MotionControllers = [];
+	readonly List<PhysicsFluidController> FluidControllers = [];
+
 	PhysicsPerformanceParams PerformanceParams;
 
 	public PhysicsEnvironment() {
@@ -101,6 +106,11 @@ internal unsafe class PhysicsEnvironment : IPhysicsEnvironment
 
 	internal void Destroy() {
 		CleanupDeleteList();
+		foreach (PhysicsConstraint constraint in Constraints)
+			constraint.Destroy();
+		Constraints.Clear();
+		Pulleys.Clear();
+		Springs.Clear();
 		foreach (PhysicsObject obj in Objects)
 			obj.ReleaseHandle();
 		Objects.Clear();
@@ -283,6 +293,22 @@ internal unsafe class PhysicsEnvironment : IPhysicsEnvironment
 		}
 
 		boxObject.RemoveShadowController();
+		foreach (PhysicsMotionController motion in MotionControllers)
+			motion.DetachObject(boxObject);
+		foreach (PhysicsFluidController fluid in FluidControllers)
+			fluid.DetachObject(boxObject);
+		foreach (PhysicsPlayerController player in PlayerControllers) {
+			if (player.GetControlledObject() == boxObject)
+				player.SetObject(null!);
+			player.ClearGround(boxObject);
+		}
+		foreach (PhysicsConstraint constraint in Constraints) {
+			bool broke = constraint.NotifyObjectDestroyed(boxObject);
+			if (broke && ConstraintEvent != null && ConstraintNotify)
+				ConstraintEvent.ConstraintBroken(constraint);
+		}
+		foreach (PhysicsSpring spring in Springs)
+			spring.NotifyObjectDestroyed(boxObject);
 
 		ActiveObjects.Remove(boxObject);
 
@@ -302,32 +328,55 @@ internal unsafe class PhysicsEnvironment : IPhysicsEnvironment
 		obj.ReleaseHandle();
 	}
 
-	public IPhysicsFluidController CreateFluidController(IPhysicsObject pFluidObject, ref FluidParams fluidParams) => throw new NotImplementedException();
-	public void DestroyFluidController(IPhysicsFluidController fluidController) => throw new NotImplementedException();
+	public IPhysicsFluidController CreateFluidController(IPhysicsObject pFluidObject, ref FluidParams fluidParams) {
+		PhysicsFluidController controller = new((PhysicsObject)pFluidObject, fluidParams);
+		FluidControllers.Add(controller);
+		return controller;
+	}
 
-	public IPhysicsSpring CreateSpring(IPhysicsObject objStart, IPhysicsObject objEnd, ref SpringParams fluidParams) => throw new NotImplementedException();
-	public void DestroySpring(IPhysicsSpring spring) => throw new NotImplementedException();
+	public void DestroyFluidController(IPhysicsFluidController fluidController) {
+		if (fluidController is not PhysicsFluidController fluid)
+			return;
+		FluidControllers.Remove(fluid);
+		fluid.Destroy();
+	}
 
-	public IPhysicsConstraint CreateRagdollConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintRagdollParams ragdoll) => throw new NotImplementedException();
-	public IPhysicsConstraint CreateHingeConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintHingeParams hinge) => throw new NotImplementedException();
-	public IPhysicsConstraint CreateFixedConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintFixedParams fixedParams) => throw new NotImplementedException();
-	public IPhysicsConstraint CreateSlidingConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintSlidingParams sliding) => throw new NotImplementedException();
-	public IPhysicsConstraint CreateBallsocketConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintBallSocketParams ballsocket) => throw new NotImplementedException();
-	public IPhysicsConstraint CreatePulleyConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintPulleyParams pulley) => throw new NotImplementedException();
-	public IPhysicsConstraint CreateLengthConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintLengthParams length) => throw new NotImplementedException();
-	public void DestroyConstraint(IPhysicsConstraint constraint) => throw new NotImplementedException();
+	public IPhysicsShadowController CreateShadowController(IPhysicsObject obj, bool allowTranslation, bool allowRotation) {
+		PhysicsShadowController controller = new((PhysicsObject)obj, allowTranslation, allowRotation);
+		ShadowControllers.Add(controller);
+		return controller;
+	}
 
-	public IPhysicsConstraintGroup CreateConstraintGroup(in ConstraintGroupParams groupParams) => throw new NotImplementedException();
-	public void DestroyConstraintGroup(IPhysicsConstraintGroup group) => throw new NotImplementedException();
+	public void DestroyShadowController(IPhysicsShadowController controller) {
+		if (controller is not PhysicsShadowController shadow)
+			return;
+		ShadowControllers.Remove(shadow);
+		shadow.Destroy();
+	}
 
-	public IPhysicsShadowController CreateShadowController(IPhysicsObject obj, bool allowTranslation, bool allowRotation) => throw new NotImplementedException();
-	public void DestroyShadowController(IPhysicsShadowController controller) => throw new NotImplementedException();
+	public IPhysicsPlayerController CreatePlayerController(IPhysicsObject obj) {
+		PhysicsPlayerController controller = new((PhysicsObject)obj);
+		PlayerControllers.Add(controller);
+		return controller;
+	}
 
-	public IPhysicsPlayerController CreatePlayerController(IPhysicsObject obj) => new PhysicsPlayerController((PhysicsObject)obj);
-	public void DestroyPlayerController(IPhysicsPlayerController controller) { }
+	public void DestroyPlayerController(IPhysicsPlayerController controller) {
+		if (controller is not PhysicsPlayerController player)
+			return;
+		PlayerControllers.Remove(player);
+		player.Destroy();
+	}
 
-	public IPhysicsMotionController CreateMotionController(IMotionEvent handler) => throw new NotImplementedException();
-	public void DestroyMotionController(IPhysicsMotionController controller) => throw new NotImplementedException();
+	public IPhysicsMotionController CreateMotionController(IMotionEvent handler) {
+		PhysicsMotionController controller = new(handler);
+		MotionControllers.Add(controller);
+		return controller;
+	}
+
+	public void DestroyMotionController(IPhysicsMotionController controller) {
+		if (controller is PhysicsMotionController motion)
+			MotionControllers.Remove(motion);
+	}
 
 	public IPhysicsVehicleController CreateVehicleController(IPhysicsObject pVehicleBodyObject, in VehicleParams parms, VehicleType vehicleType, IPhysicsGameTrace gameTrace) => throw new NotImplementedException();
 	public void DestroyVehicleController(IPhysicsVehicleController controller) => throw new NotImplementedException();
@@ -344,6 +393,30 @@ internal unsafe class PhysicsEnvironment : IPhysicsEnvironment
 		CleanupDeleteList();
 
 		InSimulation = true;
+
+		for (int i = 0; i < ShadowControllers.Count; i++)
+			ShadowControllers[i].OnPreSimulate(dt);
+		for (int i = 0; i < PlayerControllers.Count; i++)
+			PlayerControllers[i].OnPreSimulate(dt);
+		for (int i = 0; i < MotionControllers.Count; i++)
+			MotionControllers[i].OnPreSimulate(dt);
+		for (int i = 0; i < FluidControllers.Count; i++)
+			FluidControllers[i].OnPreSimulate(dt);
+
+		for (int i = 0; i < Springs.Count; i++)
+			Springs[i].Simulate(dt);
+
+		List<PhysicsConstraint> activeLimits = [];
+		for (int i = 0; i < Pulleys.Count; i++) {
+			if (Pulleys[i].IsAngularLimits() && Pulleys[i].SolveAngularLimits(dt, true))
+				activeLimits.Add(Pulleys[i]);
+		}
+		for (int iter = 1; iter < 4 && activeLimits.Count > 0; iter++) {
+			for (int i = activeLimits.Count - 1; i >= 0; i--) {
+				if (!activeLimits[i].SolveAngularLimits(dt, false))
+					activeLimits.RemoveAt(i);
+			}
+		}
 
 		foreach (PhysicsObject obj in Objects)
 			obj.SnapshotPreStepVelocity();
@@ -400,6 +473,8 @@ internal unsafe class PhysicsEnvironment : IPhysicsEnvironment
 
 		DrainContactEvents();
 		DrainSensorEvents();
+		DrainJointEvents();
+		SolvePulleys(dt);
 
 		if (SimulationClock >= NextPenetrationScan) {
 			NextPenetrationScan = SimulationClock + 0.1;
