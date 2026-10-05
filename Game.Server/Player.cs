@@ -660,6 +660,16 @@ public partial class BasePlayer : BaseCombatCharacter
 		return fFOV;
 	}
 
+	public float GetFOVDistanceAdjustFactorForNetworking() {
+		float defaultFOV = GetDefaultFOV();
+		float localFOV = GetFOVForNetworking();
+
+		if (localFOV == defaultFOV || defaultFOV < 0.001f)
+			return 1.0f;
+
+		return localFOV / defaultFOV;
+	}
+
 	public int GetFOV() {
 		int defaultFOV;
 
