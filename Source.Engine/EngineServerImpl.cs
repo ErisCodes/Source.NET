@@ -16,6 +16,7 @@ using Source.Engine.Server;
 using Steamworks;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics.X86;
 
 namespace Source.Engine;
@@ -426,7 +427,17 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	public int GetEntityCount() => sv.NumEdicts - sv.FreeEdicts;
 
 	public ref readonly MaxEdictsBitVec GetEntityTransmitBitsForClient(int iClientIndex) {
-		throw new NotImplementedException();
+		if (iClientIndex < 0 || iClientIndex >= sv.GetClientCount()) {
+			Assert(false);
+			return ref Unsafe.NullRef<MaxEdictsBitVec>();
+		}
+
+		GameClient client = sv.Client(iClientIndex);
+		ClientFrame? deltaFrame = client.FrameManager.GetClientFrame(client.DeltaTick);
+		if (deltaFrame == null)
+			return ref Unsafe.NullRef<MaxEdictsBitVec>();
+
+		return ref deltaFrame.TransmitEntity;
 	}
 
 	public void GetGameDir(Span<char> getGameDir) => strcpy(getGameDir, Common.Gamedir);
