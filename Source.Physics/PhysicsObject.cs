@@ -549,6 +549,7 @@ internal unsafe class PhysicsObject : IPhysicsObject
 	}
 
 	public IPhysicsShadowController GetShadowController() => ShadowController!;
+	public bool HasShadowController() => ShadowController != null;
 
 	public void RemoveShadowController() {
 		if (ShadowController != null) {
@@ -751,8 +752,8 @@ internal unsafe class PhysicsObject : IPhysicsObject
 	public void BecomeHinged(int localAxis) { }
 	public void RemoveHinged() { }
 
-	public IPhysicsFrictionSnapshot CreateFrictionSnapshot() => throw new NotImplementedException();
-	public void DestroyFrictionSnapshot(IPhysicsFrictionSnapshot snapshot) => throw new NotImplementedException();
+	public IPhysicsFrictionSnapshot CreateFrictionSnapshot() => new PhysicsFrictionSnapshot(this, Env.GetLastStepTime());
+	public void DestroyFrictionSnapshot(IPhysicsFrictionSnapshot snapshot) { }
 
 	public void OutputDebugInfo() { }
 }
