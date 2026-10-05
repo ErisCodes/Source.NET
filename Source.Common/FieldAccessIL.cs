@@ -14,30 +14,6 @@ using System.Text;
 
 namespace Source.Common
 {
-	/// <summary>
-	/// Define how to build IL methods for types.
-	/// </summary>
-
-	public interface IFieldAccessor
-	{
-		public string Name { get; }
-		public Type DeclaringType { get; }
-		public Type FieldType { get; }
-		public int Length { get; }
-
-		public T GetValue<T>(object instance);
-		public bool SetValue<T>(object instance, in T value);
-		public void CopyFrom<T>(object instance, Span<T> target);
-		public void CopyTo<T>(object instance, Span<T> target);
-	}
-
-	public interface IFieldAccessorIndexable
-	{
-		public IFieldAccessor AtIndex(int idx);
-	}
-
-	public interface IDynamicAccessor : IFieldAccessor, IFieldAccessorIndexable;
-
 	file static class ILCast<From, To>
 	{
 		public delegate void DynamicCastFn(in From from, out To to);
