@@ -1,9 +1,14 @@
 global using static Game.Server.GameServerClientGlobals;
 
+using Game.Shared;
+
 using Source;
 using Source.Common;
 using Source.Common.Commands;
 using Source.Common.Engine;
+using Source.Common.Formats.BSP;
+
+using System.Numerics;
 
 namespace Game.Server;
 
@@ -347,6 +352,82 @@ public static class HostSV
 
 public static class ServerClient
 {
+	[ConCommand("trace", "Traces from the player's eyes and prints everything the trace and the hit entity's visibility provide", FCvar.Cheat)]
+	static void trace() {
+		BasePlayer? player = Util.GetCommandClient();
+		if (player == null)
+			return;
+
+		Vector3 start = player.EyePosition();
+		player.EyeVectors(out Vector3 forward);
+		Util.TraceLine(start, start + forward * MAX_COORD_RANGE, Mask.Shot, player, CollisionGroup.None, out Trace tr);
+
+		BaseEntity? entity = tr.Ent;
+		Surf surfaceFlags = (Surf)tr.Surface.Flags;
+
+		Msg($"AllSolid: {tr.AllSolid}\n");
+		Msg($"Contents: {tr.Contents}\n");
+		Msg($"DispFlags: {tr.DispFlags}\n");
+		Msg($"Distance: {Vector3.Distance(start, tr.EndPos)}\n");
+		Msg($"Entity: {(entity == null ? "NULL" : $"[{entity.EntIndex()}][{entity.GetClassname()}]")}\n");
+		Msg($"Fraction: {tr.Fraction}\n");
+		Msg($"FractionLeftSolid: {tr.FractionLeftSolid}\n");
+		Msg($"Hit: {tr.DidHit()}\n");
+		Msg($"HitBox: {tr.HitBox}\n");
+		Msg($"HitGroup: {tr.HitGroup}\n");
+		Msg($"HitNoDraw: {(surfaceFlags & Surf.NoDraw) != 0}\n");
+		Msg($"HitNonWorld: {tr.DidHitNonWorldEntity()}\n");
+		Msg($"HitNormal: {tr.Plane.Normal.X} {tr.Plane.Normal.Y} {tr.Plane.Normal.Z}\n");
+		Msg($"HitPos: {tr.EndPos.X} {tr.EndPos.Y} {tr.EndPos.Z}\n");
+		Msg($"HitSky: {(surfaceFlags & Surf.Sky) != 0}\n");
+		Msg($"HitTexture: {tr.Surface.Name}\n");
+		Msg($"HitWorld: {tr.DidHitWorld()}\n");
+		Msg($"MatType: {physprops.GetSurfaceData(tr.Surface.SurfaceProps)?.Game.Material}\n");
+		Msg($"Model: {(entity == null ? "" : entity.GetModelName())}\n");
+		Msg($"Normal: {forward.X} {forward.Y} {forward.Z}\n");
+		Msg($"PhysicsBone: {tr.PhysicsBone}\n");
+		Msg($"StartPos: {start.X} {start.Y} {start.Z}\n");
+		Msg($"StartSolid: {tr.StartSolid}\n");
+		Msg($"SurfaceFlags: {tr.Surface.Flags}\n");
+		Msg($"SurfaceName: {physprops.GetPropName(tr.Surface.SurfaceProps)}\n");
+		Msg($"SurfaceProps: {tr.Surface.SurfaceProps}\n");
+
+		int eyeCluster = engine.GetClusterForOrigin(start);
+		int eyeArea = engine.GetArea(start);
+		int hitArea = engine.GetArea(tr.EndPos);
+		Msg($"EyeCluster: {eyeCluster}\n");
+		Msg($"EyeArea: {eyeArea}\n");
+		Msg($"HitCluster: {engine.GetClusterForOrigin(tr.EndPos)}\n");
+		Msg($"HitArea: {hitArea}\n");
+		Msg($"HitAreaConnected: {engine.CheckAreasConnected(eyeArea, hitArea) != 0}\n");
+
+		if (entity == null)
+			return;
+
+		ServerNetworkProperty netProp = entity.NetworkProp();
+		Edict? edict = netProp.GetEdict();
+		if (edict == null) {
+			Msg("EntityEdict: NULL\n");
+			return;
+		}
+
+		int entityArea = netProp.AreaNum();
+		ref PVSInfo pvsInfo = ref netProp.GetPVSInfo();
+
+		byte[] pvs = new byte[engine.GetPVSForCluster(eyeCluster, default)];
+		engine.GetPVSForCluster(eyeCluster, pvs);
+
+		Msg($"EntityName: {entity.GetEntityName()}\n");
+		Msg($"EntityArea: {pvsInfo.AreaNum}\n");
+		Msg($"EntityArea2: {pvsInfo.AreaNum2}\n");
+		Msg($"EntityClusterCount: {pvsInfo.ClusterCount}\n");
+		Msg($"EntityHeadNode: {pvsInfo.HeadNode}\n");
+		Msg($"EntityCenter: {pvsInfo.Center.X} {pvsInfo.Center.Y} {pvsInfo.Center.Z}\n");
+		Msg($"EntityInEyePVS: {netProp.IsInPVS(player.Edict(), pvs)}\n");
+		Msg($"EntityAreaConnected: {engine.CheckAreasConnected(eyeArea, entityArea) != 0}\n");
+		Msg($"EntityTransmitFlags: {edict.StateFlags & (EdictFlags.DontSend | EdictFlags.Always | EdictFlags.PVSCheck | EdictFlags.FullCheck)}\n");
+	}
+
 #if !GMOD_DLL
 	[ConCommand(helpText: "Noclip. Player becomes non-solid and flies.")]
 	static void noclip() {
