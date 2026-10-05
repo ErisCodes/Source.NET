@@ -12,7 +12,6 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <PackageReference Include="Box3D" Version="0.1.0.20260831" />
-	  <PackageReference Include="Jitter2.Double" Version="2.8.10" />
 	</ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Source.Common\Source.Common.csproj" />
