@@ -231,6 +231,9 @@ public class GameClient : BaseClient
 		CurrentFrame = FrameManager.AllocateFrame();
 		CurrentFrame.Init(snapshot);
 
+		PackInfo.TransmitEdict.ClearAll();
+		PackInfo.TransmitAlways.ClearAll();
+
 		int maxFrames = MAX_CLIENT_FRAMES;
 		if (maxFrames < FrameManager.AddClientFrame(CurrentFrame))
 			FrameManager.RemoveOldestFrame();
