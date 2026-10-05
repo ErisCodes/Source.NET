@@ -282,7 +282,8 @@ public partial class C_BasePlayer : C_BaseCombatCharacter, IGameEventListener2
 
 		// Only care about this for local player
 		if (IsLocalPlayer()) {
-			// Reset engine areabits pointer (TODO)
+			// Reset engine areabits pointer
+			render.SetAreaState(Local.AreaBits, Local.AreaPortalBits);
 
 #if !GMOD_DLL
 			// Check for Ammo pickups.
