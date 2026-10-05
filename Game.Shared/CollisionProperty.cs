@@ -481,7 +481,7 @@ public class CollisionProperty : ICollideable
 #if CLIENT_DLL
 		g_ClientShadowMgr.MarkRenderToTextureShadowDirty(GetOuter().GetShadowHandle());
 #else
-		// GetOuter().NetworkProp().MarkPVSInformationDirty();
+		GetOuter().NetworkProp().MarkPVSInformationDirty();
 #endif
 	}
 
