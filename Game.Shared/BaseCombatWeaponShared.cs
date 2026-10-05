@@ -145,7 +145,6 @@ public partial class
 	DEFINE.FIELD(nameof(NextEmptySoundTime), FieldType.Float ),
 	DEFINE.FIELD(nameof(Activity), FieldType.Integer ),
 	DEFINE.FIELD(nameof(FireDuration), FieldType.Float ),
-	DEFINE.FIELD(nameof(WeaponName), FieldType.Integer ),
 	DEFINE.FIELD(nameof(FiresUnderwater), FieldType.Boolean ),
 	DEFINE.FIELD(nameof(AltFiresUnderwater), FieldType.Boolean ),
 	DEFINE.FIELD(nameof(MinRange1), FieldType.Float ),
@@ -327,7 +326,6 @@ public partial class
 
 	[NetworkName("m_iState")]
 	public int State;
-	public string? WeaponName; // Equiv of m_iszName in SDK
 	[NetworkName("m_hOwner")]
 	public EHANDLE Owner = new();
 
