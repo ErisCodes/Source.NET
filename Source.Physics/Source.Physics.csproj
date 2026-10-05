@@ -11,6 +11,7 @@
 		<Compile Include="..\Usings\GlobalUsings.cs" Link="Usings/GlobalUsings.cs" />
 	</ItemGroup>
 	<ItemGroup>
+	  <PackageReference Include="Box3D" Version="0.1.0.20260831" />
 	  <PackageReference Include="Jitter2.Double" Version="2.8.10" />
 	</ItemGroup>
   <ItemGroup>
