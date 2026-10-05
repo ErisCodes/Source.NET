@@ -794,6 +794,8 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		return texture;
 	}
 
+	public bool IsTextureLoaded(ReadOnlySpan<char> textureName) => TextureSystem.IsTextureLoaded(textureName);
+
 	internal ReadOnlySpan<char> GetForcedTextureLoadPathID() {
 		return "GAME";
 	}
@@ -809,9 +811,20 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		if (existingMaterial != null)
 			return existingMaterial;
 
-		Span<char> vmtName = stackalloc char["materials/".Length + tempNameBuffer.Length];
-		"materials/".CopyTo(vmtName);
-		tempNameBuffer.CopyTo(vmtName["materials/".Length..]);
+		Span<char> vmtNameBuffer = stackalloc char["materials/".Length + tempNameBuffer.Length + 1];
+		vmtNameBuffer.Clear();
+
+		bool isUNC = tempNameBuffer.Length > 2 && tempNameBuffer[0] == '/' && tempNameBuffer[1] == '/' && tempNameBuffer[2] != '/';
+		if (!isUNC) {
+			"materials/".CopyTo(vmtNameBuffer);
+			tempNameBuffer.CopyTo(vmtNameBuffer["materials/".Length..]);
+
+			StrTools.FixDoubleSlashes(vmtNameBuffer);
+		}
+		else
+			tempNameBuffer.CopyTo(vmtNameBuffer);
+
+		ReadOnlySpan<char> vmtName = vmtNameBuffer.SliceNullTerminatedString();
 
 		List<FileNameHandle_t>? includes = null;
 		KeyValues keyValues = new("vmt");
@@ -900,6 +913,8 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 	void ReleaseShaderObjects() {
 		// todo
+		for (int i = 0; i < ReleaseFunc.Count; i++)
+			ReleaseFunc[i]();
 	}
 
 	public void RestoreShaderObjects(IServiceProvider? services, int changeFlags) {
@@ -1040,6 +1055,16 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 	public event Action? Restore;
 
 	readonly List<Action<int>> RestoreFunc = [];
+	readonly List<Action> ReleaseFunc = [];
+
+	public void AddReleaseFunc(Action func) {
+		Assert(!ReleaseFunc.Contains(func));
+		ReleaseFunc.Add(func);
+	}
+
+	public void RemoveReleaseFunc(Action func) {
+		ReleaseFunc.Remove(func);
+	}
 
 	public void AddRestoreFunc(Action<int> func) {
 		Assert(!RestoreFunc.Contains(func));

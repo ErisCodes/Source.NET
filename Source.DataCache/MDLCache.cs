@@ -176,8 +176,35 @@ public class MDLCache : IMDLCache, IStudioDataCache
 		return pData;
 	}
 
-	private Memory<byte> UnserializeAnimBlock(uint handle, int block) {
-		return null;
+	private Memory<byte> UnserializeAnimBlock(MDLHandle_t handle, int block) {
+		Assert(block > 0);
+
+		StudioData studioData = HandleToMDLDict[handle];
+
+		StudioHeader studioHdr = GetStudioHdr(handle)!;
+
+		ReadOnlySpan<char> modelName = studioHdr.AnimBlockName();
+		MStudioAnimBlock animBlock = studioHdr.AnimBlock(block);
+		int size = animBlock.DataEnd - animBlock.DataStart;
+		if (size == 0)
+			return null;
+
+		studioData.AnimBlock![block] = null;
+
+		MdlCacheMsg($"MDLCache: Begin load Anim Block {GetModelName(handle)} (block {block})\n");
+
+		using IFileHandle? file = fileSystem.Open(modelName, FileOpenOptions.Read, "GAME");
+		if (file == null)
+			return null;
+
+		byte[] data = new byte[size];
+		file.Stream.Seek(animBlock.DataStart, SeekOrigin.Begin);
+		file.Stream.ReadExactly(data);
+
+		MdlCacheMsg($"MDLCache: Finish load anim block {studioHdr.GetName()} (block {block})\n");
+
+		studioData.AnimBlock[block] = data;
+		return data;
 	}
 
 	private void AllocateAnimBlocks(StudioData studioData, int count) {
@@ -322,9 +349,36 @@ public class MDLCache : IMDLCache, IStudioDataCache
 			}
 
 			hdr = HandleToMDLDict[handle].Header;
+
+			if (hdr != null && (hdr.Flags & StudioHdrFlags.FlexesConverted) == 0) {
+				ConvertFlexData(hdr);
+				hdr.Flags |= StudioHdrFlags.FlexesConverted;
+			}
 		}
 
 		return hdr;
+	}
+
+	private void ConvertFlexData(StudioHeader studioHdr) {
+		for (int i = 0; i < studioHdr.NumBodyParts; i++) {
+			MStudioBodyParts body = studioHdr.BodyPart(i);
+			for (int j = 0; j < body.NumModels; j++) {
+				MStudioModel model = body.Model(j);
+				for (int k = 0; k < model.NumMeshes; k++) {
+					MStudioMesh mesh = model.Mesh(k);
+					for (int l = 0; l < mesh.NumFlexes; l++) {
+						MStudioFlex flex = mesh.Flex(l);
+						bool isWrinkleAnim = flex.VertAnimType == StudioVertAnimType.Wrinkle;
+						for (int m = 0; m < flex.NumVerts; m++) {
+							ref MStudioVertAnim vAnim = ref isWrinkleAnim ? ref flex.VertAnimWrinkle(m).VertAnim : ref flex.VertAnim(m);
+							ref DStudioVertAnim dAnim = ref Unsafe.As<MStudioVertAnim, DStudioVertAnim>(ref vAnim);
+							vAnim.SetDeltaFixed(dAnim.Delta);
+							vAnim.SetNDeltaFixed(dAnim.NDelta);
+						}
+					}
+				}
+			}
+		}
 	}
 
 	public const int IDSTUDIOHEADER = (('T' << 24) + ('S' << 16) + ('D' << 8) + 'I');

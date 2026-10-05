@@ -28,7 +28,10 @@ public struct UtlSymbol
 		id = UTL_INVAL_SYMBOL;
 		ValidId = false;
 	}
-	public UtlSymbol(ReadOnlySpan<char> str) => id = CurrTable().AddString(str);
+	public UtlSymbol(ReadOnlySpan<char> str) {
+		id = CurrTable().AddString(str);
+		ValidId = id != UTL_INVAL_SYMBOL;
+	}
 	public UtlSymbol(string str) {
 		id = CurrTable().AddString(str);
 		ValidId = id != UTL_INVAL_SYMBOL;
@@ -65,18 +68,12 @@ public struct UtlSymbol
 	}
 
 	// Operators
-	public static bool operator ==(UtlSymbol symbol, ReadOnlySpan<char> str) 
-		=> symbol.id == UTL_INVAL_SYMBOL 
-			? false 
-			: str.IsEmpty
-				? symbol.id == 0 
-				: str.Hash() == symbol.id;
-	public static bool operator !=(UtlSymbol symbol, ReadOnlySpan<char> str) 
-		=> symbol.id == UTL_INVAL_SYMBOL 
-			? false 
-			: str.IsEmpty 
-				? symbol.id == 0 
-				: str.Hash() != symbol.id;
+	public static bool operator ==(UtlSymbol symbol, ReadOnlySpan<char> str) {
+		if (!symbol.IsValid())
+			return false;
+		return str.SliceNullTerminatedString().SequenceEqual(symbol.String());
+	}
+	public static bool operator !=(UtlSymbol symbol, ReadOnlySpan<char> str) => !(symbol == str);
 	public static implicit operator UtlSymId_t(UtlSymbol symbol) => symbol.id;
 	public static implicit operator UtlSymbol(ReadOnlySpan<char> txt) => new(txt);
 	public static implicit operator ReadOnlySpan<char>(UtlSymbol symbol) => symbol.String();

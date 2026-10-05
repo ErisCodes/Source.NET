@@ -104,6 +104,11 @@ public class TextureManager : ITextureManager
 		texture.Download();
 	}
 
+	public bool IsTextureLoaded(ReadOnlySpan<char> textureName) {
+		ITextureInternal? texture = FindTexture(textureName);
+		return texture != null;
+	}
+
 	public ITextureInternal? FindTexture(ReadOnlySpan<char> textureName) {
 		if (textureName.IsEmpty)
 			return null;
@@ -157,7 +162,7 @@ public class TextureManager : ITextureManager
 		if (texture == null)
 			return null;
 
-		TextureList[new UtlSymbol(rtName)] = texture;
+		TextureList[texture.GetName().Hash()] = texture;
 		texture.Download();
 		return texture;
 	}

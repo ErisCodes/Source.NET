@@ -12,6 +12,10 @@ using Source.Common.Hashing;
 using Source.Common.Mathematics;
 using System.Text;
 using Source.Common.Commands;
+using Source.Common.Formats.Keyvalues;
+using Source.Common.Utilities;
+using System.Buffers;
+using System.Runtime.CompilerServices;
 
 public static class NetMessageExtensions
 {
@@ -284,8 +288,28 @@ public class SVC_SendTable : NetMessage
 	public override NetChannelGroup GetGroup() => NetChannelGroup.SignOn;
 	public bool NeedsDecoder;
 	public int Length;
-	public bf_read DataIn = new();
-	public bf_write DataOut = new();
+	public readonly bf_read DataIn = new();
+	public readonly bf_write DataOut = new();
+
+	public override bool WriteToBuffer(bf_write buffer) {
+		Length = DataOut.BitsWritten;
+		buffer.WriteNetMessageType(this);
+
+		buffer.WriteOneBit(NeedsDecoder ? 1 : 0);
+		buffer.WriteShort(Length);
+		buffer.WriteBits(DataOut.GetData(), Length);
+
+		return !buffer.Overflowed;
+	}
+
+	public override bool ReadFromBuffer(bf_read buffer) {
+		NeedsDecoder = buffer.ReadOneBit() != 0;
+		Length = buffer.ReadShort();     // TODO do we have a maximum length ? check that
+
+		buffer.CopyTo(DataIn);
+
+		return buffer.SeekRelative(Length);
+	}
 };
 
 public class SVC_ClassInfo : NetMessage
@@ -576,13 +600,35 @@ public class SVC_Sounds : NetMessage
 	}
 }
 
+public enum SVC_PrefetchType : ushort
+{
+	Sound
+}
+
 public class SVC_Prefetch : NetMessage
 {
 	public SVC_Prefetch() : base(SVC.Sounds) { }
 	public override NetChannelGroup GetGroup() => NetChannelGroup.Sounds;
 
-	public ushort Type;
+	public SVC_PrefetchType Type;
 	public ushort SoundIndex;
+
+	public override bool WriteToBuffer(bf_write buffer) {
+		buffer.WriteNetMessageType(this);
+		buffer.WriteUBitLong(SoundIndex, g_MaxSoundIndexBits);
+
+		return !buffer.Overflowed;
+	}
+
+	public override bool ReadFromBuffer(bf_read buffer) {
+		Type = SVC_PrefetchType.Sound;
+		// if(GetNetChannel()!.GetMsgHandler().GetDemoProtoclVersion > 22)
+		// etc..
+
+		SoundIndex = (ushort)buffer.ReadUBitLong(13);
+
+		return !buffer.Overflowed;
+	}
 }
 public class SVC_BSPDecal : NetMessage
 {
@@ -690,6 +736,36 @@ public class SVC_GameEventList : NetMessage
 		return buffer.WriteBits(DataOut.BaseArray, Length);
 	}
 }
+public class SVC_GetCvarValue : NetMessage
+{
+	public SVC_GetCvarValue() : base(SVC.GetCvarValue) { }
+
+	public QueryCvarCookie_t Cookie;
+	public ReadOnlySpan<char> CvarName {
+		get => pointNameToBuffer ? NameBuffer.SliceNullTerminatedString() : cvarName;
+		set {
+			if (pointNameToBuffer) strcpy(NameBuffer, value); else cvarName = new(value);
+		}
+	}
+
+	string? cvarName;
+	readonly char[] NameBuffer = new char[128];
+	bool pointNameToBuffer;
+
+	public override bool ReadFromBuffer(bf_read buffer) {
+		Cookie = buffer.ReadSBitLong(32);
+		buffer.ReadString(NameBuffer);
+		pointNameToBuffer = true;
+		return !buffer.Overflowed;
+	}
+
+	public override bool WriteToBuffer(bf_write buffer) {
+		buffer.WriteNetMessageType(this);
+		buffer.WriteSBitLong(Cookie, 32);
+		buffer.WriteString(CvarName);
+		return !buffer.Overflowed;
+	}
+}
 public class SVC_SetView : NetMessage
 {
 	public SVC_SetView() : base(SVC.SetView) { }
@@ -722,10 +798,11 @@ public class SVC_FixAngle : NetMessage
 
 	public override bool ReadFromBuffer(bf_read buffer) {
 		Relative = buffer.ReadBool();
-		Angle = new();
-		Angle.X = buffer.ReadBitAngle(16);
-		Angle.Y = buffer.ReadBitAngle(16);
-		Angle.Z = buffer.ReadBitAngle(16);
+		Angle = new() {
+			X = buffer.ReadBitAngle(16),
+			Y = buffer.ReadBitAngle(16),
+			Z = buffer.ReadBitAngle(16)
+		};
 
 		return !buffer.Overflowed;
 	}
@@ -741,6 +818,34 @@ public class SVC_FixAngle : NetMessage
 
 	public override string ToString() => $"SVC_FixAngle: {(Relative ? "relative" : "absolute")} {Angle.X}, {Angle.Y}, {Angle.Z}";
 }
+
+public class SVC_CrosshairAngle : NetMessage
+{
+	public QAngle Angle;
+	public SVC_CrosshairAngle() : base(SVC.CrosshairAngle) { }
+	public SVC_CrosshairAngle(QAngle angle) : base(SVC.CrosshairAngle) {
+		Angle = angle;
+	}
+
+	public override bool ReadFromBuffer(bf_read buffer) {
+		Angle = new() {
+			X = buffer.ReadBitAngle(16),
+			Y = buffer.ReadBitAngle(16),
+			Z = buffer.ReadBitAngle(16)
+		};
+
+		return !buffer.Overflowed;
+	}
+
+	public override bool WriteToBuffer(bf_write buffer) {
+		buffer.WriteNetMessageType(this);
+		buffer.WriteBitAngle(Angle.X, 16);
+		buffer.WriteBitAngle(Angle.Y, 16);
+		buffer.WriteBitAngle(Angle.Z, 16);
+		return !buffer.Overflowed;
+	}
+}
+
 public class SVC_UserMessage : NetMessage
 {
 	public SVC_UserMessage() : base(SVC.UserMessage) { }
@@ -1005,15 +1110,6 @@ public class CLC_ClientInfo : NetMessage
 		buffer.WriteNetMessageType(this);
 
 		buffer.WriteLong(ServerCount);
-		// We have to do this. I don't know why.
-		// There is some issue with sending it as a regular number that makes the bitbuffer flip a bit somewhere. I don't know why.
-		// foreach (int bit in new int[] { 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1 }) {
-		// 	buffer.WriteOneBit(bit);
-		// }
-		// I have left the above comment as a lesson of pain. CLC_ClientInfo::ToString intentionally masks two bits in its value.
-		// v1 = *((_DWORD *)this + 4) & 0xFFFFDFDF;
-		// To find it, you have to get the packet contents, then do bit by bit searching for the masked value in CLC_ClientInfo.
-		// So just keep that in mind when changing ClientInfoCRC's magic number.
 		buffer.WriteLong(SendTableCRC);
 
 
@@ -1099,13 +1195,354 @@ public class SVC_TempEntities : NetMessage
 	}
 
 	public override bool WriteToBuffer(bf_write buffer) {
-		return base.WriteToBuffer(buffer);
+		Length = DataOut.BitsWritten;
+
+		buffer.WriteNetMessageType(this);
+		buffer.WriteUBitLong((uint)NumEntries, EventInfo.EVENT_INDEX_BITS);
+		buffer.WriteVarInt32((uint)Length);
+		return buffer.WriteBits(DataOut.GetData(), Length);
 	}
 
 	public override string ToString() {
 		return $"svc_TempEntities: number {NumEntries}, bytes {Bits2Bytes(Length)}";
 	}
 }
+public class CLC_RespondCvarValue : NetMessage
+{
+	public QueryCvarCookie_t Cookie;
+
+	public ReadOnlySpan<char> CvarName {
+		get => pointNameToBuffer ? NameBuffer.SliceNullTerminatedString() : cvarName;
+		set {
+			if (pointNameToBuffer) strcpy(NameBuffer, value); else cvarName = new(value);
+		}
+	}
+	public ReadOnlySpan<char> CvarValue {
+		get => pointValueToBuffer ? ValueBuffer.SliceNullTerminatedString() : cvarValue;
+		set {
+			if (pointValueToBuffer) strcpy(ValueBuffer, value); else cvarValue = new(value);
+		}
+	}
+	public QueryCvarValueStatus StatusCode;
+
+	string? cvarName;
+	string? cvarValue;
+	readonly char[] NameBuffer = new char[256];
+	readonly char[] ValueBuffer = new char[256];
+	bool pointNameToBuffer;
+	bool pointValueToBuffer;
+
+	public CLC_RespondCvarValue() : base(CLC.RespondCvarValue) { }
+
+	public override bool WriteToBuffer(bf_write buffer) {
+		buffer.WriteNetMessageType(this);
+
+		buffer.WriteSBitLong(Cookie, 32);
+		buffer.WriteSBitLong((int)StatusCode, 4);
+
+		buffer.WriteString(CvarName);
+		buffer.WriteString(CvarValue);
+
+		return !buffer.Overflowed;
+	}
+	public override bool ReadFromBuffer(bf_read buffer) {
+		Cookie = buffer.ReadSBitLong(32);
+		StatusCode = (QueryCvarValueStatus)buffer.ReadSBitLong(4);
+
+		// Read the name.
+		buffer.ReadString(NameBuffer);
+		pointNameToBuffer = true;
+
+		// Read the value.
+		buffer.ReadString(ValueBuffer);
+		pointValueToBuffer = true;
+
+		return !buffer.Overflowed;
+	}
+}
+
+internal static class NetFileFuncs
+{
+
+	public static readonly string[] g_MostCommonPathIDs = [
+		"GAME",
+		"MOD"
+	];
+
+	public static readonly string[] g_MostCommonPrefixes = [
+		"materials",
+		"models",
+		"sounds",
+		"scripts"
+	];
+
+	public static int FindCommonPathID(ReadOnlySpan<char> pathID) {
+		for (int i = 0; i < g_MostCommonPathIDs.Length; i++) {
+			if (stricmp(pathID, g_MostCommonPathIDs[i]) == 0)
+				return i;
+		}
+		return -1;
+	}
+
+	public static int FindCommonPrefix(ReadOnlySpan<char> str) {
+		for (int i = 0; i < g_MostCommonPrefixes.Length; i++) {
+			if (stristr(str, g_MostCommonPrefixes[i]) == str) {
+				int iNextChar = (int)strlen(g_MostCommonPrefixes[i]);
+				if (str[iNextChar] == '/' || str[iNextChar] == '\\')
+					return i;
+			}
+		}
+		return -1;
+	}
+}
+
+public class CLC_FileCRCCheck : NetMessage
+{
+	public InlineArrayMaxPath<char> PathID;
+	public InlineArrayMaxPath<char> Filename;
+	public MD5Value MD5;
+	public CRC32_t CRCIOs;
+	public int FileHashType;
+	public int FileLen;
+	public int PackFileNumber;
+	public int PackFileID;
+	public int FileFraction;
+
+	public CLC_FileCRCCheck() : base(CLC.FileCRCCheck) { }
+	public override bool WriteToBuffer(bf_write buffer) {
+		buffer.WriteNetMessageType(this);
+
+		// Reserved for future use.
+		buffer.WriteOneBit(0);
+
+		// Just write a couple bits for the path ID if it's one of the common ones.
+		int iCode = NetFileFuncs.FindCommonPathID(PathID);
+		if (iCode == -1) {
+			buffer.WriteUBitLong(0, 2);
+			buffer.WriteString(PathID);
+		}
+		else {
+			buffer.WriteUBitLong((uint)(iCode + 1), 2);
+		}
+
+		iCode = NetFileFuncs.FindCommonPrefix(Filename);
+		if (iCode == -1) {
+			buffer.WriteUBitLong(0, 3);
+			buffer.WriteChar(1); // so we can detect the new message version
+			buffer.WriteString(Filename);
+		}
+		else {
+			buffer.WriteUBitLong((uint)(iCode + 1), 3);
+			buffer.WriteChar(1); // so we can detect the new message version
+			buffer.WriteString(Filename[(int)(strlen(NetFileFuncs.g_MostCommonPrefixes[iCode]) + 1)..]);
+		}
+
+		buffer.WriteBits(const_reinterpret<MD5Value, byte>(new(in MD5)), Unsafe.SizeOf<MD5Value>() * 8);
+		buffer.WriteUBitLong(CRCIOs, 32);
+		buffer.WriteUBitLong((uint)FileHashType, 32);
+		buffer.WriteUBitLong((uint)FileLen, 32);
+		buffer.WriteUBitLong((uint)PackFileNumber, 32);
+		buffer.WriteUBitLong((uint)PackFileID, 32);
+		buffer.WriteUBitLong((uint)FileFraction, 32);
+		return !buffer.Overflowed;
+	}
+	public override bool ReadFromBuffer(bf_read buffer) {
+		buffer.ReadOneBit();
+
+		// Read the path ID.
+		int iCode = (int)buffer.ReadUBitLong(2);
+		if (iCode == 0) {
+			buffer.ReadString(PathID);
+		}
+		else if ((iCode - 1) < NetFileFuncs.g_MostCommonPathIDs.Length) {
+			strcpy(PathID, NetFileFuncs.g_MostCommonPathIDs[iCode - 1]);
+		}
+		else {
+			AssertMsg(false, "Invalid path ID code in CLC_FileCRCCheck");
+			return false;
+		}
+
+		// Prefix string
+		iCode = (int)buffer.ReadUBitLong(3);
+
+		// Read filename, and check for the new message format version?
+		Span<char> szTemp = stackalloc char[MAX_PATH];
+		int c = buffer.ReadChar();
+		bool bNewVersion = false;
+		if (c == 1) {
+			bNewVersion = true;
+			buffer.ReadString(szTemp);
+		}
+		else {
+			szTemp[0] = (char)c;
+			buffer.ReadString(szTemp[1..]);
+		}
+		if (iCode == 0) {
+			strcpy(Filename, szTemp);
+		}
+		else if ((iCode - 1) < NetFileFuncs.g_MostCommonPrefixes.Length) {
+			sprintf(Filename, "%s%c%s").S(NetFileFuncs.g_MostCommonPrefixes[iCode - 1]).C(StrTools.CORRECT_PATH_SEPARATOR).S(szTemp);
+		}
+		else {
+			AssertMsg(false, "Invalid prefix code in CLC_FileCRCCheck.");
+			return false;
+		}
+
+		if (bNewVersion) {
+			buffer.ReadBits(reinterpret<MD5Value, byte>(new(ref MD5)), Unsafe.SizeOf<MD5Value>() * 8);
+			CRCIOs = buffer.ReadUBitLong(32);
+			FileHashType = (int)buffer.ReadUBitLong(32);
+			FileLen = (int)buffer.ReadUBitLong(32);
+			PackFileNumber = (int)buffer.ReadUBitLong(32);
+			PackFileID = (int)buffer.ReadUBitLong(32);
+			FileFraction = (int)buffer.ReadUBitLong(32);
+		}
+		else {
+			/* m_CRC */
+			buffer.ReadUBitLong(32);
+			CRCIOs = buffer.ReadUBitLong(32);
+			FileHashType = (int)buffer.ReadUBitLong(32);
+		}
+
+		return !buffer.Overflowed;
+	}
+}
+public class CLC_FileMD5Check : NetMessage
+{
+	public InlineArrayMaxPath<char> PathID;
+	public InlineArrayMaxPath<char> Filename;
+	public MD5Value MD5;
+
+	public CLC_FileMD5Check() : base(CLC.FileMD5Check) { }
+	public override bool WriteToBuffer(bf_write buffer) {
+		buffer.WriteNetMessageType(this);
+
+		// Reserved for future use.
+		buffer.WriteOneBit(0);
+
+		// Just write a couple bits for the path ID if it's one of the common ones.
+		int iCode = NetFileFuncs.FindCommonPathID(PathID);
+		if (iCode == -1) {
+			buffer.WriteUBitLong(0, 2);
+			buffer.WriteString(PathID);
+		}
+		else {
+			buffer.WriteUBitLong((uint)iCode + 1, 2);
+		}
+
+		iCode = NetFileFuncs.FindCommonPrefix(Filename);
+		if (iCode == -1) {
+			buffer.WriteUBitLong(0, 3);
+			buffer.WriteString(Filename);
+		}
+		else {
+			buffer.WriteUBitLong((uint)iCode + 1, 3);
+			buffer.WriteString(Filename[((int)strlen(NetFileFuncs.g_MostCommonPrefixes[iCode]) + 1)..]);
+		}
+
+		buffer.WriteBytes(const_reinterpret<MD5Value, byte>(new(in MD5)));
+
+		return !buffer.Overflowed;
+	}
+	public override bool ReadFromBuffer(bf_read buffer) {
+		// Reserved for future use.
+		buffer.ReadOneBit();
+
+		// Read the path ID.
+		int iCode = (int)buffer.ReadUBitLong(2);
+		if (iCode == 0) {
+			buffer.ReadString(PathID);
+		}
+		else if ((iCode - 1) < NetFileFuncs.g_MostCommonPathIDs.Length) {
+			strcpy(PathID, NetFileFuncs.g_MostCommonPathIDs[iCode - 1]);
+		}
+		else {
+			AssertMsg(false, "Invalid path ID code in CLC_FileMD5Check");
+			return false;
+		}
+
+		// Read the filename.
+		iCode = (int)buffer.ReadUBitLong(3);
+		if (iCode == 0) {
+			buffer.ReadString(Filename);
+		}
+		else if ((iCode - 1) < NetFileFuncs.g_MostCommonPrefixes.Length) {
+			Span<char> szTemp = stackalloc char[MAX_PATH];
+			buffer.ReadString(szTemp);
+			sprintf(Filename, "%s%c%s").S(NetFileFuncs.g_MostCommonPrefixes[iCode - 1]).C(StrTools.CORRECT_PATH_SEPARATOR).S(szTemp);
+		}
+		else {
+			AssertMsg(false, "Invalid prefix code in CLC_FileMD5Check.");
+			return false;
+		}
+
+		buffer.ReadBytes(reinterpret<MD5Value, byte>(new(ref MD5)));
+
+		return !buffer.Overflowed;
+	}
+}
+
+public abstract class Base_CmdKeyValues(KeyValues? keyValues, byte type) : NetMessage(type)
+{
+	public KeyValues? GetKeyValues() => KeyValues;
+
+	public KeyValues? KeyValues = keyValues;
+	public override bool ReadFromBuffer(bf_read buffer) {
+		if (KeyValues == null)
+			KeyValues = new KeyValues("");
+
+		KeyValues.Clear();
+
+		int numBytes = buffer.ReadLong();
+		if (numBytes <= 0 || numBytes > buffer.BytesLeft)
+			return false; // don't read past the end of the buffer
+
+		byte[] pvBuffer = ArrayPool<byte>.Shared.Rent(numBytes);
+		buffer.ReadBits(pvBuffer, numBytes * 8);
+
+		UtlBuffer bufRead = new(pvBuffer, UtlBuffer.BufferFlags.ReadOnly);
+		if (!KeyValues.ReadAsBinary(bufRead)) {
+			Assert(false);
+			ArrayPool<byte>.Shared.Return(pvBuffer, true);
+			return false;
+		}
+
+		ArrayPool<byte>.Shared.Return(pvBuffer, true);
+		return !buffer.Overflowed;
+	}
+	public override bool WriteToBuffer(bf_write buffer) {
+		if (KeyValues == null)
+			return false;
+		buffer.WriteNetMessageType(this);
+
+		UtlBuffer bufData = new();
+		if (!KeyValues.WriteAsBinary(bufData)) {
+			Assert(false);
+			return false;
+		}
+
+		// Note how many we're sending
+		int numBytes = bufData.TellMaxPut();
+		buffer.WriteLong(numBytes);
+		buffer.WriteBits(bufData.Base(), numBytes * 8);
+
+		return !buffer.Overflowed;
+	}
+}
+
+public class CLC_CmdKeyValues : Base_CmdKeyValues
+{
+	public CLC_CmdKeyValues() : base(null, CLC.CmdKeyValues) { }
+	public CLC_CmdKeyValues(KeyValues? keyValues) : base(keyValues, CLC.CmdKeyValues) { }
+
+}
+
+public class SVC_CmdKeyValues : Base_CmdKeyValues
+{
+	public SVC_CmdKeyValues() : base(null, CLC.CmdKeyValues) { }
+	public SVC_CmdKeyValues(KeyValues? keyValues) : base(keyValues, CLC.CmdKeyValues) { }
+}
+// CLC_SaveReplay removed?
 /*
 public class SVC_SetPauseTimed(bool paused, TimeUnit_t expireTime) : NetMessage(SVC.SetPauseTimed)
 {
@@ -1134,11 +1571,28 @@ public class EventInfo
 }
 
 
+public class SVC_SetPause : NetMessage
+{
+	public SVC_SetPause() : base(SVC.SetPause) { }
+	public bool Paused;
+	public override bool WriteToBuffer(bf_write buffer) {
+		buffer.WriteNetMessageType(this);
+		buffer.WriteOneBit(Paused ? 1 : 0);
+		return !buffer.Overflowed;
+	}
+	public override bool ReadFromBuffer(bf_read buffer) {
+		Paused = buffer.ReadOneBit() != 0;
+		return !buffer.Overflowed;
+	}
+}
+
+
 #if GMOD_DLL
 
 public struct GMod_NetMessage
 {
 	public int NetMessageID;
+	public int DataBits;
 	public Memory<byte> Data;
 }
 
@@ -1149,10 +1603,15 @@ public struct GMod_LuaAutoRefresh
 
 public struct GMod_LuaError
 {
-
+	public string Error;
 }
 
 public struct GMod_RequestLuaFiles;
+
+public struct GMod_LuaCmd
+{
+	public Memory<byte> Data;
+}
 
 public struct GMod_LuaFile_CLC
 {
@@ -1178,11 +1637,25 @@ public abstract class BaseGModNetMessage(int type, GModMessageType messageType) 
 	public GMod_LuaAutoRefresh LuaAutoRefresh;
 	public GMod_LuaError LuaError;
 	public GMod_RequestLuaFiles RequestLuaFiles;
+	public GMod_LuaCmd LuaCmd;
+	public Memory<byte> RawData;
+	public int RawBits;
 
 	public override bool ReadFromBuffer(bf_read buffer) {
 		int bits = (int)buffer.ReadUBitLong(GMOD_NETMESSAGE_LENGTH_BITS);
+		return ReadPayload(buffer, bits);
+	}
+
+	public bool ReadPayload(bf_read buffer, int bits) {
 		Bits = bits;
-		int endBit = buffer.BitsRead + bits;
+		int startBit = buffer.BitsRead;
+		int endBit = startBit + bits;
+		RawBits = Math.Max(bits, 0);
+		RawData = new byte[Bits2Bytes(RawBits)];
+		if (RawBits > 0) {
+			buffer.ReadBits(RawData.Span, RawBits);
+			buffer.Seek(startBit);
+		}
 		MessageType = (GModMessageType)buffer.ReadByte();
 		if (bits < 1)
 			return true;
@@ -1196,19 +1669,33 @@ public abstract class BaseGModNetMessage(int type, GModMessageType messageType) 
 		switch (MessageType) {
 			case GModMessageType.NetMessage:
 				NetMessage.NetMessageID = buffer.ReadWord();
-				NetMessage.Data = new byte[bits];
-				if ((toRead = bits - 8 - 16) > 0)
-					buffer.ReadBits(NetMessage.Data.Span, toRead);
+				NetMessage.DataBits = Math.Max(bits - 8 - 16, 0);
+				NetMessage.Data = new byte[Bits2Bytes(NetMessage.DataBits)];
+				if (NetMessage.DataBits > 0)
+					buffer.ReadBits(NetMessage.Data.Span, NetMessage.DataBits);
 				break;
 			case GModMessageType.LuaAutoRefresh:
 				Warning($"LuaAutoRefresh needs to be implemented!\n");
 				break;
 			case GModMessageType.LuaError:
-				Warning($"LuaError needs to be implemented!\n");
+				if ((toRead = bits - 8) > 0) {
+					byte[] error = new byte[Bits2Bytes(toRead)];
+					buffer.ReadBits(error, toRead);
+					int length = Array.IndexOf(error, (byte)0);
+					LuaError.Error = Encoding.UTF8.GetString(error, 0, length < 0 ? error.Length : length);
+				}
+				else
+					LuaError.Error = "";
 				break;
 			case GModMessageType.RequestLuaFiles: /* no body */  break;
 			case GModMessageType.LuaFile:
 				ReadLuaFile(buffer, endBit);
+				break;
+			case GModMessageType.LuaCmd:
+				toRead = bits - 8;
+				LuaCmd.Data = new byte[Bits2Bytes(Math.Max(toRead, 0))];
+				if (toRead > 0)
+					buffer.ReadBits(LuaCmd.Data.Span, toRead);
 				break;
 		}
 
@@ -1221,17 +1708,20 @@ public abstract class BaseGModNetMessage(int type, GModMessageType messageType) 
 		switch (MessageType) {
 			case GModMessageType.NetMessage:
 				bits += sizeof(ushort) * 8;
-				bits += NetMessage.Data.Length * 8;
+				bits += NetMessage.DataBits;
 				break;
 			case GModMessageType.LuaAutoRefresh:
 
 				break;
 			case GModMessageType.LuaError:
-
+				bits += (Encoding.UTF8.GetByteCount(LuaError.Error ?? "") + 1) * 8;
 				break;
 			case GModMessageType.RequestLuaFiles: /* no body */  break;
 			case GModMessageType.LuaFile:
 				bits += GetLuaFileMessageBits();
+				break;
+			case GModMessageType.LuaCmd:
+				bits += LuaCmd.Data.Length * 8;
 				break;
 		}
 
@@ -1244,17 +1734,20 @@ public abstract class BaseGModNetMessage(int type, GModMessageType messageType) 
 		switch (MessageType) {
 			case GModMessageType.NetMessage:
 				buffer.WriteWord(NetMessage.NetMessageID);
-				buffer.WriteBits(NetMessage.Data.Span, NetMessage.Data.Length * 8);
+				buffer.WriteBits(NetMessage.Data.Span, NetMessage.DataBits);
 				break;
 			case GModMessageType.LuaAutoRefresh:
 				Warning($"LuaAutoRefresh needs to be implemented!\n");
 				break;
 			case GModMessageType.LuaError:
-				Warning($"LuaAutoRefresh needs to be implemented!\n");
+				buffer.WriteBytes(Encoding.UTF8.GetBytes((LuaError.Error ?? "") + "\0"));
 				break;
 			case GModMessageType.RequestLuaFiles: /* no body */  break;
 			case GModMessageType.LuaFile:
 				WriteLuaFile(buffer);
+				break;
+			case GModMessageType.LuaCmd:
+				buffer.WriteBytes(LuaCmd.Data.Span);
 				break;
 		}
 
@@ -1291,6 +1784,7 @@ public class SVC_GMod_ServerToClient : BaseGModNetMessage
 
 	public override int GetLuaFileMessageBits() => 8 * (sizeof(ushort) + SHA256Value.SIZE_BYTES + LuaFile.FileContents.Length);
 }
+
 
 public class CLC_GMod_ClientToServer : BaseGModNetMessage
 {

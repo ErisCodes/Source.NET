@@ -56,33 +56,44 @@ public class BaseProp : BaseAnimating
 	public virtual bool OverridePropdata() => true;
 }
 
+[NetworkName("CBreakableProp")]
 public class BreakableProp : BaseProp
 {
 	public static readonly SendTable DT_BreakableProp = new(DT_BaseAnimating, []);
-	public static readonly new ServerClass ServerClass = new ServerClass("BreakableProp", DT_BreakableProp).WithManualClassID(StaticClassIndices.CBreakableProp);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_BreakableProp);
 }
 
 [LinkEntityToClass("func_physbox_multiplayer")]
+[NetworkName("CPhysBoxMultiplayer")]
 public class PhysBoxMultiplayer : PhysBox, IMultiplayerPhysics
 {
 	public static readonly SendTable DT_PhysBoxMultiplayer = new(DT_PhysBox, [
-		SendPropInt(FIELD_PBM.OF(nameof(PhysicsMode)), -1, PropFlags.Unsigned),
+		SendPropInt(FIELD_PBM.OF(nameof(PhysicsMode)), 1, PropFlags.Unsigned),
 		SendPropFloat(FIELD_PBM.OF(nameof(Mass)), 0, PropFlags.NoScale)
 	]);
-	public static readonly new ServerClass ServerClass = new ServerClass("PhysBoxMultiplayer", DT_PhysBoxMultiplayer).WithManualClassID(StaticClassIndices.CPhysBoxMultiplayer);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_PhysBoxMultiplayer);
+	[NetworkName("m_iPhysicsMode")]
 	public int PhysicsMode;
+	[NetworkName("m_fMass")]
 	public float Mass;
 }
 
 [LinkEntityToClass("physics_prop")]
 [LinkEntityToClass("prop_physics")]
 [LinkEntityToClass("prop_physics_override")]
+[LinkEntityToClass("prop_physics_multiplayer")]
+[LinkEntityToClass("item_crate")]
+[LinkEntityToClass("prop_exploding_barrel")]
+[LinkEntityToClass("prop_flare")]
+[LinkEntityToClass("prop_weighted_cube")]
+[NetworkName("CPhysicsProp")]
 public class PhysicsProp : BreakableProp
 {
 	public static readonly SendTable DT_PhysicsProp = new(DT_BreakableProp, [
 		SendPropBool(FIELD_PP.OF(nameof(Awake)))
 	]);
-	public static readonly new ServerClass ServerClass = new ServerClass("PhysicsProp", DT_PhysicsProp).WithManualClassID(StaticClassIndices.CPhysicsProp);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_PhysicsProp);
+	[NetworkName("m_bAwake")]
 	public bool Awake;
 
 	public override void Spawn() {
@@ -123,16 +134,42 @@ public class PhysicsProp : BreakableProp
 [LinkEntityToClass("dynamic_prop")]
 [LinkEntityToClass("prop_dynamic")]
 [LinkEntityToClass("prop_dynamic_override")]
+[LinkEntityToClass("asw_door")]
+[LinkEntityToClass("dod_control_point")]
+[LinkEntityToClass("env_portal_laser")]
+[LinkEntityToClass("npc_personality_core")]
+[LinkEntityToClass("npc_wheatley_boss")]
+[LinkEntityToClass("prop_button")]
+[LinkEntityToClass("prop_car_alarm")]
+[LinkEntityToClass("prop_car_glass")]
+[LinkEntityToClass("prop_dropper")]
+[LinkEntityToClass("prop_dynamic_glow")]
+[LinkEntityToClass("prop_floor_ball_button")]
+[LinkEntityToClass("prop_floor_button")]
+[LinkEntityToClass("prop_floor_cube_button")]
+[LinkEntityToClass("prop_health_cabinet")]
+[LinkEntityToClass("prop_indicator_panel")]
+[LinkEntityToClass("prop_laser_catcher")]
+[LinkEntityToClass("prop_laser_relay")]
+[LinkEntityToClass("prop_portal_stats_display")]
+[LinkEntityToClass("prop_testchamber_door")]
+[LinkEntityToClass("prop_tractor_beam")]
+[LinkEntityToClass("prop_under_button")]
+[LinkEntityToClass("prop_under_floor_button")]
+[LinkEntityToClass("prop_wall_projector")]
+[LinkEntityToClass("team_control_point")]
+[NetworkName("CDynamicProp")]
 public class DynamicProp : BreakableProp
 {
 	public static readonly SendTable DT_DynamicProp = new(DT_BreakableProp, [
 		SendPropBool(FIELD_DP.OF(nameof(UseHitboxesForRenderBox)))
 	]);
-	public static readonly new ServerClass ServerClass = new ServerClass("DynamicProp", DT_DynamicProp).WithManualClassID(StaticClassIndices.CDynamicProp);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_DynamicProp);
+	[NetworkName("m_bUseHitboxesForRenderBox")]
 	public bool UseHitboxesForRenderBox;
 }
 
-[LinkEntityToClass("prop_physics_multiplayer")]
+[NetworkName("CPhysicsPropMultiplayer")]
 public class PhysicsPropMultiplayer : PhysicsProp
 {
 	public static readonly SendTable DT_PhysicsPropMultiplayer = new(DT_PhysicsProp, [
@@ -141,32 +178,44 @@ public class PhysicsPropMultiplayer : PhysicsProp
 		SendPropVector(FIELD_PPM.OF(nameof(CollisionMins)), 0, PropFlags.NoScale),
 		SendPropVector(FIELD_PPM.OF(nameof(CollisionMaxs)), 0, PropFlags.NoScale),
 	]);
-	public static readonly new ServerClass ServerClass = new ServerClass("PhysicsPropMultiplayer", DT_PhysicsPropMultiplayer).WithManualClassID(StaticClassIndices.CPhysicsPropMultiplayer);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_PhysicsPropMultiplayer);
 
+	[NetworkName("m_iPhysicsMode")]
 	public int PhysicsMode;
+	[NetworkName("m_fMass")]
 	public float Mass;
+	[NetworkName("m_collisionMins")]
 	public Vector3 CollisionMins;
+	[NetworkName("m_collisionMaxs")]
 	public Vector3 CollisionMaxs;
 }
 
 
+[NetworkName("CBasePropDoor")]
 public class BasePropDoor : DynamicProp
 {
+	[NetworkName("m_bLocked")]
 	bool Locked;
+	[NetworkName("m_eDoorState")]
 	int DoorState;
 	public static readonly SendTable DT_BasePropDoor = new(DT_DynamicProp, [
 		SendPropBool(FIELD_BPD.OF(nameof(Locked))),
 		SendPropInt(FIELD_BPD.OF(nameof(DoorState)), 3, PropFlags.Unsigned)
 	]);
-	public static readonly new ServerClass ServerClass = new ServerClass("BasePropDoor", DT_BasePropDoor).WithManualClassID(StaticClassIndices.CBasePropDoor);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_BasePropDoor);
 }
 
-[LinkEntityToClass("prop_door_rotating")]
+[NetworkName("CPropDoorRotating")]
 public class PropDoorRotating : BasePropDoor
 {
 	public static readonly SendTable DT_PropDoorRotating = new(DT_BasePropDoor, []);
-	public static readonly new ServerClass ServerClass = new ServerClass("PropDoorRotating", DT_PropDoorRotating).WithManualClassID(StaticClassIndices.CPropDoorRotating);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_PropDoorRotating);
 }
+
+[LinkEntityToClass("prop_door_rotating")]
+[LinkEntityToClass("dz_door")]
+[LinkEntityToClass("prop_door_rotating_checkpoint")]
+public class PropDoorRotatingBreakable : PropDoorRotating;
 
 public static class Props
 {

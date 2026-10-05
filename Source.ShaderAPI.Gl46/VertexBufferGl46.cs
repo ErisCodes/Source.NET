@@ -63,7 +63,11 @@ public unsafe class VertexBufferGl46 : IDisposable
 		TexCoord5 = 15,
 		TexCoord6 = 16,
 		TexCoord7 = 17,
-		Count
+		Count,
+
+		FlexPosition = TexCoord4,
+		FlexNormal = TexCoord5
+
 	}
 
 	public static bool IsOn(OpenGL_ShaderInputAttribute shaderAttr, VertexFormat format, out int size, out VertexElement element) {
@@ -234,10 +238,22 @@ public unsafe class VertexBufferGl46 : IDisposable
 				descPtr->Position = (float*)(baseptr + offset);
 				offset += VertexElement.Position.GetSize();
 				vertexSizesToSet[vertexSizesToSetPtr++] = &descPtr->PositionSize;
+
+				if ((vertexFormat & VertexFormat.Wrinkle) != 0) {
+					descPtr->Wrinkle = (float*)(baseptr + offset);
+					offset += VertexElement.Wrinkle.GetSize();
+					vertexSizesToSet[vertexSizesToSetPtr++] = &descPtr->WrinkleSize;
+				}
+				else {
+					descPtr->Wrinkle = (float*)dummyData;
+					descPtr->WrinkleSize = 0;
+				}
 			}
 			else {
 				descPtr->Position = (float*)dummyData;
 				descPtr->PositionSize = 0;
+				descPtr->Wrinkle = (float*)dummyData;
+				descPtr->WrinkleSize = 0;
 			}
 
 			if ((vertexFormat & VertexFormat.BoneIndex) != 0) {

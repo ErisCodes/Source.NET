@@ -455,6 +455,23 @@ public partial class BaseVSShader : BaseShader
 		ShaderAPI!.SetPixelShaderConstant(modulationVar, color);
 	}
 
+	public void SetVertexShaderConstant(int vertexReg, int constantVar) {
+		Assert(!IsSnapshotting());
+		IMaterialVar[] shaderParams = Params!;
+		if (shaderParams == null || constantVar == -1)
+			return;
+
+		IMaterialVar vertexVar = shaderParams[constantVar];
+		Assert(vertexVar != null);
+
+		Span<float> val = stackalloc float[4];
+		if (vertexVar.GetVarType() == MaterialVarType.Vector)
+			vertexVar.GetVecValue(val);
+		else
+			val[0] = val[1] = val[2] = val[3] = vertexVar.GetFloatValue();
+		ShaderAPI!.SetVertexShaderConstant(vertexReg, val);
+	}
+
 	public void SetPixelShaderConstant(int pixelReg, int constantVar) {
 		Assert(!IsSnapshotting());
 		IMaterialVar[] shaderParams = Params!;

@@ -13,15 +13,16 @@ namespace Game.Server.HL2;
 using FIELD = Source.FIELD<HL2_Player>;
 
 [PrecacheRegister("player")]
+[NetworkName("CHL2_Player")]
 public class HL2_Player : BaseMultiplayerPlayer
 {
 	public static readonly SendTable DT_HL2_Player = new(DT_BasePlayer, [
-		SendPropDataTable(nameof(HL2Local), FIELD.OF(nameof(HL2Local)), HL2PlayerLocalData.DT_HL2Local, SendProxy_SendLocalDataTable),
+		SendPropDataTable("m_HL2Local", FIELD.OF(nameof(HL2Local)), HL2PlayerLocalData.DT_HL2Local, SendProxy_SendLocalDataTable),
 		SendPropBool(FIELD.OF(nameof(m_bIsSprinting)))
 	]);
-	public static new readonly ServerClass ServerClass = new ServerClass("HL2_Player", DT_HL2_Player)
-															.WithManualClassID(StaticClassIndices.CHL2_Player);
+	public static new readonly ServerClass ServerClass = new ServerClass(DT_HL2_Player);
 
+	[NetworkName("m_HL2Local")]
 	public readonly HL2PlayerLocalData HL2Local = new();
 
 #if HL2MP
@@ -38,6 +39,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 
 	bool SprintEnabled;
 
+	[NetworkName("m_fIsSprinting")]
 	public bool m_bIsSprinting;
 	public bool m_bIsWalking;
 	public bool m_bPlayUseDenySound;
@@ -78,6 +80,8 @@ public class HL2_Player : BaseMultiplayerPlayer
 
 	void HandleAdmireGlovesAnimation() { }
 
+	const TimeUnit_t HL2PLAYER_RELOADGAME_ATTACK_DELAY = 1.0;
+
 	public override void Activate() {
 		base.Activate();
 		InitSprinting();
@@ -87,7 +91,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 			TimeUnit_t remain = GetActiveWeapon()!.NextPrimaryAttack - gpGlobals.CurTime;
 
 			if (remain < HL2PLAYER_RELOADGAME_ATTACK_DELAY)
-				GetActiveWeapon().m_flNextPrimaryAttack = gpGlobals.curtime + HL2PLAYER_RELOADGAME_ATTACK_DELAY;
+				GetActiveWeapon()!.NextPrimaryAttack = gpGlobals.CurTime + HL2PLAYER_RELOADGAME_ATTACK_DELAY;
 
 			remain = GetActiveWeapon()!.NextSecondaryAttack - gpGlobals.CurTime;
 
@@ -219,7 +223,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 
 	void StartZooming() { }
 
-	void StopZooming() { }
+	public void StopZooming() { }
 
 	bool IsZooming() {
 		throw new NotImplementedException();
@@ -348,7 +352,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 		throw new NotImplementedException();
 	}
 
-	void Weapon_Equip(BaseCombatWeapon weapon) { }
+	public override void Weapon_Equip(BaseCombatWeapon weapon) { }
 
 	bool BumpWeapon(BaseCombatWeapon weapon) {
 		throw new NotImplementedException();
@@ -392,7 +396,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 
 	void OnRestore() { }
 
-	Vector3 EyeDirection2D() {
+	public override Vector3 EyeDirection2D() {
 		throw new NotImplementedException();
 	}
 

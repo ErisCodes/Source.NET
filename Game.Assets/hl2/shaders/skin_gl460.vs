@@ -17,6 +17,8 @@ layout(location = 8) in vec2 v_BoneWeights;
 layout(location = 9) in vec4 v_UserData;
 layout(location = 10) in vec4 v_TexCoord0;
 layout(location = 11) in vec4 v_TexCoord1;
+layout(location = 14) in vec4 v_FlexPosition;
+layout(location = 15) in vec3 v_FlexNormal;
 
 layout(std140, binding = 0) uniform source_matrices {
     mat4 viewMatrix;
@@ -72,6 +74,9 @@ void main()
     vec3 vNormal = v_Normal;
     vec4 vTangent = v_UserData;
 
+    float flWrinkleWeight;
+    ApplyMorph(v_FlexPosition, v_FlexNormal, vPosition.xyz, vNormal, vTangent.xyz, flWrinkleWeight);
+
     // Perform skinning
     vec3 worldNormal, worldPos, worldTangentS, worldTangentT;
     SkinPositionNormalAndTangentSpace(g_bSkinning, vPosition, vNormal, vTangent,
@@ -89,7 +94,7 @@ void main()
     gl_Position = vProjPos;
 
     vs_ProjPos_WrinkleWeight.xyz = vProjPos.xyz;
-    vs_ProjPos_WrinkleWeight.w = 0.0;
+    vs_ProjPos_WrinkleWeight.w = flWrinkleWeight;
 
     // Needed for water fog alpha and diffuse lighting
     // FIXME: we shouldn't have to compute this all the time.

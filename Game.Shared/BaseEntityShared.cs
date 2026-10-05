@@ -52,6 +52,7 @@ using FIELD = Source.FIELD<BaseEntity>;
 
 using System.Runtime.CompilerServices;
 
+using Source.Common.Commands;
 using Source.Common.Formats.BSP;
 using Source.Common.Physics;
 
@@ -59,6 +60,12 @@ using System.Text;
 
 public static class BaseEntityConstants
 {
+#if HL2_EPISODIC
+	public static readonly ConVar hl2_episodic = new("hl2_episodic", "1", FCvar.Replicated);
+#else
+	public static readonly ConVar hl2_episodic = new("hl2_episodic", "0", FCvar.Replicated);
+#endif
+
 	public const int NUM_PARENTATTACHMENT_BITS = 8; // < gmod increased 6 . 8
 	public const int VPHYSICS_MAX_OBJECT_LIST_COUNT = 1024;
 }
@@ -107,7 +114,7 @@ public partial class
 		SendPropString(FIELD.OF(nameof(ScriptName)))
 #endif
 	]);
-	public static readonly Class CC_ScriptedEntity = new("ScriptedEntity", DT_ScriptedEntity);
+	[NetworkName("m_strScriptName")]
 	public InlineArrayMaxPath<char> ScriptName;
 
 	public bool IsAnimatedEveryTick() => AnimatedEveryTick;
@@ -155,7 +162,31 @@ public partial class
 		}
 
 		AddEFlags(dirtyFlags);
-		// todo: children
+
+		bool onlyDueToAttachment = false;
+		if ((changeFlags & InvalidatePhysicsBits.AnimationChanged) != 0) {
+#if CLIENT_DLL
+			g_ClientShadowMgr.MarkRenderToTextureShadowDirty(GetShadowHandle());
+#endif
+
+			if ((changeFlags & (InvalidatePhysicsBits.PositionChanged | InvalidatePhysicsBits.VelocityChanged | InvalidatePhysicsBits.AnglesChanged)) == 0)
+				onlyDueToAttachment = true;
+
+			changeFlags = InvalidatePhysicsBits.PositionChanged | InvalidatePhysicsBits.AnglesChanged | InvalidatePhysicsBits.VelocityChanged;
+		}
+
+		for (BaseEntity? child = FirstMoveChild(); child != null; child = child.NextMovePeer()) {
+			if (onlyDueToAttachment) {
+#if CLIENT_DLL
+				if ((child.ParentAttachment == 0) && !child.IsFollowingEntity())
+					continue;
+#else
+				if (child.ParentAttachment == 0)
+					continue;
+#endif
+			}
+			child.InvalidatePhysicsRecursive(changeFlags);
+		}
 	}
 
 
@@ -163,6 +194,7 @@ public partial class
 
 	public bool IsAlive() => LifeState == (int)Source.LifeState.Alive;
 
+	[NetworkName("m_bIsPlayerSimulated")]
 	protected bool b_IsPlayerSimulated;
 	public bool IsPlayerSimulated() => b_IsPlayerSimulated;
 
@@ -477,7 +509,7 @@ public partial class
 				return false;
 
 #if !CLIENT_DLL
-			if (movetype == Source.MoveType.Push /* && GetMoveDoneTime() <= 0 */)
+			if (movetype == Source.MoveType.Push && GetMoveDoneTime() <= 0)
 				return false;
 #endif
 		}
@@ -670,6 +702,13 @@ public partial class
 	public MoveCollide GetMoveCollide() => (MoveCollide)MoveCollide;
 	public CollisionGroup GetCollisionGroup() => (CollisionGroup)CollisionGroup;
 
+	public void SetCollisionGroup(CollisionGroup collisionGroup) {
+		if ((CollisionGroup)CollisionGroup != collisionGroup) {
+			CollisionGroup = (int)collisionGroup;
+			CollisionRulesChanged();
+		}
+	}
+
 	public void CollisionRulesChanged() { } // TODO
 
 	public void SetSimulatedEveryTick(bool sim) {
@@ -739,6 +778,8 @@ public partial class
 	internal static short PrecacheScriptSound(ReadOnlySpan<char> sound) {
 		return g_SoundEmitterSystem.PrecacheScriptSound(sound);
 	}
+
+	public static void PrefetchScriptSound(ReadOnlySpan<char> soundname) => g_SoundEmitterSystem.PrefetchScriptSound(soundname);
 
 	public static bool PrecacheSound(ReadOnlySpan<char> name) {
 #if GAME_DLL

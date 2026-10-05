@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.HighPerformance;
 
 using Source.Common;
+using Source.Common.Commands;
 using Source.Common.DataCache;
 using Source.Common.Engine;
 using Source.Common.MaterialSystem;
@@ -47,11 +48,14 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 		RC.Config.SupportsVertexAndPixelShaders = hardwareConfig.SupportsVertexAndPixelShaders();
 
 
+		studioRenderImp.PrecacheGlint();
 	}
 
 	public void EndFrame() {
 		throw new NotImplementedException();
 	}
+
+	public void UpdateConfig(in StudioRenderConfig config) => RC.Config = config;
 
 	public int GetMaterialList(StudioHeader studioHDR, Span<IMaterial> materials) {
 		AssertMsg(studioHDR != null, "Don't ignore this assert! StudioRenderContext.GetMaterialList() has null studioHDR.");
@@ -542,8 +546,7 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 			// Increment the reference count for the material.
 			// material.IncrementReferenceCount();
 			threadData.Context.ComputeMaterialFlags(hdr, lodData, material);
-			// lodData.MaterialFlags[i] = UsesMouthShader(material) ? 1 : 0;
-			// ^ todo: flex system...
+			lodData.MaterialFlags[i] = UsesMouthShader(material) ? 1 : 0;
 		}
 	}
 
@@ -562,6 +565,15 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 
 	static TokenCache bumpvarCache = default;
 	static TokenCache phongVarCache = default;
+	static TokenCache clientShaderCache;
+
+	static bool UsesMouthShader(IMaterial material) {
+		IMaterialVar? clientShaderVar = material.FindVarFast("$clientShader", ref clientShaderCache);
+		if (clientShaderVar != null)
+			return stricmp(clientShaderVar.GetStringValue(), "MouthShader") == 0;
+		return false;
+	}
+
 	private void ComputeMaterialFlags(StudioHeader hdr, StudioLODData lodData, IMaterial material) {
 		if (material.UsesEnvCubemap())
 			hdr.Flags |= StudioHdrFlags.UsesEnvCubemap;
@@ -595,9 +607,63 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 
 	}
 
+	readonly List<float> flexWeightBuffer = [];
+	readonly List<float> flexDelayedWeightBuffer = [];
+
+	public void LockFlexWeights(int weightCount, out Span<float> flexWeights) {
+		flexWeightBuffer.Clear();
+		flexWeightBuffer.EnsureCountDefault(weightCount);
+		flexWeights = flexWeightBuffer.AsSpan();
+	}
+
+	public void LockFlexWeights(int weightCount, out Span<float> flexWeights, out Span<float> flexDelayedWeights) {
+		LockFlexWeights(weightCount, out flexWeights);
+		flexDelayedWeightBuffer.Clear();
+		flexDelayedWeightBuffer.EnsureCountDefault(weightCount);
+		flexDelayedWeights = flexDelayedWeightBuffer.AsSpan();
+	}
+
+	public void UnlockFlexWeights() {
+
+	}
+
+	static readonly ConVar r_randomflex = new("r_randomflex", "0", FCvar.Cheat);
+
+	private static void GenerateRandomFlexWeights(int weightCount, Span<float> weights, Span<float> delayedWeights) {
+		int randomFlex = r_randomflex.GetInt();
+		if (randomFlex <= 0 || weights.IsEmpty)
+			return;
+
+		if (randomFlex > weightCount)
+			randomFlex = weightCount;
+
+		Span<int> indices = stackalloc int[weightCount];
+		for (int i = 0; i < weightCount; ++i)
+			indices[i] = i;
+
+		for (int i = 0; i < weightCount; ++i) {
+			int n = RandomInt(0, weightCount - 1);
+			int temp = indices[n];
+			indices[n] = indices[i];
+			indices[i] = temp;
+		}
+
+		weights[..weightCount].Clear();
+		for (int i = 0; i < randomFlex; ++i)
+			weights[indices[i]] = RandomFloat(0.0f, 1.0f);
+
+		if (!delayedWeights.IsEmpty) {
+			delayedWeights[..weightCount].Clear();
+			for (int i = 0; i < randomFlex; ++i)
+				delayedWeights[indices[i]] = RandomFloat(0.0f, 1.0f);
+		}
+	}
+
+	static readonly float[] ZeroFlexWeights = new float[Studio.MAXSTUDIOFLEXDESC];
+
 
 	readonly StudioRenderCtx RC = new();
-	public void DrawModel(ref DrawModelResults results, ref DrawModelInfo info, Span<Matrix3x4> boneToWorld, Span<byte> flexWeights, Span<byte> flexDelayedWeights, in Vector3 origin, StudioRenderFlags flags = StudioRenderFlags.DrawEntireModel) {
+	public void DrawModel(ref DrawModelResults results, ref DrawModelInfo info, Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights, in Vector3 origin, StudioRenderFlags flags = StudioRenderFlags.DrawEntireModel) {
 		// Set to zero in case we don't render anything.
 		if (!Unsafe.IsNullRef(ref results))
 			results.ActualTriCount = results.TextureMemoryBytes = 0;
@@ -606,7 +672,7 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 		if (info.StudioHdr == null || info.HardwareData == null || info.HardwareData.NumLODs == 0 || info.HardwareData.LODs == null)
 			return;
 
-		// TODO: Flex weights
+		GenerateRandomFlexWeights(info.StudioHdr.NumFlexDesc, flexWeights, flexDelayedWeights);
 
 		using MatRenderContextPtr renderContext = new(materialSystem);
 		info.Lod = ComputeRenderLOD(renderContext, info, origin, out float flMetric);
@@ -615,8 +681,11 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 			results.LODMetric = flMetric;
 		}
 
+		Span<float> flexWeightsOrZero = flexWeights.IsEmpty ? ZeroFlexWeights : flexWeights;
+		Span<float> flexDelayedWeightsOrWeights = flexDelayedWeights.IsEmpty ? flexWeightsOrZero : flexDelayedWeights;
+
 		InvokeBindProxies(ref info);
-		studioRenderImp.DrawModel(ref info, RC, boneToWorld, flags);
+		studioRenderImp.DrawModel(ref info, RC, boneToWorld, flexWeightsOrZero, flexDelayedWeightsOrWeights, flags);
 	}
 
 	private void InvokeBindProxies(ref DrawModelInfo info) {

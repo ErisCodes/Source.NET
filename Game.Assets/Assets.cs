@@ -15,15 +15,15 @@ static class AssetUtils
 	private const string GModLocalPath = "steamapps/common/GarrysMod";
 
 	public static void CheckRequired() {
-		string? root = Path.Combine(FindProjectRoot(), "Game.Assets");
+		string exeDir = AppDomain.CurrentDomain.BaseDirectory;
 
-		if (GetRequiredAssets().All(asset => IsAssetLinked(asset.LocalPath, root)))
+		if (GetRequiredAssets().All(asset => IsAssetLinked(asset.LocalPath, exeDir)))
 			return;
 
 		bool result = Singleton<MessageBoxFn>()("Source.NET", "Missing required content, should we automatically link it?", true);
 
 		if (result)
-			LinkAllAssets(root, true);
+			LinkAllAssets(exeDir);
 	}
 
 	public static List<AssetMapping> GetRequiredAssets() {
@@ -31,7 +31,15 @@ static class AssetUtils
 			new("hl2/steam.inf", "garrysmod/steam.inf"),
 			new("sourceengine", "sourceengine", IsDirectory: true),
 			new("platform", "platform", IsDirectory: true),
-			new("hl2/resource", "garrysmod/resource", IsDirectory: true)
+			new("hl2/maps", "garrysmod/maps", IsDirectory: true),
+			new("hl2/materials", "garrysmod/materials", IsDirectory: true),
+			new("hl2/resource", "garrysmod/resource", IsDirectory: true),
+			new("hl2/scenes", "garrysmod/scenes", IsDirectory: true),
+			#if GMOD_DLL
+			new("hl2/gamemodes", "garrysmod/gamemodes", IsDirectory: true),
+			new("hl2/lua", "garrysmod/lua", IsDirectory: true),
+			#endif
+			new("hl2/cache/workshop", "garrysmod/cache/workshop", IsDirectory: true, Optional: false)
 		];
 
 		string[] specificGmodVpks = ["dir", "000", "001", "002"];
@@ -44,7 +52,7 @@ static class AssetUtils
 	public static List<AssetMapping> GetOptionalAssets() {
 		return [
 			new("hl2/maps", "garrysmod/maps", IsDirectory: true, Optional: true),
-			new("hl2/cfg/autoexec.cfg", "garrysmod/cfg/autoexec.cfg", Optional: true),
+			new("hl2/cfg/autoexec.cfg", "garrysmod/cfg/autoexec.cfg", Optional: true)
 		];
 	}
 
@@ -263,11 +271,7 @@ public class AssetLinker : Frame
 	private readonly string ProjectRoot;
 
 	public AssetLinker() : base(null, "AssetLinker") {
-		ProjectRoot = AssetUtils.FindProjectRoot();
-		if (string.IsNullOrEmpty(ProjectRoot) || !Directory.Exists(ProjectRoot))
-			ProjectRoot = AppDomain.CurrentDomain.BaseDirectory!;
-
-		ProjectRoot = Path.Combine(ProjectRoot, "Game.Assets");
+		ProjectRoot = AppDomain.CurrentDomain.BaseDirectory;
 
 		SetTitle("Asset Linker", true);
 		SetSize(620, 400);

@@ -45,6 +45,8 @@ static class DebugOverlay
 		throw new NotImplementedException();
 	}
 
+	public static void DebugDrawLine(in Vector3 absStart, in Vector3 absEnd, int r, int g, int b, bool test, float duration) => Line(absStart + new Vector3(0, 0, 0.1f), absEnd + new Vector3(0, 0, 0.1f), r, g, b, test, duration);
+
 	public static void Line(in Vector3 origin, in Vector3 target, int r, int g, int b, bool noDepthTest, float duration) {
 		BasePlayer? player = GetLocalPlayer();
 		if (player == null)

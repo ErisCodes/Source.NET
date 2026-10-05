@@ -17,6 +17,8 @@ layout(location = 8) in vec2 v_BoneWeights;
 layout(location = 9) in vec4 v_UserData;
 layout(location = 10) in vec4 v_TexCoord0;
 layout(location = 11) in vec4 v_TexCoord1;
+layout(location = 14) in vec4 v_FlexPosition;
+layout(location = 15) in vec3 v_FlexNormal;
 
 layout(std140, binding = 0) uniform source_matrices {
     mat4 viewMatrix;
@@ -82,6 +84,8 @@ void main()
     vec4 vPosition = vec4(v_Position, 1.0);
     vec3 vNormal = v_Normal;
     vec4 vTangent = v_UserData;
+
+    ApplyMorph(v_FlexPosition.xyz, v_FlexNormal, vPosition.xyz, vNormal, vTangent.xyz);
 
     // Perform skinning
     vec3 worldNormal, worldPos, worldTangentS, worldTangentT;

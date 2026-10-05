@@ -13,11 +13,11 @@ public class SearchPathCollection
 	/// Defines whether the search path ID is searchable when pathID == null in queries.
 	/// </summary>
 	public bool RequestOnly { get; set; } = false;
-	bool IsDirty = true;
+	volatile bool IsDirty = true;
 
 
 	readonly List<ISearchPath> addOrder = [];
-	readonly List<ISearchPath> sortOrder = [];
+	volatile List<ISearchPath> sortOrder = [];
 
 	public ISearchPath? AtAdded(int index) {
 		if (index >= Count)
@@ -43,14 +43,18 @@ public class SearchPathCollection
 	public void ValidateOrder() {
 		if (!IsDirty) return;
 
-		IsDirty = false;
-		sortOrder.Clear();
-		sortOrder.EnsureCapacity(addOrder.Count);
-		for (PathGroupName i = 0; i < PathGroupName.Fallbacks + 1; i++) {
-			foreach (var item in addOrder){
-				if (item.GetGroupName() == i)
-					sortOrder.Add(item);
+		lock (addOrder) {
+			if (!IsDirty) return;
+
+			List<ISearchPath> order = new(addOrder.Count);
+			for (PathGroupName i = 0; i < PathGroupName.Fallbacks + 1; i++) {
+				foreach (var item in addOrder){
+					if (item.GetGroupName() == i)
+						order.Add(item);
+				}
 			}
+			sortOrder = order;
+			IsDirty = false;
 		}
 	}
 

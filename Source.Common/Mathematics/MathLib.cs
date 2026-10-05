@@ -18,8 +18,13 @@ public static class MathLibConsts
 	public const int YAW = 1;
 	public const int ROLL = 2;
 
+	public const float FLT_EPSILON = 1.192092896e-07f; // FLT_EPSILON (2^-23), MathF.BitIncrement(1.0f) - 1.0f, not the same as float.Epsilon
+	public const double DBL_EPSILON = 2.2204460492503131e-16; // DBL_EPSILON (2^-52), Math.BitIncrement(1.0) - 1.0, not the same as double.Epsilon
+	public const float EQUAL_EPSILON = 0.001f;
+
 	public static readonly Vector3 vec3_origin = new(0, 0, 0);
 	public static readonly QAngle vec3_angle = new(0, 0, 0);
+	public static readonly Vector3 vec3_invalid = new(float.MaxValue, float.MaxValue, float.MaxValue);
 
 	public static Vector3 RandomAngularImpulse(float minVal, float maxVal) {
 		Vector3 angImp = default;
@@ -552,7 +557,7 @@ public static class MathLib
 	public static readonly Vector128<float> Four_2ToThe23s = Vector128.Create((float)(1 << 23), (float)(1 << 23), (float)(1 << 23), (float)(1 << 23));
 	public static readonly Vector128<float> Four_2ToThe24s = Vector128.Create((float)(1 << 24), (float)(1 << 24), (float)(1 << 24), (float)(1 << 24));
 	public static readonly Vector128<float> Four_Point225s = Vector128.Create(.225f, .225f, .225f, .225f);
-	public static readonly Vector128<float> Four_Epsilons = Vector128.Create(float.Epsilon, float.Epsilon, float.Epsilon, float.Epsilon);
+	public static readonly Vector128<float> Four_Epsilons = Vector128.Create(FLT_EPSILON, FLT_EPSILON, FLT_EPSILON, FLT_EPSILON);
 	public static readonly Vector128<float> Four_FLT_MAX = Vector128.Create(float.MaxValue, float.MaxValue, float.MaxValue, float.MaxValue);
 	public static readonly Vector128<float> Four_Negative_FLT_MAX = Vector128.Create(-float.MaxValue, -float.MaxValue, -float.MaxValue, -float.MaxValue);
 	public static Vector3 AsVector3(this ReadOnlySpan<float> span) => new(span[0], span[1], span[2]);
@@ -1086,7 +1091,7 @@ public static class MathLib
 
 		float sinsom = MathF.Sin(MathF.Asin(sinom) * t);
 
-		t = sinsom / (sinom + float.Epsilon);
+		t = sinsom / (sinom + FLT_EPSILON);
 		q = default;
 		VectorScale(in p.AsVector3ReadOnlyRef(), t, out q.AsVector3Ref());
 
@@ -1784,6 +1789,21 @@ public static class MathLib
 		Hermite_Spline(p1, p2, e10, e21, t, out output);
 	}
 
+	public static void Hermite_Spline(in Quaternion q0, in Quaternion q1, in Quaternion q2, float t, out Quaternion output) {
+		Quaternion q0a;
+		Quaternion q1a;
+
+		QuaternionAlign(q2, q0, out q0a);
+		QuaternionAlign(q2, q1, out q1a);
+
+		output.X = Hermite_Spline(q0a.X, q1a.X, q2.X, t);
+		output.Y = Hermite_Spline(q0a.Y, q1a.Y, q2.Y, t);
+		output.Z = Hermite_Spline(q0a.Z, q1a.Z, q2.Z, t);
+		output.W = Hermite_Spline(q0a.W, q1a.W, q2.W, t);
+
+		QuaternionNormalize2(ref output);
+	}
+
 	public static void QuaternionAlign(in Quaternion p, in Quaternion q, out Quaternion qt) {
 		qt = default;
 		int i;
@@ -1863,6 +1883,13 @@ public static class MathLib
 		MathF.Abs(src1.Y - src2.Y) <= tolerance &&
 		MathF.Abs(src1.Z - src2.Z) <= tolerance;
 
+	public static bool CloseEnough(float a, float b, float epsilon = EQUAL_EPSILON) => MathF.Abs(a - b) <= epsilon;
+
+	public static bool CloseEnough(in Vector3 a, in Vector3 b, float epsilon = EQUAL_EPSILON) =>
+		MathF.Abs(a.X - b.X) <= epsilon &&
+		MathF.Abs(a.Y - b.Y) <= epsilon &&
+		MathF.Abs(a.Z - b.Z) <= epsilon;
+
 	public static float Approach(float target, float value, float speed) {
 		float delta = target - value;
 
@@ -1939,6 +1966,7 @@ public static class MathLib
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static void Vector2DCopy(in Vector2 inV, out Vector2 outV) => outV = inV;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static void VectorLerp(in Vector3 src1, in Vector3 src2, float t, out Vector3 dest) => dest = Vector3.Lerp(src1, src2, t);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static void Vector2DLerp(in Vector2 src1, in Vector2 src2, float t, out Vector2 dest) => dest = Vector2.Lerp(src1, src2, t);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static void Vector2DAdd(in Vector2 a, in Vector2 b, out Vector2 c) => c = a + b;
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static void Vector2DSubtract(in Vector2 a, in Vector2 b, out Vector2 c) => c = a - b;
@@ -1956,11 +1984,17 @@ public static class MathLib
 		return 1.0f / invlen;
 	}
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static float VectorNormalize(ref Vector3 fwd) {
-		float len = fwd.Length();
-		if (len != 0)
-			fwd = Vector3.Normalize(fwd);
-		return len;
+	public static float VectorNormalize(ref Vector3 vec) {
+		float radius = MathF.Sqrt(vec.X * vec.X + vec.Y * vec.Y + vec.Z * vec.Z);
+
+		// FLT_EPSILON is added to the radius to eliminate the possibility of divide by zero.
+		float iradius = 1.0f / (radius + FLT_EPSILON);
+
+		vec.X *= iradius;
+		vec.Y *= iradius;
+		vec.Z *= iradius;
+
+		return radius;
 	}
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static float VectorNormalize(ref Vector2 fwd) {
@@ -2727,17 +2761,66 @@ public static class MathLib
 				pitch = 90;
 		}
 		else {
-			yaw = (MathF.Atan2(forward[1], forward[0]) * 180 / MathF.PI);
+			yaw = (float)(Math.Atan2(forward[1], forward[0]) * (180 / Math.PI));
 			if (yaw < 0)
 				yaw += 360;
 
 			tmp = MathF.Sqrt(forward[0] * forward[0] + forward[1] * forward[1]);
-			pitch = (MathF.Atan2(-forward[2], tmp) * 180 / MathF.PI);
+			pitch = (float)(Math.Atan2(-forward[2], tmp) * (180 / Math.PI));
 			if (pitch < 0)
 				pitch += 360;
 		}
 
 		angles = new(pitch, yaw, 0);
+	}
+
+	/// <summary>
+	/// Forward direction vector with a reference up vector -> Euler angles
+	/// </summary>
+	public static void VectorAngles(in Vector3 forward, in Vector3 pseudoup, out QAngle angles) {
+		angles = default;
+
+		CrossProduct(pseudoup, forward, out Vector3 left);
+		VectorNormalize(ref left);
+
+		float xyDist = MathF.Sqrt(forward[0] * forward[0] + forward[1] * forward[1]);
+
+		// enough here to get angles?
+		if (xyDist > 0.001f) {
+			// (yaw)	y = ATAN( forward.y, forward.x );		-- in our space, forward is the X axis
+			angles[1] = RAD2DEG(MathF.Atan2(forward[1], forward[0]));
+
+			// The engine does pitch inverted from this, but we always end up negating it in the DLL
+			// UNDONE: Fix the engine to make it consistent
+			// (pitch)	x = ATAN( -forward.z, sqrt(forward.x*forward.x+forward.y*forward.y) );
+			angles[0] = RAD2DEG(MathF.Atan2(-forward[2], xyDist));
+
+			float up_z = (left[1] * forward[0]) - (left[0] * forward[1]);
+
+			// (roll)	z = ATAN( left.z, up.z );
+			angles[2] = RAD2DEG(MathF.Atan2(left[2], up_z));
+		}
+		else    // forward is mostly Z, gimbal lock-
+		{
+			// (yaw)	y = ATAN( -left.x, left.y );			-- forward is mostly z, so use right for yaw
+			angles[1] = RAD2DEG(MathF.Atan2(-left[0], left[1])); //This was originally copied from the "void MatrixAngles( const matrix3x4_t& matrix, float *angles )" code, and it's 180 degrees off, negated the values and it all works now (Dave Kircher)
+
+			// The engine does pitch inverted from this, but we always end up negating it in the DLL
+			// UNDONE: Fix the engine to make it consistent
+			// (pitch)	x = ATAN( -forward.z, sqrt(forward.x*forward.x+forward.y*forward.y) );
+			angles[0] = RAD2DEG(MathF.Atan2(-forward[2], xyDist));
+
+			// Assume no roll in this case as one degree of freedom has been lost (i.e. yaw == roll)
+			angles[2] = 0;
+		}
+	}
+
+	public static void AxisAngleQuaternion(in Vector3 axis, float angle, out Quaternion q) {
+		SinCos(DEG2RAD(angle) * 0.5f, out float sa, out float ca);
+		q.X = axis.X * sa;
+		q.Y = axis.Y * sa;
+		q.Z = axis.Z * sa;
+		q.W = ca;
 	}
 
 	public static void Vector3DMultiplyPosition(in Matrix4x4 src1, in Vector3 src2, out Vector3 dst) {
@@ -3222,6 +3305,224 @@ public static class MathLib
 
 		// matrix row 4
 		output += p2;    // p2
+	}
+
+	public static float ExponentialDecay(float decayTo, float decayTime, float dt) => MathF.Exp(MathF.Log(decayTo) / decayTime * dt);
+
+	public static void Spline_Normalize(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, out Vector3 p1n, out Vector3 p4n) {
+		float dt = p3.X - p2.X;
+
+		p1n = p1;
+		p4n = p4;
+
+		if (dt != 0.0) {
+			if (p1.X != p2.X)
+				MathLib.VectorLerp(p2, p1, dt / (p2.X - p1.X), out p1n);
+			if (p4.X != p3.X)
+				MathLib.VectorLerp(p3, p4, dt / (p4.X - p3.X), out p4n);
+		}
+	}
+
+	public static void Catmull_Rom_Spline_Tangent(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float tOne = 3 * t * t * 0.5f;
+		float tTwo = 2 * t * 0.5f;
+		float tThree = 0.5f;
+
+		output = default;
+
+		Vector3 a, b, c, d;
+
+		MathLib.VectorScale(p1, -tOne, out a);
+		MathLib.VectorScale(p2, tOne * 3, out b);
+		MathLib.VectorScale(p3, tOne * -3, out c);
+		MathLib.VectorScale(p4, tOne, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, tTwo * 2, out a);
+		MathLib.VectorScale(p2, tTwo * -5, out b);
+		MathLib.VectorScale(p3, tTwo * 4, out c);
+		MathLib.VectorScale(p4, -tTwo, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, -tThree, out a);
+		MathLib.VectorScale(p3, tThree, out b);
+
+		output += a;
+		output += b;
+	}
+
+	public static void Catmull_Rom_Spline_Integral(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		output = p2 * t
+				- 0.25f * (p1 - p3) * t * t
+				+ (1.0f / 6.0f) * (2.0f * p1 - 5.0f * p2 + 4.0f * p3 - p4) * t * t * t
+				- 0.125f * (p1 - 3.0f * p2 + 3.0f * p3 - p4) * t * t * t * t;
+	}
+
+	public static void Catmull_Rom_Spline_Normalize(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float dt = Vector3.Distance(p3, p2);
+
+		MathLib.VectorSubtract(p1, p2, out Vector3 p1n);
+		MathLib.VectorSubtract(p4, p3, out Vector3 p4n);
+
+		MathLib.VectorNormalize(ref p1n);
+		MathLib.VectorNormalize(ref p4n);
+
+		MathLib.VectorMA(p2, dt, p1n, out p1n);
+		MathLib.VectorMA(p3, dt, p4n, out p4n);
+
+		MathLib.Catmull_Rom_Spline(p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void Catmull_Rom_Spline_Integral_Normalize(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float dt = Vector3.Distance(p3, p2);
+
+		MathLib.VectorSubtract(p1, p2, out Vector3 p1n);
+		MathLib.VectorSubtract(p4, p3, out Vector3 p4n);
+
+		MathLib.VectorNormalize(ref p1n);
+		MathLib.VectorNormalize(ref p4n);
+
+		MathLib.VectorMA(p2, dt, p1n, out p1n);
+		MathLib.VectorMA(p3, dt, p4n, out p4n);
+
+		Catmull_Rom_Spline_Integral(p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void Catmull_Rom_Spline_NormalizeX(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		Spline_Normalize(p1, p2, p3, p4, out Vector3 p1n, out Vector3 p4n);
+		MathLib.Catmull_Rom_Spline(p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void Kochanek_Bartels_Spline(float tension, float bias, float continuity, in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float ffa, ffb, ffc, ffd;
+
+		ffa = (1.0f - tension) * (1.0f + continuity) * (1.0f + bias);
+		ffb = (1.0f - tension) * (1.0f - continuity) * (1.0f - bias);
+		ffc = (1.0f - tension) * (1.0f - continuity) * (1.0f + bias);
+		ffd = (1.0f - tension) * (1.0f + continuity) * (1.0f - bias);
+
+		float tSqr = t * t * 0.5f;
+		float tSqrSqr = t * tSqr;
+		t *= 0.5f;
+
+		output = default;
+
+		Vector3 a, b, c, d;
+
+		MathLib.VectorScale(p1, tSqrSqr * -ffa, out a);
+		MathLib.VectorScale(p2, tSqrSqr * (4.0f + ffa - ffb - ffc), out b);
+		MathLib.VectorScale(p3, tSqrSqr * (-4.0f + ffb + ffc - ffd), out c);
+		MathLib.VectorScale(p4, tSqrSqr * ffd, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, tSqr * 2 * ffa, out a);
+		MathLib.VectorScale(p2, tSqr * (-6 - 2 * ffa + 2 * ffb + ffc), out b);
+		MathLib.VectorScale(p3, tSqr * (6 - 2 * ffb - ffc + ffd), out c);
+		MathLib.VectorScale(p4, tSqr * -ffd, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, t * -ffa, out a);
+		MathLib.VectorScale(p2, t * (ffa - ffb), out b);
+		MathLib.VectorScale(p3, t * ffb, out c);
+
+		output += a;
+		output += b;
+		output += c;
+
+		output += p2;
+	}
+
+	public static void Kochanek_Bartels_Spline_NormalizeX(float tension, float bias, float continuity, in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		Spline_Normalize(p1, p2, p3, p4, out Vector3 p1n, out Vector3 p4n);
+		Kochanek_Bartels_Spline(tension, bias, continuity, p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void Cubic_Spline(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float tSqr = t * t;
+		float tSqrSqr = t * tSqr;
+
+		output = default;
+
+		Vector3 b, c;
+
+		MathLib.VectorScale(p2, tSqrSqr * 2, out b);
+		MathLib.VectorScale(p3, tSqrSqr * -2, out c);
+
+		output += b;
+		output += c;
+
+		MathLib.VectorScale(p2, tSqr * -3, out b);
+		MathLib.VectorScale(p3, tSqr * 3, out c);
+
+		output += b;
+		output += c;
+
+		output += p2;
+	}
+
+	public static void Cubic_Spline_NormalizeX(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		Spline_Normalize(p1, p2, p3, p4, out Vector3 p1n, out Vector3 p4n);
+		Cubic_Spline(p1n, p2, p3, p4n, t, out output);
+	}
+
+	public static void BSpline(in Vector3 p1, in Vector3 p2, in Vector3 p3, in Vector3 p4, float t, out Vector3 output) {
+		float oneOver6 = 1.0f / 6.0f;
+
+		float tSqr = t * t * oneOver6;
+		float tSqrSqr = t * tSqr;
+		t *= oneOver6;
+
+		output = default;
+
+		Vector3 a, b, c, d;
+
+		MathLib.VectorScale(p1, -tSqrSqr, out a);
+		MathLib.VectorScale(p2, tSqrSqr * 3.0f, out b);
+		MathLib.VectorScale(p3, tSqrSqr * -3.0f, out c);
+		MathLib.VectorScale(p4, tSqrSqr, out d);
+
+		output += a;
+		output += b;
+		output += c;
+		output += d;
+
+		MathLib.VectorScale(p1, tSqr * 3.0f, out a);
+		MathLib.VectorScale(p2, tSqr * -6.0f, out b);
+		MathLib.VectorScale(p3, tSqr * 3.0f, out c);
+
+		output += a;
+		output += b;
+		output += c;
+
+		MathLib.VectorScale(p1, t * -3.0f, out a);
+		MathLib.VectorScale(p3, t * 3.0f, out c);
+
+		output += a;
+		output += c;
+
+		MathLib.VectorScale(p1, oneOver6, out a);
+		MathLib.VectorScale(p2, 4.0f * oneOver6, out b);
+		MathLib.VectorScale(p3, oneOver6, out c);
+
+		output += a;
+		output += b;
+		output += c;
 	}
 }
 

@@ -1,6 +1,9 @@
 ﻿using Source.Common;
+using Source.Common.Bitmap;
+using Source.Common.Commands;
 using Source.Common.DataCache;
 using Source.Common.Engine;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
 
@@ -9,6 +12,7 @@ using System.Buffers;
 using System.Drawing.Drawing2D;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Source.StudioRender;
 
@@ -31,34 +35,58 @@ public struct LightPos
 	public float Dot;
 }
 
+public struct EyeballState
+{
+	public MStudioEyeball? Eyeball;
+
+	public Matrix3x4 Mat;
+
+	public Vector3 Org;
+	public Vector3 Forward;
+	public Vector3 Right;
+	public Vector3 Up;
+
+	public Vector3 Cornea;
+}
+
 [EngineComponent]
 public unsafe class StudioRender
 {
 	IMaterialSystem materialSystem = Singleton<IMaterialSystem>();
 	IStudioDataCache studioDataCache = Singleton<IStudioDataCache>();
+	IMaterialSystemHardwareConfig hardwareConfig = Singleton<IMaterialSystemHardwareConfig>();
 
 	StudioRenderCtx? pRC;
 	Matrix3x4* pBoneToWorld;
 	int nBoneToWorld;
+	float* pFlexWeights;
+	float* pFlexDelayedWeights;
 	StudioHeader? StudioHdr;
 	StudioMeshData[]? StudioMeshes;
+
+	readonly CachedRenderData VertexCache = new();
 
 	public readonly Matrix3x4[] PoseToWorld = new Matrix3x4[Studio.MAXSTUDIOBONES];
 	public readonly Matrix3x4[] PoseToDecal = new Matrix3x4[Studio.MAXSTUDIOBONES];
 
 	internal const int MAXLOCALLIGHTS = 4;
 
-	internal void DrawModel(ref DrawModelInfo info, StudioRenderCtx RC, Span<Matrix3x4> boneToWorld, StudioRenderFlags flags) {
+	internal void DrawModel(ref DrawModelInfo info, StudioRenderCtx RC, Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights, StudioRenderFlags flags) {
 		// TODO: a better way to do this that doesnt require unsafe
-		// TODO: flex
 		nBoneToWorld = boneToWorld.Length;
-		fixed (Matrix3x4* pBtW = boneToWorld) {
+		fixed (Matrix3x4* pBtW = boneToWorld)
+		fixed (float* pFW = flexWeights, pFDW = flexDelayedWeights) {
 			pRC = RC;
+			pFlexWeights = pFW;
+			pFlexDelayedWeights = pFDW;
 			pBoneToWorld = pBtW;
 
 			using MatRenderContextPtr pRenderContext = new(materialSystem);
 
-			// TODO: Disable flex if we're told to...
+			bool flexConfig = pRC.Config.Flex;
+			if ((flags & StudioRenderFlags.DrawNoFlexes) != 0)
+				pRC.Config.Flex = false;
+
 			// TODO: Enable wireframe if we're told to...
 			int boneMask = Studio.BONE_USED_BY_VERTEX_AT_LOD(info.Lod);
 
@@ -66,6 +94,8 @@ public unsafe class StudioRender
 			pRenderContext.MatrixMode(MaterialMatrixMode.Model);
 			pRenderContext.PushMatrix();
 			pRenderContext.LoadIdentity();
+
+			VertexCache.StartModel();
 
 			StudioHdr = info.StudioHdr;
 			if (info.HardwareData.LODs == null) {
@@ -88,13 +118,15 @@ public unsafe class StudioRender
 			pRenderContext.PopMatrix();
 
 			// TODO: Restore the configs
-
+			pRC.Config.Flex = flexConfig;
 
 			pRenderContext.SetNumBoneWeights(0);
 			pRC = null;
 			StudioMeshes = null;
 			StudioHdr = null;
 			pBoneToWorld = null;
+			pFlexWeights = null;
+			pFlexDelayedWeights = null;
 		}
 	}
 
@@ -164,13 +196,229 @@ public unsafe class StudioRender
 
 	MStudioModel? SubModel;
 
+	readonly EyeballState[] EyeballStates = new EyeballState[16];
+
+	private void ComputeEyelidStateFACS(MStudioModel subModel) {
+		for (int j = 0; j < subModel.NumEyeballs; j++) {
+			R_StudioEyeballPosition(subModel.Eyeball(j), ref EyeballStates[j]);
+			R_StudioEyelidFACS(subModel.Eyeball(j), in EyeballStates[j]);
+		}
+	}
+
+	private void R_StudioEyelidFACS(MStudioEyeball eyeball, in EyeballState state) {
+		if (eyeball.NonFACS)
+			return;
+
+		Vector3 normTarget = new(eyeball.UpperTarget[0], eyeball.UpperTarget[1], eyeball.UpperTarget[2]);
+		normTarget /= eyeball.Radius;
+		normTarget.X = Math.Clamp(normTarget.X, -1.0f, 1.0f);
+		normTarget.Y = Math.Clamp(normTarget.Y, -1.0f, 1.0f);
+		normTarget.Z = Math.Clamp(normTarget.Z, -1.0f, 1.0f);
+
+		float upperlid = pFlexWeights[eyeball.UpperFlexDesc[0]] * MathF.Asin(normTarget.X);
+		upperlid += pFlexWeights[eyeball.UpperFlexDesc[1]] * MathF.Asin(normTarget.Y);
+		upperlid += pFlexWeights[eyeball.UpperFlexDesc[2]] * MathF.Asin(normTarget.Z);
+
+		normTarget = new(eyeball.LowerTarget[0], eyeball.LowerTarget[1], eyeball.LowerTarget[2]);
+		normTarget /= eyeball.Radius;
+		normTarget.X = Math.Clamp(normTarget.X, -1.0f, 1.0f);
+		normTarget.Y = Math.Clamp(normTarget.Y, -1.0f, 1.0f);
+		normTarget.Z = Math.Clamp(normTarget.Z, -1.0f, 1.0f);
+
+		float lowerlid = pFlexWeights[eyeball.LowerFlexDesc[0]] * MathF.Asin(normTarget.X);
+		lowerlid += pFlexWeights[eyeball.LowerFlexDesc[1]] * MathF.Asin(normTarget.Y);
+		lowerlid += pFlexWeights[eyeball.LowerFlexDesc[2]] * MathF.Asin(normTarget.Z);
+
+		MathLib.SinCos(upperlid, out float sinupper, out float cosupper);
+		MathLib.SinCos(lowerlid, out float sinlower, out float coslower);
+
+		MathLib.VectorIRotate(in state.Up, in pBoneToWorld[eyeball.Bone], out Vector3 headup);
+		MathLib.VectorIRotate(in state.Forward, in pBoneToWorld[eyeball.Bone], out Vector3 headforward);
+
+		Vector3 pos = headup * (sinupper * eyeball.Radius);
+		pos += headforward * (cosupper * eyeball.Radius);
+		pFlexWeights[eyeball.UpperLidFlexDesc] = Vector3.Dot(pos, eyeball.Up);
+
+		pos = headup * (sinlower * eyeball.Radius);
+		pos += headforward * (coslower * eyeball.Radius);
+		pFlexWeights[eyeball.LowerLidFlexDesc] = Vector3.Dot(pos, eyeball.Up);
+	}
+
+	private static float RampFlexWeight(MStudioFlex flex, float w) {
+		if (flex.Target0 == 0.0f && flex.Target1 == 1.0f)
+			return w;
+
+		if (w <= flex.Target0 || w >= flex.Target3)
+			w = 0.0f;
+		else if (w < flex.Target1)
+			w = (w - flex.Target0) / (flex.Target1 - flex.Target0);
+		else if (w > flex.Target2)
+			w = (flex.Target3 - w) / (flex.Target3 - flex.Target2);
+		else
+			w = 1.0f;
+
+		return w;
+	}
+
+	uint flexVertsWarnCount = 0;
+	uint flexConversionTimesWarned = 0;
+
+	private void R_StudioFlexVerts(MStudioMesh mesh, int lod) {
+		Assert(mesh != null);
+
+		if (VertexCache.IsFlexComputationDone())
+			return;
+
+		if (mesh.Model.CacheVertexData(studioDataCache, StudioHdr!) == null)
+			return;
+
+		MStudioMeshVertexData? vertData = mesh.GetVertexData(studioDataCache, StudioHdr!);
+		Assert(vertData != null);
+		if (vertData == null) {
+			if (flexVertsWarnCount++ < 20)
+				Warning("ERROR: R_StudioFlexVerts, model verts have been compressed, cannot render! (use \"-no_compressed_vvds\")");
+			return;
+		}
+
+		Assert((StudioHdr!.Flags & StudioHdrFlags.FlexesConverted) != 0);
+		if ((StudioHdr.Flags & StudioHdrFlags.FlexesConverted) == 0) {
+			if (flexConversionTimesWarned++ < 6)
+				Warning("ERROR: flex verts have not been converted (queued loader refcount bug?) - expect to see 'exploded' faces");
+		}
+
+		bool hasTangentS = vertData.HasTangentData();
+
+		VertexCache.SetupComputation(mesh, true);
+
+		int i, j, n;
+
+		for (i = 0; i < mesh.NumFlexes; i++) {
+			MStudioFlex flex = mesh.Flex(i);
+
+			float w1 = RampFlexWeight(flex, pFlexWeights[flex.FlexDesc]);
+			float w2 = RampFlexWeight(flex, pFlexDelayedWeights[flex.FlexDesc]);
+
+			float w3, w4;
+			if (flex.FlexPair != 0) {
+				w3 = RampFlexWeight(flex, pFlexWeights[flex.FlexPair]);
+				w4 = RampFlexWeight(flex, pFlexDelayedWeights[flex.FlexPair]);
+			}
+			else {
+				w3 = w1;
+				w4 = w2;
+			}
+
+			if (w1 > -0.001 && w1 < 0.001 && w2 > -0.001 && w2 < 0.001) {
+				if (w3 > -0.001 && w3 < 0.001 && w4 > -0.001 && w4 < 0.001)
+					continue;
+			}
+
+			Span<byte> vanim = flex.BaseVertAnim();
+			int vanimSizeBytes = flex.VertAnimSizeBytes();
+
+			for (j = 0; j < flex.NumVerts; j++) {
+				ref MStudioVertAnim anim = ref MemoryMarshal.AsRef<MStudioVertAnim>(vanim[(j * vanimSizeBytes)..]);
+				n = anim.Index;
+
+				if (n < mesh.VertexData.NumLODVertexes[lod]) {
+					ref MStudioVertex vert = ref vertData.Vertex(n);
+
+					ref CachedPosNormTan flexedVertex = ref Unsafe.NullRef<CachedPosNormTan>();
+					if (!VertexCache.IsVertexFlexed(n)) {
+						flexedVertex = ref VertexCache.CreateFlexVertex(n);
+						if (Unsafe.IsNullRef(ref flexedVertex))
+							continue;
+
+						flexedVertex.Position = vert.Position;
+						flexedVertex.Normal = vert.Normal;
+
+						if (hasTangentS) {
+							flexedVertex.TangentS = vertData.TangentS(n);
+							Assert(flexedVertex.TangentS.W == -1.0f || flexedVertex.TangentS.W == 1.0f);
+						}
+					}
+					else
+						flexedVertex = ref VertexCache.GetFlexVertex(n);
+
+					float s = anim.Speed * (1.0f / 255.0f);
+					float b = anim.Side * (1.0f / 255.0f);
+
+					float w = (w1 * s + (1.0f - s) * w2) * (1.0f - b) + b * (w3 * s + (1.0f - s) * w4);
+
+					flexedVertex.Position += anim.GetDeltaFixed() * w;
+					flexedVertex.Normal += anim.GetNDeltaFixed() * w;
+
+					if (hasTangentS) {
+						flexedVertex.TangentS.AsVector3D() += anim.GetNDeltaFixed() * w;
+						Assert(flexedVertex.TangentS.W == -1.0f || flexedVertex.TangentS.W == 1.0f);
+					}
+				}
+			}
+		}
+
+		VertexCache.RenormalizeFlexVertices(vertData.HasTangentData());
+	}
+
+	private void R_StudioEyeballPosition(MStudioEyeball eyeball, ref EyeballState state) {
+		state.Eyeball = eyeball;
+
+		Vector3 tmp = eyeball.Org;
+		tmp.X += pRC!.Config.EyeShiftX * MathF.Sign(tmp.X);
+		tmp.Y += pRC.Config.EyeShiftY * MathF.Sign(tmp.Y);
+		tmp.Z += pRC.Config.EyeShiftZ * MathF.Sign(tmp.Z);
+
+		MathLib.VectorTransform(in tmp, in pBoneToWorld[eyeball.Bone], out state.Org);
+		MathLib.VectorRotate(in eyeball.Up, in pBoneToWorld[eyeball.Bone], out state.Up);
+
+		state.Forward = pRC.ViewTarget - state.Org;
+		MathLib.VectorNormalize(ref state.Forward);
+
+		if (!pRC.Config.EyeMove) {
+			MathLib.VectorRotate(in eyeball.Forward, in pBoneToWorld[eyeball.Bone], out state.Forward);
+			state.Forward *= -1;
+		}
+
+		state.Right = Vector3.Cross(state.Forward, state.Up);
+		MathLib.VectorNormalize(ref state.Right);
+
+		float dz = eyeball.ZOffset;
+
+		state.Forward += (eyeball.ZOffset + dz) * state.Right;
+
+		MathLib.VectorNormalize(ref state.Forward);
+		state.Right = Vector3.Cross(state.Forward, state.Up);
+		MathLib.VectorNormalize(ref state.Right);
+
+		state.Up = Vector3.Cross(state.Right, state.Forward);
+		MathLib.VectorNormalize(ref state.Up);
+
+		float scale = (1.0f / eyeball.IrisScale) + pRC.Config.EyeSize;
+
+		if (scale > 0)
+			scale = 1.0f / scale;
+
+		state.Mat.M00 = state.Right.X * -scale;
+		state.Mat.M01 = state.Right.Y * -scale;
+		state.Mat.M02 = state.Right.Z * -scale;
+		state.Mat.M10 = state.Up.X * -scale;
+		state.Mat.M11 = state.Up.Y * -scale;
+		state.Mat.M12 = state.Up.Z * -scale;
+
+		state.Mat.M03 = -Vector3.Dot(state.Org, new Vector3(state.Mat.M00, state.Mat.M01, state.Mat.M02)) + 0.5f;
+		state.Mat.M13 = -Vector3.Dot(state.Org, new Vector3(state.Mat.M10, state.Mat.M11, state.Mat.M12)) + 0.5f;
+	}
+
 	private int R_StudioRenderFinal(IMatRenderContext renderContext, int skin, int bodyPartCount, BodyPartInfo[] pBodyPartInfo, object? clientEntity, Span<IMaterial> materials, Span<int> materialFlags, int boneMask, int lod, Span<ColorMeshInfo> colorMeshes) {
 		int numTrianglesRendered = 0;
 
 		for (int i = 0; i < bodyPartCount; i++) {
 			SubModel = pBodyPartInfo[i].SubModel;
 
-			// TODO: Flex controller stuff
+			ComputeEyelidStateFACS(SubModel!);
+
+			VertexCache.SetBodyPart(i);
+			VertexCache.SetModel(pBodyPartInfo[i].SubModelIndex);
+
 			numTrianglesRendered += R_StudioDrawPoints(renderContext, skin, clientEntity, materials, materialFlags, boneMask, lod, colorMeshes);
 		}
 		return numTrianglesRendered;
@@ -210,13 +458,13 @@ public unsafe class StudioRender
 			if (pMaterial == null)
 				continue;
 
-			// VertexCache.SetMesh(i);
+			VertexCache.SetMesh(i);
 
 			// The following are special cases that can't be covered with
 			// the normal static/dynamic methods due to optimization reasons
 			switch (pmesh.MaterialType) {
 				case 1:
-					// numTrianglesRendered += R_StudioDrawEyeball(renderContext, pmesh, pMeshData, lighting, pMaterial, lod);
+					numTrianglesRendered += R_StudioDrawEyeball(renderContext, pmesh, pMeshData, lighting, pMaterial, lod);
 					break;
 				default:
 					numTrianglesRendered += R_StudioDrawMesh(renderContext, pmesh, pMeshData, lighting, pMaterial, colorMeshes, lod);
@@ -230,6 +478,482 @@ public unsafe class StudioRender
 		return numTrianglesRendered;
 	}
 
+	static TokenCache eyeOriginCache;
+	static TokenCache eyeUpCache;
+	static TokenCache irisUCache;
+	static TokenCache irisVCache;
+	static TokenCache glintUCache;
+	static TokenCache glintVCache;
+
+	private void SetEyeMaterialVars(IMaterial? material, MStudioEyeball eyeball, in Vector3 eyeOrigin, in Matrix3x4 irisTransform, in Matrix3x4 glintTransform) {
+		if (material == null)
+			return;
+
+		IMaterialVar? var = material.FindVarFast("$eyeorigin", ref eyeOriginCache);
+		if (var != null)
+			var.SetVecValue(in eyeOrigin);
+
+		var = material.FindVarFast("$eyeup", ref eyeUpCache);
+		if (var != null)
+			var.SetVecValue(in eyeball.Up);
+
+		var = material.FindVarFast("$irisu", ref irisUCache);
+		if (var != null)
+			var.SetVecValue(irisTransform.M00, irisTransform.M01, irisTransform.M02, irisTransform.M03);
+
+		var = material.FindVarFast("$irisv", ref irisVCache);
+		if (var != null)
+			var.SetVecValue(irisTransform.M10, irisTransform.M11, irisTransform.M12, irisTransform.M13);
+
+		var = material.FindVarFast("$glintu", ref glintUCache);
+		if (var != null)
+			var.SetVecValue(glintTransform.M00, glintTransform.M01, glintTransform.M02, glintTransform.M03);
+
+		var = material.FindVarFast("$glintv", ref glintVCache);
+		if (var != null)
+			var.SetVecValue(glintTransform.M10, glintTransform.M11, glintTransform.M12, glintTransform.M13);
+	}
+
+	private static void ComputeGlintTextureProjection(in EyeballState state, in Vector3 vright, in Vector3 vup, out Matrix3x4 mat) {
+		float scale = 1.0f / (state.Eyeball!.Radius * 2);
+		mat = default;
+		mat.M00 = vright.X * scale;
+		mat.M01 = vright.Y * scale;
+		mat.M02 = vright.Z * scale;
+		mat.M10 = vup.X * scale;
+		mat.M11 = vup.Y * scale;
+		mat.M12 = vup.Z * scale;
+
+		mat.M03 = -Vector3.Dot(state.Org, new Vector3(mat.M00, mat.M01, mat.M02)) + 0.5f;
+		mat.M13 = -Vector3.Dot(state.Org, new Vector3(mat.M10, mat.M11, mat.M12)) + 0.5f;
+	}
+
+	static readonly ConVar r_flashlightscissor = new("r_flashlightscissor", "1", 0);
+
+	private void DisableScissor() {
+		using MatRenderContextPtr renderContext = new(materialSystem);
+		if (r_flashlightscissor.GetBool())
+			renderContext.SetScissorRect(-1, -1, -1, -1, false);
+	}
+
+	public struct GlintRenderData
+	{
+		public Vector2 Position;
+		public Vector3 Intensity;
+	}
+
+	ITexture? GlintTexture;
+	ITexture? GlintLODTexture;
+	IMaterial? GlintBuildMaterial;
+	short GlintWidth;
+	short GlintHeight;
+
+	internal void PrecacheGlint() {
+		if (GlintTexture == null) {
+			materialSystem.BeginRenderTargetAllocation();
+
+			GlintTexture = materialSystem.CreateNamedRenderTargetTextureEx("_rt_eyeglint", 32, 32, RenderTargetSizeMode.NoChange, ImageFormat.BGRA8888, MaterialRenderTargetDepth.None, TextureFlags.ClampS | TextureFlags.ClampT, 0)!;
+			GlintTexture.IncrementReferenceCount();
+
+			materialSystem.EndRenderTargetAllocation();
+
+			GlintLODTexture = materialSystem.FindTexture("vgui/black", null, false);
+			GlintLODTexture.IncrementReferenceCount();
+		}
+
+		if (GlintBuildMaterial == null) {
+			KeyValues vmtKeyValues = new("EyeGlint");
+			GlintBuildMaterial = materialSystem.CreateMaterial("___glintbuildmaterial", vmtKeyValues);
+		}
+	}
+
+	private bool R_LightGlintPosition(int index, in Vector3 org, out Vector3 delta, out Vector3 intensity) {
+		if (index >= pRC!.NumLocalLights) {
+			delta = default;
+			intensity = default;
+			return false;
+		}
+
+		R_WorldLightDelta(in pRC.LocalLights[index], in org, out delta);
+		float falloff = R_WorldLightDistanceFalloff(in pRC.LocalLights[index], in delta);
+
+		intensity = pRC.LocalLights[index].Color * falloff;
+		return true;
+	}
+
+	private int BuildGlintRenderData(Span<GlintRenderData> data, int maxGlints, in EyeballState state, in Vector3 vright, in Vector3 vup, in Vector3 r_origin) {
+		Vector3 viewdelta = r_origin - state.Org;
+		MathLib.VectorNormalize(ref viewdelta);
+
+		float iris_radius = state.Eyeball!.Radius * (6.0f / 12.0f);
+		float cornea_radius = state.Eyeball.Radius * (8.0f / 12.0f);
+
+		float er = iris_radius / state.Eyeball.Radius;
+		er = MathF.Sqrt(1 - er * er);
+
+		float cr = iris_radius / cornea_radius;
+		cr = MathF.Sqrt(1 - cr * cr);
+
+		float r = er * state.Eyeball.Radius - cr * cornea_radius;
+		Vector3 cornea = state.Forward * r;
+
+		float dx = Vector3.Dot(vright, cornea);
+		float dy = Vector3.Dot(vup, cornea);
+
+		cornea += state.Org;
+
+		Vector3 reflection;
+
+		int glintCount = 0;
+		for (int i = 0; R_LightGlintPosition(i, in cornea, out Vector3 delta, out Vector3 intensity); ++i) {
+			MathLib.VectorNormalize(ref delta);
+			if (Vector3.Dot(delta, state.Forward) <= 0)
+				continue;
+
+			reflection = delta + viewdelta;
+			MathLib.VectorNormalize(ref reflection);
+
+			data[glintCount].Position.X = dx + cornea_radius * Vector3.Dot(vright, reflection);
+			data[glintCount].Position.Y = dy + cornea_radius * Vector3.Dot(vup, reflection);
+			data[glintCount].Intensity = intensity;
+			if (++glintCount >= maxGlints)
+				return maxGlints;
+
+			if (!R_LightGlintPosition(i, in state.Org, out delta, out intensity))
+				continue;
+
+			MathLib.VectorNormalize(ref delta);
+			if (Vector3.Dot(delta, state.Forward) >= er)
+				continue;
+
+			data[glintCount].Position.X = state.Eyeball.Radius * Vector3.Dot(vright, reflection);
+			data[glintCount].Position.Y = state.Eyeball.Radius * Vector3.Dot(vup, reflection);
+			data[glintCount].Intensity = intensity;
+			if (++glintCount >= maxGlints)
+				return maxGlints;
+		}
+		return glintCount;
+	}
+
+	private ITexture? RenderGlintTexture(in EyeballState state, in Vector3 vright, in Vector3 vup, in Vector3 r_origin) {
+		Span<GlintRenderData> renderData = stackalloc GlintRenderData[16];
+		int glintCount = BuildGlintRenderData(renderData, renderData.Length, in state, in vright, in vup, in r_origin);
+
+		if (glintCount == 0)
+			return GlintLODTexture;
+
+		using MatRenderContextPtr renderContext = new(materialSystem);
+		renderContext.PushRenderTargetAndViewport(GlintTexture);
+
+		IMaterial? prevMaterial = renderContext.GetCurrentMaterial();
+		object? prevProxy = renderContext.GetCurrentProxy();
+		int prevBoneCount = renderContext.GetCurrentNumBones();
+		MaterialHeightClipMode prevClipMode = renderContext.GetHeightClipMode();
+		bool prevClippingEnabled = renderContext.EnableClipping(false);
+		bool inFlashlightMode = renderContext.GetFlashlightMode();
+
+		if (inFlashlightMode)
+			DisableScissor();
+
+		renderContext.ClearColor4ub(0, 0, 0, 0);
+		renderContext.ClearBuffers(true, false, false);
+
+		renderContext.SetFlashlightMode(false);
+		renderContext.SetHeightClipMode(MaterialHeightClipMode.Disable);
+		renderContext.SetNumBoneWeights(0);
+		renderContext.Bind(GlintBuildMaterial!, null);
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		MeshBuilder meshBuilder = new();
+		IMesh mesh = renderContext.GetDynamicMesh();
+		meshBuilder.Begin(mesh, MaterialPrimitiveType.Triangles, glintCount * 4, glintCount * 6);
+
+		const float epsilon = 0.5f / 32.0f;
+		int index = 0;
+		for (int i = 0; i < glintCount; ++i) {
+			ref GlintRenderData glint = ref renderData[i];
+
+			float x = (glint.Position.X + 0.5f) * GlintWidth;
+			float y = (glint.Position.Y + 0.5f) * GlintHeight;
+			Vector2 glintCenter = new(x, y);
+			float ooWidth = 1.0f / GlintWidth;
+			float ooHeight = 1.0f / GlintHeight;
+
+			int x0 = (int)MathF.Floor(x);
+			int y0 = (int)MathF.Floor(y);
+			int x1 = x0 + 1;
+			int y1 = y0 + 1;
+			x0 -= 2;
+			y0 -= 2;
+
+			float screenX0 = x0 * 2 * ooWidth + epsilon - 1;
+			float screenX1 = x1 * 2 * ooWidth + epsilon - 1;
+			float screenY0 = -(y0 * 2 * ooHeight + epsilon - 1);
+			float screenY1 = -(y1 * 2 * ooHeight + epsilon - 1);
+
+			ReadOnlySpan<float> intensity = [glint.Intensity.X, glint.Intensity.Y, glint.Intensity.Z];
+
+			meshBuilder.Position3f(screenX0, screenY0, 0.0f);
+			meshBuilder.TexCoord2f(0, x0, y0);
+			meshBuilder.TexCoord2fv(1, in glintCenter);
+			meshBuilder.TexCoord3fv(2, intensity);
+			meshBuilder.AdvanceVertex();
+
+			meshBuilder.Position3f(screenX1, screenY0, 0.0f);
+			meshBuilder.TexCoord2f(0, x1, y0);
+			meshBuilder.TexCoord2fv(1, in glintCenter);
+			meshBuilder.TexCoord3fv(2, intensity);
+			meshBuilder.AdvanceVertex();
+
+			meshBuilder.Position3f(screenX1, screenY1, 0.0f);
+			meshBuilder.TexCoord2f(0, x1, y1);
+			meshBuilder.TexCoord2fv(1, in glintCenter);
+			meshBuilder.TexCoord3fv(2, intensity);
+			meshBuilder.AdvanceVertex();
+
+			meshBuilder.Position3f(screenX0, screenY1, 0.0f);
+			meshBuilder.TexCoord2f(0, x0, y1);
+			meshBuilder.TexCoord2fv(1, in glintCenter);
+			meshBuilder.TexCoord3fv(2, intensity);
+			meshBuilder.AdvanceVertex();
+
+			meshBuilder.FastIndex((ushort)index);
+			meshBuilder.FastIndex((ushort)(index + 1));
+			meshBuilder.FastIndex((ushort)(index + 2));
+			meshBuilder.FastIndex((ushort)index);
+			meshBuilder.FastIndex((ushort)(index + 2));
+			meshBuilder.FastIndex((ushort)(index + 3));
+			index += 4;
+		}
+
+		meshBuilder.End();
+		mesh.Draw();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.PopMatrix();
+
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PopMatrix();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+		renderContext.PopMatrix();
+
+		renderContext.PopRenderTargetAndViewport();
+
+		renderContext.Bind(prevMaterial!, prevProxy);
+		renderContext.SetNumBoneWeights(prevBoneCount);
+		renderContext.SetHeightClipMode(prevClipMode);
+		renderContext.EnableClipping(prevClippingEnabled);
+		renderContext.SetFlashlightMode(inFlashlightMode);
+
+		return GlintTexture;
+	}
+
+	static readonly ConVar r_glint_alwaysdraw = new("r_glint_alwaysdraw", "0");
+
+	private void R_StudioEyeballGlint(in EyeballState state, IMaterialVar glintVar, in Vector3 vright, in Vector3 vup, in Vector3 r_origin) {
+		using MatRenderContextPtr renderContext = new(materialSystem);
+
+		if (GlintLODTexture != null && r_glint_alwaysdraw.GetInt() == 0) {
+			float pixelArea = renderContext.ComputePixelWidthOfSphere(state.Org, state.Eyeball!.Radius);
+			if (pixelArea < pRC!.Config.EyeGlintPixelWidthLODThreshold) {
+				glintVar.SetTextureValue(GlintLODTexture);
+				return;
+			}
+		}
+
+		GlintWidth = (short)GlintTexture!.GetActualWidth();
+		GlintHeight = (short)GlintTexture.GetActualHeight();
+
+		ITexture? useGlintTexture = RenderGlintTexture(in state, in vright, in vup, in r_origin);
+
+		glintVar.SetTextureValue(useGlintTexture);
+	}
+
+	static TokenCache glintCache;
+
+	private int R_StudioDrawEyeball(IMatRenderContext renderContext, MStudioMesh pmesh, StudioMeshData pMeshData, StudioModelLighting lighting, IMaterial pMaterial, int lod) {
+		if (!pRC!.Config.Eyes)
+			return 0;
+
+		MStudioMeshVertexData? vertData = GetFatVertexData(pmesh, StudioHdr!);
+		if (vertData == null)
+			return 0;
+
+		int j;
+		int numTrianglesRendered = 0;
+
+		bool isDeltaFlexed = false;
+		bool isHardwareSkinnedData = false;
+		bool isFlexed = false;
+		for (j = 0; j < pMeshData.NumGroup; ++j) {
+			StudioMeshGroup pGroup = pMeshData.MeshGroup![j];
+
+			if ((pGroup.Flags & StudioMeshGroupFlags.IsDeltaFlexed) != 0 && hardwareConfig.SupportsStreamOffset())
+				isDeltaFlexed = true;
+
+			if ((pGroup.Flags & StudioMeshGroupFlags.IsFlexed) != 0)
+				isFlexed = true;
+
+			if ((pGroup.Flags & StudioMeshGroupFlags.IsHWSkinned) != 0)
+				isHardwareSkinnedData = true;
+		}
+
+		bool flexStatic = isDeltaFlexed && hardwareConfig.SupportsStreamOffset();
+		bool shouldHardwareSkin = isHardwareSkinnedData && (!isFlexed || flexStatic) &&
+			(lighting != StudioModelLighting.Software) && !pRC.Config.SoftwareSkin;
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.LoadIdentity();
+
+		if (isFlexed && (!flexStatic || !shouldHardwareSkin))
+			R_StudioFlexVerts(pmesh, lod);
+
+		MStudioEyeball eyeball = SubModel!.Eyeball(pmesh.MaterialParam);
+
+		MathLib.VectorTransform(in eyeball.Org, in pBoneToWorld[eyeball.Bone], out Vector3 org);
+
+		ComputeGlintTextureProjection(in EyeballStates[pmesh.MaterialParam], in pRC.ViewRight, in pRC.ViewUp, out Matrix3x4 glintMat);
+
+		if (!pRC.Config.Wireframe) {
+			IMaterialVar? glintVar = pMaterial.FindVarFast("$glint", ref glintCache);
+			if (glintVar != null)
+				R_StudioEyeballGlint(in EyeballStates[pmesh.MaterialParam], glintVar, in pRC.ViewRight, in pRC.ViewUp, in pRC.ViewOrigin);
+			SetEyeMaterialVars(pMaterial, eyeball, in org, in EyeballStates[pmesh.MaterialParam].Mat, in glintMat);
+		}
+
+		if (shouldHardwareSkin) {
+			for (j = 0; j < pMeshData.NumGroup; ++j) {
+				StudioMeshGroup pGroup = pMeshData.MeshGroup![j];
+				numTrianglesRendered += R_StudioDrawStaticMesh(renderContext, pmesh, pGroup, lighting, pRC.AlphaMod, pMaterial, lod, default);
+			}
+
+			return numTrianglesRendered;
+		}
+
+		renderContext.SetNumBoneWeights(0);
+		VertexCache.SetupComputation(pmesh);
+
+		int alphaInt = MathLib.RoundFloatToInt(pRC.AlphaMod * 255);
+		byte a = (byte)Math.Clamp(alphaInt, 0, 255);
+
+		MeshBuilder meshBuilder = new();
+
+		bool useHWLighting = pRC.Config.SupportsVertexAndPixelShaders && !pRC.Config.SoftwareLighting;
+		for (j = 0; j < pMeshData.NumGroup; ++j) {
+			StudioMeshGroup pGroup = pMeshData.MeshGroup![j];
+
+			IMesh mesh = renderContext.GetDynamicMesh(false, null, pGroup.Mesh);
+
+			meshBuilder.Begin(mesh, MaterialPrimitiveType.Triangles, pmesh.NumVertices, 0);
+
+			for (int i = 0; i < pGroup.NumVertices; ++i) {
+				int n = pGroup.GroupIndexToMeshIndex![i];
+				ref MStudioVertex vert = ref vertData.Vertex(n);
+
+				ref CachedPosNorm worldVert = ref VertexCache.CreateWorldVertex(n);
+
+				if (VertexCache.IsVertexFlexed(n)) {
+					ref CachedPosNormTan flexVert = ref VertexCache.GetFlexVertex(n);
+					R_StudioTransform(in flexVert.Position, in vert.BoneWeights, out worldVert.Position.AsVector3D());
+					R_StudioRotate(in flexVert.Normal, in vert.BoneWeights, out worldVert.Normal.AsVector3D());
+					Assert(worldVert.Normal.X >= -1.05f && worldVert.Normal.X <= 1.05f);
+					Assert(worldVert.Normal.Y >= -1.05f && worldVert.Normal.Y <= 1.05f);
+					Assert(worldVert.Normal.Z >= -1.05f && worldVert.Normal.Z <= 1.05f);
+				}
+				else {
+					R_StudioTransform(in vert.Position, in vert.BoneWeights, out worldVert.Position.AsVector3D());
+					R_StudioRotate(in vert.Normal, in vert.BoneWeights, out worldVert.Normal.AsVector3D());
+					Assert(worldVert.Normal.X >= -1.05f && worldVert.Normal.X <= 1.05f);
+					Assert(worldVert.Normal.Y >= -1.05f && worldVert.Normal.Y <= 1.05f);
+					Assert(worldVert.Normal.Z >= -1.05f && worldVert.Normal.Z <= 1.05f);
+				}
+
+				meshBuilder.Position3fv(in worldVert.Position.AsVector3D());
+
+				if (useHWLighting)
+					meshBuilder.Normal3fv(in worldVert.Normal.AsVector3D());
+				else {
+					R_StudioEyeballNormal(eyeball, in org, in worldVert.Position.AsVector3D(), out worldVert.Normal.AsVector3D());
+
+					meshBuilder.Normal3fv(in worldVert.Normal.AsVector3D());
+					R_ComputeLightAtPoint3(in worldVert.Position.AsVector3D(), in worldVert.Normal.AsVector3D(), out Vector3 color);
+
+					byte r = MathLib.LinearToLightmap(color.X);
+					byte g = MathLib.LinearToLightmap(color.Y);
+					byte b = MathLib.LinearToLightmap(color.Z);
+
+					meshBuilder.Color4ub(r, g, b, a);
+				}
+
+				meshBuilder.TexCoord2fv(0, in vert.TexCoord);
+
+				meshBuilder.BoneWeight(0, 1.0f);
+				meshBuilder.BoneWeight(1, 0.0f);
+				meshBuilder.BoneWeight(2, 0.0f);
+				meshBuilder.BoneWeight(3, 0.0f);
+				meshBuilder.BoneMatrix(0, 0);
+				meshBuilder.BoneMatrix(1, 0);
+				meshBuilder.BoneMatrix(2, 0);
+				meshBuilder.BoneMatrix(3, 0);
+				meshBuilder.AdvanceVertex();
+			}
+
+			meshBuilder.End();
+			mesh.Draw();
+		}
+
+		return numTrianglesRendered;
+	}
+
+	private void R_StudioTransform(in Vector3 in1, in MStudioBoneWeight boneweight, out Vector3 out1) {
+		switch (boneweight.NumBones) {
+			case 1:
+				MathLib.VectorTransform(in in1, in PoseToWorld[boneweight.Bone[0]], out out1);
+				break;
+
+			default:
+				out1 = default;
+				for (int i = 0; i < boneweight.NumBones; i++) {
+					MathLib.VectorTransform(in in1, in PoseToWorld[boneweight.Bone[i]], out Vector3 out2);
+					MathLib.VectorMA(out1, boneweight.Weight[i], out2, out out1);
+				}
+				break;
+		}
+	}
+
+	private void R_StudioRotate(in Vector3 in1, in MStudioBoneWeight boneweight, out Vector3 out1) {
+		if (boneweight.NumBones == 1)
+			MathLib.VectorRotate(in in1, in PoseToWorld[boneweight.Bone[0]], out out1);
+		else {
+			out1 = default;
+
+			for (int i = 0; i < boneweight.NumBones; i++) {
+				MathLib.VectorRotate(in in1, in PoseToWorld[boneweight.Bone[i]], out Vector3 out2);
+				MathLib.VectorMA(out1, boneweight.Weight[i], out2, out out1);
+			}
+			MathLib.VectorNormalize(ref out1);
+		}
+	}
+
+	private static void R_StudioEyeballNormal(MStudioEyeball eyeball, in Vector3 org, in Vector3 pos, out Vector3 normal) {
+		normal = pos - org;
+		float upAmount = Vector3.Dot(normal, eyeball.Up);
+		MathLib.VectorMA(normal, -0.5f * upAmount, eyeball.Up, out normal);
+		MathLib.VectorNormalize(ref normal);
+	}
+
 	private int R_StudioDrawMesh(IMatRenderContext renderContext, MStudioMesh pmesh, StudioMeshData pMeshData, StudioModelLighting lighting, IMaterial pMaterial, Span<ColorMeshInfo> colorMeshes, int lod) {
 		int numTrianglesRendered = 0;
 
@@ -239,7 +963,7 @@ public unsafe class StudioRender
 			bool bIsFlexed = (pGroup.Flags & StudioMeshGroupFlags.IsFlexed) != 0;
 			bool bIsDeltaFlexed = (pGroup.Flags & StudioMeshGroupFlags.IsDeltaFlexed) != 0;
 
-			bool bFlexStatic = bIsDeltaFlexed; // && g_pMaterialSystemHardwareConfig->SupportsStreamOffset()); << todo: research
+			bool bFlexStatic = bIsDeltaFlexed && hardwareConfig.SupportsStreamOffset();
 
 			bool bIsHardwareSkinnedData = (pGroup.Flags & StudioMeshGroupFlags.IsHWSkinned) != 0;
 			bool bShouldHardwareSkin = bIsHardwareSkinnedData && (!bIsFlexed || bFlexStatic) && (lighting != StudioModelLighting.Software);
@@ -276,7 +1000,7 @@ public unsafe class StudioRender
 			VertexFormat fmt = ComputeSWSkinVertexFormat(pMaterial!);
 			bool dx8Vertex = fmt.GetUserDataSize() != 0;
 
-			IMesh mesh = renderContext.GetDynamicMesh(false, null, pGroup.Mesh);
+			IMesh mesh = renderContext.GetDynamicMeshEx(fmt, false, null, pGroup.Mesh);
 
 			MeshBuilder meshBuilder = new();
 			meshBuilder.Begin(mesh, MaterialPrimitiveType.Heterogenous, pGroup.NumVertices, 0);
@@ -291,15 +1015,23 @@ public unsafe class StudioRender
 		// Needed when we switch back and forth between hardware + software lighting
 		// TODO ^^^^^^^^^^^^^^^^^^
 
-		// Build separate flex stream containing deltas, which will get copied into another vertex stream
-		// TODO ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+		bool useSOFlex = hardwareConfig.SupportsStreamOffset();
+		if ((pGroup.Flags & StudioMeshGroupFlags.IsDeltaFlexed) != 0 && pRC.Config.Flex) {
+			if (useSOFlex) {
+				R_StudioProcessFlexedMesh_StreamOffset(pmesh, lod);
+				R_StudioFlexMeshGroup(pGroup);
+			}
+		}
 
 		if (!colorMeshes.IsEmpty && (pGroup.ColorMeshID != -1))
 			numTrianglesRendered = R_StudioDrawGroupHWSkin(renderContext, pGroup, pGroup.Mesh, ref colorMeshes[pGroup.ColorMeshID]);
 		else
 			numTrianglesRendered = R_StudioDrawGroupHWSkin(renderContext, pGroup, pGroup.Mesh, ref Unsafe.NullRef<ColorMeshInfo>());
 
-		// TODO: Morph/flex
+		if ((pGroup.Flags & StudioMeshGroupFlags.IsDeltaFlexed) != 0 && pRC.Config.Flex) {
+			if (useSOFlex)
+				pGroup.Mesh!.DisableFlexMesh();
+		}
 
 		return numTrianglesRendered;
 	}
@@ -367,25 +1099,23 @@ public unsafe class StudioRender
 		renderContext.MatrixMode(MaterialMatrixMode.Model);
 		renderContext.LoadIdentity();
 
-		if (doFlex) {
-			// todo
-		}
+		if (doFlex)
+			R_StudioFlexVerts(pmesh, lod);
 
 		bool needsTangentSpace = pMaterial != null ? pMaterial.NeedsTangentSpace() : false;
 
 		VertexFormat fmt = ComputeSWSkinVertexFormat(pMaterial!);
 		bool dx8Vertex = fmt.GetUserDataSize() != 0;
 
-		IMesh mesh = renderContext.GetDynamicMesh(false, null, pGroup.Mesh);
+		IMesh mesh = renderContext.GetDynamicMeshEx(fmt, false, null, pGroup.Mesh);
 
 		MeshBuilder meshBuilder = new();
 		meshBuilder.Begin(mesh, MaterialPrimitiveType.Heterogenous, pGroup.NumVertices, 0);
 
 		if (swSkin)
 			R_StudioSoftwareProcessMesh(pmesh, ref meshBuilder, pGroup.NumVertices, pGroup.GroupIndexToMeshIndex!, lighting, doFlex, alphaMod, needsTangentSpace, dx8Vertex, pMaterial!);
-		else if (doFlex) {
-			// todo
-		}
+		else if (doFlex)
+			R_StudioProcessFlexedMesh(pmesh, ref meshBuilder, pGroup.NumVertices, pGroup.GroupIndexToMeshIndex!);
 
 		meshBuilder.End();
 
@@ -500,10 +1230,10 @@ public unsafe class StudioRender
 
 		MStudioMeshVertexData? vertData = GetFatVertexData(mesh, StudioHdr!);
 		if (vertData != null)
-			R_StudioSoftwareProcessMesh(vertData, PoseToWorld, ref meshBuilder, numVertices, groupToMesh, alphaMask, lighting, material, needsTangentSpace, dx8Vertex);
+			R_StudioSoftwareProcessMesh(vertData, PoseToWorld, VertexCache, ref meshBuilder, numVertices, groupToMesh, alphaMask, lighting, material, needsTangentSpace, doFlex, dx8Vertex);
 	}
 
-	private void R_StudioSoftwareProcessMesh(MStudioMeshVertexData vertData, Span<Matrix3x4> poseToWorld, ref MeshBuilder meshBuilder, int numVertices, ushort[] groupToMesh, uint alphaMask, StudioModelLighting lighting, IMaterial material, bool hasTangentSpace, bool dx8Vertex) {
+	private void R_StudioSoftwareProcessMesh(MStudioMeshVertexData vertData, Span<Matrix3x4> poseToWorld, CachedRenderData vertexCache, ref MeshBuilder meshBuilder, int numVertices, ushort[] groupToMesh, uint alphaMask, StudioModelLighting lighting, IMaterial material, bool hasTangentSpace, bool doFlex, bool dx8Vertex) {
 		Assert(numVertices > 0);
 
 		float illum = 1.0f;
@@ -516,10 +1246,20 @@ public unsafe class StudioRender
 
 			Matrix3x4 skinMat = ComputeSkinMatrix(in vert.BoneWeights, poseToWorld);
 
-			Vector4 srcTangentS = hasTangentSpace ? vertData.TangentS(n) : default;
+			Vector3 pos;
+			Vector3 norm;
+			Vector4 tangentS;
+			if (doFlex && vertexCache.IsVertexFlexed(n)) {
+				ref CachedPosNormTan flexedVertex = ref vertexCache.GetFlexVertex(n);
+				if (hasTangentSpace)
+					Assert(flexedVertex.TangentS.W == -1.0f || flexedVertex.TangentS.W == 1.0f);
 
-			// todo: flex
-			R_TransformVert(in vert.Position, in vert.Normal, in srcTangentS, in skinMat, out Vector3 pos, out Vector3 norm, out Vector4 tangentS, hasTangentSpace);
+				R_TransformVert(in flexedVertex.Position, in flexedVertex.Normal, in flexedVertex.TangentS, in skinMat, out pos, out norm, out tangentS, hasTangentSpace);
+			}
+			else {
+				Vector4 srcTangentS = hasTangentSpace ? vertData.TangentS(n) : default;
+				R_TransformVert(in vert.Position, in vert.Normal, in srcTangentS, in skinMat, out pos, out norm, out tangentS, hasTangentSpace);
+			}
 
 			R_PerformLighting(in forward, illum, in pos, in norm, alphaMask, out uint color, lighting);
 
@@ -530,6 +1270,200 @@ public unsafe class StudioRender
 			if (dx8Vertex)
 				meshBuilder.UserData(in tangentS);
 			meshBuilder.AdvanceVertex();
+		}
+	}
+
+	private void ComputeFlexedVertex_StreamOffset(MStudioFlex flex, int vertCount, float w1, float w2, float w3, float w4) {
+		float w12 = w1 - w2;
+		float w34 = w3 - w4;
+
+		bool wrinkle = flex.VertAnimType != StudioVertAnimType.Normal;
+		for (int j = 0; j < flex.NumVerts; j++) {
+			int n;
+			float s, b;
+			Vector4 position, normal;
+			if (wrinkle) {
+				ref MStudioVertAnimWrinkle anim = ref flex.VertAnimWrinkle(j);
+				n = anim.VertAnim.Index;
+				s = anim.VertAnim.Speed;
+				b = anim.VertAnim.Side;
+				position = anim.GetDeltaFixed4DAligned();
+				normal = anim.GetNDeltaFixed4DAligned();
+			}
+			else {
+				ref MStudioVertAnim anim = ref flex.VertAnim(j);
+				n = anim.Index;
+				s = anim.Speed;
+				b = anim.Side;
+				position = anim.GetDeltaFixed4DAligned();
+				normal = anim.GetNDeltaFixed4DAligned();
+			}
+
+			if (n >= vertCount)
+				continue;
+
+			ref CachedPosNorm flexedVertex = ref Unsafe.NullRef<CachedPosNorm>();
+			if (!VertexCache.IsThinVertexFlexed(n)) {
+				flexedVertex = ref VertexCache.CreateThinFlexVertex(n);
+
+				Assert(!Unsafe.IsNullRef(ref flexedVertex));
+				if (Unsafe.IsNullRef(ref flexedVertex))
+					continue;
+
+				flexedVertex.Position = Vector4.Zero;
+				flexedVertex.Normal = Vector4.Zero;
+			}
+			else
+				flexedVertex = ref VertexCache.GetThinFlexVertex(n);
+
+			s *= 1.0f / 255.0f;
+			b *= 1.0f / 255.0f;
+
+			float wa = w2 + w12 * s;
+			float wb = w4 + w34 * s;
+			float w = wa + (wb - wa) * b;
+			flexedVertex.Position += position * w;
+			flexedVertex.Normal += normal * w;
+		}
+	}
+
+	private void R_StudioProcessFlexedMesh_StreamOffset(MStudioMesh mesh, int lod) {
+		if (VertexCache.IsFlexComputationDone())
+			return;
+
+		int vertCount = mesh.VertexData.NumLODVertexes[lod];
+		VertexCache.SetupComputation(mesh, true);
+
+		for (int i = 0; i < mesh.NumFlexes; i++) {
+			MStudioFlex flex = mesh.Flex(i);
+
+			float w1 = RampFlexWeight(flex, pFlexWeights[flex.FlexDesc]);
+			float w2 = RampFlexWeight(flex, pFlexDelayedWeights[flex.FlexDesc]);
+
+			float w3, w4;
+			if (flex.FlexPair != 0) {
+				w3 = RampFlexWeight(flex, pFlexWeights[flex.FlexPair]);
+				w4 = RampFlexWeight(flex, pFlexDelayedWeights[flex.FlexPair]);
+			}
+			else {
+				w3 = w1;
+				w4 = w2;
+			}
+
+			if (w1 > -0.001 && w1 < 0.001 && w2 > -0.001 && w2 < 0.001) {
+				if (w3 > -0.001 && w3 < 0.001 && w4 > -0.001 && w4 < 0.001)
+					continue;
+			}
+
+			ComputeFlexedVertex_StreamOffset(flex, vertCount, w1, w2, w3, w4);
+		}
+	}
+
+	private void R_StudioFlexMeshGroup(StudioMeshGroup pGroup) {
+		MeshBuilder meshBuilder = new();
+		using MatRenderContextPtr renderContext = new(materialSystem);
+		IMesh mesh = renderContext.GetFlexMesh();
+		meshBuilder.Begin(mesh, MaterialPrimitiveType.Heterogenous, pGroup.NumVertices, 0, out int vertexOffsetInBytes);
+
+		for (int j = 0; j < pGroup.NumVertices; j++) {
+			int n = pGroup.GroupIndexToMeshIndex![j];
+			if (VertexCache.IsThinVertexFlexed(n)) {
+				ref CachedPosNorm flexedVertex = ref VertexCache.GetThinFlexVertex(n);
+				meshBuilder.Position3fv(in flexedVertex.Position.AsVector3D());
+				meshBuilder.NormalDelta3fv(in flexedVertex.Normal.AsVector3D());
+				meshBuilder.Wrinkle1f(flexedVertex.Position.W);
+			}
+			else {
+				meshBuilder.Position3f(0.0f, 0.0f, 0.0f);
+				meshBuilder.NormalDelta3f(0.0f, 0.0f, 0.0f);
+				meshBuilder.Wrinkle1f(0.0f);
+			}
+			meshBuilder.AdvanceVertex();
+		}
+
+		meshBuilder.End(false, false);
+
+		pGroup.Mesh!.SetFlexMesh(mesh, vertexOffsetInBytes);
+	}
+
+	private void R_StudioProcessFlexedMesh(MStudioMesh mesh, ref MeshBuilder meshBuilder, int numVertices, ushort[] groupToMesh) {
+		MStudioMeshVertexData? vertData = GetFatVertexData(mesh, StudioHdr!);
+		if (vertData == null)
+			return;
+
+		if (vertData.HasTangentData()) {
+			for (int j = 0; j < numVertices; j++) {
+				int n = groupToMesh[j];
+				ref MStudioVertex vert = ref vertData.Vertex(n);
+
+				if (VertexCache.IsVertexFlexed(n)) {
+					ref CachedPosNormTan flexedVertex = ref VertexCache.GetFlexVertex(n);
+					meshBuilder.Position3fv(in flexedVertex.Position);
+					meshBuilder.BoneWeight(0, 1.0f);
+					meshBuilder.BoneWeight(1, 0.0f);
+					meshBuilder.BoneWeight(2, 0.0f);
+					meshBuilder.BoneWeight(3, 0.0f);
+					meshBuilder.BoneMatrix(0, 0);
+					meshBuilder.BoneMatrix(1, 0);
+					meshBuilder.BoneMatrix(2, 0);
+					meshBuilder.BoneMatrix(3, 0);
+					meshBuilder.Normal3fv(in flexedVertex.Normal);
+					meshBuilder.TexCoord2fv(0, in vert.TexCoord);
+					Assert(flexedVertex.TangentS.W == -1.0f || flexedVertex.TangentS.W == 1.0f);
+					meshBuilder.UserData(in flexedVertex.TangentS);
+				}
+				else {
+					meshBuilder.Position3fv(in vert.Position);
+					meshBuilder.BoneWeight(0, 1.0f);
+					meshBuilder.BoneWeight(1, 0.0f);
+					meshBuilder.BoneWeight(2, 0.0f);
+					meshBuilder.BoneWeight(3, 0.0f);
+					meshBuilder.BoneMatrix(0, 0);
+					meshBuilder.BoneMatrix(1, 0);
+					meshBuilder.BoneMatrix(2, 0);
+					meshBuilder.BoneMatrix(3, 0);
+					meshBuilder.Normal3fv(in vert.Normal);
+					meshBuilder.TexCoord2fv(0, in vert.TexCoord);
+					Assert(vertData.TangentS(n).W == -1.0f || vertData.TangentS(n).W == 1.0f);
+					meshBuilder.UserData(in vertData.TangentS(n));
+				}
+
+				meshBuilder.AdvanceVertex();
+			}
+		}
+		else {
+			for (int j = 0; j < numVertices; j++) {
+				int n = groupToMesh[j];
+				ref MStudioVertex vert = ref vertData.Vertex(n);
+
+				if (VertexCache.IsVertexFlexed(n)) {
+					ref CachedPosNormTan flexedVertex = ref VertexCache.GetFlexVertex(n);
+					meshBuilder.Position3fv(in flexedVertex.Position);
+					meshBuilder.BoneWeight(0, 1.0f);
+					meshBuilder.BoneWeight(1, 0.0f);
+					meshBuilder.BoneWeight(2, 0.0f);
+					meshBuilder.BoneWeight(3, 0.0f);
+					meshBuilder.BoneMatrix(0, 0);
+					meshBuilder.BoneMatrix(1, 0);
+					meshBuilder.BoneMatrix(2, 0);
+					meshBuilder.BoneMatrix(3, 0);
+					meshBuilder.Normal3fv(in flexedVertex.Normal);
+				}
+				else {
+					meshBuilder.Position3fv(in vert.Position);
+					meshBuilder.BoneWeight(0, 1.0f);
+					meshBuilder.BoneWeight(1, 0.0f);
+					meshBuilder.BoneWeight(2, 0.0f);
+					meshBuilder.BoneWeight(3, 0.0f);
+					meshBuilder.BoneMatrix(0, 0);
+					meshBuilder.BoneMatrix(1, 0);
+					meshBuilder.BoneMatrix(2, 0);
+					meshBuilder.BoneMatrix(3, 0);
+					meshBuilder.Normal3fv(in vert.Normal);
+				}
+				meshBuilder.TexCoord2fv(0, in vert.TexCoord);
+				meshBuilder.AdvanceVertex();
+			}
 		}
 	}
 
@@ -598,7 +1532,7 @@ public unsafe class StudioRender
 				return 0.0f;
 		}
 
-		float total = float.Epsilon;
+		float total = FLT_EPSILON;
 
 		LightTypeOptimizationFlags flags = (LightTypeOptimizationFlags)wl.Flags;
 
@@ -719,9 +1653,11 @@ public unsafe class StudioRender
 
 		lighting = R_StudioComputeLighting(pMaterial, materialFlags, colorMeshes);
 		if (lighting == StudioModelLighting.Mouth) {
-			// TODO
-			Assert(false);
-			return null;
+			if (!pRC.Config.Teeth || !R_TeethAreVisible())
+				return null;
+
+			if (pRC.Config.SupportsVertexAndPixelShaders)
+				R_MouthSetupVertexShader(pMaterial);
 		}
 
 		// todo: lightmap var
@@ -738,6 +1674,35 @@ public unsafe class StudioRender
 		}
 
 		return pMaterial;
+	}
+
+	static bool R_TeethAreVisible() => true;
+
+	static TokenCache illumVarCache;
+	static TokenCache forwardVarCache;
+
+	private void R_MouthSetupVertexShader(IMaterial? material) {
+		if (material == null)
+			return;
+
+		MStudioMouth mouth = StudioHdr!.Mouth(0);
+
+		float illum = pFlexWeights[mouth.FlexDesc];
+		if (illum < 0)
+			illum = 0;
+		if (illum > 1)
+			illum = 1;
+
+		MathLib.VectorRotate(in mouth.Forward, in pBoneToWorld[mouth.Bone], out Vector3 forward);
+		forward *= -1;
+
+		IMaterialVar? illumVar = material.FindVarFast("$illumfactor", ref illumVarCache);
+		if (illumVar != null)
+			illumVar.SetFloatValue(illum);
+
+		IMaterialVar? forwardVar = material.FindVarFast("$forward", ref forwardVarCache);
+		if (forwardVar != null)
+			forwardVar.SetVecValue(in forward);
 	}
 
 	private StudioModelLighting R_StudioComputeLighting(IMaterial pMaterial, int materialFlags, Span<ColorMeshInfo> colorMeshes) {

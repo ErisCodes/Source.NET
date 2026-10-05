@@ -3,6 +3,7 @@ using Steamworks;
 using System;
 using System.Formats.Asn1;
 using System.Globalization;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace Source.Common;
@@ -298,12 +299,12 @@ public ref struct CFormatReader
 		int chars = 0;
 		for (int i = 0; i < readTarget.Length; i++) {
 			if (Overflowed())
-				return i;
+				return chars;
 
 			char c = format[formatReader];
 			if (c == '%') {
 				i++;
-				if (format[formatReader + 1] != '%') {
+				if (formatReader + 1 < format.Length && format[formatReader + 1] != '%' && format[formatReader + 1] != '\0') {
 					// We have to stop, a variable was reached
 					formatReader++;
 					haltedAtVariable = true;
@@ -449,8 +450,12 @@ public static class CFormatting
 			i++;
 
 		int mantissaStart = i;
-		while (i < input.Length && (char.IsAsciiDigit(input[i]) || input[i] == '.'))
+		bool seenDot = false;
+		while (i < input.Length && (char.IsAsciiDigit(input[i]) || (input[i] == '.' && !seenDot))) {
+			if (input[i] == '.')
+				seenDot = true;
 			i++;
+		}
 
 		if (i > mantissaStart && i < input.Length && (input[i] == 'e' || input[i] == 'E')) {
 			int expStart = i;
@@ -471,6 +476,96 @@ public static class CFormatting
 		}
 		output = input;
 		return 0;
+	}
+
+	public static double strtod(ReadOnlySpan<char> input, out ReadOnlySpan<char> output) {
+		int i = 0;
+		while (i < input.Length && input[i] is ' ' or '\t' or '\n' or '\r' or '\f' or '\v')
+			i++;
+
+		int start = i;
+		if (i < input.Length && (input[i] == '+' || input[i] == '-'))
+			i++;
+
+		int mantissaStart = i;
+		bool seenDot = false;
+		while (i < input.Length && (char.IsAsciiDigit(input[i]) || (input[i] == '.' && !seenDot))) {
+			if (input[i] == '.')
+				seenDot = true;
+			i++;
+		}
+
+		if (i > mantissaStart && i < input.Length && (input[i] == 'e' || input[i] == 'E')) {
+			int expStart = i;
+			i++;
+			if (i < input.Length && (input[i] == '+' || input[i] == '-'))
+				i++;
+			if (i < input.Length && char.IsAsciiDigit(input[i])) {
+				while (i < input.Length && char.IsAsciiDigit(input[i]))
+					i++;
+			}
+			else
+				i = expStart;
+		}
+
+		if (double.TryParse(input[start..i], NumberStyles.Float, CultureInfo.InvariantCulture, out double ret)) {
+			output = input[i..];
+			return ret;
+		}
+		output = input;
+		return 0;
+	}
+
+	public static double atof(ReadOnlySpan<char> str) => strtod(str, out _);
+
+	public static string FormatFixed(double value, int precision) {
+		long bits = BitConverter.DoubleToInt64Bits(value);
+		bool negative = bits < 0;
+		long fraction = bits & 0xFFFFFFFFFFFFFL;
+		int exponent = (int)((bits >> 52) & 0x7FF);
+
+		if (exponent == 0x7FF) {
+			if (fraction == 0)
+				return negative ? "-inf" : "inf";
+			if ((fraction & 0x8000000000000L) == 0)
+				return negative ? "-nan(snan)" : "nan(snan)";
+			if (negative && fraction == 0x8000000000000L)
+				return "-nan(ind)";
+			return negative ? "-nan" : "nan";
+		}
+
+		BigInteger mantissa = exponent == 0 ? fraction : fraction | (1L << 52);
+		int shift = (exponent == 0 ? 1 : exponent) - 1075;
+		BigInteger scaled;
+		if (shift >= 0)
+			scaled = (mantissa << shift) * BigInteger.Pow(10, precision);
+		else {
+			BigInteger num = mantissa * BigInteger.Pow(10, precision);
+			BigInteger den = BigInteger.One << -shift;
+			scaled = BigInteger.DivRem(num, den, out BigInteger rem);
+			int cmp = (rem << 1).CompareTo(den);
+			if (cmp > 0 || (cmp == 0 && !scaled.IsEven))
+				scaled += 1;
+		}
+
+		string digits = scaled.ToString(CultureInfo.InvariantCulture);
+		if (digits.Length <= precision)
+			digits = new string('0', precision - digits.Length + 1) + digits;
+
+		string result = precision > 0 ? $"{digits[..^precision]}.{digits[^precision..]}" : digits;
+		return negative ? "-" + result : result;
+	}
+
+	public static int ScanFloats(ReadOnlySpan<char> str, Span<float> values) {
+		str = str.SliceNullTerminatedString();
+		for (int i = 0; i < values.Length; i++) {
+			float value = strtof(str, out ReadOnlySpan<char> rest);
+			if (rest.Length == str.Length)
+				return i;
+			values[i] = value;
+			str = rest;
+		}
+		return values.Length;
 	}
 
 	public static bool nexttoken(out ReadOnlySpan<char> token, ReadOnlySpan<char> str, char sep, out ReadOnlySpan<char> next) {
@@ -529,9 +624,15 @@ public static class CFormatting
 
 	public static int strcmp(scoped ReadOnlySpan<char> a, scoped ReadOnlySpan<char> b) => a.SliceNullTerminatedString().CompareTo(b.SliceNullTerminatedString(), StringComparison.Ordinal);
 	public static int strncmp(scoped ReadOnlySpan<char> a, scoped ReadOnlySpan<char> b, int c) => a.SliceNullTerminatedString().SliceSafe(c).CompareTo(b.SliceNullTerminatedString().SliceSafe(c), StringComparison.Ordinal);
-	public static int strnicmp(scoped ReadOnlySpan<char> a, scoped ReadOnlySpan<char> b, int c) => a.SliceNullTerminatedString().SliceSafe(c).CompareTo(b.SliceNullTerminatedString().SliceSafe(c), StringComparison.OrdinalIgnoreCase);
-	public static int stricmp(scoped ReadOnlySpan<char> a, scoped ReadOnlySpan<char> b) => a.SliceNullTerminatedString().CompareTo(b.SliceNullTerminatedString(), StringComparison.OrdinalIgnoreCase);
-	public static int strcmpi(scoped ReadOnlySpan<char> a, scoped ReadOnlySpan<char> b) => a.SliceNullTerminatedString().CompareTo(b.SliceNullTerminatedString(), StringComparison.OrdinalIgnoreCase);
+	public static int strnicmp(scoped ReadOnlySpan<char> a, scoped ReadOnlySpan<char> b, int c) => stricmp(a.SliceNullTerminatedString().SliceSafe(c), b.SliceNullTerminatedString().SliceSafe(c));
+	public static int stricmp(scoped ReadOnlySpan<char> a, scoped ReadOnlySpan<char> b) {
+		a = a.SliceNullTerminatedString(); b = b.SliceNullTerminatedString();
+		for (int i = 0; i < a.Length && i < b.Length; i++)
+			if (char.ToLowerInvariant(a[i]) != char.ToLowerInvariant(b[i]))
+				return char.ToLowerInvariant(a[i]) - char.ToLowerInvariant(b[i]);
+		return a.Length - b.Length;
+	}
+	public static int strcmpi(scoped ReadOnlySpan<char> a, scoped ReadOnlySpan<char> b) => stricmp(a, b);
 
 
 	public static bool streq(scoped ReadOnlySpan<char> a, scoped ReadOnlySpan<char> b) => a.SliceNullTerminatedString().Equals(b.SliceNullTerminatedString(), StringComparison.Ordinal);
@@ -682,15 +783,15 @@ public static class CFormatting
 		return len;
 	}
 	// This needs to go in the future, but Dbg currently relies on it.
-	public static unsafe int sprintf(scoped Span<char> target, ref CFormatReader reader, params object?[] args) {
+	public static unsafe int sprintf(scoped Span<char> target, ref CFormatReader reader, params ReadOnlySpan<object?> args) {
 		int originalSize = target.Length;
 
 		Span<char> buffer = stackalloc char[256];
-		while (!reader.Overflowed()) {
+		while (!reader.Overflowed() && !target.IsEmpty) {
 			// Try reading literal
 
 #pragma warning disable CS9080 // Use of variable in this context may expose referenced variables outside of their declaration scope
-			Span<char> read = buffer[0..reader.ReadLiteral(buffer)];
+			Span<char> read = buffer[0..reader.ReadLiteral(buffer[..Math.Min(buffer.Length, target.Length)])];
 #pragma warning restore CS9080 // Use of variable in this context may expose referenced variables outside of their declaration scope
 			if (read.Length > 0) {
 				read.CopyTo(target);
@@ -718,4 +819,8 @@ public static class CFormatting
 		return originalSize - target.Length; // Should return the delta length
 	}
 	public static PrintF sprintf(Span<char> target, ReadOnlySpan<char> format) => new(target, format);
+	public static void binarytohex(ReadOnlySpan<byte> input, Span<char> output) {
+		for (int i = 0; i < input.Length; i++) input[i].TryFormat(output[(i * 2)..], out _, "x2");
+		output[input.Length * 2] = '\0';
+	}
 }

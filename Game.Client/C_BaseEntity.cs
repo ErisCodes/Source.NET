@@ -1,4 +1,4 @@
-global using static Game.Client.BaseEntityConsts;
+﻿global using static Game.Client.BaseEntityConsts;
 global using static Game.Client.PredictableList;
 
 using CommunityToolkit.HighPerformance;
@@ -24,6 +24,7 @@ using FIELD = Source.FIELD<Game.Client.C_BaseEntity>;
 
 using AimEntsListHandle_t = int;
 using Source.Common.Physics;
+using Source.Common.Formats.BSP;
 
 namespace Game.Client;
 
@@ -136,6 +137,7 @@ public class PredictableList : IPredictableList
 	private readonly List<ClientEntityHandle> Predictables = [];
 }
 
+[NetworkName("CBaseEntity")]
 public partial class C_BaseEntity : IClientEntity
 {
 	public delegate void BASEPTR(C_BaseEntity self);
@@ -448,16 +450,11 @@ public partial class C_BaseEntity : IClientEntity
 	public bool Teleported() => OldMoveParent != NetworkMoveParent || OldParentAttachment != ParentAttachment;
 
 	public static void ProcessInterpolatedList() {
-		LinkedListNode<C_BaseEntity>? curr = InterpolationList.First;
-		LinkedListNode<C_BaseEntity>? next = curr?.Next;
-		while (curr != null) {
+		LinkedListNode<C_BaseEntity>? next;
+		for (LinkedListNode<C_BaseEntity>? curr = InterpolationList.First; curr != null; curr = next) {
+			next = curr.Next;
 			C_BaseEntity entity = curr.Value;
 			entity.ReadyToDraw = entity.Interpolate(gpGlobals.CurTime);
-			if (curr.List == null) // We got removed!!
-				curr = next;
-
-			curr = curr?.Next;
-			next = curr?.Next;
 		}
 	}
 
@@ -514,14 +511,12 @@ public partial class C_BaseEntity : IClientEntity
 	public static RecvTable DT_AnimTimeMustBeFirst = new(nameof(DT_AnimTimeMustBeFirst), [
 		RecvPropInt(FIELD.OF(nameof(AnimTime)), 0, RecvProxy_AnimTime),
 	]);
-	public static readonly ClientClass CC_AnimTimeMustBeFirst = new ClientClass("AnimTimeMustBeFirst", null, null, DT_AnimTimeMustBeFirst);
 
 
 	public static RecvTable DT_PredictableId = new(nameof(DT_PredictableId), [
 		RecvPropPredictableId(FIELD.OF(nameof(PredictableID))),
 		RecvPropInt(FIELD.OF(nameof(b_IsPlayerSimulated))),
 	]);
-	public static readonly ClientClass CC_PredictableId = new ClientClass("PredictableId", null, null, DT_PredictableId);
 
 	protected static void RecvProxy_SimulationTime(ref readonly RecvProxyData data, object instance, IFieldAccessor field) {
 		C_BaseEntity entity = (C_BaseEntity)instance;
@@ -545,8 +540,8 @@ public partial class C_BaseEntity : IClientEntity
 		RecvPropInt(FIELD.OF(nameof(SimulationTime)), 0, RecvProxy_SimulationTime),
 		RecvPropInt(FIELD.OF(nameof(InterpolationFrame))),
 
-		RecvPropVector(FIELD.OF_NAMED(nameof(NetworkOrigin), nameof(Origin))),
-		RecvPropQAngles(FIELD.OF_NAMED(nameof(NetworkAngles), nameof(Rotation))),
+		RecvPropVector(FIELD.OF_NAMED(nameof(NetworkOrigin), "m_vecOrigin")),
+		RecvPropQAngles(FIELD.OF_NAMED(nameof(NetworkAngles), "m_angRotation")),
 
 		RecvPropInt(FIELD.OF(nameof(ModelIndex)), 0, RecvProxy_IntToModelIndex16_BackCompatible),
 
@@ -560,7 +555,7 @@ public partial class C_BaseEntity : IClientEntity
 		RecvPropFloat(FIELD.OF(nameof(ShadowCastDistance))),
 		RecvPropEHandle(FIELD.OF(nameof(OwnerEntity))),
 		RecvPropEHandle(FIELD.OF(nameof(EffectEntity))),
-		RecvPropInt(FIELD.OF(nameof(MoveParent)), 0, RecvProxy_IntToMoveParent),
+		RecvPropInt(FIELD.OF(nameof(NetworkMoveParent)), 0, RecvProxy_IntToMoveParent),
 		RecvPropInt(FIELD.OF(nameof(ParentAttachment))),
 
 		RecvPropInt(FIELD.OF(nameof(MoveType)), 0, RecvProxy_MoveType),
@@ -572,7 +567,7 @@ public partial class C_BaseEntity : IClientEntity
 		RecvPropInt(FIELD.OF(nameof(AnimatedEveryTick)), 0, RecvProxy_InterpolationAmountChanged),
 		RecvPropBool( FIELD.OF(nameof( AlternateSorting ))),
 
-		RecvPropDataTable(nameof(Collision), FIELD.OF(nameof(Collision)), CollisionProperty.DT_CollisionProperty, 0, RECV_GET_OBJECT_AT_FIELD(FIELD.OF(nameof(Collision)))),
+		RecvPropDataTable("m_Collision", FIELD.OF(nameof(Collision)), CollisionProperty.DT_CollisionProperty, 0, RECV_GET_OBJECT_AT_FIELD(FIELD.OF(nameof(Collision)))),
 
 		// gmod specific
 		RecvPropInt(FIELD.OF(nameof(m_takedamage))),
@@ -581,7 +576,7 @@ public partial class C_BaseEntity : IClientEntity
 		RecvPropInt(FIELD.OF(nameof(OverrideMaterial))),
 
 		RecvPropInt(FIELD.OF_ARRAYINDEX(nameof(OverrideSubMaterials), 0), PropFlags.Unsigned),
-		RecvPropArray2(null, 32, "OverrideSubMaterials"),
+		RecvPropArray2(null, 32, "m_OverrideSubMaterials"),
 
 		RecvPropInt(FIELD.OF(nameof(Health))),
 		RecvPropInt(FIELD.OF(nameof(MaxHealth))),
@@ -624,8 +619,7 @@ public partial class C_BaseEntity : IClientEntity
 
 	public void SetCollisionBounds(in Vector3 mins, in Vector3 maxs) => CollisionProp().SetCollisionBounds(in mins, in maxs);
 
-	public static readonly ClientClass ClientClass = new ClientClass("BaseEntity", null, null, DT_BaseEntity)
-																		.WithManualClassID(StaticClassIndices.CBaseEntity);
+	public static readonly ClientClass ClientClass = new ClientClass(null, null, DT_BaseEntity);
 	const float coordTolerance = 2.0f / (float)(1 << (int)COORD_FRACTIONAL_BITS);
 
 	public float GetGravity() => Gravity;
@@ -695,70 +689,116 @@ public partial class C_BaseEntity : IClientEntity
 	private Model? Model;
 	ModelInstanceHandle_t ModelInstance;
 
+	[NetworkName("m_flAnimTime")]
 	public TimeUnit_t AnimTime;
 	public TimeUnit_t OldAnimTime;
 
+	[NetworkName("m_flSimulationTime")]
 	public TimeUnit_t SimulationTime;
 	public TimeUnit_t OldSimulationTime;
 
 	public TimeUnit_t CreateTime;
 
+	[NetworkName("m_ubInterpolationFrame")]
 	public byte InterpolationFrame;
 	public byte OldInterpolationFrame;
+	[NetworkName("m_nModelIndex")]
 	public int ModelIndex;
 	public byte OldParentAttachment;
+	[NetworkName("m_iParentAttachment")]
 	public byte ParentAttachment;
 
+	[NetworkName("movetype")]
 	public byte MoveType;
+	[NetworkName("movecollide")]
 	public byte MoveCollide;
+	[NetworkName("m_iTextureFrameIndex")]
 	public bool TextureFrameIndex;
+	[NetworkName("m_bSimulatedEveryTick")]
 	public bool SimulatedEveryTick;
+	[NetworkName("m_bAnimatedEveryTick")]
 	public bool AnimatedEveryTick;
+	[NetworkName("m_bAlternateSorting")]
 	public bool AlternateSorting;
 
+	[NetworkName("m_PredictableID")]
 	public PredictableId PredictableID = new();
 
 	public byte m_takedamage;
+	[NetworkName("m_RealClassName")]
 	public ushort RealClassName;
+	[NetworkName("m_OverrideMaterial")]
 	public ushort OverrideMaterial;
+	[NetworkName("m_OverrideSubMaterials")]
 	public InlineArray32<ushort> OverrideSubMaterials;
+	[NetworkName("m_iHealth")]
 	public int Health;
+	[NetworkName("m_iMaxHealth")]
 	public int MaxHealth;
+	[NetworkName("m_spawnflags")]
 	public int SpawnFlags;
+	[NetworkName("m_iGModFlags")]
 	public int GModFlags;
+	[NetworkName("m_bOnFire")]
 	public bool OnFire;
+	[NetworkName("m_CreationTime")]
 	public float CreationTime;
+	[NetworkName("m_vecVelocity")]
 	public Vector3 Velocity;
+	[NetworkName("m_iCreationID")]
 	public int CreationID;
+	[NetworkName("m_iMapCreatedID")]
 	public int MapCreatedID;
+	[NetworkName("m_flFriction")]
 	public float Friction;
 
+	[NetworkName("m_Collision")]
 	public CollisionProperty Collision = new();
 
+	[NetworkName("m_fEffects")]
 	public int Effects;
+	[NetworkName("m_nRenderMode")]
 	public byte RenderMode;
+	[NetworkName("m_nRenderFX")]
 	public byte RenderFX;
 	public byte RenderFXBlend;
+	[NetworkName("m_clrRender")]
 	public Color ColorRender;
+	[NetworkName("m_CollisionGroup")]
 	public int CollisionGroup;
+	[NetworkName("m_flElasticity")]
 	public float Elasticity;
+	[NetworkName("m_flShadowCastDistance")]
 	public float ShadowCastDistance;
 	public byte OldRenderMode;
 
+	[NetworkName("m_GMOD_bool")]
 	public InlineArray32<bool> GMOD_bool;
+	[NetworkName("m_GMOD_float")]
 	public InlineArray32<float> GMOD_float;
+	[NetworkName("m_GMOD_int")]
 	public InlineArray32<int> GMOD_int;
+	[NetworkName("m_GMOD_Vector")]
 	public InlineArray32<Vector3> GMOD_Vector;
+	[NetworkName("m_GMOD_QAngle")]
 	public InlineArray32<QAngle> GMOD_QAngle;
+	[NetworkName("m_GMOD_EHANDLE")]
 	public InlineArrayNew32<EHANDLE> GMOD_EHANDLE = new();
+	[NetworkName("m_GMOD_String0")]
 	public InlineArray512<char> GMOD_String0;
+	[NetworkName("m_GMOD_String1")]
 	public InlineArray512<char> GMOD_String1;
+	[NetworkName("m_GMOD_String2")]
 	public InlineArray512<char> GMOD_String2;
+	[NetworkName("m_GMOD_String3")]
 	public InlineArray512<char> GMOD_String3;
 
+	[NetworkName("m_GMOD_DataTable")]
 	public readonly GModTable GMOD_DataTable = new();
 
+	[NetworkName("m_nSpeed")]
 	public int Speed;
+	[NetworkName("m_iTeamNum")]
 	public int TeamNum;
 	public int GetTeamNumber() => TeamNum;
 
@@ -769,17 +809,25 @@ public partial class C_BaseEntity : IClientEntity
 
 	public bool IsFloating() => false;
 
+	[NetworkName("m_hOwnerEntity")]
 	public EHANDLE OwnerEntity = new();
 	public C_BaseEntity? GetOwnerEntity() => (C_BaseEntity?)OwnerEntity.Get();
+	[NetworkName("m_hEffectEntity")]
 	public EHANDLE EffectEntity = new();
+	[NetworkName("m_hGroundEntity")]
 	public EHANDLE GroundEntity = new();
+	[NetworkName("moveparent")]
 	public EHANDLE NetworkMoveParent = new();
 	public EHANDLE OldMoveParent = new();
 	public string? ModelName;
+	[NetworkName("m_lifeState")]
 	public int LifeState;
+	[NetworkName("m_vecBaseVelocity")]
 	public Vector3 BaseVelocity;
+	[NetworkName("m_nNextThinkTick")]
 	public int NextThinkTick;
 	public int LastThinkTick;
+	[NetworkName("m_nWaterLevel")]
 	public byte WaterLevel;
 	public byte WaterType;
 
@@ -789,6 +837,7 @@ public partial class C_BaseEntity : IClientEntity
 
 	public Vector3 AbsOrigin;
 	public QAngle AbsRotation;
+	[NetworkName("m_vecViewOffset")]
 	public Vector3 ViewOffset;
 	public Vector3 OldOrigin;
 	public QAngle OldRotation;
@@ -800,8 +849,10 @@ public partial class C_BaseEntity : IClientEntity
 	public Source.InlineArray4<float> RenderingClipPlane;
 	public bool EnableRenderingClipPlane;
 
+	[NetworkName("m_vecOrigin")]
 	public Vector3 Origin;
 	public readonly InterpolatedVar<Vector3> IV_Origin = new("Origin");
+	[NetworkName("m_angRotation")]
 	public QAngle Rotation;
 	public readonly InterpolatedVar<QAngle> IV_Rotation = new("Rotation");
 
@@ -1089,6 +1140,21 @@ public partial class C_BaseEntity : IClientEntity
 			UnlinkChild(MoveParent.Get(), this);
 	}
 
+	public void HierarchySetParent(C_BaseEntity? newParent) {
+		EHANDLE newParentHandle = default;
+		newParentHandle.Set(newParent);
+		if (newParentHandle.Index == MoveParent.Index)
+			return;
+
+		if (MoveParent.IsValid())
+			UnlinkChild(MoveParent.Get(), this);
+
+		if (newParent != null)
+			LinkChild(newParent, this);
+
+		InvalidatePhysicsRecursive(InvalidatePhysicsBits.PositionChanged | InvalidatePhysicsBits.AnglesChanged | InvalidatePhysicsBits.VelocityChanged);
+	}
+
 	public void LinkChild(C_BaseEntity parent, C_BaseEntity child) {
 		Assert(!child.MovePeer.IsValid());
 		Assert(!child.MovePrevPeer.IsValid());
@@ -1223,6 +1289,12 @@ public partial class C_BaseEntity : IClientEntity
 		DestroyModelInstance();
 		RemoveFromLeafSystem();
 		RemoveFromAimEntsList();
+
+		LuaEntityObject?.UnReference();
+		LuaEntityObject = null;
+		LuaTableObject?.UnReference();
+		LuaTableObject = null;
+		LuaCalcAbsolutePosition.UnReference();
 	}
 
 	public bool OnPredictedEntityRemove(bool isbeingremoved, C_BaseEntity predicted) {
@@ -1394,7 +1466,8 @@ public partial class C_BaseEntity : IClientEntity
 		else if (predictable)
 			OnStoreLastNetworkedValue();
 
-		// HierarchySetParent(NetworkMoveParent);
+		Assert(NetworkMoveParent.Get() != null || !NetworkMoveParent.IsValid());
+		HierarchySetParent(NetworkMoveParent.Get());
 
 		MarkMessageReceived();
 
@@ -2101,6 +2174,7 @@ public partial class C_BaseEntity : IClientEntity
 
 
 
+	[NetworkName("m_fFlags")]
 	protected int flags;
 	EFL eflags = EFL.DirtyAbsTransform; // << TODO: FIGURE OUT WHAT ACTUALLY INITIALIZES THIS.
 	public Matrix3x4 CoordinateFrame;
@@ -2305,7 +2379,8 @@ public partial class C_BaseEntity : IClientEntity
 
 
 	public void OnDataUnchangedInPVS() {
-		// HierarchySetParent(NetworkMoveParent);
+		Assert(NetworkMoveParent.Get() != null || !NetworkMoveParent.IsValid());
+		HierarchySetParent(NetworkMoveParent.Get());
 		MarkMessageReceived();
 	}
 
@@ -2578,6 +2653,40 @@ public partial class C_BaseEntity : IClientEntity
 		if (ModelInstance != MODEL_INSTANCE_INVALID) {
 			modelrender.DestroyInstance(ModelInstance);
 			ModelInstance = MODEL_INSTANCE_INVALID;
+		}
+	}
+
+	public virtual void AddStudioDecal(in Ray ray, int hitbox, int decalIndex, bool doTrace, ref Trace tr, int maxLODToDecal = -1) {
+		// throw new NotImplementedException();
+		DevWarning("AddStudioDecal not implemented\n");
+	}
+
+	public virtual void AddBrushModelDecal(in Ray ray, in Vector3 decalCenter, int decalIndex, bool doTrace, ref Trace tr) {
+		if (doTrace) {
+			enginetrace.ClipRayToEntity(in ray, Mask.Shot, this, ref tr);
+			if (tr.Fraction == 1.0f)
+				return;
+		}
+
+		effects.DecalShoot(decalIndex, Index, Model, GetAbsOrigin(), GetAbsAngles(), decalCenter, null, 0);
+	}
+
+	public void AddDecal(in Vector3 rayStart, in Vector3 rayEnd, in Vector3 decalCenter, int hitbox, int decalIndex, bool doTrace, ref Trace tr, int maxLODToDecal = -1) {
+		Ray ray = new();
+		ray.Init(in rayStart, in rayEnd);
+		ray.Delta *= 1.1f;
+
+		ModelType modelType = modelinfo.GetModelType(Model);
+		switch (modelType) {
+			case ModelType.Studio:
+				AddStudioDecal(in ray, hitbox, decalIndex, doTrace, ref tr, maxLODToDecal);
+				break;
+			case ModelType.Brush:
+				AddBrushModelDecal(in ray, in decalCenter, decalIndex, doTrace, ref tr);
+				break;
+			default:
+				tr.Fraction = 1.0f;
+				break;
 		}
 	}
 

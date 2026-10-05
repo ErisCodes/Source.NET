@@ -19,11 +19,12 @@ public static class WorldGlobals
 }
 
 [LinkEntityToClass("worldspawn")]
+[NetworkName("CWorld")]
 public class World : BaseEntity
 {
 	public static World? g_WorldEntity { get; private set; }
 	public override int RequiredEdictIndex() => 0;
-	public static SendTable DT_World = new([
+	public static SendTable DT_WORLD = new([
 		SendPropDataTable("baseclass", DT_BaseEntity),
 
 		SendPropVector(FIELD.OF(nameof(WorldMins)), -1, PropFlags.Coord),
@@ -41,6 +42,7 @@ public class World : BaseEntity
 		NetworkProp().AttachEdict(INDEXENT(RequiredEdictIndex()));
 
 		ActivityList.Init();
+		EventList.Init();
 		SetSolid(Source.SolidType.BSP);
 		SetMoveType(Source.MoveType.None);
 		ColdWorld = false;
@@ -90,13 +92,15 @@ public class World : BaseEntity
 		// 63 testing
 		engine.LightStyle(63, "a");
 
-		// AI_NetworkManager.InitializeAINetworks();
-		// g_AI_SchedulesManager.LoadAllSchedules();
+		AI_NetworkManager.InitializeAINetworks();
+		g_AI_SchedulesManager.LoadAllSchedules();
 		// g_pGameRules.InitDefaultAIRelationships();
 
 		// BaseCombatCharacter.InitInteractionSystem();
 
 		PrecacheRegister.Precache();
+
+		g_iszFuncBrushClassname = "func_brush";
 	}
 
 	public static ReadOnlySpan<char> GetDefaultLightstyleString(int styleIndex) => styleIndex < g_DefaultLightstyles.Length ? g_DefaultLightstyles[styleIndex] : "m";
@@ -145,16 +149,23 @@ public class World : BaseEntity
 		GlobalEntity.Add("is_pc", gpGlobals.MapName, (!IsConsole()) ? GlobalEState.On : GlobalEState.Off);
 	}
 
-	public static readonly new ServerClass ServerClass = new ServerClass("World", DT_World)
-																		.WithManualClassID(StaticClassIndices.CWorld);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_WORLD);
 	float WaveHeight;
+	[NetworkName("m_WorldMins")]
 	Vector3 WorldMins;
+	[NetworkName("m_WorldMaxs")]
 	Vector3 WorldMaxs;
+	[NetworkName("m_bStartDark")]
 	bool StartDark;
+	[NetworkName("m_flMaxOccludeeArea")]
 	float MaxOccludeeArea;
+	[NetworkName("m_flMinOccluderArea")]
 	float MinOccluderArea;
+	[NetworkName("m_flMaxPropScreenSpaceWidth")]
 	float MaxPropScreenSpaceWidth;
+	[NetworkName("m_flMinPropScreenSpaceWidth")]
 	float MinPropScreenSpaceWidth;
+	[NetworkName("m_iszDetailSpriteMaterial")]
 	string? DetailSpriteMaterial;
 	bool ColdWorld;
 }

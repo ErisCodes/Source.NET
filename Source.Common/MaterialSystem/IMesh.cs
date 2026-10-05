@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace Source.Common.MaterialSystem;
@@ -118,6 +118,8 @@ public interface IMesh : IVertexBuffer, IIndexBuffer
 	void Draw(int firstIndex = -1, int indexCount = 0);
 	void Draw(ReadOnlySpan<PrimList> lists, int numLists);
 	void SetColorMesh(IMesh colorMesh, int vertexOffset);
+	void SetFlexMesh(IMesh? mesh, int vertexOffset);
+	void DisableFlexMesh();
 	void LockMesh(int vertexCount, int indexCount, ref MeshDesc desc);
 	void ModifyBegin(int firstVertex, int vertexCount, int firstIndex, int indexCount, ref MeshDesc desc);
 	void ModifyEnd(ref MeshDesc desc);
@@ -246,6 +248,31 @@ public unsafe struct VertexBuilder
 		*pDst = z;
 	}
 
+	public void NormalDelta3f(float nx, float ny, float nz) {
+		Assert(float.IsFinite(nx) && float.IsFinite(ny) && float.IsFinite(nz));
+
+		float* pDst = CurrNormal;
+		*pDst++ = nx;
+		*pDst++ = ny;
+		*pDst = nz;
+	}
+
+	public void NormalDelta3fv(ReadOnlySpan<float> n) {
+		Assert(float.IsFinite(n[0]) && float.IsFinite(n[1]) && float.IsFinite(n[2]));
+
+		float* pDst = CurrNormal;
+		*pDst++ = n[0];
+		*pDst++ = n[1];
+		*pDst = n[2];
+	}
+
+	public void Wrinkle1f(float flWrinkle) {
+		Assert(float.IsFinite(flWrinkle));
+
+		float* pWrinkle = OffsetFloatPointer(Desc.Wrinkle, CurrentVertex, Desc.WrinkleSize);
+		*pWrinkle = flWrinkle;
+	}
+
 	public void UserData(ReadOnlySpan<float> pData) {
 		int userDataSize = 4;
 		float* pUserData = OffsetFloatPointer(Desc.UserData, CurrentVertex, Desc.UserDataSize);
@@ -338,6 +365,22 @@ public unsafe struct VertexBuilder
 		}
 	}
 
+	internal void TexCoord1f(int stage, float s) {
+		float* pDst = stage switch {
+			0 => CurrTexCoord0,
+			1 => CurrTexCoord1,
+			2 => CurrTexCoord2,
+			3 => CurrTexCoord3,
+			4 => CurrTexCoord4,
+			5 => CurrTexCoord5,
+			6 => CurrTexCoord6,
+			7 => CurrTexCoord7,
+			_ => null
+		};
+		if (pDst == null) return;
+		*pDst = s;
+	}
+
 	internal void TexCoord2f(int stage, float s, float t) {
 		float* pDst = stage switch {
 			0 => CurrTexCoord0,
@@ -353,6 +396,24 @@ public unsafe struct VertexBuilder
 		if (pDst == null) return;
 		*pDst++ = s;
 		*pDst++ = t;
+	}
+
+	internal void TexCoord3f(int stage, float s, float t, float u) {
+		float* pDst = stage switch {
+			0 => CurrTexCoord0,
+			1 => CurrTexCoord1,
+			2 => CurrTexCoord2,
+			3 => CurrTexCoord3,
+			4 => CurrTexCoord4,
+			5 => CurrTexCoord5,
+			6 => CurrTexCoord6,
+			7 => CurrTexCoord7,
+			_ => null
+		};
+		if (pDst == null) return;
+		*pDst++ = s;
+		*pDst++ = t;
+		*pDst = u;
 	}
 
 	public void AdvanceVertex() {
@@ -645,6 +706,18 @@ public struct IndexBuilder
 		AdvanceIndices(3);
 	}
 
+	public unsafe void FastPolygon(int startVert, int triangleCount) {
+		ushort* index = &Desc.Indices[CurrentIndex];
+		startVert += IndexOffset;
+		triangleCount *= (int)Desc.IndexSize;
+		for (int v = 0; v < triangleCount; ++v) {
+			*index++ = (ushort)startVert;
+			*index++ = (ushort)(startVert + v + 1);
+			*index++ = (ushort)(startVert + v + 2);
+		}
+		AdvanceIndices(triangleCount * 3);
+	}
+
 	public unsafe void FastQuad(int startVert) {
 		startVert += IndexOffset;
 		Desc.Indices[CurrentIndex + 0] = (ushort)startVert;
@@ -707,7 +780,11 @@ public unsafe struct MeshBuilder : IDisposable
 
 	// Locks the vertex buffer, can specify arbitrary index lists
 	// (must use the Index() call below)
-	public void Begin(IMesh pMesh, MaterialPrimitiveType type, int nVertexCount, int nIndexCount, ref int nFirstVertex) => throw new NotImplementedException();
+	public void Begin(IMesh pMesh, MaterialPrimitiveType type, int nVertexCount, int nIndexCount, out int nFirstVertex) {
+		Begin(pMesh, type, nVertexCount, nIndexCount);
+
+		nFirstVertex = VertexBuilder.Desc.FirstVertex * VertexBuilder.Desc.ActualVertexSize;
+	}
 	public void Begin(IMesh pMesh, MaterialPrimitiveType type, int nVertexCount, int nIndexCount) {
 		Assert(pMesh != null && Mesh == null);
 		Assert((type != MaterialPrimitiveType.Quads) && (type != MaterialPrimitiveType.InstancedQuads) && (type != MaterialPrimitiveType.Polygon) &&
@@ -851,8 +928,9 @@ public unsafe struct MeshBuilder : IDisposable
 	public void Normal3fv(ReadOnlySpan<float> n) => VertexBuilder.Normal3fv(n);
 	public void Normal3fv(in Vector3 vec) => VertexBuilder.Normal3f(vec.X, vec.Y, vec.Z);
 	// What do these even do
-	public void NormalDelta3fv(ReadOnlySpan<float> n) => throw new NotImplementedException();
-	public void NormalDelta3f(float nx, float ny, float nz) => throw new NotImplementedException();
+	public void NormalDelta3fv(ReadOnlySpan<float> n) => VertexBuilder.NormalDelta3fv(n);
+	public void NormalDelta3fv(in Vector3 vec) => VertexBuilder.NormalDelta3f(vec.X, vec.Y, vec.Z);
+	public void NormalDelta3f(float nx, float ny, float nz) => VertexBuilder.NormalDelta3f(nx, ny, nz);
 
 	// color setting
 	public void Color3f(float r, float g, float b) => VertexBuilder.Color3f(r, g, b);
@@ -887,12 +965,12 @@ public unsafe struct MeshBuilder : IDisposable
 	public void Specular4ubv(ReadOnlySpan<byte> c) => throw new NotImplementedException();
 
 	// texture coordinate setting
-	public void TexCoord1f(int stage, float s) => throw new NotImplementedException();
+	public void TexCoord1f(int stage, float s) => VertexBuilder.TexCoord1f(stage, s);
 	public void TexCoord2f(int stage, float s, float t) => VertexBuilder.TexCoord2f(stage, s, t);
 	public void TexCoord2fv(int stage, ReadOnlySpan<float> st) => VertexBuilder.TexCoord2f(stage, st[0], st[1]);
 	public void TexCoord2fv(int stage, in Vector2 vec) => VertexBuilder.TexCoord2f(stage, vec.X, vec.Y);
-	public void TexCoord3f(int stage, float s, float t, float u) => throw new NotImplementedException();
-	public void TexCoord3fv(int stage, ReadOnlySpan<float> stu) => throw new NotImplementedException();
+	public void TexCoord3f(int stage, float s, float t, float u) => VertexBuilder.TexCoord3f(stage, s, t, u);
+	public void TexCoord3fv(int stage, ReadOnlySpan<float> stu) => VertexBuilder.TexCoord3f(stage, stu[0], stu[1], stu[2]);
 	public void TexCoord4f(int stage, float s, float t, float u, float w) => throw new NotImplementedException();
 	public void TexCoord4fv(int stage, ReadOnlySpan<float> stuv) => throw new NotImplementedException();
 
@@ -909,7 +987,7 @@ public unsafe struct MeshBuilder : IDisposable
 	public void TangentT3fv(Vector3 vec) => VertexBuilder.TangentT3f(vec.X, vec.Y, vec.Z);
 
 	// Wrinkle
-	public void Wrinkle1f(float flWrinkle) => throw new NotImplementedException();
+	public void Wrinkle1f(float flWrinkle) => VertexBuilder.Wrinkle1f(flWrinkle);
 
 	// bone weights
 	public void BoneWeight(int idx, float weight) => VertexBuilder.BoneWeight(idx, weight);
@@ -929,6 +1007,7 @@ public unsafe struct MeshBuilder : IDisposable
 	public void Index(ushort index) => IndexBuilder.Index(index);
 
 	public void FastIndex(ushort index) => IndexBuilder.FastIndex(index);
+	public void FastPolygon(int startVert, int triangleCount) => IndexBuilder.FastPolygon(startVert, triangleCount);
 	public void FastTriangle(int startVert) => IndexBuilder.FastTriangle(startVert);
 
 

@@ -1,4 +1,4 @@
-﻿using Source.Common;
+using Source.Common;
 using Source.Common.Bitmap;
 using Source.Common.Formats.Keyvalues;
 using Source.Common.Launcher;
@@ -178,6 +178,8 @@ public class DummyMesh : IMesh
 	}
 	public void ModifyEnd(ref MeshDesc desc) { }
 	public void SetColorMesh(IMesh colorMesh, int vertexOffset) { }
+	public void SetFlexMesh(IMesh? mesh, int vertexOffset) { }
+	public void DisableFlexMesh() { }
 	public void SetPrimitiveType(MaterialPrimitiveType type) { }
 	public bool Unlock(int vertexCount, ref VertexDesc desc) => false;
 	public bool Unlock(int writtenIndexCount, ref IndexDesc desc) => false;
@@ -293,11 +295,20 @@ public class DummyMaterial : IMaterial
 	public bool HasProxy() => false;
 	public void IncrementReferenceCount() { }
 	public bool InMaterialPage() => false;
+	public void GetMaterialOffset(Span<float> offset) {
+		offset[0] = 0.0f;
+		offset[1] = 0.0f;
+	}
+	public void GetMaterialScale(Span<float> scale) {
+		scale[0] = 1.0f;
+		scale[1] = 1.0f;
+	}
 	public bool IsErrorMaterialInternal() => false;
 	public bool IsRealTimeVersion() => false;
 	public bool IsTranslucent() => false;
 	public bool IsVertexLit() => false;
 	public void Refresh() { }
+	public void RefreshPreservingMaterialVars() { }
 	public int ShaderParamCount() => 0;
 	public bool TryFindVar(ReadOnlySpan<char> varName, [NotNullWhen(true)] out IMaterialVar? found, bool complain = true) {
 		found = null;
@@ -369,6 +380,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public IMaterial? FindMaterialEx(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, MaterialFindContext isOnAModel, bool complain = true, ReadOnlySpan<char> complainPrefix = default) => g_DummyMaterial;
 	public IMaterial? FindProceduralMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, KeyValues keyValues) => g_DummyMaterial;
 	public ITexture FindTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroupName, bool complain = true, int additionalCreationFlags = 0) => g_DummyTexture;
+	public bool IsTextureLoaded(ReadOnlySpan<char> textureName) => false;
 	public void Flush(bool flushHardware) { }
 	public void GetBackBufferDimensions(out int width, out int height) {
 		width = 1024;
@@ -377,8 +389,13 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public int GetCurrentAdapter() => 0;
 	public MaterialSystem_Config GetCurrentConfigForVideoCard() => g_dummyConfig;
 	public IMaterial? GetCurrentMaterial() => null;
+	public object? GetCurrentProxy() => null;
+	public int GetCurrentNumBones() => 0;
+	public bool EnableClipping(bool enable) => true;
 	public int GetDisplayAdapterCount() => 0;
 	public IMesh GetDynamicMesh(bool buffered, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => GetDummyMesh();
+	public IMesh GetDynamicMeshEx(VertexFormat vertexFormat, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => GetDummyMesh();
+	public IMesh GetFlexMesh() => GetDummyMesh();
 	public void BeginBatch(IMesh indices) { }
 	public void BindBatch(IMesh vertices, IMaterial? autoBind = null) { }
 	public void DrawBatch(int firstIndex, int numIndices) { }
@@ -436,6 +453,9 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public void PopRenderTargetAndViewport() { }
 	public void PushMatrix() { }
 	public void PushRenderTargetAndViewport(ITexture? thisTexture) { }
+	public void CopyRenderTargetToTexture(ITexture texture) { }
+	public void SetFrameBufferCopyTexture(ITexture? texture, int textureIndex = 0) { }
+	public void CopyRenderTargetToTextureEx(ITexture texture, int renderTargetID, System.Drawing.Rectangle? srcRect, System.Drawing.Rectangle? dstRect = null) { }
 	public void PushRenderTargetAndViewport(ITexture? renderTarget, int x, int y, int width, int height) { }
 	public void PushRenderTargetAndViewport(ITexture? renderTarget, ITexture? depthTarget, int x, int y, int width, int height) { }
 	public void RestoreShaderObjects(IServiceProvider services, int changeFlags) { }
@@ -477,4 +497,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public ImageFormat GetNullTextureFormat() => ImageFormat.Unknown;
 	public void TurnOnToneMapping() { }
 	public void SetToneMappingScaleLinear(in Vector3 scale) { }
+	public void AddReleaseFunc(Action func) { }
+
+	public void RemoveReleaseFunc(Action func) { }
 }

@@ -104,6 +104,8 @@ public interface IShaderDynamicAPI
 	void PushMatrix();
 	void PopMatrix();
 	IMesh GetDynamicMesh(IMaterial material, int nCurrentBoneCount, bool buffered, IMesh? vertexOverride, IMesh? indexOverride);
+	IMesh GetDynamicMeshEx(IMaterial material, VertexFormat vertexFormat, int nCurrentBoneCount, bool buffered, IMesh? vertexOverride, IMesh? indexOverride);
+	IMesh GetFlexMesh();
 	bool InEditorMode();
 
 
@@ -147,6 +149,7 @@ public interface IShaderDynamicAPI
 	void CommitPixelShaderLighting(int lightInfoArray);
 	void SetPixelShaderStateAmbientLightCube(int ambientCube, bool v);
 	float GetLightMapScaleFactor();
+	float GetAmbientLightCubeLuminance();
 }
 
 public struct LightState

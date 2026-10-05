@@ -29,6 +29,8 @@ using Class =
 
 using FIELD = Source.FIELD<InfoLadderDismount>;
 
+[LinkEntityToClass("info_ladder_dismount")]
+[NetworkName("CInfoLadderDismount")]
 public partial class
 #if CLIENT_DLL
 	C_InfoLadderDismount: C_BaseEntity
@@ -37,7 +39,7 @@ public partial class
 #endif
 {
 	public static Table DT_InfoLadderDismount = new(DT_BaseEntity, []);
-	public static readonly Class Class = new Class("InfoLadderDismount", DT_InfoLadderDismount).WithManualClassID(StaticClassIndices.CInfoLadderDismount);
+	public static readonly Class Class = new Class(DT_InfoLadderDismount);
 }
 
 #endif

@@ -677,6 +677,7 @@ public abstract class BaseServer : IServer
 		if (StringTables != null) {
 			StringTables.RemoveAllTables();
 			StringTables = null;
+			serverGameDLL?.GMOD_OnStringTablesRemoved();
 		}
 
 		InstanceBaselineTable = null;
@@ -698,7 +699,7 @@ public abstract class BaseServer : IServer
 		else
 			SignonBuffer.EnsureCapacity(16384);
 
-		Signon.StartWriting(SignonBuffer.Base(), SignonBuffer.Count(), 0);
+		Signon.StartWriting(SignonBuffer.Base(), (nuint)SignonBuffer.Count(), 0);
 		Signon.DebugName = "m_Signon";
 
 		ServerClasses = 0;
@@ -1169,6 +1170,8 @@ public abstract class BaseServer : IServer
 
 		if (netchan != null && !netchan.IsLoopback())
 			ConMsg($"Client \"{client.GetClientName()}\" connected ({netchan.GetAddress()}).\n");
+
+		serverGameClients.GMOD_ClientConnected(client.GetPlayerSlot());
 
 		return client;
 	}

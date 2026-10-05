@@ -107,16 +107,20 @@ public enum LifeState
 
 public enum EntityEffects
 {
-	BoneMerge = 0x001,
-	BrightLight = 0x002,
-	DimLight = 0x004,
-	NoInterp = 0x008,
-	NoShadow = 0x010,
-	NoDraw = 0x020,
-	NoReceiveShadow = 0x040,
-	BoneMergeFastCull = 0x080,
-	ItemBlink = 0x100,
-	ParentAnimates = 0x200,
+	BoneMerge = 1 << 0,
+	BrightLight = 1 << 1,
+	DimLight = 1 << 2,
+	NoInterp = 1 << 3,
+	NoShadow = 1 << 4,
+	NoDraw = 1 << 5,
+	NoReceiveShadow = 1 << 6,
+	BoneMergeFastCull = 1 << 7,
+	ItemBlink = 1 << 8,
+	ParentAnimates = 1 << 9,
+	FollowBone = 1 << 10,
+	NoShadowDepth = 1 << 11,
+	ShadowDepthNoCache= 1 << 12,
+	NoFlashlight = 1 << 13,
 
 	MaxBits = 16, // < gmod increased 10 -> 16
 	ParityBits = 3,
@@ -222,7 +226,9 @@ public enum CollisionGroup
 	Pushaway,
 	NPCActor,
 	NPCScripted,
-	LastSharedCollisionGroup
+	World,
+	LastSharedCollisionGroup,
+	HL2Spit
 }
 
 public static class Constants
@@ -237,6 +243,10 @@ public static class Constants
 
 	public const int MAX_EDICTS = 1 << MAX_EDICT_BITS;
 	public const int MAX_EDICT_BITS = 13;
+
+	public const int MAX_MAP_NAME = 128;
+	public const int MAX_MAP_NAME_SAVE = 32;
+	public const int MAX_DISPLAY_MAP_NAME = 32;
 
 	/// <summary>
 	/// Most Source games have this at 20; Garry's Mod has it at 24

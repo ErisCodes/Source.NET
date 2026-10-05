@@ -131,6 +131,7 @@ public static partial class Util_Globals
 	static readonly CEntityFactoryDictionary s_EntityFactory = new();
 	public static IEntityFactoryDictionary EntityFactoryDictionary() => s_EntityFactory;
 
+	public static bool CanCreateEntityClass(ReadOnlySpan<char> classname) => EntityFactoryDictionary() != null && EntityFactoryDictionary().FindFactory(classname) != null;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static int ENTINDEX(Edict? edict) {
@@ -203,10 +204,47 @@ public ref struct FlaggedEntitiesEnum : IPartitionEnumerator
 
 public static partial class Util
 {
+	public static float AngleMod(float a) => MathLib.AngleMod(a);
+
+	public static float AngleDiff(float destAngle, float srcAngle) {
+		float delta;
+
+		delta = (destAngle - srcAngle) % 360.0f;
+		if (destAngle > srcAngle) {
+			if (delta >= 180)
+				delta -= 360;
+		}
+		else {
+			if (delta <= -180)
+				delta += 360;
+		}
+		return delta;
+	}
+
 	public static void ClearTrace(ref Trace trace) {
 		trace = default;
 		trace.Fraction = 1.0f;
 		trace.FractionLeftSolid = 0;
+	}
+
+	public static int DropToFloor(BaseEntity entity, Mask mask) {
+		entity.SetGroundEntity(null);
+
+		TraceEntity(entity, entity.GetAbsOrigin(), entity.GetAbsOrigin() - new Vector3(0, 0, 256), mask, out Trace trace);
+
+		if (trace.AllSolid)
+			return -1;
+
+		if (trace.Fraction == 1)
+			return 0;
+
+		entity.SetAbsOrigin(trace.EndPos);
+		entity.SetGroundEntity(trace.Ent);
+#if GMOD_DLL
+		entity.VPhysicsGetObject()?.SetPosition(trace.EndPos, entity.GetAbsAngles(), true);
+#endif
+
+		return 1;
 	}
 
 	public static void EmitAmbientSound(int entindex, in Vector3 vecOrigin, ReadOnlySpan<char> samp, float vol, Source.Common.Audio.SoundLevel soundlevel, int fFlags, int pitch, TimeUnit_t soundtime = 0.0f) => EmitAmbientSound(entindex, vecOrigin, samp, vol, soundlevel, fFlags, pitch, soundtime, out _);

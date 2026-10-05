@@ -10,6 +10,7 @@ using System.Numerics;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace Source.Common
 {
@@ -300,6 +301,18 @@ namespace Source.Common
 					break;
 				case IndexInfo index:
 					switch (index.Behavior) {
+						case IndexInfoBehavior.GenericArrayType:
+							MethodInfo setter = index.Container.GetMethod("set_Item", (BindingFlags)~0, [typeof(int), index.ElementType]) ?? index.Container.GetMethod("Set", (BindingFlags)~0, [typeof(int), index.ElementType]) ?? throw new Exception();
+							il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
+
+							LoadValue(accessor, il);
+							PerformAutocast(accessor, il);
+
+							if (setter.IsVirtual)
+								il.LoggedEmit(OpCodes.Callvirt, setter);
+							else
+								il.LoggedEmit(OpCodes.Call, setter);
+							break;
 						case IndexInfoBehavior.NetworkArray:
 							il.LoggedEmit(OpCodes.Ldfld, (accessor.Members[^2] as FieldInfo)!.FieldType!.GetField("Value")!);
 							il.LoggedEmit(OpCodes.Ldc_I4, index.Index);
@@ -430,7 +443,7 @@ namespace Source.Common
 		public override int Length => Info.MaxLength;
 		public override void CopyFrom<T>(object instanceFrom, Span<T> target) {
 			for (int i = 0; i < Math.Min(Length, target.Length); i++)
-				SetValue(instanceFrom, in target[i]);
+				AtIndex(i)!.SetValue(instanceFrom, in target[i]);
 		}
 		public override void CopyTo<T>(object instanceFrom, Span<T> target) {
 			for (int i = 0; i < Math.Min(Length, target.Length); i++)
@@ -440,6 +453,8 @@ namespace Source.Common
 		const int IS_NETWORK_ARRAY = -2;
 
 		public DynamicArrayAccessor(Type targetType, ReadOnlySpan<char> expression, int isList = IS_LIST) : base(targetType, expression) {
+			UseNetworkVarBackingField();
+
 			var arrayAttr = StoringType.GetCustomAttribute<InlineArrayAttribute>();
 			if (arrayAttr != null) {
 				Info = new(StoringType.GetGenericArguments()[0], () => arrayAttr.Length);
@@ -482,6 +497,45 @@ namespace Source.Common
 			BaseArrayAccessor = baseArray;
 			Index = Math.Abs(index);
 			IsAVectorElement = isVectorElem;
+		}
+	}
+
+	public class ListElementAccessor<TElement>(int index) : IFieldAccessor
+	{
+		public string Name { get; } = $"[{index}]";
+		public Type DeclaringType => typeof(List<TElement>);
+		public Type FieldType => typeof(TElement);
+		public int Length => 1;
+		public int Index => index;
+
+		public T GetValue<T>(object instance) {
+			TElement value = ((List<TElement>)instance)[index];
+			if (typeof(T) == typeof(TElement))
+				return Unsafe.As<TElement, T>(ref value);
+
+			ILAssembler.DynamicCast(in value, out T ret);
+			return ret;
+		}
+
+		public bool SetValue<T>(object instance, in T value) {
+			TElement converted;
+			if (typeof(T) == typeof(TElement))
+				converted = Unsafe.As<T, TElement>(ref Unsafe.AsRef(in value));
+			else
+				ILAssembler.DynamicCast(in value, out converted);
+
+			((List<TElement>)instance)[index] = converted;
+			return true;
+		}
+
+		public void CopyFrom<T>(object instanceFrom, Span<T> target) {
+			SetValue<T>(instanceFrom, target.Length == 0 ? default! : target[0]);
+		}
+
+		public void CopyTo<T>(object instanceFrom, Span<T> target) {
+			if (target.Length <= 0)
+				return;
+			target[0] = GetValue<T>(instanceFrom);
 		}
 	}
 
@@ -591,10 +645,57 @@ namespace Source.Common
 		public virtual int Index => -1;
 
 		public string Name { get; }
+
+		string? networkName;
+		public string? NetworkNameOverride { init => networkName = value; }
+		public string NetworkName => networkName ??= BuildNetworkName();
+
+		string BuildNetworkName() {
+			bool anyNamed = false;
+			foreach (MemberInfo member in Members) {
+				if (member is IndexInfo)
+					continue;
+				MemberInfo target = member.Name.StartsWith("__nv_") ? member.DeclaringType!.GetProperty(member.Name[5..], BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static) ?? member : member;
+				if (target is not IndexInfo && target.GetCustomAttribute<NetworkNameAttribute>() != null)
+					anyNamed = true;
+			}
+			if (!anyNamed)
+				return Name;
+
+			StringBuilder name = new();
+			for (int i = 0; i < Members.Count; i++) {
+				MemberInfo member = Members[i];
+				if (member is IndexInfo index) {
+					name.Append('[').Append(index.Index).Append(']');
+					continue;
+				}
+
+				if (member.Name.StartsWith("__nv_"))
+					member = member.DeclaringType!.GetProperty(member.Name[5..], BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static) ?? member;
+
+				string memberName = member.GetCustomAttribute<NetworkNameAttribute>()?.Name ?? member.Name;
+				if (i + 1 < Members.Count && Members[i + 1] is IndexInfo next && memberName.Contains("{0}")) {
+					memberName = string.Format(memberName, next.Index);
+					i++;
+				}
+
+				if (memberName.Length == 0)
+					continue;
+				if (name.Length > 0)
+					name.Append('.');
+				name.Append(memberName);
+			}
+			return name.ToString();
+		}
 		Type IFieldAccessor.DeclaringType => TargetType;
 		Type IFieldAccessor.FieldType => StoringType;
 
+		protected void UseNetworkVarBackingField() {
+			if (Members[^1] is PropertyInfo prop && prop.DeclaringType!.GetField("__nv_" + prop.Name, BindingFlags.Instance | BindingFlags.NonPublic) is FieldInfo backing)
+				Members[^1] = backing;
+		}
 		void HandleIndex(ReadOnlySpan<char> index) {
+			UseNetworkVarBackingField();
 			Members.Add(new IndexInfo(Members.Last(), int.Parse(index)));
 		}
 		void HandleFieldProp(ReadOnlySpan<char> index) {
@@ -838,9 +939,13 @@ namespace Source
 	public static class FIELD<T>
 	{
 		public static DynamicAccessor OF(ReadOnlySpan<char> expression) => new(typeof(T), expression);
-		public static DynamicAccessor OF_NAMED(ReadOnlySpan<char> expression, ReadOnlySpan<char> name) => new(typeof(T), expression, name);
+		public static DynamicAccessor OF_NAMED(ReadOnlySpan<char> expression, ReadOnlySpan<char> name) => new(typeof(T), expression, name) { NetworkNameOverride = new(name) };
 		public static DynamicArrayAccessor OF_ARRAY(ReadOnlySpan<char> expression) => new(typeof(T), expression);
 		public static DynamicArrayIndexAccessor OF_ARRAYINDEX(ReadOnlySpan<char> expression, int index = 0) => new(OF_ARRAY(expression), index);
+		public static DynamicArrayIndexAccessor OF_SENDINFO_ARRAY(ReadOnlySpan<char> expression) {
+			DynamicArrayAccessor array = OF_ARRAY(expression);
+			return new(array, 0) { NetworkNameOverride = array.NetworkName };
+		}
 		public static DynamicArrayIndexAccessor OF_VECTORELEM(ReadOnlySpan<char> expression, int index) => new(OF_ARRAY(expression), index, isVectorElem: true);
 		public static DynamicArrayAccessor OF_LIST(ReadOnlySpan<char> expression, int max) => new(typeof(T), expression, isList: max);
 	}

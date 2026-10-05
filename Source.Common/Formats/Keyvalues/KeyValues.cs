@@ -1,4 +1,5 @@
-using Source.Common.Filesystem;
+﻿using Source.Common.Filesystem;
+using Source.Common.Utilities;
 
 using System.Collections;
 using System.Diagnostics;
@@ -20,6 +21,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		Pointer,
 		Color,
 		Uint64,
+		NumTypes
 	}
 
 	public void Clear() {
@@ -100,8 +102,26 @@ public class KeyValues : IEnumerable<KeyValues>
 		// Clear();
 		if (stream == null) return false;
 
-		using StreamReader reader = new StreamReader(stream);
+		using KeyValuesReader reader = new KeyValuesReader(stream);
 		return LoadFromBuffer(reader);
+	}
+
+	public sealed class KeyValuesReader(Stream stream) : StreamReader(stream)
+	{
+		int Pushback = -1;
+
+		public void Unread(char c) => Pushback = c;
+
+		public override int Peek() => Pushback != -1 ? Pushback : base.Peek();
+
+		public override int Read() {
+			if (Pushback != -1) {
+				int c = Pushback;
+				Pushback = -1;
+				return c;
+			}
+			return base.Read();
+		}
 	}
 
 	public bool WriteToStream(Stream? stream) {
@@ -162,7 +182,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 
-	private bool LoadFromBuffer(StreamReader reader) {
+	private bool LoadFromBuffer(KeyValuesReader reader) {
 		LinkedList<KeyValues> peers = [];
 		KeyValues? current = this;
 		while (SkipUntilParseableTextOrEOF(reader)) {
@@ -178,7 +198,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Returns true if we did anything at all to skip whitespace.
-	public static bool SkipWhitespace(StreamReader reader) {
+	public static bool SkipWhitespace(KeyValuesReader reader) {
 		bool didAnything = false;
 		while (true) {
 			int c = reader.Peek();
@@ -198,7 +218,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Returns true if we can read something. False if we can't.
-	private bool SkipUntilParseableTextOrEOF(StreamReader reader) {
+	private bool SkipUntilParseableTextOrEOF(KeyValuesReader reader) {
 		// We read either
 		//    1. A quote mark, in which case we need to read up to a quote
 		//    2. Anything else, we read until whitespace
@@ -260,7 +280,7 @@ public class KeyValues : IEnumerable<KeyValues>
 
 		return false;
 	}
-	public static bool ReadConditional(StreamReader reader, Span<char> condition, out bool match) {
+	public static bool ReadConditional(KeyValuesReader reader, Span<char> condition, out bool match) {
 		// Zero out if it's existing memory
 		for (int si = 0; si < condition.Length; si++)
 			condition[si] = '\0';
@@ -336,7 +356,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return notSupported;
 	}
 
-	private bool ReadKV(StreamReader reader) {
+	private bool ReadKV(KeyValuesReader reader) {
 		SkipUntilParseableTextOrEOF(reader);
 
 		bool quoteTerminated = (char)reader.Peek() == '"';
@@ -388,7 +408,7 @@ public class KeyValues : IEnumerable<KeyValues>
 
 	void AddToTail(KeyValues kv) => children.AddLast(kv.node);
 
-	private void ReadKVPairs(StreamReader reader, bool matches) {
+	private void ReadKVPairs(KeyValuesReader reader, bool matches) {
 		int rd = reader.Read();
 
 		while (reader.Peek() != -1) {
@@ -412,7 +432,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Returns true if we did anything at all to skip comments.
-	public static bool SkipComments(StreamReader reader) {
+	public static bool SkipComments(KeyValuesReader reader) {
 		bool didAnything = false;
 		if (reader.Peek() == '/') {
 			// We need to check the stream for another /
@@ -427,10 +447,8 @@ public class KeyValues : IEnumerable<KeyValues>
 						break;
 				}
 			}
-			else {
-				// What...
-				throw new InvalidOperationException("Expected comment");
-			}
+			else
+				reader.Unread('/');
 		}
 
 		return didAnything;
@@ -461,7 +479,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		Type = Types.String;
 	}
 
-	public static string ReadWhitespaceTerminatedString(StreamReader reader) {
+	public static string ReadWhitespaceTerminatedString(KeyValuesReader reader) {
 		Span<char> work = stackalloc char[1024];
 		int i, len;
 		for (i = 0, len = work.Length; i < len; i++) {
@@ -481,7 +499,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return new(work[..i]);
 	}
 
-	public static string ReadQuoteTerminatedString(StreamReader reader, bool useEscapeSequences) {
+	public static string ReadQuoteTerminatedString(KeyValuesReader reader, bool useEscapeSequences) {
 		int rd = reader.Read();
 		Debug.Assert(rd == '"', "invalid quote-terminated string");
 		Span<char> work = stackalloc char[1024];
@@ -720,10 +738,10 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	public bool WriteToFile(IFileSystem fileSystem, ReadOnlySpan<char> path, ReadOnlySpan<char> pathID) {
-		return WriteToStream(fileSystem.Open(path, FileOpenOptions.Read, pathID)?.Stream);
+		return WriteToStream(fileSystem.Open(path, FileOpenOptions.Write, pathID)?.Stream);
 	}
 	public bool WriteToFile(IFileSystem fileSystem, ReadOnlySpan<char> path) {
-		return WriteToStream(fileSystem.Open(path, FileOpenOptions.Read, null)?.Stream);
+		return WriteToStream(fileSystem.Open(path, FileOpenOptions.Write, null)?.Stream);
 	}
 
 
@@ -826,12 +844,9 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Untested...
-	public unsafe bool LoadFromBuffer(ReadOnlySpan<char> resourceName, ReadOnlySpan<char> buffer) {
-		fixed (char* bytes = buffer) {
-			byte* input = (byte*)bytes;
-			using UnmanagedMemoryStream stream = new(input, buffer.Length * sizeof(char));
-			return LoadFromStream(stream);
-		}
+	public bool LoadFromBuffer(ReadOnlySpan<char> resourceName, ReadOnlySpan<char> buffer) {
+		using MemoryStream stream = new(System.Text.Encoding.UTF8.GetBytes(buffer.ToArray()));
+		return LoadFromStream(stream);
 	}
 
 	public KeyValues AddSubKey(KeyValues subkey) {
@@ -883,7 +898,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return new(); // todo: proper implementation of this
 	}
 
-	public void SetName(ReadOnlySpan<char> name) => Name = name.ToString();
+	public void SetName(ReadOnlySpan<char> name) => Name = name.SliceNullTerminatedString().ToString();
 	public void SetFloat(ReadOnlySpan<char> keyName, float value) {
 		KeyValues? dat = FindKey(keyName, true);
 		if (dat != null) {
@@ -957,5 +972,214 @@ public class KeyValues : IEnumerable<KeyValues>
 			return true;
 
 		return false;
+	}
+
+	public bool WriteAsBinary(UtlBuffer buffer) {
+		if (buffer.IsText())
+			return false;
+		if (!buffer.IsValid())
+			return false;
+
+		// loop through all our peers
+		for (KeyValues? dat = this; dat != null; dat = dat.node.Next?.Value) {
+			// write type
+			buffer.PutUnsignedChar((byte)dat.Type);
+
+			// write name
+			buffer.PutString(dat.Name);
+
+			// write type
+			switch (dat.Type) {
+				case Types.None: {
+						dat.GetFirstSubKey()!.WriteAsBinary(buffer);
+						break;
+					}
+				case Types.String: {
+						if (dat.Value is not string str)
+							buffer.PutString("");
+						else
+							buffer.PutString(str);
+						break;
+					}
+				case Types.Int: {
+						int v;
+						switch (dat.Value) {
+							case int f: v = f; break;
+							case long f: v = Convert.ToInt32(f); break;
+							default: v = 0; break;
+						}
+						buffer.PutInt(v);
+						break;
+					}
+
+				case Types.Uint64: {
+						if (dat.Value is not ulong i)
+							i = 0;
+						buffer.PutDouble(const_reinterpret<ulong, double>(new(in i))[0]);
+						break;
+					}
+
+				case Types.Double: {
+						float v;
+						switch (dat.Value) {
+							case float f: v = f; break;
+							case double f: v = (float)f; break;
+							default: v = 0; break;
+						}
+						buffer.PutFloat(v);
+						break;
+					}
+				case Types.Color: {
+						if (dat.Value is not Color c)
+							c = default;
+						buffer.PutUnsignedChar(c[0]);
+						buffer.PutUnsignedChar(c[1]);
+						buffer.PutUnsignedChar(c[2]);
+						buffer.PutUnsignedChar(c[3]);
+						break;
+					}
+				case Types.Pointer: {
+						// hmm... not sure how to do this proper...
+
+						break;
+					}
+
+				default:
+					break;
+			}
+		}
+
+		buffer.PutUnsignedChar((byte)Types.NumTypes);
+
+		return buffer.IsValid();
+	}
+
+	public void RemoveEverything() {
+		children.Clear();
+		Value = null;
+		node.List!.Remove(node);
+	}
+
+	public void Init() {
+		Name = null!;
+		Type = Types.None;
+		children.Clear();
+
+		useEscapeSequences = false;
+		evaluateConditionals = true;
+	}
+
+	public const int KEYVALUES_TOKEN_SIZE = 4096;
+
+	public bool ReadAsBinary(UtlBuffer buffer, int nStackDepth = 0) {
+		if (buffer.IsText()) // must be a binary buffer
+			return false;
+
+		if (!buffer.IsValid()) // must be valid, no overflows etc
+			return false;
+
+		RemoveEverything(); // remove current content
+		Init(); // reset
+
+		if (nStackDepth > 100) {
+			AssertMsg(false, "KeyValues::ReadAsBinary() stack depth > 100\n");
+			return false;
+		}
+
+		KeyValues? dat = this;
+		Types type = (Types)buffer.GetUnsignedChar();
+
+		// loop through all our peers
+		Span<char> token = stackalloc char[KEYVALUES_TOKEN_SIZE];
+
+		while (true) {
+			if (type == Types.NumTypes)
+				break; // no more peers
+
+			dat.Type = type;
+
+			{
+				buffer.GetString(token);
+				token[KEYVALUES_TOKEN_SIZE - 1] = '\0';
+				dat.SetName(token);
+			}
+
+			switch (type) {
+				case Types.None: {
+						var sub = new KeyValues("");
+						if (dat.children.Count == 0)
+							dat.children.AddFirst(new LinkedListNode<KeyValues>(sub));
+						else {
+							dat.children.First!.ValueRef = sub;
+							sub.node = dat.children.First;
+						}
+
+						sub.ReadAsBinary(buffer, nStackDepth + 1);
+						break;
+					}
+				case Types.String: {
+						buffer.GetString(token);
+						token[KEYVALUES_TOKEN_SIZE - 1] = '\0';
+
+						int len = (int)strlen(token);
+						dat.Value = new string(token[..len]);
+
+						break;
+					}
+				case Types.Int: {
+						dat.Value = buffer.GetInt();
+						break;
+					}
+
+				case Types.Uint64: {
+						dat.Value = buffer.GetInt64();
+						break;
+					}
+
+				case Types.Double: {
+						dat.Value = buffer.GetFloat();
+						break;
+					}
+				case Types.Color: {
+						Color c = new Color();
+						c[0] = buffer.GetUnsignedChar();
+						c[1] = buffer.GetUnsignedChar();
+						c[2] = buffer.GetUnsignedChar();
+						c[3] = buffer.GetUnsignedChar();
+						dat.Value = c;
+						break;
+					}
+				case Types.Pointer: {
+						// WOW: This sucks! Doesn't this imply the binary data going across two sides is dependant on both being 64-bit?? Why?????????
+						/*
+		# ifdef PLATFORM_64BITS
+								dat->m_pValue = (void*)buffer.GetUint64();
+		#else
+								dat->m_pValue = (void*)buffer.GetUnsignedInt();
+		#endif
+								*/
+
+						break;
+					}
+
+				default:
+					break;
+			}
+
+			if (!buffer.IsValid()) // error occured
+				return false;
+
+			type = (Types)buffer.GetUnsignedChar();
+
+			if (type == Types.NumTypes)
+				break;
+
+			// new peer follows
+			var peer = new KeyValues("");
+			dat.children.AddLast(peer);
+			dat = peer;
+		}
+
+		return buffer.IsValid();
 	}
 }

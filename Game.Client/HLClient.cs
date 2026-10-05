@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Source;
 using Source.Common;
+using Source.Common.Audio;
 using Source.Common.Bitbuffers;
 using Source.Common.Client;
 using Source.Common.Engine;
@@ -17,6 +18,7 @@ using Source.Common.GUI;
 using Source.Common.Hashing;
 using Source.Common.Input;
 using Source.Common.MaterialSystem;
+using Source.Common.Mathematics;
 using Source.Common.Networking;
 using Source.Engine;
 
@@ -75,6 +77,9 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 		modemanager.LevelInit(mapname);
 		IGameSystem.LevelInitPreEntityAllSystems(mapname);
+#if GMOD_DLL
+		garrysmod.LevelInit(mapname);
+#endif
 
 		if (gpGlobals.MaxClients > 1) {
 			if (cl_predict.GetInt() == 0)
@@ -91,7 +96,13 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 	}
 
 	public void PostInit() {
+#if GMOD_DLL
+		get.IntroScreen()!.Update("Post Init Systems", true);
 		IGameSystem.PostInitAllSystems();
+		get.IntroScreen()!.Update("Finished!", true);
+		get.IntroScreen()!.End();
+		// todo: headtrack
+#endif
 	}
 
 	public void CreateMove(int sequenceNumber, double inputSampleFrametime, bool active) {
@@ -117,7 +128,16 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 	public bool Init() {
 #if GMOD_DLL
+		get.IntroScreen()!.Start();
+		get.IntroScreen()!.Update("Start", true);
 		garrysmod.InitializeMod(services);
+
+		get.IntroScreen()!.Update("Connecting Soundemitter", true);
+		get.IntroScreen()!.Update("Initializing Convars", true);
+		get.IntroScreen()!.Update("Initializing Objects", true);
+		get.IntroScreen()!.Update("Initializing Particles", true);
+		get.IntroScreen()!.Update("Initializing VGUI", true);
+		get.IntroScreen()!.Update("Adding Game Systems", true);
 #endif
 		IGameSystem.Add(g_SoundEmitterSystem);
 		IGameSystem.Add(Singleton<ClientLeafSystem>());
@@ -128,10 +148,26 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 		vgui = services.GetService<IVGui>();
 
+#if GMOD_DLL
+		get.IntroScreen()!.Update("Initializing Model Manager", true);
+#endif
 		modemanager.Init();
+#if GMOD_DLL
+		get.IntroScreen()!.Update("Initializing Viewport", true);
+#endif
 		// clientMode.InitViewport();
+#if GMOD_DLL
+		get.IntroScreen()!.Update("Initializing HUD", true);
+#endif
 		HUD.Init();
+#if GMOD_DLL
+		get.IntroScreen()!.Update("Initializing Clientmode", true);
+#endif
 		clientMode.Init();
+#if GMOD_DLL
+		get.IntroScreen()!.Update("Save Restore Handlers", true);
+		get.IntroScreen()!.Update("Initialize All Game Systems", true);
+#endif
 
 		if (!IGameSystem.InitAllSystems())
 			return false;
@@ -159,11 +195,15 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 			GetClientVoiceMgr().Init(g_VoiceStatusHelper, parent);
 		}
 
+#if GMOD_DLL
+		get.IntroScreen()!.Update("Initializing Serverside..", true);
+#endif
 		return true;
 	}
 
 	public void Shutdown() {
 		ClientVoiceMgr_Shutdown();
+		Game.Client.GarrysMod.GarrysMod.Lua.Kill();
 	}
 
 	public void VoiceStatus(int entindex, bool talking) {
@@ -221,33 +261,18 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		view.Render(rects);
 	}
 
-	public static INetworkStringTable g_ClientLuaFiles = null!;
-
 	public void InstallStringTableCallback(ReadOnlySpan<char> tableName) {
 		// TODO: what to do here, if anything
 		switch (tableName) {
+			case "networkstring":
+				Game.Client.GarrysMod.NetworkString.Install();
+				break;
 			case Protocol.CLIENT_LUA_FILES_TABLENAME:
-				g_ClientLuaFiles = networkstringtable.FindTable(tableName)!;
-				g_ClientLuaFiles.SetStringChangedCallback(this, OnReceiveLuaFileString);
+				Game.Client.GarrysMod.GModDataPack.DataPack().Initialize();
 				break;
 		}
 
 		GameRulesRegister.InstallStringTableCallback_GameRules();
-	}
-
-	private void OnReceiveLuaFileString(object? context, INetworkStringTable stringTable, int stringNumber, ReadOnlySpan<char> newString, ReadOnlySpan<byte> newData) {
-		if (stringNumber == 0 && newString.Equals("paths", StringComparison.Ordinal)) {
-			// Load paths
-			Span<char> paths = stackalloc char[Encoding.ASCII.GetCharCount(newData)];
-			Encoding.ASCII.GetChars(newData, paths);
-			var splitter = paths.Split(";");
-			while (splitter.MoveNext()) {
-				ReadOnlySpan<char> path = paths[splitter.Current].SliceNullTerminatedString();
-				// This sucks! TODO: Fix this!!!
-				ReadOnlySpan<char> absPath = $"{engine.GetGameDirectory()}{path}";
-				filesystem.AddSearchPath(absPath, "lcl", groupName: Source.Common.Filesystem.PathGroupName.Lua);
-			}
-		}
 	}
 
 	public int IN_KeyEvent(int eventcode, ButtonCode keynum, ReadOnlySpan<char> currentBinding) {
@@ -493,56 +518,240 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		throw new NotImplementedException();
 	}
 
-	const string LUA_PREFIX = "lua/";
-	const string LUA_SUFFIX = ".lua";
-
-	int filesRequesting_Total;
-	int filesRequesting_Recv;
-
-	public void GMod_RequestLuaFiles(INetChannel netchan) {
-		Span<char> shaBuffer = stackalloc char[LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS + LUA_SUFFIX.Length];
-		LUA_PREFIX.CopyTo(shaBuffer);
-
-		var luaFileMessage = new CLC_GMod_ClientToServer(GModMessageType.LuaFile);
-
-		int filesRequesting = 0;
-		for (int i = 1; i < g_ClientLuaFiles.GetNumStrings(); i++) {
-			ReadOnlySpan<char> filename = g_ClientLuaFiles.GetString(i);
-			byte[]? filehash = g_ClientLuaFiles.GetStringUserData(i);
-			SHA256Value.FromBytes(filehash).ToString(shaBuffer[LUA_PREFIX.Length..]);
-			LUA_SUFFIX.CopyTo(shaBuffer.Slice(LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS, LUA_SUFFIX.Length));
-			if (!filesystem.FileExists(shaBuffer, "CACHE")) {
-				luaFileMessage.LuaFile.FileStringTableEntryIDs[filesRequesting] = (ushort)i;
-				filesRequesting++;
-			}
-		}
-
-		netchan!.SendNetMsg(luaFileMessage!);
-
-		filesRequesting_Total = filesRequesting;
-		filesRequesting_Recv = 0;
-	}
-
-	public void GMod_ReceiveLuaFile(ReadOnlySpan<char> fileName, in SHA256Value sha256, ReadOnlySpan<byte> compressed) {
-		Span<char> shaBuffer = stackalloc char[LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS + LUA_SUFFIX.Length];
-		LUA_PREFIX.CopyTo(shaBuffer);
-		sha256.ToString(shaBuffer[LUA_PREFIX.Length..]);
-		LUA_SUFFIX.CopyTo(shaBuffer.Slice(LUA_PREFIX.Length + SHA256Value.SIZE_HEX_CHARACTERS, LUA_SUFFIX.Length));
-
-		using IFileHandle? h = filesystem.Open(shaBuffer, FileOpenOptions.Write, "CACHE");
-		if (h == null)
-			return;
-		h.Stream.Write(compressed);
-		filesRequesting_Recv++;
-
-		if (filesRequesting_Recv != filesRequesting_Total)
-			gameUI.UpdateProgressBar(filesRequesting_Recv / (float)filesRequesting_Total, $"Received {filesRequesting_Recv}/{filesRequesting_Total} Lua files...");
-
-	}
+	public void GMOD_RequestLuaFiles() => Game.Client.GarrysMod.GModDataPack.DataPack().RequestFiles();
 
 	public void FileReceived(ReadOnlySpan<char> fileName, uint transferID) {
 
 	}
 
 	public StandardRecvProxies GetStandardRecvProxies() => StandardRecvProxies.g_StandardRecvProxies;
+
+	public bool ReplayInit() {
+		throw new NotImplementedException();
+	}
+
+	public bool ReplayPostInit() {
+		throw new NotImplementedException();
+	}
+
+	public void RenderView(in ViewSetup view, ClearFlags nClearFlags, int whatToDraw) {
+		throw new NotImplementedException();
+	}
+
+	public void View_Fade(ref ScreenFade pSF) {
+		throw new NotImplementedException();
+	}
+
+	public void SetCrosshairAngle(in QAngle angle) {
+		throw new NotImplementedException();
+	}
+
+	public void ShutdownSprite(EngineSprite sprite) {
+		throw new NotImplementedException();
+	}
+
+	public int GetSpriteSize() {
+		throw new NotImplementedException();
+	}
+
+	public SaveRestoreData? SaveInit(int size) {
+		throw new NotImplementedException();
+	}
+
+	public void SaveWriteFields(SaveRestoreData data, ReadOnlySpan<char> name, ReadOnlySpan<byte> baseData, DataMap map, ReadOnlySpan<TypeDescription> fields) {
+		throw new NotImplementedException();
+	}
+
+	public void SaveReadFields(SaveRestoreData data, ReadOnlySpan<char> name, ReadOnlySpan<byte> baseData, DataMap map, ReadOnlySpan<TypeDescription> fields) {
+		throw new NotImplementedException();
+	}
+
+	public void PreSave(SaveRestoreData data) {
+		throw new NotImplementedException();
+	}
+
+	public void Save(SaveRestoreData data) {
+		throw new NotImplementedException();
+	}
+
+	public void WriteSaveHeaders(SaveRestoreData data) {
+		throw new NotImplementedException();
+	}
+
+	public void ReadRestoreHeaders(SaveRestoreData data) {
+		throw new NotImplementedException();
+	}
+
+	public void Restore(SaveRestoreData data, bool unk) {
+		throw new NotImplementedException();
+	}
+
+	public void DispatchOnRestore() {
+		throw new NotImplementedException();
+	}
+
+	public void WriteSaveGameScreenshot(ReadOnlySpan<char> pFilename) {
+		throw new NotImplementedException();
+	}
+
+	public void EmitSentenceCloseCaption(ReadOnlySpan<char> tokenstream) {
+		throw new NotImplementedException();
+	}
+
+	public void EmitCloseCaption(ReadOnlySpan<char> captionname, double duration) {
+		throw new NotImplementedException();
+	}
+
+	public bool CanRecordDemo(Span<char> errorMsg) {
+		throw new NotImplementedException();
+	}
+
+	public void OnDemoRecordStart(ReadOnlySpan<char> pDemoBaseName) {
+		throw new NotImplementedException();
+	}
+
+	public void OnDemoRecordStop() {
+		throw new NotImplementedException();
+	}
+
+	public void OnDemoPlaybackStart(ReadOnlySpan<char> pDemoBaseName) {
+		throw new NotImplementedException();
+	}
+
+	public void OnDemoPlaybackStop() {
+		throw new NotImplementedException();
+	}
+
+	public int GetScreenWidth() {
+		throw new NotImplementedException();
+	}
+
+	public int GetScreenHeight() {
+		throw new NotImplementedException();
+	}
+
+	public void WriteSaveGameScreenshotOfSize(ReadOnlySpan<char> pFilename, int width, int height, bool bCreatePowerOf2Padded = false, bool bWriteVTF = false) {
+		throw new NotImplementedException();
+	}
+
+	public bool GetPlayerView(ref ViewSetup playerView) {
+		throw new NotImplementedException();
+	}
+
+	public uint GetPresenceID(ReadOnlySpan<char> pIDName) {
+		throw new NotImplementedException();
+	}
+
+	public ReadOnlySpan<char> GetPropertyIdString(uint id) {
+		throw new NotImplementedException();
+	}
+
+	public void GetPropertyDisplayString(uint id, uint value, Span<char> output, int bytes) {
+		throw new NotImplementedException();
+	}
+
+	public void InvalidateMdlCache() {
+		throw new NotImplementedException();
+	}
+
+	public void ReloadFilesInList(IFileList filesToReload) {
+		throw new NotImplementedException();
+	}
+
+	public MouthInfo? GetClientUIMouthInfo() {
+		throw new NotImplementedException();
+	}
+
+	public ReadOnlySpan<char> TranslateEffectForVisionFilter(ReadOnlySpan<char> pchEffectType, ReadOnlySpan<char> pchEffectName) {
+		throw new NotImplementedException();
+	}
+
+	public void ClientAdjustStartSoundParams(ref StartSoundParams parms) {
+		throw new NotImplementedException();
+	}
+
+	public void GMOD_ReceiveServerMessage(bf_read buffer, int len) {
+		GModMessageType type = (GModMessageType)buffer.ReadByte();
+		switch (type) {
+			case GModMessageType.LuaAutoRefresh:
+				// todo: GarrysMod::AutoRefresh::HandleChange_Lua(buffer, len);
+				return;
+			case GModMessageType.RequestLuaFiles:
+				return;
+			case GModMessageType.LuaCmd:
+				Game.Client.GarrysMod.GarrysMod.RunLuaCmd(buffer);
+				return;
+			case GModMessageType.LuaFile: {
+					int index = (int)buffer.ReadUBitLong(16);
+					uint size = (uint)((len >> 3) - 3);
+					if (size > 0x10000) {
+						Msg($"Lua file {index} too big, ignoring! ({size} > {0x10000})\n");
+						return;
+					}
+					byte[] bdata = new byte[size];
+					buffer.ReadBytes(bdata);
+					Game.Client.GarrysMod.GModDataPack.DataPack().SetFileContents(index, bdata, true);
+				}
+				return;
+		}
+
+		len -= 8;
+		if (type != GModMessageType.NetMessage) {
+			Msg("Not net message!?\n");
+			return;
+		}
+
+		int curBit = buffer.BitsRead;
+		int bitOffset = curBit % 8;
+		int numBits = len + bitOffset;
+		byte[] data = new byte[Protocol.Bits2Bytes(numBits)];
+		ReadOnlySpan<byte> source = buffer.BaseArray.AsSpan(curBit / 8);
+		source[..Math.Min(source.Length, data.Length)].CopyTo(data);
+
+		bf_read read = new("NetMessage(read_cl)", data, data.Length, numBits);
+		read.Seek(bitOffset);
+		Game.Client.GarrysMod.LuaNet.g_NetIncoming = read;
+
+		if (g_Lua != null && g_Lua.Global() != null) {
+			Game.Client.GarrysMod.LuaObject net = new();
+			g_Lua.Global().GetMember("net", net);
+			if (net.isTable()) {
+				Game.Client.GarrysMod.LuaObject incoming = new();
+				net.GetMember("Incoming", incoming);
+				if (incoming.isFunction()) {
+					incoming.Push();
+					g_Lua.PushNumber(len);
+					g_Lua.CallInternalNoReturns(1);
+				}
+				incoming.UnReference();
+			}
+			net.UnReference();
+		}
+
+		Game.Client.GarrysMod.LuaNet.g_NetIncoming = null;
+	}
+
+	public void GMOD_DoSnapshots() {
+		throw new NotImplementedException();
+	}
+
+	public void GMOD_VoiceVolume(uint playerID, float volume) {
+		throw new NotImplementedException();
+	}
+
+	public void GMOD_OnDrawSkybox() {
+		throw new NotImplementedException();
+	}
+
+	public void IN_MouseWheelAnalog(int value) {
+		throw new NotImplementedException();
+	}
+
+	public void GMOD_SignOnStateChanged(int userID, int oldState, int newState) {
+		throw new NotImplementedException();
+	}
+
+	public void GMOD_OnAllSoundsStoppedCL() {
+		throw new NotImplementedException();
+	}
 }

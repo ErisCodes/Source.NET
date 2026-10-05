@@ -126,19 +126,19 @@ public readonly struct BoneCache
 	}
 
 	private Span<Matrix3x4> BoneArray() {
-		Span<byte> mem = backingMemory.AsSpan()[1..][MatrixOffset..];
+		Span<byte> mem = backingMemory.AsSpan()[BoneCache_SIZE..][MatrixOffset..];
 		int numMatrices = mem.Length / Unsafe.SizeOf<Matrix3x4>();
 		return mem.Cast<byte, Matrix3x4>()[..numMatrices];
 	}
 
 	private Span<ushort> StudioToCached() {
-		Span<byte> mem = backingMemory.AsSpan()[1..];
+		Span<byte> mem = backingMemory.AsSpan()[BoneCache_SIZE..];
 		int numPtrs = mem.Length / Unsafe.SizeOf<ushort>();
 		return mem.Cast<byte, ushort>()[..numPtrs];
 	}
 
 	private Span<ushort> CachedToStudio() {
-		Span<byte> mem = backingMemory.AsSpan()[1..][CachedToStudioOffset..];
+		Span<byte> mem = backingMemory.AsSpan()[BoneCache_SIZE..][CachedToStudioOffset..];
 		int numPtrs = mem.Length / Unsafe.SizeOf<ushort>();
 		return mem.Cast<byte, ushort>()[..numPtrs];
 	}
@@ -1376,6 +1376,75 @@ public ref struct BoneSetup
 		return ctlValue * (PoseParam.End - PoseParam.Start) + PoseParam.Start;
 	}
 
+	static MStudioBoneController? FindController(StudioHdr studioHdr, int controller) {
+		for (int i = 0; i < studioHdr.NumBoneControllers(); i++) {
+			if (studioHdr.BoneController(i).InputField == controller)
+				return studioHdr.BoneController(i);
+		}
+
+		return null;
+	}
+
+	public static float Studio_SetController(StudioHdr? studioHdr, int controller, float value, out float ctlValue) {
+		if (studioHdr == null) {
+			ctlValue = default;
+			return value;
+		}
+
+		MStudioBoneController? boneController = FindController(studioHdr, controller);
+		if (boneController == null) {
+			ctlValue = 0;
+			return value;
+		}
+
+		if ((boneController.Type & (StudioMotionFlags.XR | StudioMotionFlags.YR | StudioMotionFlags.ZR)) != 0) {
+			if (boneController.End < boneController.Start)
+				value = -value;
+
+			if (boneController.Start + 359.0 >= boneController.End) {
+				if (value > ((boneController.Start + boneController.End) / 2.0) + 180)
+					value = value - 360;
+				if (value < ((boneController.Start + boneController.End) / 2.0) - 180)
+					value = value + 360;
+			}
+			else {
+				if (value > 360)
+					value = (float)(value - (int)(value / 360.0) * 360.0);
+				else if (value < 0)
+					value = (float)(value + (int)((value / -360.0) + 1) * 360.0);
+			}
+		}
+
+		ctlValue = (value - boneController.Start) / (boneController.End - boneController.Start);
+		if (ctlValue < 0) ctlValue = 0;
+		if (ctlValue > 1) ctlValue = 1;
+
+		float returnVal = (float)((1.0 - ctlValue) * boneController.Start + ctlValue * boneController.End);
+
+		if ((boneController.Type & (StudioMotionFlags.XR | StudioMotionFlags.YR | StudioMotionFlags.ZR)) != 0 &&
+			boneController.End < boneController.Start) {
+			returnVal *= -1;
+		}
+
+		return returnVal;
+	}
+
+	public static float Studio_GetController(StudioHdr? studioHdr, int controller, float ctlValue) {
+		if (studioHdr == null)
+			return 0.0f;
+
+		MStudioBoneController? boneController = FindController(studioHdr, controller);
+		if (boneController == null)
+			return 0;
+
+		return ctlValue * (boneController.End - boneController.Start) + boneController.Start;
+	}
+
+	public static float Studio_GetMass(StudioHdr? studioHdr) {
+		if (studioHdr == null) return 1.0f;
+		return studioHdr.Mass();
+	}
+
 	public void CalcAutoplaySequences(Span<Vector3> pos, Span<Quaternion> q, TimeUnit_t realTime, object? ikContext) {
 		int count = studioHdr.GetAutoplayList(out Span<short> pList);
 		for (int i = 0; i < count; i++) {
@@ -1388,6 +1457,58 @@ public ref struct BoneSetup
 				cycle = cycle - (int)cycle;
 
 				AccumulatePose(pos, q, sequenceIndex, cycle, 1.0f, realTime, ikContext);
+			}
+		}
+	}
+
+	public static void Studio_BuildMatrices(StudioHdr studioHdr, in QAngle angles, in Vector3 origin, ReadOnlySpan<Vector3> pos, ReadOnlySpan<Quaternion> q, int iBone, float flScale, Span<Matrix3x4> bonetoworld, int boneMask) {
+		int i, j;
+
+		Span<int> chain = stackalloc int[Studio.MAXSTUDIOBONES];
+		int chainlength = 0;
+
+		if (iBone < -1 || iBone >= studioHdr.NumBones())
+			iBone = 0;
+
+		if (iBone == -1) {
+			chainlength = studioHdr.NumBones();
+			for (i = 0; i < studioHdr.NumBones(); i++)
+				chain[chainlength - i - 1] = i;
+		}
+		else {
+			i = iBone;
+			while (i != -1) {
+				chain[chainlength++] = i;
+				i = studioHdr.BoneParent(i);
+			}
+		}
+
+		MathLib.AngleMatrix(angles, origin, out Matrix3x4 rotationmatrix);
+
+		if (flScale < 1.0f - FLT_EPSILON || flScale > 1.0f + FLT_EPSILON) {
+			MathLib.MatrixGetColumn(rotationmatrix, 3, out Vector3 vecOffset);
+			vecOffset -= origin;
+			vecOffset *= flScale;
+			vecOffset += origin;
+			MathLib.MatrixSetColumn(vecOffset, 3, ref rotationmatrix);
+
+			for (int row = 0; row < 3; row++) {
+				Span<float> r = rotationmatrix[row];
+				r[0] *= flScale;
+				r[1] *= flScale;
+				r[2] *= flScale;
+			}
+		}
+
+		for (j = chainlength - 1; j >= 0; j--) {
+			i = chain[j];
+			if ((studioHdr.BoneFlags(i) & boneMask) != 0) {
+				MathLib.QuaternionMatrix(q[i], pos[i], out Matrix3x4 bonematrix);
+
+				if (studioHdr.BoneParent(i) == -1)
+					MathLib.ConcatTransforms(rotationmatrix, bonematrix, out bonetoworld[i]);
+				else
+					MathLib.ConcatTransforms(bonetoworld[studioHdr.BoneParent(i)], bonematrix, out bonetoworld[i]);
 			}
 		}
 	}

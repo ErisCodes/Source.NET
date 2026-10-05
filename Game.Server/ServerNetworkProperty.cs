@@ -45,7 +45,20 @@ public class ServerNetworkProperty : IServerNetworkable, IEventRegisterCallback
 	}
 
 	public void Release() {
-		throw new NotImplementedException();
+		Outer!.Term();
+	}
+
+	public void Term() {
+		engine.CleanUpEntityClusterList(ref PVSInfo);
+		DetachEdict();
+	}
+
+	public void DetachEdict() {
+		if (Pev != null) {
+			Pev.SetEdict(null, false);
+			engine.RemoveEdict(Pev);
+			Pev = null!;
+		}
 	}
 
 	object? IServerNetworkable.GetBaseEntity() => Outer;
@@ -79,6 +92,10 @@ public class ServerNetworkProperty : IServerNetworkable, IEventRegisterCallback
 		PendingStateChange = false;
 		PVSInfo.ClusterCount = 0;
 		// timerevent todo
+	}
+
+	internal void NetworkStateForceUpdate() {
+		Pev?.StateChanged();
 	}
 
 	internal void NetworkStateChanged() {

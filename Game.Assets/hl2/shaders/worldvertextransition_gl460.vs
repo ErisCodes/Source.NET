@@ -13,7 +13,7 @@ layout(std140, binding = 0) uniform source_matrices {
 };
 
 out vec2 vs_TexCoord0;
-out vec2 vs_TexCoord1;
+centroid out vec2 vs_TexCoord1;
 out vec4 vs_Color;
 
 void main()

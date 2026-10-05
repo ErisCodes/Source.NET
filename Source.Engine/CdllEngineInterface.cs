@@ -2,6 +2,7 @@
 
 using Source.Common;
 using Source.Common.Audio;
+using Source.Common.Bitbuffers;
 using Source.Common.Client;
 using Source.Common.Commands;
 using Source.Common.Engine;
@@ -218,8 +219,18 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 		throw new NotImplementedException();
 	}
 
+	public Sentence? GetSentence(AudioSource? audioSource) {
+		if (audioSource != null)
+			return audioSource.GetSentence();
+		return null;
+	}
+
 	public float GetSentenceLength(AudioSource? audioSource) {
-		throw new NotImplementedException();
+		if (audioSource != null && audioSource.SampleRate() > 0) {
+			float length = (float)audioSource.SampleCount() / (float)audioSource.SampleRate();
+			return length;
+		}
+		return 0.0f;
 	}
 
 	public bool IsStreaming(AudioSource? audioSource) {
@@ -611,8 +622,17 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 		throw new NotImplementedException();
 	}
 
-	public void GMOD_SendToServer(ReadOnlySpan<byte> data, bool reliable) {
-		throw new NotImplementedException();
+	public void GMOD_SendToServer(ReadOnlySpan<byte> data, int dataBits, bool reliable) {
+		CLC_GMod_ClientToServer msg = new();
+		msg.SetReliable(reliable);
+		msg.ReadPayload(new bf_read(data.ToArray(), data.Length), dataBits);
+
+		if (cl.NetChannel == null) {
+			Warning("Client sending to server with no netchannel!\n");
+			return;
+		}
+
+		cl.NetChannel.SendNetMsg(msg);
 	}
 
 	public void GMOD_PlaceDecalMaterial(IMaterial material, bool unk1, int unk2, IClientEntity ent, in Vector3 origin, in Vector3 normal, in Color color, float unk3, float unk4) {

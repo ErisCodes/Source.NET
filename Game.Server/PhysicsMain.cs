@@ -4,6 +4,7 @@ using Game.Shared;
 
 using Source;
 using Source.Common.Commands;
+using Source.Common.Engine;
 using Source.Common.Formats.BSP;
 using Source.Common.Mathematics;
 using Source.Engine;
@@ -85,7 +86,7 @@ public partial class BaseEntity
 
 			PhysicsCheckVelocity();
 
-			PhysicsTryMove(timestep, null);
+			PhysicsTryMove(timestep, ref Unsafe.NullRef<Trace>());
 
 			PhysicsCheckVelocity();
 
@@ -106,15 +107,186 @@ public partial class BaseEntity
 	}
 
 	private void PhysicsAddHalfGravity(double timestep) {
-		throw new NotImplementedException();
+		float entGravity;
+
+		if (GetGravity() != 0)
+			entGravity = GetGravity();
+		else
+			entGravity = 1.0f;
+
+		Vector3 vecAbsVelocity = GetAbsVelocity();
+		vecAbsVelocity[2] -= (float)(0.5 * entGravity * GetCurrentGravity() * timestep);
+		vecAbsVelocity[2] += (float)(GetBaseVelocity()[2] * gpGlobals.FrameTime);
+		SetAbsVelocity(vecAbsVelocity);
+
+		Vector3 vecNewBaseVelocity = GetBaseVelocity();
+		vecNewBaseVelocity[2] = 0;
+		SetBaseVelocity(vecNewBaseVelocity);
+
+		PhysicsCheckVelocity();
 	}
 
 	private void PhysicsStepRecheckGround() {
-		throw new NotImplementedException();
+		Mask mask = PhysicsSolidMaskForEntity();
+		Vector3 mins, maxs, point = default;
+		int x, y;
+		Trace trace;
+
+		mins = GetAbsOrigin() + WorldAlignMins();
+		maxs = GetAbsOrigin() + WorldAlignMaxs();
+		point[2] = mins[2] - 1;
+		for (x = 0; x <= 1; x++) {
+			for (y = 0; y <= 1; y++) {
+				point[0] = x != 0 ? maxs[0] : mins[0];
+				point[1] = y != 0 ? maxs[1] : mins[1];
+
+				ICollideable? collision = GetCollideable();
+
+				if (collision != null && IsNPC())
+					Util.TraceLineFilterEntity(this, point, point, mask, Source.CollisionGroup.None, out trace);
+				else
+					Util.TraceLine(point, point, mask, this, Source.CollisionGroup.None, out trace);
+
+				if (trace.StartSolid) {
+					SetGroundEntity(trace.Ent);
+					return;
+				}
+			}
+		}
 	}
 
-	private void PhysicsTryMove(double timestep, object? value) {
-		throw new NotImplementedException();
+	private int PhysicsTryMove(double flTime, ref Trace steptrace) {
+		int bumpcount, numbumps;
+		Vector3 dir;
+		float d;
+		int numplanes;
+		Span<Vector3> planes = stackalloc Vector3[GameMovement.MAX_CLIP_PLANES];
+		Vector3 primal_velocity, original_velocity, new_velocity;
+		int i, j;
+		Trace trace;
+		Vector3 end;
+		float time_left;
+		int blocked;
+
+		Mask mask = PhysicsSolidMaskForEntity();
+
+		new_velocity = default;
+
+		numbumps = 4;
+
+		Vector3 vecAbsVelocity = GetAbsVelocity();
+
+		blocked = 0;
+		original_velocity = vecAbsVelocity;
+		primal_velocity = vecAbsVelocity;
+		numplanes = 0;
+
+		time_left = (float)flTime;
+
+		for (bumpcount = 0; bumpcount < numbumps; bumpcount++) {
+			if (vecAbsVelocity == vec3_origin)
+				break;
+
+			MathLib.VectorMA(GetAbsOrigin(), time_left, vecAbsVelocity, out end);
+
+			Physics.TraceEntity(this, GetAbsOrigin(), end, (uint)mask, out trace);
+
+			if (trace.StartSolid) {
+				SetAbsVelocity(vec3_origin);
+				return 4;
+			}
+
+			if (trace.Fraction > 0) {
+				SetAbsOrigin(trace.EndPos);
+				original_velocity = vecAbsVelocity;
+				numplanes = 0;
+			}
+
+			if (trace.Fraction == 1)
+				break;
+
+			if (trace.Ent == null) {
+				SetAbsVelocity(vecAbsVelocity);
+				Warning("PhysicsTryMove: !trace.u.ent");
+				Assert(false);
+				return 4;
+			}
+
+			if (trace.Plane.Normal[2] > 0.7f) {
+				blocked |= 1;
+				if (CanStandOn(trace.Ent)) {
+					if (GetGroundEntity() != trace.Ent)
+						SetGroundChangeTime((float)(gpGlobals.CurTime + (flTime - (1 - trace.Fraction) * time_left)));
+
+					SetGroundEntity(trace.Ent);
+				}
+			}
+			if (trace.Plane.Normal[2] == 0) {
+				blocked |= 2;
+				if (!Unsafe.IsNullRef(ref steptrace))
+					steptrace = trace;
+			}
+
+			PhysicsImpact(trace.Ent, trace);
+			if (IsMarkedForDeletion() || IsEdictFree())
+				break;
+
+			time_left -= time_left * trace.Fraction;
+
+			if (numplanes >= GameMovement.MAX_CLIP_PLANES) {
+				SetAbsVelocity(vec3_origin);
+				return blocked;
+			}
+
+			planes[numplanes] = trace.Plane.Normal;
+			numplanes++;
+
+			if (GetMoveType() == Source.MoveType.Walk && ((GetFlags() & EntityFlags.OnGround) == 0 || GetFriction() != 1)) {
+				for (i = 0; i < numplanes; i++) {
+					if (planes[i][2] > 0.7f) {
+						PhysicsClipVelocity(original_velocity, planes[i], out new_velocity, 1);
+						original_velocity = new_velocity;
+					}
+					else
+						PhysicsClipVelocity(original_velocity, planes[i], out new_velocity, 1.0f + sv_bounce.GetFloat() * (1 - GetFriction()));
+				}
+
+				vecAbsVelocity = new_velocity;
+				original_velocity = new_velocity;
+			}
+			else {
+				for (i = 0; i < numplanes; i++) {
+					PhysicsClipVelocity(original_velocity, planes[i], out new_velocity, 1);
+					for (j = 0; j < numplanes; j++)
+						if (j != i) {
+							if (Vector3.Dot(new_velocity, planes[j]) < 0)
+								break;
+						}
+					if (j == numplanes)
+						break;
+				}
+
+				if (i != numplanes)
+					vecAbsVelocity = new_velocity;
+				else {
+					if (numplanes != 2) {
+						SetAbsVelocity(vecAbsVelocity);
+						return blocked;
+					}
+					dir = Vector3.Cross(planes[0], planes[1]);
+					d = Vector3.Dot(dir, vecAbsVelocity);
+					vecAbsVelocity = dir * d;
+				}
+
+				if (Vector3.Dot(vecAbsVelocity, primal_velocity) <= 0) {
+					SetAbsVelocity(vec3_origin);
+					return blocked;
+				}
+			}
+		}
+
+		SetAbsVelocity(vecAbsVelocity);
+		return blocked;
 	}
 }
 
@@ -123,11 +295,15 @@ public static class Physics
 	public static bool g_bTestMoveTypeStepSimulation = true;
 	static readonly ConVar sv_teststepsimulation = new("1", 0);
 	public readonly static ConVar npc_vphysics = new("0", 0);
+	public static readonly PhysicsPushedEntities PushedEntities = new();
 
 	const float PLAYER_PACKETS_STOPPED_SO_RETURN_TO_PHYSICS_TIME = 1.0f;
 
 	public static void TraceEntity(BaseEntity entity, in Vector3 start, in Vector3 end, uint mask, out Trace tr) {
-		throw new NotImplementedException();
+		if (entity.GetDamageType() != DamageType.Generic)
+			g_pGameRules.WeaponTraceEntity(entity, start, end, (Mask)mask, out tr);
+		else
+			Util.TraceEntity(entity, start, end, (Mask)mask, out tr);
 	}
 
 	static void SimulateEntity(BaseEntity entity) {
@@ -268,7 +444,43 @@ public partial class BaseEntity
 		// PhysicsRelinkChildren(dt);
 	}
 
-	void PhysicsPusher() { }
+	BaseEntity? PhysicsPushMove(TimeUnit_t movetime) {
+		IncrementLocalTime(movetime);
+
+		if (GetLocalVelocity() == vec3_origin)
+			return null;
+
+		BaseEntity? blocker = Physics.PushedEntities.PerformLinearPush(this, movetime);
+		if (blocker != null)
+			IncrementLocalTime(-movetime);
+		return blocker;
+	}
+
+	BaseEntity? PhysicsPushRotate(TimeUnit_t movetime) {
+		IncrementLocalTime(movetime);
+
+		if (GetLocalAngularVelocity() == vec3_angle)
+			return null;
+
+		BaseEntity? blocker = Physics.PushedEntities.PerformRotatePush(this, movetime);
+		if (blocker != null)
+			IncrementLocalTime(-movetime);
+
+		return blocker;
+	}
+
+	void PhysicsPusher() {
+		if (!PhysicsRunThink())
+			return;
+
+		VPhysicsUpdateLocalTime = LocalTime;
+
+		TimeUnit_t movetime = GetMoveDoneTime();
+		if (movetime > gpGlobals.FrameTime)
+			movetime = gpGlobals.FrameTime;
+
+		PerformPush(movetime);
+	}
 
 	void PhysicsNone() {
 		PhysicsRunThink();
@@ -291,8 +503,55 @@ public partial class BaseEntity
 
 	void PhysicsCustom() { }
 
-	void PerformPush(TimeUnit_t movetime) { }
+	void PerformPush(TimeUnit_t movetime) {
+		uint prevBlocker = Blocker.Index;
+		BaseEntity? blocker;
+		Physics.PushedEntities.BeginPush(this);
+		if (movetime > 0) {
+			if (GetLocalAngularVelocity() != vec3_angle) {
+				if (GetLocalVelocity() != vec3_origin) {
+					TimeUnit_t initialLocalTime = LocalTime;
 
+					blocker = PhysicsPushRotate(movetime);
+					if (blocker == null) {
+						TimeUnit_t rotateLocalTime = LocalTime;
+
+						LocalTime = initialLocalTime;
+						blocker = PhysicsPushMove(movetime);
+						if (LocalTime < rotateLocalTime)
+							LocalTime = rotateLocalTime;
+					}
+				}
+				else
+					blocker = PhysicsPushRotate(movetime);
+			}
+			else
+				blocker = PhysicsPushMove(movetime);
+
+			Blocker.Set(blocker);
+			if (Blocker.Index != prevBlocker) {
+				if (prevBlocker != Source.Constants.INVALID_EHANDLE_INDEX)
+					EndBlocked();
+				if (Blocker.Get() != null)
+					StartBlocked(blocker);
+			}
+			if (Blocker.Get() != null)
+				Blocked(Blocker.Get());
+
+			VPhysicsGetObject()?.Wake();
+		}
+
+		if (VPhysicsGetObject() != null) {
+			if (movetime > 0 && Blocker.Get() == null && GetSolid() == SolidType.VPhysics && Physics.PushedEntities.CountMovedEntities() > 0)
+				throw new NotImplementedException();
+		}
+		else {
+			if (MoveDoneTime <= LocalTime && MoveDoneTime > 0) {
+				SetMoveDoneTime(-1);
+				MoveDone();
+			}
+		}
+	}
 	void StepSimulationThink(TimeUnit_t dt) {
 		CheckStepSimulationChanged();
 

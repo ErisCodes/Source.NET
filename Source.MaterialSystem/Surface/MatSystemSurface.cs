@@ -399,6 +399,14 @@ public class MatSystemSurface : IMatSystemSurface
 		}
 	}
 
+#if GMOD_DLL
+	public void SetInDrawing(bool inDrawing) => InDrawing = inDrawing;
+#endif
+
+	public void DestroyTextureID(in TextureID id) {
+		TextureDictionary.DestroyTexture(id);
+	}
+
 	public bool DeleteTextureByID(in TextureID id) {
 		TextureDictionary.DestroyTexture(id);
 		return false;
@@ -1802,7 +1810,7 @@ public class MatSystemSurface : IMatSystemSurface
 		TextureDictionary.SetSubTextureRGBA(in id, drawX, drawY, rgba, subTextureWide, subTextureTall, ImageFormat.RGBA8888);
 	}
 
-	internal void DrawSetTextureMaterial(TextureID textureID, IMaterial material) {
+	public void DrawSetTextureMaterial(TextureID textureID, IMaterial material) {
 		TextureDictionary.BindTextureToMaterial(in textureID, material);
 		DrawSetTexture(in textureID);
 	}
@@ -2119,7 +2127,26 @@ public class MatSystemSurface : IMatSystemSurface
 
 		DisableClipping(false);
 	}
+	public void PrecacheFontCharacters(IFont font, ReadOnlySpan<char> characterString){
+		const string pCommonChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.!:-/%";
 
+		if (characterString.IsStringEmpty) 
+			// use the common chars, alternate languages are not handled
+			characterString = pCommonChars;
+
+		StartDrawing();
+		DrawSetTextFont(font);
+
+		int numChars = 0;
+		while (!characterString[numChars..].IsStringEmpty) 
+			numChars++;
+
+		Span<TextureID> pTextureIDs_ignored = stackalloc TextureID[numChars];
+		Span<CharTexCoord> pTexCoords_ignored = stackalloc CharTexCoord[numChars];
+		FontTextureCache.GetTextureForChars(CurrentFont, FontDrawType.Default, characterString, pTextureIDs_ignored, pTexCoords_ignored);
+
+		FinishDrawing();
+	}
 	public ReadOnlySpan<char> GetFontName(IFont font) => FontManager.GetFontName(font);
 	public ReadOnlySpan<char> GetFontFamilyName(IFont font) => FontManager.GetFontFamilyName(font);
 }

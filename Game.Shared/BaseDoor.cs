@@ -2,6 +2,11 @@
 using Source.Common;
 namespace Game.Shared;
 using FIELD = Source.FIELD<BaseDoor>;
+#if !CLIENT_DLL
+[LinkEntityToClass("func_door")]
+[LinkEntityToClass("func_water")]
+#endif
+[NetworkName("CBaseDoor")]
 public partial class BaseDoor : BaseToggle
 {
 	public static readonly
@@ -16,9 +21,9 @@ public partial class BaseDoor : BaseToggle
 #endif
 		]);
 #if CLIENT_DLL
-	public static readonly new ClientClass ClientClass = new ClientClass("BaseDoor", null, null, DT_BaseDoor).WithManualClassID(StaticClassIndices.CBaseDoor);
+	public static readonly new ClientClass ClientClass = new ClientClass(null, null, DT_BaseDoor);
 #else
-	public static readonly new ServerClass ServerClass = new ServerClass("BaseDoor", DT_BaseDoor).WithManualClassID(StaticClassIndices.CBaseDoor);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_BaseDoor);
 #endif
 	public float WaveHeight;
 }

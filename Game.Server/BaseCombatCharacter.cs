@@ -2,14 +2,70 @@
 
 using Source;
 using Source.Common;
+using Source.Common.Commands;
 using Source.Common.Engine;
+using Source.Common.Formats.BSP;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Game.Server;
 
 using FIELD = Source.FIELD<BaseCombatCharacter>;
 
+[Flags]
+public enum Capability
+{
+	MoveGround = 0x00000001,
+	MoveJump = 0x00000002,
+	MoveFly = 0x00000004,
+	MoveClimb = 0x00000008,
+	MoveSwim = 0x00000010,
+	MoveCrawl = 0x00000020,
+	MoveShoot = 0x00000040,
+	SkipNavGroundCheck = 0x00000080,
+	Use = 0x00000100,
+	AutoDoors = 0x00000400,
+	OpenDoors = 0x00000800,
+	TurnHead = 0x00001000,
+	WeaponRangeAttack1 = 0x00002000,
+	WeaponRangeAttack2 = 0x00004000,
+	WeaponMeleeAttack1 = 0x00008000,
+	WeaponMeleeAttack2 = 0x00010000,
+	InnateRangeAttack1 = 0x00020000,
+	InnateRangeAttack2 = 0x00040000,
+	InnateMeleeAttack1 = 0x00080000,
+	InnateMeleeAttack2 = 0x00100000,
+	UseWeapons = 0x00200000,
+	AnimatedFace = 0x00800000,
+	UseShotRegulator = 0x01000000,
+	FriendlyDmgImmune = 0x02000000,
+	Squad = 0x04000000,
+	Duck = 0x08000000,
+	NoHitPlayer = 0x10000000,
+	AimGun = 0x20000000,
+	NoHitSquadmates = 0x40000000,
+	SimpleRadiusDamage = unchecked((int)0x80000000),
+}
+
+public enum Disposition
+{
+	ER,
+	HT,
+	FR,
+	LI,
+	NU
+}
+
+public class Relationship
+{
+	public EHANDLE Entity = new();
+	public Class_T ClassType;
+	public Disposition Disposition;
+	public int Priority;
+}
+
+[NetworkName("CBaseCombatCharacter")]
 public partial class BaseCombatCharacter : BaseFlex
 {
 	public bool ForceServerRagdoll;
@@ -35,13 +91,38 @@ public partial class BaseCombatCharacter : BaseFlex
 		return bodyDir;
 	}
 
+	public virtual Vector3 HeadDirection2D() => BodyDirection2D();
 	public virtual Vector3 HeadDirection3D() => BodyDirection2D(); // No head motion so just return body dir
+	public virtual Vector3 EyeDirection2D() => HeadDirection2D();
 	public virtual Vector3 EyeDirection3D() => HeadDirection3D(); // No eye motion so just return head dir
 
-	public static readonly SendTable DT_BCCLocalPlayerExclusive = new([
+
+	public virtual bool FInViewCone(BaseEntity entity) => FInViewCone(entity.WorldSpaceCenter());
+
+	public virtual bool FInViewCone(in Vector3 spot) {
+		Vector3 los = spot - EyePosition();
+
+		los.Z = 0;
+		Source.Common.Mathematics.MathLib.VectorNormalize(ref los);
+
+		Vector3 facingDir = EyeDirection2D();
+
+		float dot = Vector3.Dot(los, facingDir);
+
+		if (dot > FieldOfView)
+			return true;
+
+		return false;
+	}
+
+	public virtual BaseEntity? GetVehicleEntity() => null;
+
+	public virtual bool IsInAVehicle() => false;
+	public virtual bool ExitVehicle() => false;
+
+	public static readonly SendTable DT_BCCLocalPlayerExclusive = new(nameof(DT_BCCLocalPlayerExclusive), [
 		SendPropTime64(FIELD.OF(nameof(NextAttack))),
 	]);
-	public static readonly ServerClass CC_BCCLocalPlayerExclusive = new ServerClass("BCCLocalPlayerExclusive", DT_BCCLocalPlayerExclusive);
 
 	public static readonly SendTable DT_BaseCombatCharacter = new(DT_BaseFlex, [
 		SendPropDataTable( "bcc_localdata", DT_BCCLocalPlayerExclusive, SendProxy_SendBaseCombatCharacterLocalDataTable ),
@@ -53,12 +134,18 @@ public partial class BaseCombatCharacter : BaseFlex
 	public TimeUnit_t GetNextAttack() => NextAttack;
 	public void SetNextAttack(TimeUnit_t wait) => NextAttack = wait;
 
+	[NetworkName("m_flNextAttack")]
 	public TimeUnit_t NextAttack;
 	public float ImpactEnergyScale;
+	[NetworkName("m_hLastWeapon")]
 	public Handle<BaseCombatWeapon> LastWeapon = new();
+	[NetworkName("m_hActiveWeapon")]
 	public Handle<BaseCombatWeapon> ActiveWeapon = new();
+	[NetworkName("m_hMyWeapons")]
 	public InlineArrayNewMaxWeapons<Handle<BaseCombatWeapon>> MyWeapons = new();
+	[NetworkName("m_iAmmo")]
 	[NetworkArraySize(MAX_AMMO_TYPES)] public readonly NetworkArray<int> Ammo = new(MAX_AMMO_TYPES);
+	[NetworkName("m_bloodColor")]
 	public Color BloodColor;
 
 	private static object? SendProxy_SendBaseCombatCharacterLocalDataTable(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {
@@ -84,10 +171,124 @@ public partial class BaseCombatCharacter : BaseFlex
 		// TODO
 	}
 
+	public string? RelationshipString;
+
+	public AI_HullType Hull;
+	public float FieldOfView;
+
+	public const int DEF_RELATIONSHIP_PRIORITY = int.MinValue;
+
+	public static Relationship[][]? DefaultRelationship;
+	public readonly List<Relationship> Relationship = [];
+
+	public virtual void AddEntityRelationship(BaseEntity entity, Disposition disposition, int priority) => throw new NotImplementedException();
+	public virtual void AddClassRelationship(Class_T classType, Disposition disposition, int priority) => throw new NotImplementedException();
+
+	public virtual bool RemoveEntityRelationship(BaseEntity? entity) {
+		for (int i = Relationship.Count - 1; i >= 0; i--) {
+			if (Relationship[i].Entity.Get() == entity) {
+				Relationship.RemoveAt(i);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static void AllocateDefaultRelationships() {
+		if (DefaultRelationship == null) {
+			DefaultRelationship = new Relationship[(int)Class_T.NumAIClasses][];
+
+			for (int i = 0; i < (int)Class_T.NumAIClasses; ++i) {
+				DefaultRelationship[i] = new Relationship[(int)Class_T.NumAIClasses];
+				for (int j = 0; j < (int)Class_T.NumAIClasses; ++j)
+					DefaultRelationship[i][j] = new();
+			}
+		}
+	}
+
+	public static void SetDefaultRelationship(Class_T classType, Class_T classTarget, Disposition disposition, int priority) {
+		if (DefaultRelationship != null) {
+			DefaultRelationship[(int)classType][(int)classTarget].Disposition = disposition;
+			DefaultRelationship[(int)classType][(int)classTarget].Priority = priority;
+		}
+	}
+
+	public Disposition GetDefaultRelationshipDisposition(Class_T classTarget) {
+		Assert(DefaultRelationship != null);
+
+		return DefaultRelationship![(int)Classify()][(int)classTarget].Disposition;
+	}
+
+	static readonly Relationship DummyRelationship = new();
+
+	public Relationship FindEntityRelationship(BaseEntity? target) {
+		if (target == null)
+			return DummyRelationship;
+
+		int i;
+		for (i = 0; i < Relationship.Count; i++) {
+			if (target == Relationship[i].Entity.Get())
+				return Relationship[i];
+		}
+
+		if (target.Classify() != Class_T.None) {
+			for (i = 0; i < Relationship.Count; i++) {
+				if (target.Classify() == Relationship[i].ClassType)
+					return Relationship[i];
+			}
+		}
+		AllocateDefaultRelationships();
+		return DefaultRelationship![(int)Classify()][(int)target.Classify()];
+	}
+
+	public virtual Disposition IRelationType(BaseEntity? target) {
+		if (target != null)
+			return FindEntityRelationship(target).Disposition;
+		return Disposition.NU;
+	}
+
+	public virtual int IRelationPriority(BaseEntity? target) {
+		if (target != null)
+			return FindEntityRelationship(target).Priority;
+		return 0;
+	}
+
+	public void SetImpactEnergyScale(float scale) => ImpactEnergyScale = scale;
+
+	public AI_HullType GetHullType() => Hull;
+	public void SetHullType(AI_HullType hullType) => Hull = hullType;
+
+	public virtual Activity Weapon_TranslateActivity(Activity baseAct, ref bool required) {
+		Activity translated = baseAct;
+
+		if (ActiveWeapon.Get() != null)
+			translated = ActiveWeapon.Get()!.ActivityOverride(baseAct, ref required);
+		else
+			required = false;
+
+		return translated;
+	}
+
+	public virtual Activity NPC_TranslateActivity(Activity baseAct) => baseAct;
+
+	public void Weapon_SetActivity(Activity newActivity, float duration) {
+		if (ActiveWeapon.Get() != null)
+			ActiveWeapon.Get()!.SetActivity(newActivity, duration);
+	}
+
+	public virtual void Weapon_FrameUpdate() {
+		if (ActiveWeapon.Get() != null)
+			ActiveWeapon.Get()!.Operator_FrameUpdate(this);
+	}
+
+	public BaseCombatWeapon? Weapon_Create(ReadOnlySpan<char> weaponName) => throw new NotImplementedException();
+	public virtual void Weapon_Equip(BaseCombatWeapon weapon) => throw new NotImplementedException();
+
 	public int WeaponCount() => MAX_WEAPONS;
 	public BaseCombatWeapon? GetWeapon(int i) => MyWeapons[i].Get();
 
-	public static readonly new ServerClass ServerClass = new ServerClass("BaseCombatCharacter", DT_BaseCombatCharacter).WithManualClassID(StaticClassIndices.CBaseCombatCharacter);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_BaseCombatCharacter);
 
 	public override void DoMuzzleFlash() {
 		BaseCombatWeapon? weapon = GetActiveWeapon();

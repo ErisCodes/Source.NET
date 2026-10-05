@@ -35,5 +35,9 @@
 	<!-- Analyzers -->
 	<ItemGroup>
 		<ProjectReference Include="../Source.CodeAnalysis/Source.CodeAnalysis/Source.CodeAnalysis.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+		<ProjectReference Include="../Source.CodeAnalysis.Lua/Source.CodeAnalysis.Lua.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
 	</ItemGroup>
 </Project>

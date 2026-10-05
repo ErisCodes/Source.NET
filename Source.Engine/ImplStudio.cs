@@ -184,6 +184,45 @@ public class ModelRender : IModelRender
 	static readonly ConVar r_modelwireframedecal = new("r_modelwireframedecal", "0", FCvar.Cheat);
 	static readonly ConVar r_maxmodeldecal = new("r_maxmodeldecal", "50", 0);
 
+	static StudioRenderConfig s_StudioRenderConfig;
+
+	public static void UpdateStudioRenderConfig() {
+		IStudioRender? studioRender = Singleton<IStudioRender>();
+		if (studioRender == null)
+			return;
+
+		s_StudioRenderConfig = default;
+
+		s_StudioRenderConfig.EyeMove = r_eyemove.GetInt() != 0;
+		s_StudioRenderConfig.EyeShiftX = r_eyeshift_x.GetFloat();
+		s_StudioRenderConfig.EyeShiftY = r_eyeshift_y.GetFloat();
+		s_StudioRenderConfig.EyeShiftZ = r_eyeshift_z.GetFloat();
+		s_StudioRenderConfig.EyeSize = r_eyesize.GetFloat();
+		if (mat_softwareskin.GetInt() != 0 || ShouldDrawInWireFrameMode())
+			s_StudioRenderConfig.SoftwareSkin = true;
+		else
+			s_StudioRenderConfig.SoftwareSkin = false;
+		s_StudioRenderConfig.NoHardware = r_nohw.GetInt() != 0;
+		s_StudioRenderConfig.NoSoftware = r_nosw.GetInt() != 0;
+		s_StudioRenderConfig.Teeth = r_teeth.GetInt() != 0;
+		s_StudioRenderConfig.DrawEntities = r_drawentities.GetInt();
+		s_StudioRenderConfig.Flex = r_flex.GetInt() != 0;
+		s_StudioRenderConfig.Eyes = r_eyes.GetInt() != 0;
+		s_StudioRenderConfig.Wireframe = ShouldDrawInWireFrameMode();
+		s_StudioRenderConfig.DrawNormals = mat_normals.GetBool();
+		s_StudioRenderConfig.Skin = r_skin.GetInt();
+		s_StudioRenderConfig.MaxDecalsPerModel = r_maxmodeldecal.GetInt();
+		s_StudioRenderConfig.WireframeDecals = r_modelwireframedecal.GetInt() != 0;
+
+		s_StudioRenderConfig.FullBright = MatSysInterface.MaterialSystemConfig.Fullbright;
+		s_StudioRenderConfig.SoftwareLighting = MatSysInterface.MaterialSystemConfig.SoftwareLighting;
+
+		s_StudioRenderConfig.ShowEnvCubemapOnly = r_showenvcubemap.GetInt() != 0;
+		s_StudioRenderConfig.EyeGlintPixelWidthLODThreshold = r_eyeglintlodpixels.GetFloat();
+
+		studioRender.UpdateConfig(in s_StudioRenderConfig);
+	}
+
 	ModelInstanceHandle_t curModelHandle;
 	readonly Dictionary<ModelInstanceHandle_t, ModelInstance> ModelInstances = [];
 
@@ -405,6 +444,10 @@ public class ModelRender : IModelRender
 		StudioRender.ForcedMaterialOverride(null);
 	}
 
+	public void SetViewTarget(StudioHdr studioHdr, int bodyIndex, in Vector3 target) {
+		StudioRender.SetEyeViewTarget(studioHdr.GetRenderHdr(), bodyIndex, in target);
+	}
+
 	readonly IMDLCache MDLCache;
 	readonly IStudioRender StudioRender;
 	readonly IMaterialSystem materials;
@@ -547,7 +590,19 @@ public class ModelRender : IModelRender
 		//  if (textMode)
 		//  	return;
 
-		// TODO: Flexes
+		Span<float> flexWeights = default;
+		Span<float> flexDelayedWeights = default;
+		int flexCount = state.StudioHdr!.NumFlexDesc;
+		if (flexCount > 0) {
+			Assert(!boneToWorldArray.IsEmpty);
+			bool usesDelayedWeights = state.Renderable!.UsesFlexDelayedWeights();
+			if (usesDelayedWeights)
+				StudioRender.LockFlexWeights(flexCount, out flexWeights, out flexDelayedWeights);
+			else
+				StudioRender.LockFlexWeights(flexCount, out flexWeights);
+			state.Renderable.SetupWeights(boneToWorldArray, flexWeights, flexDelayedWeights);
+			StudioRender.UnlockFlexWeights();
+		}
 
 		// OPTIMIZE: Try to precompute part of this mess once a frame at the very least.
 		bool bUsesBumpmapping = (pInfo.Model!.Flags & ModelFlag.UsesBumpMapping) != 0;
@@ -635,8 +690,8 @@ public class ModelRender : IModelRender
 
 		// TODO: perf stats
 		DrawModelResults results = default;
-		StudioRender.DrawModel(ref results, ref info, boneToWorldArray, null,
-			null, in pInfo.Origin, drawFlags);
+		StudioRender.DrawModel(ref results, ref info, boneToWorldArray, flexWeights,
+			flexDelayedWeights, in pInfo.Origin, drawFlags);
 
 		// TODO: debug overlay
 

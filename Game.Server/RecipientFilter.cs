@@ -34,7 +34,17 @@ public class RecipientFilter : IRecipientFilter
 		return Recipients[slot];
 	}
 
-	public void CopyFrom(scoped in RecipientFilter src) { }
+	public void CopyFrom(scoped in RecipientFilter src) {
+		Reliable = src.IsReliable();
+		InitMessage = src.IsInitMessage();
+
+		UsingPredictionRules = src.IsUsingPredictionRules();
+		IgnoringPredictionCull = src.IgnorePredictionCull();
+
+		int c = src.GetRecipientCount();
+		for (int i = 0; i < c; ++i)
+			Recipients.Add(src.GetRecipientIndex(i));
+	}
 	public void Reset() {
 		Reliable = false;
 		InitMessage = false;
@@ -56,9 +66,36 @@ public class RecipientFilter : IRecipientFilter
 			AddRecipient(player);
 		}
 	}
-	public void AddRecipientsByPVS(in Vector3 origin) { }
+	public void AddPlayersFromBitMask(ref AbsolutePlayerLimitBitVec playerbits) {
+		int index = playerbits.FindNextSetBit(0);
+
+		while (index > -1) {
+			BasePlayer? player = Util.PlayerByIndex(index + 1);
+			if (player != null)
+				AddRecipient(player);
+
+			index = playerbits.FindNextSetBit(index + 1);
+		}
+	}
+	public void AddRecipientsByPVS(in Vector3 origin) {
+		if (gpGlobals.MaxClients == 1)
+			AddAllPlayers();
+		else {
+			AbsolutePlayerLimitBitVec playerbits = default;
+			engine.Message_DetermineMulticastRecipients(false, origin, ref playerbits);
+			AddPlayersFromBitMask(ref playerbits);
+		}
+	}
 	public void RemoveRecipientsByPVS(in Vector3 origin) { }
-	public void AddRecipientsByPAS(in Vector3 origin) { }
+	public void AddRecipientsByPAS(in Vector3 origin) {
+		if (gpGlobals.MaxClients == 1)
+			AddAllPlayers();
+		else {
+			AbsolutePlayerLimitBitVec playerbits = default;
+			engine.Message_DetermineMulticastRecipients(true, origin, ref playerbits);
+			AddPlayersFromBitMask(ref playerbits);
+		}
+	}
 	public void AddRecipient(BasePlayer player) {
 		Assert(player != null);
 
@@ -81,8 +118,20 @@ public class RecipientFilter : IRecipientFilter
 		Recipients.Add(index);
 	}
 	public void RemoveAllRecipients() => Recipients.Clear();
-	public void RemoveRecipient(BasePlayer player) { }
-	public void RemoveRecipientByPlayerIndex(int playerindex) { }
+	public void RemoveRecipient(BasePlayer player) {
+		Assert(player != null);
+		if (player != null) {
+			int index = player.EntIndex();
+
+			// Remove it if it's in the list
+			Recipients.Remove(index);
+		}
+	}
+	public void RemoveRecipientByPlayerIndex(int playerindex) {
+		Assert(playerindex >= 1 && playerindex <= Constants.ABSOLUTE_PLAYER_LIMIT);
+
+		Recipients.Remove(playerindex);
+	}
 	public void AddRecipientsByTeam(Team team) { }
 	public void RemoveRecipientsByTeam(Team team) { }
 	public void RemoveRecipientsNotOnTeam(Team team) { }

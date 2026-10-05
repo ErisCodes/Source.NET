@@ -1,0 +1,197 @@
+using Source;
+using Source.Common.GarrysMod.Lua;
+using Source.Common.GUI;
+using Source.Common.MaterialSystem;
+
+using System.Runtime.CompilerServices;
+
+namespace Game.Client.GarrysMod;
+
+public static partial class LuaSurface
+{
+	[LuaLibrary]
+	static readonly LuaLibrary LL_Factory_surface = new("surface");
+
+	static readonly List<int> TextureIDs = [];
+
+	static Color GetColor(ILuaInterface lua, int stackPos) {
+		if (lua.GetType(stackPos) == LuaType.Table) {
+			ILuaObject obj = lua.GetObject(stackPos)!;
+			byte a = (byte)obj.GetMemberInt("a", 255);
+			byte b = (byte)obj.GetMemberInt("b", 255);
+			byte g = (byte)obj.GetMemberInt("g", 255);
+			byte r = (byte)obj.GetMemberInt("r", 255);
+			return new(r, g, b, a);
+		}
+
+		int alpha = 255;
+		if (lua.GetType(stackPos + 3) == LuaType.Number)
+			alpha = (int)lua.GetNumber(stackPos + 3);
+		int blue = (int)lua.GetNumber(stackPos + 2);
+		int green = (int)lua.GetNumber(stackPos + 1);
+		int red = (int)lua.GetNumber(stackPos);
+		return new((byte)Math.Clamp(red, 0, 255), (byte)Math.Clamp(green, 0, 255), (byte)Math.Clamp(blue, 0, 255), (byte)Math.Clamp(alpha, 0, 255));
+	}
+
+	[LuaFunction]
+	static int CreateFont(ILuaInterface lua) {
+		string? name = lua.GetString(1);
+		if (name == null)
+			return 0;
+
+		LuaObject data = new();
+		data.SetFromStack(2);
+		if (!data.isTable())
+			lua.TypeError("table", 2);
+		else if (data.GetMemberStr("font", "")!.Length >= 32)
+			lua.ArgError(2, "font name is too long");
+		else
+			LuaFonts.CreateFont(name, data.GetMemberStr("font", "Arial"), data.GetMemberBool("extended", false), data.GetMemberFloat("size", 13), data.GetMemberFloat("weight", 500), data.GetMemberFloat("blursize", 0), data.GetMemberFloat("scanlines", 0), data.GetMemberBool("antialias", true), data.GetMemberBool("underline", false), data.GetMemberBool("italic", false), data.GetMemberBool("strikeout", false), data.GetMemberBool("symbol", false), data.GetMemberBool("rotary", false), data.GetMemberBool("shadow", false), data.GetMemberBool("additive", false), data.GetMemberBool("outline", false));
+
+		data.UnReference();
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetDrawColor(ILuaInterface lua) {
+		surface.DrawSetColor(GetColor(lua, 1));
+		return 0;
+	}
+
+	// todo: GetDrawColor
+
+	[LuaFunction]
+	static void DrawRect([LuaGet] int x, [LuaGet] int y, [LuaGet] int w, [LuaGet] int h) => surface.DrawFilledRect(x, y, x + w, y + h);
+
+	[LuaFunction]
+	static void DrawOutlinedRect([LuaGet] int x, [LuaGet] int y, [LuaGet] int w, [LuaGet] int h, [LuaOpt<int>(1)] int thickness) {
+		surface.DrawFilledRect(x, y, x + w, thickness + y);
+		surface.DrawFilledRect(x, h - thickness + y, x + w, h + y);
+		surface.DrawFilledRect(x, thickness + y, thickness + x, h - thickness + y);
+		surface.DrawFilledRect(w - thickness + x, thickness + y, x + w, h - thickness + y);
+	}
+
+	// todo: DrawLine
+
+	[LuaFunction]
+	static int SetTextColor(ILuaInterface lua) {
+		surface.DrawSetTextColor(GetColor(lua, 1));
+		return 0;
+	}
+
+	// todo: GetTextColor
+
+	[LuaFunction]
+	static void SetTextPos([LuaGet] int x, [LuaGet] int y) => surface.DrawSetTextPos(x, y);
+
+	[LuaFunction]
+	static (int, int) GetTextPos() {
+		surface.DrawGetTextPos(out int x, out int y);
+		return (x, y);
+	}
+
+	// todo: DrawText
+
+	[LuaFunction]
+	[LuaGlobal("ScrW")]
+	static int ScreenWidth() {
+		surface.GetScreenSize(out int wide, out _);
+		return wide;
+	}
+
+	[LuaFunction]
+	[LuaGlobal("ScrH")]
+	static int ScreenHeight() {
+		surface.GetScreenSize(out _, out int tall);
+		return tall;
+	}
+
+	// todo: GetTextSize
+	// todo: SetFont
+
+	[LuaFunction]
+	static int GetTextureID([LuaGet] string? name) {
+		int id = surface.DrawGetTextureId(name);
+		if (id == -1) {
+			id = (int)surface.CreateNewTextureID(false);
+			surface.DrawSetTextureFile(id, name, 0, false);
+			TextureIDs.Add(id);
+		}
+		return id;
+	}
+
+	[LuaFunction]
+	static string GetTextureNameByID([LuaGet] int id) {
+		if (!surface.DrawGetTextureFile(id, out ReadOnlySpan<char> filename))
+			return "";
+		return new(filename);
+	}
+
+	[LuaFunction]
+	static void SetTexture([LuaGet] int id) => surface.DrawSetTexture(id);
+
+	static int MaterialTextureID = -1;
+
+	[LuaFunction]
+	static void SetMaterial(IMaterial material) {
+		if (MaterialTextureID == -1)
+			MaterialTextureID = (int)surface.CreateNewTextureID(false);
+		surface.DrawSetTextureMaterial(MaterialTextureID, material);
+		surface.DrawSetTexture(MaterialTextureID);
+	}
+
+	[LuaFunction]
+	static (int, int) GetTextureSize([LuaGet] int id) {
+		surface.DrawGetTextureSize(id, out int wide, out int tall);
+		return (wide, tall);
+	}
+
+	// todo: GetHUDTexture
+	// todo: DrawTexturedRect
+	// todo: DrawTexturedRectRotated
+	// todo: PlaySound
+	[InlineArray(4096)] struct InlineArrayPolyVerts { SurfaceVertex first; }
+	static InlineArrayPolyVerts PolyVerts;
+
+	[LuaFunction]
+	static int DrawPoly(ILuaInterface lua) {
+		LuaObject vertices = new();
+		vertices.SetFromStack(1);
+		if (!vertices.isTable()) {
+			lua.TypeError("table", 1);
+			vertices.UnReference();
+			return 0;
+		}
+
+		int count = 0;
+		for (int i = 1; i < 4096; i++) {
+			LuaObject vertex = new();
+			vertices.GetMember(i, vertex);
+			if (!vertex.isTable()) {
+				vertex.UnReference();
+				break;
+			}
+
+			PolyVerts[count].Position = new(vertex.GetMemberFloat("x", 0), vertex.GetMemberFloat("y"));
+			PolyVerts[count].TexCoord = new(vertex.GetMemberFloat("u"), vertex.GetMemberFloat("v"));
+			count++;
+			vertex.UnReference();
+		}
+
+		surface.DrawTexturedPolygon(((Span<SurfaceVertex>)PolyVerts)[..count], true);
+		vertices.UnReference();
+		return 0;
+	}
+	// todo: DisableClipping
+	// todo: DrawCircle
+	// todo: DrawTexturedRectUV
+
+	[LuaFunction]
+	static void SetAlphaMultiplier([LuaGet] float alpha) => surface.DrawSetAlphaMultiplier(alpha);
+
+	[LuaFunction]
+	static float GetAlphaMultiplier() => surface.DrawGetAlphaMultiplier();
+
+	// todo: GetPanelPaintState
+	// todo: GetScissorRect
+}

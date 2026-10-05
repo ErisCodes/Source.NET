@@ -1,4 +1,4 @@
-﻿global using static Source.Engine.SourceDllMain;
+global using static Source.Engine.SourceDllMain;
 
 using Source.Common;
 using Source.Common.Audio;
@@ -34,6 +34,7 @@ public static class SourceDllMain
 	[Dependency] public static GameServer sv { get; private set; } = null!;
 	[Dependency(Required = false)] public static IBaseClientDLL? g_ClientDLL { get; private set; } = null!;
 	[Dependency] public static IServerGameDLL serverGameDLL { get; private set; } = null!;
+	[Dependency] public static EngineRecvTable engineRecvTable { get; private set; } = null!;
 	[Dependency] public static IServerGameClients serverGameClients { get; private set; } = null!;
 	[Dependency] public static IServerGameEnts serverGameEnts { get; private set; } = null!;
 	[Dependency(Required = false)] public static ILocalize g_Localize { get; private set; } = null!;
@@ -52,6 +53,8 @@ public static class SourceDllMain
 	[Dependency] public static IMaterialSystem materials { get; private set; } = null!;
 	[Dependency] public static IFileSystem g_pFileSystem { get; private set; } = null!;
 	[Dependency] public static RenderUtils renderUtils { get; private set; } = null!;
+	[Dependency] public static MatSysInterface MatSys { get; private set; } = null!;
+	[Dependency] public static IVEfx effects { get; private set; } = null!;
 	[Dependency] public static CommonHostState host_state { get; private set; } = null!;
 	[Dependency] public static Render R { get; private set; } = null!;
 	[Dependency] public static EngineToolImpl g_EngineTool { get; private set; } = null!;
@@ -71,6 +74,9 @@ public static class SourceDllMain
 	[KeyedDependency(Key = Realm.Server)] public static NetworkStringTableContainer networkStringTableContainerServer { get; private set; } = null!;
 	[KeyedDependency(Key = Realm.Server)] public static IEngineTrace g_pEngineTraceServer { get; private set; } = null!;
 	[Dependency] public static IVDebugOverlay debugoverlay { get; private set; } = null!;
+#if GMOD_DLL
+	[Dependency] public static Source.Common.GarrysMod.IGet get { get; private set; } = null!;
+#endif
 
 
 #if !SWDS

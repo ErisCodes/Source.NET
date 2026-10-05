@@ -30,6 +30,8 @@ public class GameServer : BaseServer
 	protected readonly ICommandLine CommandLine = Singleton<ICommandLine>();
 	public readonly FrameSnapshotManager FrameSnapshotManager = Singleton<FrameSnapshotManager>();
 
+	PureServerWhitelist? PureServerWhitelist;
+
 	public override void SetMaxClients(int number) {
 		MaxClients = Math.Clamp(number, 1, MaxClientsLimit);
 		Host.deathmatch.SetValue(MaxClients > 1);
@@ -41,6 +43,8 @@ public class GameServer : BaseServer
 		FullSendTables.DebugName = "FullSendTables";
 		DLLInitialized = false;
 	}
+
+	public bool IsInPureServerMode() => PureServerWhitelist != null;
 
 	public override void Shutdown() {
 		g_DownloadListGenerator.OnLevelLoadEnd();
@@ -113,7 +117,6 @@ public class GameServer : BaseServer
 		LightStyleTable = StringTables.CreateStringTable(Protocol.LIGHT_STYLES_TABLENAME, BSPFileCommon.MAX_LIGHTSTYLES);
 		UserInfoTable = StringTables.CreateStringTable(Protocol.USER_INFO_TABLENAME, 1 << Constants.ABSOLUTE_PLAYER_LIMIT_DW);
 		DynamicModelsTable = StringTables.CreateStringTable(Protocol.DYNAMIC_MODELS_TABLENAME, 2048, 1, 1);
-		ClientLuaFilesTable = StringTables.CreateStringTable(Protocol.CLIENT_LUA_FILES_TABLENAME, 8192, 0, 0);
 		ServerStartupDataTable = StringTables.CreateStringTable(Protocol.SERVER_STARTUP_DATA_TABLENAME, 4);
 
 		SetQueryPortFromSteamServer();
@@ -129,7 +132,6 @@ public class GameServer : BaseServer
 			LightStyleTable != null &&
 			UserInfoTable != null &&
 			DynamicModelsTable != null &&
-			ClientLuaFilesTable != null &&
 			ServerStartupDataTable != null
 		);
 
@@ -147,9 +149,6 @@ public class GameServer : BaseServer
 			j = UserInfoTable.AddString(true, name);
 			Assert(j == i);
 		}
-
-		ReadOnlySpan<byte> luaPaths = "lua;gamemodes;addons"u8;
-		ClientLuaFilesTable.AddString(true, "paths", luaPaths.Length, luaPaths);
 
 		g_DownloadListGenerator.SetStringTable(DownloadableFileTable);
 	}
@@ -477,6 +476,15 @@ public class GameServer : BaseServer
 		startspot = startspot.SliceNullTerminatedString();
 		modelloader.ResetModelServerCounts();
 
+#if GMOD_DLL && !SWDS
+		EngineVGui().UpdateCustomProgressBar(0.01f, "Waiting for Steam Workshop to finish...");
+		while (!g_pFileSystem.Addons().AllJobsFinished()) {
+			g_pFileSystem.Addons().Think();
+			Scr.UpdateScreen();
+			Thread.Sleep(50);
+		}
+#endif
+
 		// ReloadWhitelist(mapName);
 		Common.TimestampedLog($"SV_SpawnServer({mapName})");
 #if !SWDS
@@ -720,16 +728,14 @@ public class GameServer : BaseServer
 		ServerClasses = nClasses;
 		ServerClassBits = (int)(Math.Log2(ServerClasses) + 1);
 
-		// TODO: When our server classes match up, we can make it assign class ID's. For now,
-		// we'll use what the Garry's Mod bindings give us...
-#if false
+		bool spew = CommandLine.FindParm("-netspike") != 0;
 		int curID = 0;
-		for (ServerClass c = classes; c != null; c = c.Next) {
+		for (ServerClass? c = classes; c != null; c = c.Next) {
 			c.ClassID = curID++;
 
-			// Msg($"{c.ClassID} == '{c.NetworkName}'\n");
+			if (spew)
+				Msg($"{c.ClassID} == '{c.NetworkName}'\n");
 		}
-#endif
 	}
 
 	INetworkStringTable? ModelPrecacheTable;
@@ -739,7 +745,6 @@ public class GameServer : BaseServer
 
 	INetworkStringTable? DynamicModelsTable;
 
-	INetworkStringTable? ClientLuaFilesTable;
 	INetworkStringTable? ServerStartupDataTable;
 
 	bool Hibernating;    // Are we hibernating.  Hibernation makes server process consume approx 0 CPU when no clients are connected
@@ -786,7 +791,7 @@ public class GameServer : BaseServer
 			GameClient client = Client(index - 1)!;
 
 			// client must be fully connect to hear sounds
-			if (client.IsActive())
+			if (!client.IsActive())
 				continue;
 
 			client.SendSound(sound, filter.IsReliable());

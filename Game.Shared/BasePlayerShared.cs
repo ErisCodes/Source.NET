@@ -54,6 +54,35 @@ public static class BasePlayerGlobals
 
 	public const TimeUnit_t DEATH_ANIMATION_TIME = 3.0f;
 
+	public static void CopySoundNameWithModifierToken(Span<char> dest, ReadOnlySpan<char> source, int maxLenInChars, ReadOnlySpan<char> token) {
+		source = source.SliceNullTerminatedString();
+		token = token.SliceNullTerminatedString();
+
+		int nSource = 0;
+		int nDest = 0;
+		bool foundPeriod = false;
+
+		while (nSource < source.Length && nDest < maxLenInChars - 2) {
+			dest[nDest] = source[nSource];
+			nDest++;
+			nSource++;
+
+			if (!foundPeriod && source[nSource - 1] == '.') {
+				foundPeriod = true;
+
+				int nToken = 0;
+
+				while (nToken < token.Length && nDest < maxLenInChars - 2) {
+					dest[nDest] = token[nToken];
+					nDest++;
+					nToken++;
+				}
+			}
+		}
+
+		dest[nDest] = '\0';
+	}
+
 	public enum StepSoundTimes
 	{
 		Normal = 0,
@@ -188,6 +217,8 @@ public partial class
 		GetPredictionErrorSmoothingVector(out Vector3 smoothOffset);
 		eyeOrigin += smoothOffset;
 #endif
+
+		fov = GetFOV();
 	}
 
 	public int GetDefaultFOV() {
@@ -207,6 +238,10 @@ public partial class
 
 		return (int)fov;
 	}
+
+	public BaseEntity? GetFOVOwner() => ZoomOwner.Get();
+
+	public void ClearZoomOwner() => ZoomOwner.Set(null);
 
 	public bool SetFOV(BaseEntity requester, int fov, float zoomRate = 0, int zoomStart = 0) {
 		Assert(requester != null);
@@ -509,33 +544,33 @@ public partial class
 
 			SetStepSoundTime(StepSoundTimes.Normal, walking);
 
-			switch ((char)surface.Game.Material) {
+			switch ((CharTex)surface.Game.Material) {
 				default:
-				case Decals.CHAR_TEX_CONCRETE:
+				case CharTex.Concrete:
 					vol = walking ? 0.2f : 0.5f;
 					break;
 
-				case Decals.CHAR_TEX_METAL:
+				case CharTex.Metal:
 					vol = walking ? 0.2f : 0.5f;
 					break;
 
-				case Decals.CHAR_TEX_DIRT:
+				case CharTex.Dirt:
 					vol = walking ? 0.25f : 0.55f;
 					break;
 
-				case Decals.CHAR_TEX_VENT:
+				case CharTex.Vent:
 					vol = walking ? 0.4f : 0.7f;
 					break;
 
-				case Decals.CHAR_TEX_GRATE:
+				case CharTex.Grate:
 					vol = walking ? 0.2f : 0.5f;
 					break;
 
-				case Decals.CHAR_TEX_TILE:
+				case CharTex.Tile:
 					vol = walking ? 0.2f : 0.5f;
 					break;
 
-				case Decals.CHAR_TEX_SLOSH:
+				case CharTex.Slosh:
 					vol = walking ? 0.2f : 0.5f;
 					break;
 			}

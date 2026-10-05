@@ -5,6 +5,7 @@ using Source.Common;
 using Source.Common.Commands;
 using Source.Common.DataCache;
 using Source.Common.Engine;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.Mathematics;
 
 using System.Numerics;
@@ -16,16 +17,20 @@ namespace Game.Server;
 using FIELD = Source.FIELD<Game.Server.BaseAnimating>;
 using FIELD_ILR = Source.FIELD<Game.Server.InfoLightingRelative>;
 
+[LinkEntityToClass("info_lighting_relative")]
+[NetworkName("CInfoLightingRelative")]
 public partial class InfoLightingRelative : BaseEntity
 {
 	public static readonly SendTable DT_InfoLightingRelative = new(DT_BaseEntity, [
 		SendPropEHandle(FIELD_ILR.OF(nameof(LightingLandmark)))
 	]);
-	public static readonly new ServerClass ServerClass = new ServerClass("InfoLightingRelative", DT_InfoLightingRelative).WithManualClassID(StaticClassIndices.CInfoLightingRelative);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_InfoLightingRelative);
 
+	[NetworkName("m_hLightingLandmark")]
 	public EHANDLE LightingLandmark = new();
 }
 
+[NetworkName("CBaseAnimating")]
 public class BaseAnimating : BaseEntity
 {
 	public const int ANIMATION_SKIN_BITS = 10;
@@ -34,10 +39,9 @@ public class BaseAnimating : BaseEntity
 	public const int ANIMATION_POSEPARAMETER_BITS = 11;
 	public const int ANIMATION_PLAYBACKRATE_BITS = 8;
 
-	public static readonly SendTable DT_ServerAnimationData = new([
+	public static readonly SendTable DT_ServerAnimationData = new(nameof(DT_ServerAnimationData), [
 		SendPropFloat(FIELD.OF(nameof(Cycle)), ANIMATION_CYCLE_BITS, PropFlags.ChangesOften|PropFlags.RoundDown, -1.0f, 1.0f)
 	]);
-	public static readonly ServerClass CC_ServerAnimationData = new ServerClass("ServerAnimationData", DT_ServerAnimationData);
 	public static readonly SendTable DT_BaseAnimating = new(DT_BaseEntity, [
 		SendPropInt( FIELD.OF(nameof(ForceBone)), 8, 0 ),
 		SendPropVector( FIELD.OF(nameof(Force)), 0, PropFlags.NoScale ),
@@ -77,36 +81,60 @@ public class BaseAnimating : BaseEntity
 		SendPropEHandle(FIELD.OF(nameof(FlexManipulator))),
 		SendPropVector(FIELD.OF(nameof(OverrideViewTarget)), 0, PropFlags.NoScale),
 	]);
-	public static readonly new ServerClass ServerClass = new ServerClass("BaseAnimating", DT_BaseAnimating).WithManualClassID(StaticClassIndices.CBaseAnimating);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_BaseAnimating);
 
+	[NetworkName("m_nForceBone")]
 	public int ForceBone;
+	[NetworkName("m_vecForce")]
 	public Vector3 Force;
+	[NetworkName("m_nSkin")]
 	public int Skin;
+	[NetworkName("m_nBody")]
 	public int Body;
+	[NetworkName("m_nHitboxSet")]
 	public int HitboxSet;
 
+	[NetworkName("m_flModelScale")]
 	public float ModelScale = 1.0f;
+	[NetworkName("m_flPoseParameter")]
 	public InlineArrayMaxStudioPoseParam<float> PoseParameter;
 	public InlineArrayMaxStudioPoseParam<float> OldPoseParameters;
 	public float PrevEventCycle;
 	public int EventSequence;
+	[NetworkName("m_flEncodedController")]
 	public InlineArrayMaxStudioBoneCtrls<float> EncodedController;
 	public InlineArrayMaxStudioBoneCtrls<float> OldEncodedController;
+	[NetworkName("m_nSequence")]
 	public int Sequence;
+	[NetworkName("m_flPlaybackRate")]
 	public TimeUnit_t PlaybackRate;
+	[NetworkName("m_bClientSideAnimation")]
 	public bool ClientSideAnimation;
+	[NetworkName("m_bClientSideFrameReset")]
 	public bool ClientSideFrameReset;
+	[NetworkName("m_nNewSequenceParity")]
 	public int NewSequenceParity;
+	[NetworkName("m_nResetEventsParity")]
 	public int ResetEventsParity;
+	[NetworkName("m_nMuzzleFlashParity")]
 	public int MuzzleFlashParity;
+	[NetworkName("m_hLightingOrigin")]
 	public EHANDLE LightingOrigin = new();
+	[NetworkName("m_hLightingOriginRelative")]
 	public EHANDLE LightingOriginRelative = new();
+	[NetworkName("m_pBoneManipulator")]
 	public EHANDLE BoneManipulator = new();
+	[NetworkName("m_pFlexManipulator")]
 	public EHANDLE FlexManipulator = new();
+	[NetworkName("m_fadeMinDist")]
 	public float FadeMinDist;
+	[NetworkName("m_fadeMaxDist")]
 	public float FadeMaxDist;
+	[NetworkName("m_flFadeScale")]
 	public float FadeScale;
+	[NetworkName("m_flCycle")]
 	public TimeUnit_t Cycle;
+	[NetworkName("m_OverrideViewTarget")]
 	public Vector3 OverrideViewTarget;
 
 	public override void SetModel(ReadOnlySpan<char> modelName) {
@@ -140,12 +168,122 @@ public class BaseAnimating : BaseEntity
 
 	public bool ComputeHitboxSurroundingBox(out Vector3 vecWorldMins, out Vector3 vecWorldMaxs) => throw new NotImplementedException();
 
+	public const int NUM_POSEPAREMETERS = 24;
+	public const int NUM_BONECTRLS = 4;
+
+	public virtual void InitBoneControllers() {
+		int i;
+
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return;
+
+		int boneControllerCount = studioHdr.NumBoneControllers();
+		if (boneControllerCount > NUM_BONECTRLS) {
+			boneControllerCount = NUM_BONECTRLS;
+#if DEBUG
+			Warning($"Model {studioHdr.Name()} has too many bone controllers! (Max {NUM_BONECTRLS} allowed)\n");
+#endif
+		}
+
+		for (i = 0; i < boneControllerCount; i++)
+			SetBoneController(i, 0.0f);
+
+		Assert(studioHdr.SequencesAvailable());
+
+		if (studioHdr.SequencesAvailable()) {
+			for (i = 0; i < studioHdr.GetNumPoseParameters(); i++)
+				SetPoseParameter(i, 0.0f);
+		}
+	}
+
+	public float SetBoneController(int controller, float value) {
+		Assert(GetModelPtr() != null);
+
+		StudioHdr? model = GetModelPtr();
+
+		Assert(controller >= 0 && controller < NUM_BONECTRLS);
+
+		float retVal = BoneSetup.Studio_SetController(model, controller, value, out float newValue);
+		EncodedController[controller] = newValue;
+
+		return retVal;
+	}
+
+	public float GetBoneController(int controller) {
+		Assert(GetModelPtr() != null);
+
+		StudioHdr? model = GetModelPtr();
+
+		return BoneSetup.Studio_GetController(model, controller, EncodedController[controller]);
+	}
+
+	public void ResetActivityIndexes() {
+		Assert(GetModelPtr() != null);
+		Animation.ResetActivityIndexes(GetModelPtr());
+	}
+
+	public void ResetEventIndexes() {
+		Assert(GetModelPtr() != null);
+		Animation.ResetEventIndexes(GetModelPtr());
+	}
+
+	public LocalFlexController GetNumFlexControllers() {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return 0;
+
+		return studioHdr.NumFlexControllers();
+	}
+
+	public string? GetFlexControllerName(LocalFlexController flexController) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return null;
+
+		MStudioFlexController flexcontroller = studioHdr.FlexController(flexController);
+
+		return flexcontroller.Name();
+	}
+
+	public string? GetFlexControllerType(LocalFlexController flexController) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return null;
+
+		MStudioFlexController flexcontroller = studioHdr.FlexController(flexController);
+
+		return flexcontroller.Type();
+	}
+
 	public Activity LookupActivity(ReadOnlySpan<char> label) {
 		return Animation.LookupActivity(GetModelPtr(), label);
 	}
 
 	public int LookupSequence(ReadOnlySpan<char> label) {
 		return Animation.LookupSequence(GetModelPtr(), label);
+	}
+
+	static string? Studio_GetKeyValueText(StudioHdr? studioHdr, int sequence) {
+		if (studioHdr != null && studioHdr.SequencesAvailable()) {
+			if (sequence >= 0 && sequence < studioHdr.GetNumSeq()) {
+				MStudioSeqDesc seqdesc = studioHdr.Seqdesc(sequence);
+				if (seqdesc.KeyValueSize != 0)
+					return System.Text.Encoding.ASCII.GetString(((ReadOnlySpan<byte>)seqdesc.Data.Span[seqdesc.KeyValueIndex..]).SliceNullTerminatedString());
+			}
+		}
+		return null;
+	}
+
+	public KeyValues? GetSequenceKeyValues(int sequence) {
+		string? text = Studio_GetKeyValueText(GetModelPtr(), sequence);
+
+		if (text != null) {
+			KeyValues seqKeyValues = new("");
+			if (seqKeyValues.LoadFromBuffer(modelinfo.GetModelName(GetModel()), text))
+				return seqKeyValues;
+		}
+		return null;
 	}
 	public TimeUnit_t GetSequenceGroundSpeed(int sequence) => GetSequenceGroundSpeed(GetModelPtr(), sequence);
 
@@ -191,7 +329,7 @@ public class BaseAnimating : BaseEntity
 	public bool IsSequenceFinished() => SequenceFinished;
 
 	public bool IsModelScaleFractional() => ModelScale < 1.0f;
-	public bool IsModelScaled() => ModelScale > 1.0f + float.Epsilon || ModelScale < 1.0f - float.Epsilon;
+	public bool IsModelScaled() => ModelScale > 1.0f + FLT_EPSILON || ModelScale < 1.0f - FLT_EPSILON;
 	public float GetModelScale() => ModelScale;
 
 	StudioHdr? StudioHdr;
@@ -349,22 +487,47 @@ public class BaseAnimating : BaseEntity
 		return pcache;
 	}
 
-	private void SetupBones(Span<Matrix3x4> bonetoworld, int boneMask) {
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// TODO
-		// REALLY important todo, I am just already porting a lot in this commit, don't really want to deal with it right now
+	public bool IsRagdoll() => RenderFX == (byte)RenderFx.Ragdoll;
+
+	public virtual void GetSkeleton(StudioHdr? studioHdr, Span<Vector3> pos, Span<Quaternion> q, int boneMask) {
+		if (studioHdr == null) {
+			AssertMsg(false, "BaseAnimating.GetSkeleton() without a model");
+			return;
+		}
+
+		BoneSetup boneSetup = new(studioHdr, boneMask, PoseParameter);
+		boneSetup.InitPose(pos, q);
+
+		boneSetup.AccumulatePose(pos, q, GetSequence(), GetCycle(), 1.0f, gpGlobals.CurTime, null);
+
+		if (!IsRagdoll())
+			boneSetup.CalcAutoplaySequences(pos, q, gpGlobals.CurTime, null);
+	}
+
+	public virtual void SetupBones(Span<Matrix3x4> boneToWorld, int boneMask) {
+		Assert(GetModelPtr() != null);
+
+		StudioHdr? studioHdr = GetModelPtr();
+
+		if (studioHdr == null) {
+			AssertMsg(false, "BaseAnimating.GetSkeleton() without a model");
+			return;
+		}
+
+		Assert(!IsEFlagSet(EFL.SettingUpBones));
+
+		AddEFlags(EFL.SettingUpBones);
+
+		Span<Vector3> pos = stackalloc Vector3[Studio.MAXSTUDIOBONES];
+		Span<Quaternion> q = stackalloc Quaternion[Studio.MAXSTUDIOBONES];
+
+		Vector3 adjOrigin = GetAbsOrigin();
+
+		GetSkeleton(studioHdr, pos, q, boneMask);
+
+		BoneSetup.Studio_BuildMatrices(studioHdr, GetAbsAngles(), adjOrigin, pos, q, -1, GetModelScale(), boneToWorld, boneMask);
+
+		RemoveEFlags(EFL.SettingUpBones);
 	}
 
 	public int LookupAttachment(ReadOnlySpan<char> name) {
@@ -394,7 +557,7 @@ public class BaseAnimating : BaseEntity
 
 	public bool GetAttachment(int attachment, out Matrix3x4 attachmentToWorld) {
 		StudioHdr? studioHdr = GetModelPtr();
-		if (studioHdr != null) {
+		if (studioHdr == null) {
 			MathLib.MatrixCopy(EntityToWorldTransform(), out attachmentToWorld);
 			AssertMsg(false, "BaseAnimating.GetAttachment: model missing");
 			return false;
@@ -423,6 +586,35 @@ public class BaseAnimating : BaseEntity
 		}
 
 		return true;
+	}
+
+	public bool GetAttachment(ReadOnlySpan<char> attachmentName, out Vector3 absOrigin, out Vector3 forward, out Vector3 right, out Vector3 up) {
+		return GetAttachment(LookupAttachment(attachmentName), out absOrigin, out forward, out right, out up);
+	}
+
+	public bool GetAttachment(int attachment, out Vector3 absOrigin, out Vector3 forward, out Vector3 right, out Vector3 up) {
+		bool bRet = GetAttachment(attachment, out Matrix3x4 attachmentToWorld);
+		MathLib.MatrixPosition(attachmentToWorld, out absOrigin);
+		MathLib.MatrixGetColumn(attachmentToWorld, 0, out forward);
+		MathLib.MatrixGetColumn(attachmentToWorld, 1, out right);
+		MathLib.MatrixGetColumn(attachmentToWorld, 2, out up);
+		return bRet;
+	}
+
+	public float EdgeLimitPoseParameter(int parameter, float value, float baseValue = 0.0f) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return value;
+
+		if (parameter < 0 || parameter >= studioHdr.GetNumPoseParameters())
+			return value;
+
+		MStudioPoseParamDesc pose = studioHdr.PoseParameter(parameter);
+
+		if (pose.Loop != 0 || pose.Start == pose.End)
+			return value;
+
+		return MathLibShared.RangeCompressor(value, pose.Start, pose.End, baseValue);
 	}
 
 	public float GetPoseParameter(ReadOnlySpan<char> name) => GetPoseParameter(LookupPoseParameter(name));
@@ -581,6 +773,79 @@ public class BaseAnimating : BaseEntity
 	public int SelectWeightedSequence(Activity activity) {
 		return Animation.SelectWeightedSequence(GetModelPtr(), activity, GetSequence());
 	}
+	public int SelectHeaviestSequence(Activity activity) {
+		Assert(GetModelPtr() != null);
+		return Animation.SelectHeaviestSequence(GetModelPtr(), activity);
+	}
+
+	public virtual void DispatchAnimEvents(BaseAnimating eventHandler) {
+		if (PlaybackRate == 0.0)
+			return;
+
+		AnimEvent animEvent = default;
+
+		StudioHdr? studiohdr = GetModelPtr();
+
+		if (studiohdr == null) {
+			AssertMsg(false, "BaseAnimating.DispatchAnimEvents: model missing");
+			return;
+		}
+
+		if (!studiohdr.SequencesAvailable())
+			return;
+
+		if (studiohdr.Seqdesc(GetSequence()).NumEvents == 0)
+			return;
+
+		float cycleRate = GetSequenceCycleRate(GetSequence()) * (float)PlaybackRate;
+		float start = (float)LastEventCheck;
+		float end = (float)GetCycle();
+
+		if (!SequenceLoops && SequenceFinished)
+			end = 1.01f;
+		LastEventCheck = end;
+
+		int index = 0;
+		while ((index = Animation.GetAnimationEvent(studiohdr, GetSequence(), ref animEvent, start, end, index)) != 0) {
+			animEvent.Source = this;
+			if (cycleRate > 0.0f) {
+				float cycle = animEvent.Cycle;
+				if (cycle > GetCycle())
+					cycle = cycle - 1.0f;
+				animEvent.EventTime = AnimTime + (cycle - GetCycle()) / cycleRate + GetAnimTimeInterval();
+			}
+
+			eventHandler.HandleAnimEvent(ref animEvent);
+
+			StudioHdr? nowStudioHdr = GetModelPtr();
+			if (nowStudioHdr != studiohdr) {
+				AssertMsg(false, $"{GetDebugName()} has changed its model while processing AnimEvents on sequence {GetSequence()}. Aborting dispatch.\n");
+				Warning($"{GetDebugName()} has changed its model while processing AnimEvents on sequence {GetSequence()}. Aborting dispatch.\n");
+				break;
+			}
+		}
+	}
+
+	public virtual void HandleAnimEvent(ref AnimEvent animEvent) {
+		if ((animEvent.Type & AnimEventType.NewEventSystem) != 0 && (animEvent.Type & AnimEventType.Server) != 0) {
+			if (animEvent.Event == (int)Animevent.AE_SV_PLAYSOUND) {
+				EmitSound(animEvent.Options);
+				return;
+			}
+			else if (animEvent.Event == (int)Animevent.AE_RAGDOLL) {
+				throw new NotImplementedException();
+			}
+			else if (animEvent.Event == (int)Animevent.AE_SV_DUSTTRAIL) {
+				throw new NotImplementedException();
+			}
+		}
+
+		string? name = EventList.NameForIndex(animEvent.Event);
+		if (name != null)
+			DevWarning(1, $"Unhandled animation event {name} for {GetClassname()}\n");
+		else
+			DevWarning(1, $"Unhandled animation event {animEvent.Event} for {GetClassname()}\n");
+	}
 	public float GroundSpeed;
 	public bool SequenceLoops;
 	public bool ResetSequenceInfoOnLoad;
@@ -648,4 +913,8 @@ public class BaseAnimating : BaseEntity
 	}
 
 	public override BaseAnimating? GetBaseAnimating() => this;
+
+	public bool IsUsingClientSideAnimation() {
+		return ClientSideAnimation;
+	}
 }

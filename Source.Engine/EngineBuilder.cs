@@ -8,6 +8,7 @@ using Source.Common.Engine;
 using Source.Common.GameUI;
 using Source.Common.MaterialSystem;
 using Source.Common.Networking;
+using Source.Common.SceneFileCache;
 using Source.Common.Server;
 using Source.Common.ToolFramework;
 using Source.Engine.Client;
@@ -157,6 +158,7 @@ public class EngineBuilder(ICommandLine cmdLine) : ServiceCollection
 		this.AddSingleton<Sys>();
 		this.AddSingleton<View>();
 		this.AddSingleton<IVEfx, VEfx>();
+		this.AddSingleton<IServerPluginHelpers, ServerPlugin>(_ => g_pServerPluginHandler);
 		// Engine components that we provide.
 		this.AddSingleton<ICvar, Cvar>((services) => services.GetRequiredService<Cvar>());
 		this.AddSingleton<ICvarQuery, DefaultCvarQuery>();
@@ -167,6 +169,10 @@ public class EngineBuilder(ICommandLine cmdLine) : ServiceCollection
 		this.AddSingleton<IVideoMode, VideoMode_MaterialSystem>();
 		this.AddSingleton<IRender, Render>(x => x.GetRequiredService<Render>());
 		this.AddSingleton<IRegistry, Registry>();
+#if GMOD_DLL
+		this.AddSingleton<Source.Common.GarrysMod.IGet, GarrysMod.Get>();
+		this.AddSingleton<Source.Common.GarrysMod.IResources, GarrysMod.Resources>();
+#endif
 
 		this.AddSingleton<IEngineServer, EngineServer>();
 		this.AddSingleton<IVoiceServer, VoiceServer>();
@@ -183,6 +189,7 @@ public class EngineBuilder(ICommandLine cmdLine) : ServiceCollection
 		this.AddSingleton<IGame, Game>();
 		this.AddSingleton<IVDebugOverlay, DebugOverlay>();
 		this.AddSingleton<IGameEventManager2, GameEventManager>();
+		this.AddSingleton<ISceneFileCache, SceneFileCache>();
 		this.AddSingleton<ModInfo>(); // This may not be valid for a while! At least until gameinfo is readable!
 									  // Client state and server state singletons
 		this.AddSingleton<ClientState>();

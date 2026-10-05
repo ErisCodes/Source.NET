@@ -45,8 +45,8 @@ in vec2 vs_BaseTexCoord;
 in vec4 vs_DetailOrBumpAndEnvmapMaskTexCoord;
 #endif
 #endif
-in vec4 vs_LightmapTexCoord1And2;
-in vec4 vs_LightmapTexCoord3;
+centroid in vec4 vs_LightmapTexCoord1And2;
+centroid in vec4 vs_LightmapTexCoord3;
 in vec4 vs_WorldPos_ProjPosZ;
 #if CUBEMAP || (LIGHTING_PREVIEW)
 in mat3 vs_TangentSpaceTranspose;
@@ -505,6 +505,18 @@ void main()
 #if WRITEWATERFOGTODESTALPHA && (PIXELFOGTYPE == PIXEL_FOG_TYPE_HEIGHT)
     alpha = fogFactor;
 #endif
+
+    if(isAlphaTesting){
+        switch(alphaTestFunc){
+            case 0: discard; break;
+            case 1: if(alpha >= alphaTestRef){ discard; } break;
+            case 2: if(alpha != alphaTestRef){ discard; } break;
+            case 3: if(alpha > alphaTestRef){ discard; } break;
+            case 4: if(alpha <= alphaTestRef){ discard; } break;
+            case 5: if(alpha == alphaTestRef){ discard; } break;
+            case 6: if(alpha < alphaTestRef){ discard; } break;
+        }
+    }
 
     fragColor = FinalOutput(vec4(result.rgb, alpha), fogFactor, PIXELFOGTYPE, TONEMAP_SCALE_LINEAR, bWriteDepthToAlpha, vs_WorldPos_ProjPosZ.w);
 

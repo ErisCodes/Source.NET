@@ -215,7 +215,8 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 	}
 
 	public void AddDecalToStaticProp(Vector3 rayStart, Vector3 rayEnd, int staticPropIndex, int decalIndex, bool doTrace, Trace tr) {
-		throw new NotImplementedException();
+		// throw new NotImplementedException();
+		DevWarning("AddDecalToStaticProp not implemented\n");
 	}
 
 	public void AddColorDecalToStaticProp(Vector3 rayStart, Vector3 rayEnd, int staticPropIndex, int decalIndex, bool doTrace, Trace tr, bool useColor, Color color) {
@@ -702,7 +703,7 @@ public class StaticProp : IClientUnknown, IClientRenderable, ICollideable
 		boneToWorldOut[0] = ModelToWorld;
 		return true;
 	}
-	public void SetupWeights(Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights) => throw new NotImplementedException();
+	public void SetupWeights(Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights) { }
 	public bool UsesFlexDelayedWeights() => false;
 	public void DoAnimationEvents() => throw new NotImplementedException();
 	public IPVSNotify? GetPVSNotifyInterface() => null;

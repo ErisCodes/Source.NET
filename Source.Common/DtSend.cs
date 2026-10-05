@@ -115,7 +115,7 @@ public static class SendPropHelpers
 	public static void SendProxy_StringToString(SendProp prop, object instance, IFieldAccessor data, ref DVariant outData, int element, int objectID)
 		=> outData.String = prop.GetValue<string>(instance);
 	public static object SendProxy_DataTableToDataTable(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID)
-		=> prop.GetValue<object>(instance);
+		=> prop.FieldInfo == null ? instance : prop.GetValue<object>(instance);
 	public static object SendProxy_SendLocalDataTable(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {
 		recipients.SetOnly(objectID - 1);
 		return prop.FieldInfo == null ? instance : prop.GetValue<object>(instance);
@@ -137,7 +137,9 @@ public static class SendPropHelpers
 		else
 			highValue = (uint)((1 << bits) - 1);
 
-		float fHighLowMul = (float)(Math.Abs(range) <= double.Epsilon ? highValue : highValue / range);
+		float fHighLowMul = (float)(highValue / range);
+		if (MathLib.CloseEnough((float)range, 0))
+			fHighLowMul = highValue;
 
 		if ((uint)(fHighLowMul * range) > highValue ||
 			 (fHighLowMul * range) > (double)highValue) {
@@ -170,7 +172,7 @@ public static class SendPropHelpers
 	}
 
 	private static SendProp SendPropVariableLengthArray(DynamicArrayAccessor accessor) {
-		return InternalSendPropArray(accessor.Length, accessor.Name, null);
+		return InternalSendPropArray(accessor.Length, accessor.NetworkName, null);
 	}
 
 	/// <summary>
@@ -202,10 +204,10 @@ public static class SendPropHelpers
 			props[i] = arrayProp.Copy();
 			props[i].FieldInfo = new DynamicArrayIndexAccessor(field, i);
 			props[i].NameOverride = ElementNames[i];
-			props[i].SetParentArrayPropName(field.Name);
+			props[i].SetParentArrayPropName(((field as DynamicAccessor)?.NetworkName ?? field.Name));
 		}
 
-		SendTable table = new SendTable(field.Name, props);
+		SendTable table = new SendTable(((field as DynamicAccessor)?.NetworkName ?? field.Name), props);
 		ret.SetDataTable(table);
 
 		return ret;
@@ -313,6 +315,8 @@ public static class SendPropHelpers
 		ret.SetFlags(flags);
 		ret.LowValue = 0.0f;
 		ret.HighValue = 360.0f;
+		if ((flags & PropFlags.RoundDown) != 0)
+			ret.HighValue = ret.HighValue - ((ret.HighValue - ret.LowValue) / (1 << bits));
 		ret.HighLowMul = AssignRangeMultiplier(ret.Bits, ret.HighValue - ret.LowValue);
 		ret.SetProxyFn(proxyFn);
 
@@ -331,6 +335,8 @@ public static class SendPropHelpers
 		ret.SetFlags(flags);
 		ret.LowValue = 0.0f;
 		ret.HighValue = 360.0f;
+		if ((flags & PropFlags.RoundDown) != 0)
+			ret.HighValue = ret.HighValue - ((ret.HighValue - ret.LowValue) / (1 << bits));
 		ret.HighLowMul = AssignRangeMultiplier(ret.Bits, ret.HighValue - ret.LowValue);
 		ret.SetProxyFn(proxyFn);
 
@@ -429,6 +435,23 @@ public static class SendPropHelpers
 
 		return ret;
 	}
+	public static SendProp SendPropDataTable(string name, int offset, SendTable sendTable, SendTableProxyFn? proxyFn = null) {
+		SendProp ret = new();
+		proxyFn ??= SendProxy_DataTableToDataTable;
+
+		ret.Type = SendPropType.DataTable;
+		ret.NameOverride = name;
+		ret.SetDataTable(sendTable);
+		ret.SetDataTableProxyFn(proxyFn);
+
+		if (proxyFn == SendProxy_DataTableToDataTable)
+			ret.SetFlags(PropFlags.ProxyAlwaysYes);
+
+		if (proxyFn == SendProxy_DataTableToDataTable && offset == 0)
+			ret.SetFlags(PropFlags.Collapsible);
+
+		return ret;
+	}
 	delegate void EnsureCapacityBasicFn(int length);
 	public static SendProp SendPropList(IFieldAccessor field, int maxElements, SendProp arrayProp, SendTableProxyFn? proxyFn = null) {
 		proxyFn ??= SendProxy_DataTableToDataTable;
@@ -445,9 +468,9 @@ public static class SendPropHelpers
 		MethodInfo ensureCapacity = field.FieldType.GetMethod("EnsureCapacity")!;
 		SendPropExtra_UtlVector extraData = new() {
 			MaxElements = maxElements,
-			EnsureCapacityFn = (instance, list, size) => {
-				ensureCapacity.CreateDelegate<EnsureCapacityBasicFn>(list)(size);
-			}
+			EnsureCapacityFn = ensureCapacity.ReturnType == typeof(int)
+				? (instance, list, size) => ensureCapacity.CreateDelegate<Func<int, int>>(list)(size)
+				: (instance, list, size) => ensureCapacity.CreateDelegate<EnsureCapacityBasicFn>(list)(size)
 		};
 
 		if (arrayProp.Type == SendPropType.DataTable)
@@ -459,7 +482,7 @@ public static class SendPropHelpers
 		SendProp lengthProp = SendPropInt($"lengthprop{maxElements}", DtCommon.NumBitsForCount(maxElements), PropFlags.Unsigned, SendProxy_UtlVectorLength);
 		lengthProp.SetExtraData(extraData);
 
-		string lengthProxyTableName = DtUtlVectorCommon.AllocateUniqueDataTableName(true, $"_LPT_{field.Name}_{maxElements}");
+		string lengthProxyTableName = DtUtlVectorCommon.AllocateUniqueDataTableName(true, $"_LPT_{((field as DynamicAccessor)?.NetworkName ?? field.Name)}_{maxElements}");
 		SendTable lengthTable = new SendTable(lengthProxyTableName, [lengthProp]);
 		props[0] = SendPropDataTable("lengthproxy", lengthTable, SendProxy_LengthTable);
 		props[0].SetExtraData(extraData);
@@ -468,8 +491,10 @@ public static class SendPropHelpers
 			props[i] = arrayProp.Copy();
 			props[i].SetOffset(0);
 			props[i].NameOverride = ElementNames[i - 1];
-			props[i].ParentArrayPropName = field.Name;
-			props[i].SetExtraData(extraData);
+			props[i].ParentArrayPropName = ((field as DynamicAccessor)?.NetworkName ?? field.Name);
+			SendPropExtra_UtlVector indexedData = extraData.Clone();
+			indexedData.Index = i - 1;
+			props[i].SetExtraData(indexedData);
 
 			if (arrayProp.Type == SendPropType.DataTable) {
 				props[i].SetDataTableProxyFn(SendProxy_UtlVectorElement_DataTable);
@@ -477,11 +502,12 @@ public static class SendPropHelpers
 				// todo: make sure this is okay...
 			}
 			else {
+				indexedData.ElementFieldInfo = (IFieldAccessor)Activator.CreateInstance(typeof(ListElementAccessor<>).MakeGenericType(field.FieldType.GetGenericArguments()[0]), i - 1)!;
 				props[i].SetProxyFn(SendProxy_UtlVectorElement);
 			}
 		}
 
-		SendTable table = new SendTable(DtUtlVectorCommon.AllocateUniqueDataTableName(true, $"_ST_{field.Name}_{maxElements}"), props);
+		SendTable table = new SendTable(DtUtlVectorCommon.AllocateUniqueDataTableName(true, $"_ST_{((field as DynamicAccessor)?.NetworkName ?? field.Name)}_{maxElements}"), props);
 		ret.SetDataTable(table);
 		return ret;
 	}
@@ -495,19 +521,45 @@ public static class SendPropHelpers
 	}
 
 	private static void SendProxy_UtlVectorLength(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		throw new NotImplementedException();
+		SendPropExtra_UtlVector extra = (SendPropExtra_UtlVector)prop.GetExtraData()!;
+
+		outData.Int = ((System.Collections.ICollection)instance).Count;
+		if (outData.Int > extra.MaxElements) {
+			Assert(false);
+			outData.Int = extra.MaxElements;
+		}
 	}
 
 	private static object? SendProxy_UtlVectorElement_DataTable(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {
-		throw new NotImplementedException();
+		SendPropExtra_UtlVector extra = (SendPropExtra_UtlVector)prop.GetExtraData()!;
+
+		int iElement = extra.Index;
+		Assert(iElement < extra.MaxElements);
+
+		System.Collections.IList list = (System.Collections.IList)instance;
+		if (iElement >= list.Count)
+			return null;
+
+		return extra.DataTableProxyFn(prop, list[iElement]!, data, recipients, objectID);
 	}
 
 	private static void SendProxy_UtlVectorElement(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		throw new NotImplementedException();
+		SendPropExtra_UtlVector extra = (SendPropExtra_UtlVector)prop.GetExtraData()!;
+		Assert(extra != null);
+
+		int iElement = extra.Index;
+
+		ICollection utlVec = (ICollection)instance;
+		if (iElement >= utlVec.Count) 
+			outData = default;
+		else 
+			extra.ProxyFn(prop, instance, extra.ElementFieldInfo, ref outData, 0, objectID);
 	}
 
 	private static object? SendProxy_LengthTable(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {
-		throw new NotImplementedException();
+		SendPropExtra_UtlVector extra = (SendPropExtra_UtlVector)prop.GetExtraData()!;
+		extra.EnsureCapacityFn(instance, instance, extra.MaxElements);
+		return instance;
 	}
 
 	public static SendProp SendPropDataTable(string name, IFieldAccessor field, SendTable sendTable, SendTableProxyFn? proxyFn = null) {
@@ -617,7 +669,7 @@ public class SendProp : IDataTableProp
 
 	public PropFlags GetFlags() => Flags;
 
-	public ReadOnlySpan<char> GetName() => NameOverride ?? FieldInfo?.Name ?? "<??UNNAMED??>";
+	public ReadOnlySpan<char> GetName() => NameOverride ?? (FieldInfo as DynamicAccessor)?.NetworkName ?? FieldInfo?.Name ?? "<??UNNAMED??>";
 
 	public int GetNumElements() => Elements;
 
@@ -915,7 +967,7 @@ public class SendTable : IDataTableBase<SendProp>
 		HasPropsEncodedAgainstCurrentTickCount = state;
 	}
 
-	public static void WriteInfos(SendTable table, ref bf_write dataOut) {
+	public static void WriteInfos(SendTable table, bf_write dataOut) {
 		throw new NotImplementedException();
 	}
 

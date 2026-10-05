@@ -118,6 +118,8 @@ public struct QAngle : IEquatable<QAngle>
 	}
 
 
+	public readonly float Length() => MathF.Sqrt(X * X + Y * Y + Z * Z);
+
 	public static QAngle Normalize(in QAngle angle) => new(Normalize(angle.X), Normalize(angle.Y), Normalize(angle.Z));
 
 	public float this[int index] {

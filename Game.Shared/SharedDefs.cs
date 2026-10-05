@@ -116,7 +116,8 @@ public enum HudPrint
 	Center = 4
 }
 
-public enum Damage : byte {
+public enum Damage : byte
+{
 	No,
 	EventsOnly,
 	Yes,
@@ -283,9 +284,25 @@ public enum DamageType : int
 	/// <summary>
 	/// not quite a bullet. Little, rounder, different.
 	/// </summary>
-	Buckshot = (1 << 29)
+	Buckshot = (1 << 29),
+
+	Sniper = (1 << 30),
+	MissileDefense = (1 << 31)
 }
 
+public enum BloodColor
+{
+	DontBleed = -1,
+	Red,
+	Yellow,
+	Green,
+	Mech,
+#if HL2_EPISODIC
+	Antlion,
+	Zombie,
+	AntlionWorker
+#endif
+}
 
 public enum ObserverMode
 {
@@ -453,17 +470,6 @@ public static class SharedDefs
 
 	public const int kActivityLookup_Unknown = -2;          // hasn't been searched for
 	public const int kActivityLookup_Missing = -1;          // has been searched for but wasn't found
-
-
-	public static ClientClass WithManualClassID(this ClientClass clientClass, StaticClassIndices classID) {
-		clientClass.ClassID = (int)classID;
-		return clientClass;
-	}
-
-	public static ServerClass WithManualClassID(this ServerClass clientClass, StaticClassIndices classID) {
-		clientClass.ClassID = (int)classID;
-		return clientClass;
-	}
 }
 
 public enum WeaponState
@@ -662,6 +668,13 @@ public enum DataObjectType
 	VPhysicsUpdateAI,
 	VPhysicsWatcher,
 	NumTypes
+}
+
+public enum HillType
+{
+	None = 0,
+	Uphill,
+	Downhill,
 }
 
 public static class TraceFieldProps

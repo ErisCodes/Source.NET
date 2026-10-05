@@ -44,7 +44,7 @@ public static class RenderAccessors
 
 public partial class Render(
 	CommonHostState host_state,
-	IMaterialSystem materials,
+	// IMaterialSystem materials,
 	Host Host,
 	MatSysInterface MaterialSystem,
 	ClientGlobalVariables gpGlobals
@@ -91,7 +91,7 @@ public partial class Render(
 			GLRLight.PushDlights();
 		}
 
-		// UpdateStudioRenderConfig();
+		ModelRender.UpdateStudioRenderConfig();
 		studioRender.BeginFrame();
 
 		FrameCount++;
@@ -315,7 +315,9 @@ public partial class Render(
 
 		FrameCount = 1;
 		ResetLightStyles();
+#if !SWDS
 		DecalInit();
+#endif
 		LoadSkys();
 		InitStudio();
 
@@ -340,7 +342,6 @@ public partial class Render(
 			MatSysInterface.LightStyleFrame[i] = FrameCount;
 		}
 	}
-	private void DecalInit() { }
 	private void LoadSkys() {
 		bool success = true;
 		Span<char> requestedsky = stackalloc char[128];
@@ -1426,10 +1427,6 @@ public partial class Render(
 				}
 			}
 		}
-	}
-
-	public void DecalTermAll() {
-
 	}
 
 	public void UnloadSkys() {

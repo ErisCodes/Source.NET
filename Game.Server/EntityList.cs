@@ -225,6 +225,14 @@ public class GlobalEntityList : BaseEntityList
 		return null;
 	}
 
+	public T? NextEntByClass<T>(T? start) where T : BaseEntity {
+		for (BaseEntity? x = NextEnt(start); x != null; x = NextEnt(x)) {
+			if (x is T found)
+				return found;
+		}
+		return null;
+	}
+
 	public void AddListenerEntity(IEntityListener listener) {
 		if (EntityListeners.Contains(listener)) {
 			Assert(false, "Can't add listeners multiple times\n");
@@ -236,13 +244,19 @@ public class GlobalEntityList : BaseEntityList
 	public void RemoveListenerEntity(IEntityListener listener) => EntityListeners.Remove(listener);
 
 	public void CleanupDeleteList() {
-		// todo
+		PhysOnCleanupDeleteList();
+
+		Util.g_bDisableEhandleAccess = true;
+		for (int i = 0; i < g_DeleteList.Count; i++)
+			g_DeleteList[i].Release();
+		Util.g_bDisableEhandleAccess = false;
+		g_DeleteList.Clear();
 	}
 
 	public int ResetDeleteList() {
-		int count = 0;
-		// todo
-		return count;
+		int result = g_DeleteList.Count;
+		g_DeleteList.Clear();
+		return result;
 	}
 
 	public BaseEntity? FindEntityByClassname(BaseEntity? startEntity, ReadOnlySpan<char> className) {

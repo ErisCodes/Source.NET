@@ -93,8 +93,8 @@ out vec3 vs_TangentSpaceViewRay;
 out vec4 vs_DetailOrBumpAndEnvmapMaskTexCoord;
 #endif
 #endif
-out vec4 vs_LightmapTexCoord1And2;
-out vec4 vs_LightmapTexCoord3;						// and basetexcoord*mask_scale
+centroid out vec4 vs_LightmapTexCoord1And2;
+centroid out vec4 vs_LightmapTexCoord3;						// and basetexcoord*mask_scale
 out vec4 vs_WorldPos_ProjPosZ;
 
 #if TANGENTSPACE || (LIGHTING_PREVIEW)

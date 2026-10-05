@@ -244,12 +244,13 @@ public enum PlayerPhysFlag
 	GamePhysicsRotPush = 1 << 5,
 }
 
+[NetworkName("CBasePlayer")]
 public partial class BasePlayer : BaseCombatCharacter
 {
 	public const int SF_NORESPAWN = 1 << 30;
-	public static readonly SendTable DT_PlayerState = new([
+	public static readonly SendTable DT_PlayerState = new(nameof(DT_PlayerState), [
 		SendPropInt(FIELD<PlayerState>.OF(nameof(PlayerState.DeadFlag)), 1, PropFlags.Unsigned)
-	]); public static readonly ServerClass CC_PlayerState = new("PlayerState", DT_PlayerState);
+	]);
 
 	public override bool IsPlayer() => true;
 	public virtual bool IsBot() => (GetFlags() & EntityFlags.FakeClient) != 0;
@@ -266,8 +267,8 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	public BaseViewModel? GetViewModel(int index) => ViewModel[index].Get();
 
-	public static readonly SendTable DT_LocalPlayerExclusive = new([
-		SendPropDataTable(nameof(Local), FIELD.OF(nameof(Local)), PlayerLocalData.DT_Local),
+	public static readonly SendTable DT_LocalPlayerExclusive = new(nameof(DT_LocalPlayerExclusive), [
+		SendPropDataTable("m_Local", FIELD.OF(nameof(Local)), PlayerLocalData.DT_Local),
 		SendPropFloat(FIELD.OF(nameof(Friction)), 0, PropFlags.NoScale | PropFlags.RoundDown, 0.0f, 4.0f),
 		SendPropArray3(FIELD.OF_ARRAY(nameof(Ammo)), SendPropInt( FIELD.OF_ARRAYINDEX(nameof(Ammo)), 16, PropFlags.Unsigned)),
 		SendPropInt(FIELD.OF(nameof(TickBase)), -1, PropFlags.ChangesOften),
@@ -285,7 +286,7 @@ public partial class BasePlayer : BaseCombatCharacter
 		SendPropEHandle(FIELD.OF(nameof(TonemapController))),
 		SendPropEHandle(FIELD.OF(nameof(ViewEntity))),
 		SendPropBool(FIELD.OF(nameof(DisableWorldClicking))),
-	]); public static readonly ServerClass PlayerExclusive = new("LocalPlayerExclusive", DT_LocalPlayerExclusive);
+	]);
 
 	public static readonly SendTable DT_BasePlayer = new(DT_BaseCombatCharacter, [
 		SendPropDataTable(nameof(pl), FIELD.OF(nameof(pl)), DT_PlayerState, SendProxy_DataTableToDataTable),
@@ -303,7 +304,7 @@ public partial class BasePlayer : BaseCombatCharacter
 		SendPropFloat(FIELD.OF(nameof(DefaultFOV)), 16, PropFlags.Unsigned, 0, 65536),
 		SendPropEHandle(FIELD.OF(nameof(ZoomOwner))),
 
-		SendPropEHandle(FIELD.OF_ARRAYINDEX(nameof(ViewModel), 0)),
+		SendPropEHandle(FIELD.OF_SENDINFO_ARRAY(nameof(ViewModel))),
 		SendPropArray(FIELD.OF_ARRAY(nameof(ViewModel))),
 
 		SendPropBool(FIELD.OF(nameof(UseWeaponsInVehicle))),
@@ -346,6 +347,13 @@ public partial class BasePlayer : BaseCombatCharacter
 	public bool ForcedObserverMode;
 	PlayerPhysFlag PhysicsFlags;
 
+	public void SetPhysicsFlag(PlayerPhysFlag flag, bool set) {
+		if (set)
+			PhysicsFlags |= flag;
+		else
+			PhysicsFlags &= ~flag;
+	}
+
 	int LastDmageAmount;
 	Vector3 DmgOrigin;
 	Vector3 OldOrigin;
@@ -381,7 +389,7 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	GamePlayerInfo PlayerInfo = new();
 
-	public static readonly new ServerClass ServerClass = new ServerClass("BasePlayer", DT_BasePlayer).WithManualClassID(StaticClassIndices.CBasePlayer);
+	public static readonly new ServerClass ServerClass = new ServerClass(DT_BasePlayer);
 
 
 	public BasePlayer() {
@@ -478,6 +486,7 @@ public partial class BasePlayer : BaseCombatCharacter
 	}
 
 	public readonly PlayerState pl = new();
+	[NetworkName("m_Local")]
 	public readonly PlayerLocalData Local = new();
 
 	public ref AudioParams GetAudioParams() => ref Local.Audio;
@@ -492,39 +501,83 @@ public partial class BasePlayer : BaseCombatCharacter
 			SetPoseParameter(BodyPitchPoseParam, pitch);
 	}
 
+	[NetworkName("m_hVehicle")]
 	public EHANDLE Vehicle = new();
+	[NetworkName("m_hUseEntity")]
 	public EHANDLE UseEntity = new();
+	[NetworkName("m_hObserverTarget")]
 	public EHANDLE ObserverTarget = new();
+	[NetworkName("m_hZoomOwner")]
 	public EHANDLE ZoomOwner = new();
+	[NetworkName("m_hConstraintEntity")]
 	public EHANDLE ConstraintEntity = new();
+	[NetworkName("m_hTonemapController")]
 	public EHANDLE TonemapController = new();
+	[NetworkName("m_hViewEntity")]
 	public EHANDLE ViewEntity = new();
+	[NetworkName("m_hViewModel")]
 	InlineArrayNewMaxViewmodels<Handle<BaseViewModel>> ViewModel = new();
 	readonly List<Handle<BaseEntity>> SimulatedByThisPlayer = [];
 
 	public IServerVehicle? GetVehicle() => Vehicle.Get()?.GetServerVehicle();
-	public BaseEntity? GetVehicleEntity() => Vehicle.Get();
-	public bool IsInAVehicle() => Vehicle.Get() != null;
+	public override BaseEntity? GetVehicleEntity() => Vehicle.Get();
+	public override bool IsInAVehicle() => Vehicle.Get() != null;
 	public float GetStepSize() => Local.StepSize;
 
+	public BaseEntity? GetViewEntity() => ViewEntity.Get();
+
+	public virtual ReadOnlySpan<char> GetSceneSoundToken() => "";
+
+	public void SetViewEntity(BaseEntity? entity) {
+		ViewEntity.Set(entity);
+
+		if (ViewEntity.Get() != null)
+			engine.SetView(Edict()!, ViewEntity.Get()!.Edict()!);
+		else
+			engine.SetView(Edict()!, Edict()!);
+	}
+
+	public void EnableControl(bool control) {
+		if (!control)
+			AddFlag(EntityFlags.Frozen);
+		else
+			RemoveFlag(EntityFlags.Frozen);
+	}
+
 	bool HasHaptics;
+	[NetworkName("m_bDisableWorldClicking")]
 	bool DisableWorldClicking;
+	[NetworkName("m_flMaxspeed")]
 	float Maxspeed;
+	[NetworkName("m_iObserverMode")]
 	int ObserverMode;
+	[NetworkName("m_iFOV")]
 	int FOV;
+	[NetworkName("m_nTickBase")]
 	public int TickBase;
+	[NetworkName("m_iFOVStart")]
 	int FOVStart;
+	[NetworkName("m_flFOVTime")]
 	TimeUnit_t FOVTime;
+	[NetworkName("m_iDefaultFOV")]
 	float DefaultFOV;
+	[NetworkName("m_vecConstraintCenter")]
 	public Vector3 ConstraintCenter;
+	[NetworkName("m_flConstraintRadius")]
 	public float ConstraintRadius;
+	[NetworkName("m_flConstraintWidth")]
 	public float ConstraintWidth;
+	[NetworkName("m_flConstraintSpeedFactor")]
 	public float ConstraintSpeedFactor;
 	InlineArray18<char> LastPlaceName;
+	[NetworkName("m_hColorCorrectionCtrl")]
 	EHANDLE ColorCorrectionCtrl = new();
+	[NetworkName("m_bUseWeaponsInVehicle")]
 	bool UseWeaponsInVehicle;
 	public bool OnTarget;
+	[NetworkName("m_flDeathTime")]
 	public TimeUnit_t DeathTime;
+	[NetworkName("m_flLaggedMovementValue")]
 	public double LaggedMovementValue;
 	public TimeUnit_t StepSoundTime;
 
@@ -640,7 +693,7 @@ public partial class BasePlayer : BaseCombatCharacter
 	public TimeUnit_t ConsumeMovementTimeForUserCmdProcessing(TimeUnit_t timeNeeded) {
 		if (MovementTimeForUserCmdProcessingRemaining <= 0.0)
 			return 0.0;
-		else if (timeNeeded > MovementTimeForUserCmdProcessingRemaining + TimeUnit_t.Epsilon) {
+		else if (timeNeeded > MovementTimeForUserCmdProcessingRemaining + DBL_EPSILON) {
 			TimeUnit_t result = MovementTimeForUserCmdProcessingRemaining;
 			MovementTimeForUserCmdProcessingRemaining = 0.0;
 			return result;
