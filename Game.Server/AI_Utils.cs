@@ -8,6 +8,7 @@ using Source.Common.Engine;
 using Source.Common.Formats.BSP;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Game.Server;
 
@@ -15,7 +16,15 @@ public static class AI_UtilsGlobals
 {
 	public static string? g_iszFuncBrushClassname;
 
-	public static bool AI_IsSinglePlayer() => gpGlobals.MaxClients == 1;
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static BasePlayer? AI_GetSinglePlayer() {
+		if (gpGlobals.MaxClients > 1)
+			return null;
+
+		return Util.GetLocalPlayer();
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static bool AI_IsSinglePlayer() => gpGlobals.MaxClients == 1;
 }
 
 public class AI_MoveMonitor

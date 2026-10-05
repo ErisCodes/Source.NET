@@ -2803,7 +2803,66 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 	public virtual int HolsterWeapon() => throw new NotImplementedException();
 	public virtual int UnholsterWeapon() => throw new NotImplementedException();
 
-	public virtual BaseEntity? FindNamedEntity(ReadOnlySpan<char> name, IEntityFindFilter? filter = null) => throw new NotImplementedException();
+	static int selfwarningcount = 0;
+	static int playerwarningcount = 0;
+	public const int FINDNAMEDENTITY_MAX_ENTITIES = 32;
+	static readonly BaseEntity?[] entityList = new BaseEntity?[FINDNAMEDENTITY_MAX_ENTITIES];
+
+
+	public virtual BaseEntity? FindNamedEntity(ReadOnlySpan<char> name, IEntityFindFilter? filter = null){
+		if (0 == stricmp(name, "!player")) {
+			return (BaseEntity?)AI_GetSinglePlayer();
+		}
+		else if (0 == stricmp(name, "!enemy")) {
+			if (GetEnemy() != null)
+				return GetEnemy();
+		}
+		else if (0 == stricmp(name, "!self") || 0 == stricmp(name, "!target1")) {
+			return this;
+		}
+		else if (0 == stricmp(name, "!nearestfriend") || 0 == stricmp(name, "!friend")) {
+			// FIXME: look at CBaseEntity *CNPCSimpleTalker::FindNearestFriend(bool fPlayer)
+			// punt for now
+			return (BaseEntity?)AI_GetSinglePlayer();
+		}
+		else if (0 == stricmp(name, "self")) {
+
+			// fix the vcd, the reserved names have changed
+			if (++selfwarningcount < 5) {
+				DevMsg("ERROR: \"self\" is no longer used, use \"!self\" in vcd instead!\n");
+			}
+			return this;
+		}
+		else if (0 == stricmp(name, "Player")) {
+			if (++playerwarningcount < 5) {
+				DevMsg("ERROR: \"player\" is no longer used, use \"!player\" in vcd instead!\n");
+			}
+			return (BaseEntity?)AI_GetSinglePlayer();
+		}
+		else {
+			// search for up to 32 entities with the same name and choose one randomly
+			BaseEntity? entity = null;
+			int iCount;
+
+			entity = null;
+			for (iCount = 0; iCount < FINDNAMEDENTITY_MAX_ENTITIES; iCount++) {
+				entity = gEntList.FindEntityByName(entity, name, null, null, null, filter);
+				if (entity == null) 
+					break;
+				
+				entityList[iCount] = entity;
+			}
+
+			if (iCount > 0) {
+				int index = RandomInt(0, iCount - 1);
+				entity = entityList[index];
+				Array.Clear(entityList);
+				return entity;
+			}
+		}
+
+		return null;
+	}
 
 	public virtual AI_Expresser? GetExpresser() => null;
 
