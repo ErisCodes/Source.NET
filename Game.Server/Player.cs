@@ -376,10 +376,10 @@ public partial class BasePlayer : BaseCombatCharacter
 	int LockViewanglesTickNumber;
 	QAngle LockedViewangles;
 
-	int UpdateRate;
-	TimeUnit_t LerpTime;
-	bool LagCompensation;
-	bool PredictWeapons;
+	public int UpdateRate;
+	public TimeUnit_t LerpTime;
+	public bool LagCompensation;
+	public bool PredictWeapons;
 
 	public static void SendProxy_CropFlagsToPlayerFlagBitsLength(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
 		int mask = (1 << Constants.PLAYER_FLAG_BITS) - 1;
@@ -1392,6 +1392,15 @@ public partial class BasePlayer : BaseCombatCharacter
 
 		return base.ShouldTransmit(info);
 	}
+
+	public virtual bool WantsLagCompensationOnEntity(BaseEntity entity, in UserCmd cmd, ref readonly MaxEdictsBitVec entityTransmitBits) {
+		if (!Unsafe.IsNullRef(in entityTransmitBits) && !entityTransmitBits.IsBitSet(entity.EntIndex()))
+			return false;
+
+		return true;
+	}
+
+	public ref UserCmd GetCurrentUserCommand() => ref CurrentCommand.IsNull ? ref Unsafe.NullRef<UserCmd>() : ref CurrentCommand.Get();
 
 	public int Frags;
 	public int Deaths;

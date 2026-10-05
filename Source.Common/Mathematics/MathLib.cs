@@ -654,6 +654,7 @@ public static class MathLib
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static void Negate(this ref Vector3 vec) => vec = Vector3.Negate(vec);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DistToSqr(this in Vector3 vec, in Vector3 other) => Vector3.DistanceSquared(vec, other);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t Length2D(this in Vector3 vec) => MathF.Sqrt(vec.X * vec.X + vec.Y * vec.Y);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t Length2DSqr(this in Vector3 vec) => vec.X * vec.X + vec.Y * vec.Y;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
