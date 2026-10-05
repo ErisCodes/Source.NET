@@ -12,6 +12,9 @@ public interface ILocalize
 
 	// Wow! This sucks!
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void ConstructString(Span<char> localized, ReadOnlySpan<char> format)
+		=> ConstructString(localized, format, null, null, null, null, null, null, null, null);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void ConstructString(Span<char> localized, ReadOnlySpan<char> format, ReadOnlySpan<char> s1)
 		=> ConstructString(localized, format, s1, null, null, null, null, null, null, null);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
