@@ -227,6 +227,8 @@ public class GameClient : BaseClient
 	}
 
 	public void SetupPackInfo(FrameSnapshot snapshot) {
+		PackInfo.PVSSize = (GetCollisionBSPData().NumClusters + 7) / 8;
+		SV.ServerGameClients!.ClientSetupVisibility(ViewEntity, PackInfo.ClientEnt!, PackInfo.PVS, PackInfo.PVSSize);
 
 		CurrentFrame = FrameManager.AllocateFrame();
 		CurrentFrame.Init(snapshot);
@@ -237,9 +239,31 @@ public class GameClient : BaseClient
 		int maxFrames = MAX_CLIENT_FRAMES;
 		if (maxFrames < FrameManager.AddClientFrame(CurrentFrame))
 			FrameManager.RemoveOldestFrame();
+
+		PackInfo.AreasNetworked = 0;
+		int areaCount = SV.g_AreasNetworked.Count;
+		for (int j = 0; j < areaCount; j++) {
+			PackInfo.Areas[PackInfo.AreasNetworked] = SV.g_AreasNetworked[j];
+			PackInfo.AreasNetworked++;
+
+			Assert(PackInfo.AreasNetworked < CheckTransmitInfo.MAX_WORLD_AREAS);
+		}
+
+		CM.SetupAreaFloodNums(PackInfo.AreaFloodNums, out PackInfo.MapAreas);
 	}
 
-	public void SetupPrevPackInfo() { }
+	public void SetupPrevPackInfo() {
+		PrevTransmitEdict = PackInfo.TransmitEdict;
+
+		PrevPackInfo.AreasNetworked = PackInfo.AreasNetworked;
+		((ReadOnlySpan<int>)PackInfo.Areas)[..PackInfo.AreasNetworked].CopyTo(PrevPackInfo.Areas);
+
+		PrevPackInfo.PVSSize = PackInfo.PVSSize;
+		PackInfo.PVS.AsSpan(0, PackInfo.PVSSize).CopyTo(PrevPackInfo.PVS);
+
+		PrevPackInfo.MapAreas = PackInfo.MapAreas;
+		((ReadOnlySpan<byte>)PackInfo.AreaFloodNums)[..PackInfo.MapAreas].CopyTo(PrevPackInfo.AreaFloodNums);
+	}
 
 	// void SetRate(int nRate, bool force) { }
 

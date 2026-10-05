@@ -637,8 +637,27 @@ public class ServerGameClients : IServerGameClients
 		// throw new NotImplementedException();
 	}
 
-	public void ClientSetupVisibility(Edict viewEntity, Edict client, Span<byte> pvs) {
-		throw new NotImplementedException();
+	public void ClientSetupVisibility(Edict? viewEntity, Edict client, byte[] pvs, int pvssize) {
+		engine.ResetPVS(pvs, pvssize);
+
+		BaseEntity? ve = null;
+		if (viewEntity != null) {
+			ve = BaseEntity.GetContainingEntity(viewEntity);
+			if (ve != null)
+				engine.AddOriginToPVS(ve.EyePosition());
+		}
+
+		BasePlayer? player = BaseEntity.GetContainingEntity(client) as BasePlayer;
+		if (player != null) {
+			player.SetupVisibility(ve, pvs, pvssize);
+			Util.SetClientVisibilityPVS(client, pvs.AsSpan(0, pvssize));
+		}
+
+		Span<byte> portalBits = stackalloc byte[Constants.MAX_AREA_PORTAL_STATE_BYTES];
+		portalBits.Clear();
+
+		if (player != null)
+			player.Local.UpdateAreaBits(player, portalBits);
 	}
 
 	public void ClientSpawned(Edict player) => g_pGameRules?.ClientSpawned(player);
