@@ -83,6 +83,12 @@ public class RenderView(EngineVGui EngineVGui, Render engineRenderer) : IRenderV
 		R_DrawBrushModel(baseentity, model, origin, angles, RenderDepthMode.Normal, true, true);
 	}
 
+	public void DrawBrushModelEx(IClientEntity baseentity, Model model, in Vector3 origin, in QAngle angles, DrawBrushModelMode mode) {
+		bool drawOpaque = mode != DrawBrushModelMode.DrawTranslucentOnly;
+		bool drawTranslucent = mode != DrawBrushModelMode.DrawOpaqueOnly;
+		R_DrawBrushModel(baseentity, model, origin, angles, RenderDepthMode.Normal, drawOpaque, drawTranslucent);
+	}
+
 	public void DrawBrushModelShadow(IClientRenderable renderable) => R_DrawBrushModelShadow(renderable);
 
 	public void DrawIdentityBrushModel(IWorldRenderList list, Model model) {
