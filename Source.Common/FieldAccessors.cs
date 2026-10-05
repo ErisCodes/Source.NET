@@ -46,6 +46,27 @@ public abstract class FieldAccessor<TField> : DynamicAccessor
 		Ref(instance) = FieldConvert<T, TField>.Convert(in value);
 		return true;
 	}
+
+	public override bool TryGetSpan<T>(object instance, int count, out Span<T> span) {
+		if (RuntimeHelpers.IsReferenceOrContainsReferences<TField>() || (count == 1 && Unsafe.SizeOf<TField>() != Unsafe.SizeOf<T>())) {
+			span = default;
+			return false;
+		}
+
+		span = MemoryMarshal.CreateSpan(ref Unsafe.As<TField, T>(ref Ref(instance)), count);
+		return true;
+	}
+}
+
+public abstract class NetworkArrayFieldAccessor<TElement> : FieldAccessor<NetworkArray<TElement>> where TElement : unmanaged
+{
+	protected NetworkArrayFieldAccessor(Type targetType, string name, string networkName) : base(targetType, name, networkName) { }
+
+	public override bool TryGetSpan<T>(object instance, int count, out Span<T> span) {
+		TElement[] array = Ref(instance).Value;
+		span = MemoryMarshal.CreateSpan(ref Unsafe.As<TElement, T>(ref MemoryMarshal.GetArrayDataReference(array)), array.Length * Unsafe.SizeOf<TElement>() / Unsafe.SizeOf<T>());
+		return true;
+	}
 }
 
 public abstract class InlineArrayFieldAccessor<TField, TElement> : FieldAccessor<TField>

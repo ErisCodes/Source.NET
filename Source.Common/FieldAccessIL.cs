@@ -144,6 +144,11 @@ namespace Source.Common
 		public abstract T GetValue<T>(object instance);
 		public abstract bool SetValue<T>(object instance, in T value);
 
+		public virtual bool TryGetSpan<T>(object instance, int count, out Span<T> span) {
+			span = default;
+			return false;
+		}
+
 		public virtual void CopyFrom<T>(object instanceFrom, Span<T> target) {
 			SetValue<T>(instanceFrom, target.Length == 0 ? default : target[0]);
 		}

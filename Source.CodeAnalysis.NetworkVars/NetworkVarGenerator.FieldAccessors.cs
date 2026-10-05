@@ -352,8 +352,13 @@ namespace Source.CodeAnalysis.NetworkVars
 		}
 
 		private static string ScalarAccessorBase(Compilation compilation, ITypeSymbol type) {
-			if (GetContainer(compilation, type, out ITypeSymbol? element, out _) == ContainerKind.InlineArray && element != null && IsAccessible(compilation, element))
-				return "global::Source.Common.InlineArrayFieldAccessor<" + Display(type) + ", " + Display(element) + ">";
+			ContainerKind kind = GetContainer(compilation, type, out ITypeSymbol? element, out _);
+			if (element != null && IsAccessible(compilation, element)) {
+				if (kind == ContainerKind.InlineArray)
+					return "global::Source.Common.InlineArrayFieldAccessor<" + Display(type) + ", " + Display(element) + ">";
+				if (kind == ContainerKind.NetworkArray)
+					return "global::Source.Common.NetworkArrayFieldAccessor<" + Display(element) + ">";
+			}
 			return "global::Source.Common.FieldAccessor<" + Display(type) + ">";
 		}
 

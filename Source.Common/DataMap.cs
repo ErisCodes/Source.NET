@@ -75,7 +75,7 @@ namespace Source.Common
 		public readonly FieldType FieldType;
 		public readonly string FieldName = "";
 		public readonly FieldInfo FieldInfo;
-		public IFieldAccessor Accessor => field ??= FieldAccessorRegistry.Create(FieldInfo.DeclaringType!, FieldInfo.Name, null);
+		public DynamicAccessor Accessor => field ??= FieldAccessorRegistry.Create(FieldInfo.DeclaringType!, FieldInfo.Name, null);
 		public nuint PackedOffset = nuint.MaxValue;
 		public readonly ushort FieldSize;
 		public readonly FieldTypeDescFlags Flags;
@@ -677,13 +677,6 @@ namespace Source.Common
 		#endregion
 	}
 
-	// These functions are for prediction copies. They are stored per data map, since that's their responsibility.
-	// The client DLL should pass us these if it's applicable (on validation)
-	public delegate int PredictionCopyFn_ObjectToObjectFn(ref PredictionCopy predCopy);
-	public delegate int PredictionCopyFn_ObjectToDataFrameFn(ref PredictionCopy predCopy);
-	public delegate int PredictionCopyFn_DataFrameToObjectFn(ref PredictionCopy predCopy);
-	public delegate int PredictionCopyFn_DataFrameToDataFrameFn(ref PredictionCopy predCopy);
-
 	/*
 		Make sure that DEFINE is defined in the C# file as using DEFINE = Source.DEFINE<YOURCLASSHERE>;
 
@@ -697,12 +690,6 @@ namespace Source.Common
 	public class DataMap
 	{
 		public DataMap() { }
-
-
-		public PredictionCopyFn_ObjectToObjectFn? PredictionCopyFn_ObjectToObject;
-		public PredictionCopyFn_ObjectToDataFrameFn? PredictionCopyFn_ObjectToDataFrame;
-		public PredictionCopyFn_DataFrameToObjectFn? PredictionCopyFn_DataFrameToObject;
-		public PredictionCopyFn_DataFrameToDataFrameFn? PredictionCopyFn_DataFrameToDataFrame;
 
 		/// <summary>
 		/// Old API, the other constructors are better and closer to the macros... fixme
