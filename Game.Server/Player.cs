@@ -376,10 +376,10 @@ public partial class BasePlayer : BaseCombatCharacter
 	int LockViewanglesTickNumber;
 	QAngle LockedViewangles;
 
-	int UpdateRate;
-	TimeUnit_t LerpTime;
-	bool LagCompensation;
-	bool PredictWeapons;
+	public int UpdateRate;
+	public TimeUnit_t LerpTime;
+	public bool LagCompensation;
+	public bool PredictWeapons;
 
 	public static void SendProxy_CropFlagsToPlayerFlagBitsLength(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
 		int mask = (1 << Constants.PLAYER_FLAG_BITS) - 1;

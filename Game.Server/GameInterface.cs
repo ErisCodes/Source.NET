@@ -633,8 +633,56 @@ public class ServerGameClients : IServerGameClients
 		GMODClient.ClientPutInServer(entity, playerName);
 	}
 
+	static ConVar? MinUpdateRate;
+	static ConVar? MaxUpdateRate;
+	static ConVar? MinInterpRatio;
+	static ConVar? MaxInterpRatio;
+
 	public void ClientSettingsChanged(Edict edict) {
-		// throw new NotImplementedException();
+		if (edict.GetUnknown() == null)
+			return;
+
+		if (BaseEntity.Instance(edict) is not BasePlayer player)
+			return;
+
+		int index = player.EntIndex();
+
+		player.UpdateRate = atoi(engine.GetClientConVarValue(index, "cl_updaterate"));
+		MinUpdateRate ??= cvar.FindVar("sv_minupdaterate");
+		MaxUpdateRate ??= cvar.FindVar("sv_maxupdaterate");
+		if (MinUpdateRate != null && MaxUpdateRate != null)
+			player.UpdateRate = Math.Clamp(player.UpdateRate, (int)MinUpdateRate.GetFloat(), (int)MaxUpdateRate.GetFloat());
+
+		bool useInterpolation = atoi(engine.GetClientConVarValue(index, "cl_interpolate")) != 0;
+		if (useInterpolation) {
+			double lerpRatio = atof(engine.GetClientConVarValue(index, "cl_interp_ratio"));
+			if (lerpRatio == 0)
+				lerpRatio = 1.0;
+			double lerpAmount = atof(engine.GetClientConVarValue(index, "cl_interp"));
+
+			MinInterpRatio ??= cvar.FindVar("sv_client_min_interp_ratio");
+			MaxInterpRatio ??= cvar.FindVar("sv_client_max_interp_ratio");
+			if (MinInterpRatio != null && MaxInterpRatio != null && MinInterpRatio.GetFloat() != -1)
+				lerpRatio = Math.Clamp(lerpRatio, MinInterpRatio.GetFloat(), MaxInterpRatio.GetFloat());
+			else if (lerpRatio == 0)
+				lerpRatio = 1.0;
+
+			player.LerpTime = Math.Max(lerpAmount, lerpRatio / player.UpdateRate);
+		}
+		else
+			player.LerpTime = 0.0;
+
+		bool usePrediction = atoi(engine.GetClientConVarValue(index, "cl_predict")) != 0;
+		if (usePrediction) {
+			player.PredictWeapons = atoi(engine.GetClientConVarValue(index, "cl_predictweapons")) != 0;
+			player.LagCompensation = atoi(engine.GetClientConVarValue(index, "cl_lagcompensation")) != 0;
+		}
+		else {
+			player.PredictWeapons = false;
+			player.LagCompensation = false;
+		}
+
+		g_pGameRules.ClientSettingsChanged(player);
 	}
 
 	public void ClientSetupVisibility(Edict viewEntity, Edict client, Span<byte> pvs) {
