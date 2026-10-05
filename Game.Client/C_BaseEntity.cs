@@ -1118,7 +1118,7 @@ public partial class C_BaseEntity : IClientEntity
 		ClientLeafSystem.DefaultRenderBoundsWorldspace(this, out mins, out maxs);
 	}
 
-	public bool IsTransparent() {
+	public virtual bool IsTransparent() {
 		return modelinfo.IsTranslucent(Model) || RenderMode != (int)Source.RenderMode.Normal;
 	}
 
@@ -2388,7 +2388,7 @@ public partial class C_BaseEntity : IClientEntity
 		return null;
 	}
 
-	public void ComputeFxBlend() {
+	public virtual void ComputeFxBlend() {
 		// todo
 	}
 
@@ -3171,7 +3171,7 @@ public partial class C_BaseEntity : IClientEntity
 	public Color GetRenderColor() => ColorRender;
 	public RenderMode GetRenderMode() => (RenderMode)RenderMode;
 
-	public bool ShouldReceiveProjectedTextures(ShadowFlags flags) {
+	public virtual bool ShouldReceiveProjectedTextures(ShadowFlags flags) {
 		if (IsEffectActive(EntityEffects.NoDraw))
 			return false;
 
