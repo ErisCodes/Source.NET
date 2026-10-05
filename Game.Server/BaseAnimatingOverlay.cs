@@ -17,7 +17,7 @@ public class BaseAnimatingOverlay : BaseAnimating
 	internal static readonly ConVar ai_sequence_debug = new("ai_sequence_debug", "0");
 
 	public static readonly SendTable DT_OverlayVars = new(nameof(DT_OverlayVars), [
-		SendPropList(FIELD.OF(nameof(AnimOverlay)), MAX_OVERLAYS, SendPropDataTable(null, AnimationLayerRef.DT_Animationlayer))
+		SendPropList<AnimationLayerRef>(FIELD.OF(nameof(AnimOverlay)), MAX_OVERLAYS, SendPropDataTable(null, AnimationLayerRef.DT_Animationlayer))
 	]);
 
 	public static readonly SendTable DT_BaseAnimatingOverlay = new(DT_BaseAnimating, [
