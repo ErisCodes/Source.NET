@@ -773,9 +773,7 @@ public class ServerGameClients : IServerGameClients
 
 public class ServerGameEnts : IServerGameEnts
 {
-	public void FreeContainingEntity(Edict e) {
-		throw new NotImplementedException();
-	}
+	public void FreeContainingEntity(Edict e) => MapEntities.FreeContainingEntity(e);
 
 	public void MarkEntitiesAsTouching(Edict e1, Edict e2) {
 		BaseEntity? entity = BaseEntity.GetContainingEntity(e1);
