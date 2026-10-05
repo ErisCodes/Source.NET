@@ -84,6 +84,7 @@ public interface IRenderView
 	void SetMainView(in Vector3 origin, in QAngle angles);
 	void SceneBegin();
 	void SceneEnd();
+	void ViewDrawFade(Span<byte> color, IMaterial? fadeMaterial);
 	void Draw3DDebugOverlays();
 	void ViewSetupVisEx(bool novis, ReadOnlySpan<Vector3> origins, out uint visFlags);
 	Span<byte> GetAreaBits();

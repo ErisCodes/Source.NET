@@ -24,6 +24,7 @@ vec3 RGBtoHSV(vec3 rgb)
     fmax = max(max(rgb.r, rgb.g), rgb.b);
     hsv.b = fmax;
     delta = fmax - fmin;
+    if (delta != 0.0)
     {
         hsv.g = delta / fmax;
         if (rgb.r == fmax)
@@ -35,6 +36,11 @@ vec3 RGBtoHSV(vec3 rgb)
         hsv.r *= 60.0;
         if (hsv.r < 0.0)
             hsv.r += 360.0;
+    }
+    else
+    {
+        hsv.g = 0.0;
+        hsv.r = -1.0;
     }
     return hsv;
 }

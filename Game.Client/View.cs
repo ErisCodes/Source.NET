@@ -155,8 +155,14 @@ public class ViewRender : IViewRender
 		return r_nearz.GetFloat();
 	}
 
+	readonly MaterialReference TranslucentSingleColor = new();
+	readonly MaterialReference ModulateSingleColor = new();
+
 	public void Init() {
 		render = services.GetRequiredService<IRenderView>();
+
+		TranslucentSingleColor.Init("debug/debugtranslucentsinglecolor", MaterialDefines.TEXTURE_GROUP_OTHER);
+		ModulateSingleColor.Init("engine/modulatesinglecolor", MaterialDefines.TEXTURE_GROUP_OTHER);
 	}
 
 	public void LevelInit() {
@@ -403,6 +409,14 @@ public class ViewRender : IViewRender
 
 		DrawViewModels(in viewRender, (whatToDraw & RenderViewInfo.DrawViewmodel) != 0);
 
+		// Draw fade over entire screen if needed
+		Span<byte> color = stackalloc byte[4];
+		vieweffects.GetFadeParams(out color[0], out color[1], out color[2], out color[3], out bool blend);
+
+		// Overlay screen fade on entire screen
+		IMaterial? material = blend ? ModulateSingleColor.Get() : TranslucentSingleColor.Get();
+		render.ViewDrawFade(color, material);
+
 		CleanupMain3DView(in viewRender);
 
 		if ((whatToDraw & RenderViewInfo.DrawHUD) != 0) {
@@ -570,6 +584,10 @@ public class ViewRender : IViewRender
 		renderContext.MatrixMode(MaterialMatrixMode.Projection);
 		renderContext.PopMatrix();
 
+		// Make sure sound doesn't stutter
+		engine.Sound_ExtraUpdate();
+
+		// Debugging info goes over the top
 		DebugViewRender.Draw3DDebuggingInfo(in view);
 	}
 

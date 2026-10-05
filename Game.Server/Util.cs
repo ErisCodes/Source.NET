@@ -361,6 +361,19 @@ public static partial class Util
 		Util.ScreenFadeWrite(in fade, entity);
 	}
 
+	public static void ScreenFadeAll(in Color color, TimeUnit_t fadeTime, TimeUnit_t fadeHold, FadeFlags flags) {
+		int i;
+		ScreenFade fade = default;
+
+		Util.ScreenFadeBuild(ref fade, color, fadeTime, fadeHold, flags);
+
+		for (i = 1; i <= gpGlobals.MaxClients; i++) {
+			BaseEntity? player = Util.PlayerByIndex(i);
+
+			Util.ScreenFadeWrite(in fade, player);
+		}
+	}
+
 	public static ushort FixedUnsigned16(TimeUnit_t value, float scale) {
 		int output;
 

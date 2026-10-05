@@ -97,6 +97,7 @@ public class RenderView(EngineVGui EngineVGui, Render engineRenderer) : IRenderV
 
 	public void SceneBegin() => engineRenderer.DrawSceneBegin();
 	public void SceneEnd() => engineRenderer.DrawSceneEnd();
+	public void ViewDrawFade(Span<byte> color, IMaterial? fadeMaterial) => engineRenderer.ViewDrawFade(color, fadeMaterial);
 
 	public void ViewSetupVisEx(bool novis, ReadOnlySpan<Vector3> origins, out uint returnFlags) => engineRenderer.ViewSetupVisEx(novis, origins, out returnFlags);
 

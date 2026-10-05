@@ -143,24 +143,151 @@ public class ViewEffects : IViewEffects
 		// TODO: haptics, rumble.
 	}
 
-	public void ClearAllFades() {
-		throw new NotImplementedException();
-	}
+	public void ClearAllFades() => FadeList.Clear();
 
 	public void ClearPermanentFades() {
-		throw new NotImplementedException();
+		int size = FadeList.Count;
+		for (int i = size - 1; i >= 0; i--) {
+			ActiveScreenFade fade = FadeList[i];
+
+			if ((fade.Flags & FadeFlags.StayOut) != 0) {
+				// Destroy this fade
+				FadeList.RemoveAt(i);
+			}
+		}
 	}
 
 	public void Fade(in ScreenFade data) {
-		throw new NotImplementedException();
+		// Create a new fade and append it to the list
+		ActiveScreenFade newFade = new();
+		newFade.End = data.Duration * (1.0f / (float)(1 << ScreenFade.SCREENFADE_FRACBITS));
+		newFade.Reset = data.HoldTime * (1.0f / (float)(1 << ScreenFade.SCREENFADE_FRACBITS));
+		newFade.Color = new(data.R, data.G, data.B, data.A);
+		newFade.Flags = data.FadeFlags;
+		newFade.Speed = 0;
+
+		// Calc fade speed
+		if (data.Duration > 0) {
+			if ((data.FadeFlags & FadeFlags.Out) != 0) {
+				if (newFade.End != 0)
+					newFade.Speed = -(float)newFade.Color.A / newFade.End;
+
+				newFade.End += gpGlobals.CurTime;
+				newFade.Reset += newFade.End;
+			}
+			else {
+				if (newFade.End != 0)
+					newFade.Speed = (float)newFade.Color.A / newFade.End;
+
+				newFade.Reset += gpGlobals.CurTime;
+				newFade.End += newFade.Reset;
+			}
+		}
+
+		if ((data.FadeFlags & FadeFlags.Purge) != 0)
+			ClearAllFades();
+
+		FadeList.Add(newFade);
+	}
+
+	void FadeCalculate() {
+		// Cycle through all fades and remove any that have finished (work backwards)
+		int i;
+		int size = FadeList.Count;
+		for (i = size - 1; i >= 0; i--) {
+			ActiveScreenFade fade = FadeList[i];
+
+			// Keep pushing reset time out indefinitely
+			if ((fade.Flags & FadeFlags.StayOut) != 0)
+				fade.Reset = gpGlobals.CurTime + 0.1f;
+
+			// All done?
+			if ((gpGlobals.CurTime > fade.Reset) && (gpGlobals.CurTime > fade.End)) {
+				// Remove this Fade from the list
+				FadeList.RemoveAt(i);
+			}
+		}
+
+		Modulate = false;
+		FadeColorRGBA[0] = FadeColorRGBA[1] = FadeColorRGBA[2] = FadeColorRGBA[3] = 0;
+
+		// Cycle through all fades in the list and calculate the overall color/alpha
+		for (i = 0; i < FadeList.Count; i++) {
+			ActiveScreenFade fade = FadeList[i];
+
+			// Color
+			FadeColorRGBA[0] += fade.Color.R;
+			FadeColorRGBA[1] += fade.Color.G;
+			FadeColorRGBA[2] += fade.Color.B;
+
+			// Fading...
+			int fadeAlpha;
+			if ((fade.Flags & (FadeFlags.Out | FadeFlags.In)) != 0) {
+				fadeAlpha = (int)(fade.Speed * (fade.End - gpGlobals.CurTime));
+				if ((fade.Flags & FadeFlags.Out) != 0)
+					fadeAlpha += fade.Color.A;
+
+				fadeAlpha = Math.Min(fadeAlpha, fade.Color.A);
+				fadeAlpha = Math.Max(0, fadeAlpha);
+			}
+			else
+				fadeAlpha = fade.Color.A;
+
+			// Use highest alpha
+			if (fadeAlpha > FadeColorRGBA[3])
+				FadeColorRGBA[3] = fadeAlpha;
+
+			// Modulate?
+			if ((fade.Flags & FadeFlags.Modulate) != 0)
+				Modulate = true;
+		}
+
+		// Divide colors
+		if (FadeList.Count != 0) {
+			FadeColorRGBA[0] /= FadeList.Count;
+			FadeColorRGBA[1] /= FadeList.Count;
+			FadeColorRGBA[2] /= FadeList.Count;
+		}
 	}
 
 	public void GetFadeParams(out byte r, out byte g, out byte b, out byte a, out bool blend) {
-		throw new NotImplementedException();
+		// If the intro is overriding our fade, use that instead
+		IntroData? introData = IntroData.g_pIntroData;
+		if (introData != null && introData.CurrentFadeColor[3] != 0) {
+			r = (byte)introData.CurrentFadeColor[0];
+			g = (byte)introData.CurrentFadeColor[1];
+			b = (byte)introData.CurrentFadeColor[2];
+			a = (byte)introData.CurrentFadeColor[3];
+			blend = false;
+			return;
+		}
+
+		FadeCalculate();
+
+		r = (byte)FadeColorRGBA[0];
+		g = (byte)FadeColorRGBA[1];
+		b = (byte)FadeColorRGBA[2];
+		a = (byte)FadeColorRGBA[3];
+		blend = Modulate;
 	}
 
 	public void Init() {
 		usermessages.HookMessage("Shake", ShakeFn);
+		usermessages.HookMessage("Fade", FadeFn);
+	}
+
+	private void FadeFn(bf_read msg) {
+		ScreenFade fade;
+
+		fade.Duration = (ushort)msg.ReadShort(); // fade lasts this long
+		fade.HoldTime = (ushort)msg.ReadShort(); // fade lasts this long
+		fade.FadeFlags = (FadeFlags)msg.ReadShort(); // fade type (in / out)
+		fade.R = (byte)msg.ReadByte(); // fade red
+		fade.G = (byte)msg.ReadByte(); // fade green
+		fade.B = (byte)msg.ReadByte(); // fade blue
+		fade.A = (byte)msg.ReadByte(); // fade blue
+
+		g_ViewEffects.Fade(in fade);
 	}
 
 	private void ShakeFn(bf_read msg) {
@@ -174,7 +301,8 @@ public class ViewEffects : IViewEffects
 	}
 
 	public void LevelInit() {
-		throw new NotImplementedException();
+		ClearAllShakes();
+		ClearAllFades();
 	}
 
 	public void Restore(IRestore restore, bool _) {
@@ -231,6 +359,9 @@ public class ViewEffects : IViewEffects
 
 	readonly List<ActiveScreenFade> FadeList = [];
 	readonly List<ActiveScreenShake> ShakeList = [];
+
+	InlineArray4<int> FadeColorRGBA;
+	bool Modulate;
 
 	public Vector3 ShakeAppliedOffset;
 	public float ShakeAppliedAngle;

@@ -1420,7 +1420,82 @@ public partial class Render(
 	}
 
 	public void ViewDrawFade(Span<byte> color, IMaterial? fadeMaterial) {
-		throw new NotImplementedException();
+		if (color.IsEmpty || color[3] == 0)
+			return;
+
+		if (fadeMaterial == null)
+			return;
+
+		ref ViewSetup view = ref CurrentView();
+
+		using MatRenderContextPtr renderContext = new(materials);
+
+		renderContext.Bind(fadeMaterial);
+		fadeMaterial.AlphaModulate(color[3] * (1.0f / 255.0f));
+		fadeMaterial.ColorModulate(color[0] * (1.0f / 255.0f),
+			color[1] * (1.0f / 255.0f),
+			color[2] * (1.0f / 255.0f));
+
+		bool oldIgnoreZ = fadeMaterial.GetMaterialVarFlag(MaterialVarFlags.IgnoreZ);
+		fadeMaterial.SetMaterialVarFlag(MaterialVarFlags.IgnoreZ, true);
+
+		float texWidth = fadeMaterial.GetMappingWidth();
+		float texHeight = fadeMaterial.GetMappingHeight();
+		float uOffset = 0.5f / texWidth;
+		float vOffset = 0.5f / texHeight;
+
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		renderContext.Scale(1, -1, 1);
+		renderContext.Ortho(0, 0, view.Width, view.Height, -99999, 99999);
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		IMesh mesh = renderContext.GetDynamicMesh();
+		MeshBuilder meshBuilder = new();
+		meshBuilder.Begin(mesh, MaterialPrimitiveType.Quads, 1);
+
+		float offset = 0.5f;
+
+		// Note - the viewport has already adjusted the origin
+		float x1 = 0.0f - offset;
+		float x2 = view.Width - offset;
+		float y1 = 0.0f - offset;
+		float y2 = view.Height - offset;
+
+		// adjust nominal uvs to reflect adjusted xys
+		float u1 = MathLib.Lerp(uOffset, 1 - uOffset, view.X, view.X + view.Width, x1);
+		float u2 = MathLib.Lerp(uOffset, 1 - uOffset, view.X, view.X + view.Width, x2);
+		float v1 = MathLib.Lerp(vOffset, 1 - vOffset, view.Y, view.Y + view.Height, y1);
+		float v2 = MathLib.Lerp(vOffset, 1 - vOffset, view.Y, view.Y + view.Height, y2);
+
+		for (int corner = 0; corner < 4; corner++) {
+			bool left = (corner == 0) || (corner == 3);
+			meshBuilder.Position3f(left ? x1 : x2, (corner & 2) != 0 ? y2 : y1, 0.0f);
+			meshBuilder.TexCoord2f(0, left ? u1 : u2, (corner & 2) != 0 ? v2 : v1);
+			meshBuilder.AdvanceVertex();
+		}
+		meshBuilder.End();
+		mesh.Draw();
+		meshBuilder.Dispose();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.PopMatrix();
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PopMatrix();
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+		renderContext.PopMatrix();
+
+		fadeMaterial.SetMaterialVarFlag(MaterialVarFlags.IgnoreZ, oldIgnoreZ);
 	}
 
 	public IWorldRenderList? CreateWorldList() => AllocWorldRenderList();

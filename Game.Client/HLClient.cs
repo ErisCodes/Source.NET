@@ -75,6 +75,8 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 			return;
 		g_bLevelInitialized = true;
 
+		vieweffects.LevelInit();
+
 		modemanager.LevelInit(mapname);
 		IGameSystem.LevelInitPreEntityAllSystems(mapname);
 #if GMOD_DLL

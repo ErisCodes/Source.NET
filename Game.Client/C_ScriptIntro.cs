@@ -121,8 +121,16 @@ public class C_ScriptIntro : C_BaseEntity
 
 		IntroData.DrawPrimary = CameraView != vec3_origin;
 
+		// If we're currently blending to a new mode, set the second pass
 		if (NextBlendTime > gpGlobals.CurTime)
 			IntroData.Passes.Add(new() { BlendMode = NextBlendMode, Alpha = 0.0f });
+		else if (IntroData.Passes.Count == 2) {
+			C_BasePlayer? player = C_BasePlayer.GetLocalPlayer();
+			if (player == null)
+				return;
+
+			IntroData.Passes.RemoveAt(1);
+		}
 
 		if (Active)
 			IntroData.g_pIntroData = IntroData;

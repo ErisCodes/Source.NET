@@ -136,7 +136,19 @@ public sealed class MaterialVar : IMaterialVar
 		return Matrix.IsIdent;
 	}
 
+	void FlushIfCurrentMaterial() {
+		// Gotta flush if we've changed state and this is the current material
+		if (owningMaterial is Material material && material.materials.GetCurrentMaterial() == owningMaterial)
+			material.materials.ShaderAPI.FlushBufferedPrimitives();
+	}
+
 	public override void SetFloatValue(float val) {
+		// Suppress all this if we're not actually changing anything
+		if (Type == MaterialVarType.Float && VecVal[0] == val)
+			return;
+
+		FlushIfCurrentMaterial();
+
 		VecVal[0] = VecVal[1] = VecVal[2] = VecVal[3] = val;
 		IntVal = (int)val;
 		Type = MaterialVarType.Float;
@@ -148,6 +160,12 @@ public sealed class MaterialVar : IMaterialVar
 	}
 
 	public override void SetIntValue(int val) {
+		// Suppress all this if we're not actually changing anything
+		if (Type == MaterialVarType.Int && IntVal == val)
+			return;
+
+		FlushIfCurrentMaterial();
+
 		IntVal = val;
 		VecVal[0] = VecVal[1] = VecVal[2] = VecVal[3] = val;
 		Type = MaterialVarType.Int;
@@ -159,6 +177,8 @@ public sealed class MaterialVar : IMaterialVar
 	}
 
 	public override void SetMatrixValue(in Matrix4x4 matrix) {
+		FlushIfCurrentMaterial();
+
 		Matrix.Matrix = matrix;
 		Type = MaterialVarType.Matrix;
 		Matrix.IsIdent = matrix.IsIdentity;
@@ -168,18 +188,31 @@ public sealed class MaterialVar : IMaterialVar
 	}
 
 	public override void SetStringValue(ReadOnlySpan<char> val) {
+		FlushIfCurrentMaterial();
+
 		StringVal = new(val.SliceNullTerminatedString());
 		Type = MaterialVarType.String;
 		VarChanged();
 	}
 
 	public override void SetTextureValue(ITexture? texture) {
+		// Suppress all this if we're not actually changing anything
+		if (Type == MaterialVarType.Texture && TextureValue == texture)
+			return;
+
+		FlushIfCurrentMaterial();
+
 		Type = MaterialVarType.Texture;
 		TextureValue = texture;
 		VarChanged();
 	}
 
 	public override void SetUndefined() {
+		if (Type == MaterialVarType.Undefined)
+			return;
+
+		FlushIfCurrentMaterial();
+
 		Type = MaterialVarType.Undefined;
 		VarChanged();
 	}
@@ -192,44 +225,32 @@ public sealed class MaterialVar : IMaterialVar
 		throw new NotImplementedException();
 	}
 
-	public override unsafe void SetVecValue(ReadOnlySpan<float> val) {
-		fixed (Vector4* v4 = &VecVal)
-			val.CopyTo(new Span<float>(v4, 4));
+	void SetVecValueInternal(in Vector4 vec, int comps) {
+		// Suppress all this if we're not actually changing anything
+		if (Type == MaterialVarType.Vector && VecVal == vec)
+			return;
+
+		FlushIfCurrentMaterial();
+
 		Type = MaterialVarType.Vector;
-		NumVectorComps = (byte)Math.Min(val.Length, 4);
+		Assert(comps <= 4);
+		NumVectorComps = (byte)comps;
+		VecVal = vec;
 		IntVal = (int)VecVal[0];
 		VarChanged();
 	}
 
-	public override void SetVecValue(float x, float y) {
-		VecVal[0] = x;
-		VecVal[1] = y;
-		Type = MaterialVarType.Vector;
-		NumVectorComps = 2;
-		IntVal = (int)VecVal[0];
-		VarChanged();
+	public override void SetVecValue(ReadOnlySpan<float> val) {
+		int comps = Math.Min(val.Length, 4);
+		Vector4 vec = default;
+		for (int i = 0; i < comps; i++)
+			vec[i] = val[i];
+		SetVecValueInternal(in vec, comps);
 	}
 
-	public override void SetVecValue(float x, float y, float z) {
-		VecVal[0] = x;
-		VecVal[1] = y;
-		VecVal[2] = z;
-		Type = MaterialVarType.Vector;
-		NumVectorComps = 3;
-		IntVal = (int)VecVal[0];
-		VarChanged();
-	}
-
-	public override void SetVecValue(float x, float y, float z, float w) {
-		VecVal[0] = x;
-		VecVal[1] = y;
-		VecVal[2] = z;
-		VecVal[3] = w;
-		Type = MaterialVarType.Vector;
-		NumVectorComps = 4;
-		IntVal = (int)VecVal[0];
-		VarChanged();
-	}
+	public override void SetVecValue(float x, float y) => SetVecValueInternal(new(x, y, 0.0f, 0.0f), 2);
+	public override void SetVecValue(float x, float y, float z) => SetVecValueInternal(new(x, y, z, 0.0f), 3);
+	public override void SetVecValue(float x, float y, float z, float w) => SetVecValueInternal(new(x, y, z, w), 4);
 
 	protected override float GetFloatValueInternal() {
 		throw new NotImplementedException();
