@@ -15,7 +15,7 @@ using DEFINE = Source.DEFINE<ScriptIntro>;
 [NetworkName("CScriptIntro")]
 public class ScriptIntro : BaseEntity
 {
-	public static readonly Handle<ScriptIntro> g_hIntroScript = new();
+	public static Handle<ScriptIntro> g_hIntroScript = new();
 
 	static readonly ConVar cl_spewscriptintro = new("cl_spewscriptintro", "0");
 
