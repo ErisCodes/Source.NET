@@ -7,6 +7,7 @@ using Source.Common.Bitbuffers;
 using Source.Common.Formats.Keyvalues;
 using Source.Common.GUI;
 using Source.Common.Input;
+using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
 using Source.Engine;
 using Source.GUI.Controls;
@@ -26,6 +27,45 @@ public enum GameActionSet
 
 public class ClientModeShared : GameEventListener, IClientMode
 {
+#if GMOD_DLL
+	static void SetupVGuiMatrices(bool push, IMatRenderContext renderContext) {
+		if (!push) {
+			renderContext.MatrixMode(MaterialMatrixMode.Projection);
+			renderContext.PopMatrix();
+			renderContext.MatrixMode(MaterialMatrixMode.Model);
+			renderContext.PopMatrix();
+			renderContext.MatrixMode(MaterialMatrixMode.View);
+			renderContext.PopMatrix();
+			return;
+		}
+
+		renderContext.GetViewport(out _, out _, out int width, out int height);
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+		renderContext.Scale(1, -1, 1);
+		renderContext.Ortho(0.5, 0.5, width + 0.5f, height + 0.5f, -1, 1);
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+	}
+
+	public void PostRenderVGui(IMatRenderContext renderContext) {
+		if (gGM == null)
+			return;
+
+		SetupVGuiMatrices(true, renderContext);
+		surface.PushMakeCurrent(GarrysMod.GModBase.GetGModBasePanel(true)!, false);
+		gGM.Call((int)LUA_POOLEDSTRING.DrawOverlay);
+		gGM.Call((int)LUA_POOLEDSTRING.PostRenderVGUI);
+		surface.PopMakeCurrent(GarrysMod.GModBase.GetGModBasePanel(true)!);
+		SetupVGuiMatrices(false, renderContext);
+	}
+#endif
+
 	public void Init() {
 		ChatElement = (BaseHudChat?)gHUD.FindElement("CHudChat");
 		Assert(ChatElement != null);

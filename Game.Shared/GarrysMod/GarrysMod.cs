@@ -283,8 +283,35 @@ public class GarrysMod : IGarrysMod
 			RunScriptsInFolder("matproxy", "!RELOAD_CL");
 			g_Lua.FindAndRunScript("skins/default.lua", true, true, "!UNKNOWN", true);
 			enginevgui.UpdateCustomProgressBar(0.96f, "Lua Started!");
+#else
+			if (gGM == null)
+				Error("We should have a gGM at this point!");
+			gGM.LoadGamemode("base", false);
+			RunScriptsInFolder("autorun", "!RELOAD");
+			SendScriptsInFolder("matproxy", "!RELOAD_CL");
+			SendScriptsInFolder("postprocess", "!RELOAD_CL");
+			SendScriptsInFolder("vgui", "!RELOAD_CL");
+			SendScriptsInFolder("skins", "!RELOAD_CL");
+			SendScriptsInFolder("autorun", "!RELOAD");
+			SendScriptsInFolder("autorun/client", "!RELOAD_CL");
+			RunScriptsInFolder("autorun/server", "!RELOAD_SV");
+			RunScriptsInFolder("autorun/server/sensorbones", "!RELOAD_SV");
+			if (commandLine.FindParm("-systemtest") != 0)
+				g_Lua.FindAndRunScript("includes/dev_server_test.lua", true, true, "!UNKNOWN", true);
 #endif
 		}
+
+#if GAME_DLL
+		public void SendScriptsInFolder(ReadOnlySpan<char> folder, ReadOnlySpan<char> source) {
+			if (g_LuaManager == null)
+				return;
+
+			List<LuaFindResult> files = [];
+			get.LuaShared()!.FindScripts($"{folder}/*.lua", "lsv", files);
+			foreach (LuaFindResult file in files)
+				Game.Server.GarrysMod.FileServ.AddCSLuaFile($"{folder}/{file.FileName}", new string(source));
+		}
+#endif
 
 		public void RunScriptsInFolder(ReadOnlySpan<char> folder, ReadOnlySpan<char> source) {
 			if (g_LuaManager == null) {

@@ -19,14 +19,6 @@ public static partial class LuaPlayer
 		return 1;
 	}
 
-	static bool IsDisconnected(BasePlayer player) {
-#if GAME_DLL
-		return player.Connected == PlayerConnectedState.Disconnected;
-#else
-		return false;
-#endif
-	}
-
 	[LuaFunction]
 	static int GetCount(ILuaInterface lua) {
 		int count = 0;
@@ -34,7 +26,9 @@ public static partial class LuaPlayer
 			BasePlayer? player = Util.PlayerByIndex(i);
 			if (player == null || player.IsMarkedForDeletion())
 				continue;
-			if (!IsDisconnected(player))
+#if GAME_DLL
+			if (player.Connected != PlayerConnectedState.Disconnected)
+#endif
 				count++;
 		}
 		g_Lua!.PushNumber(count);
@@ -62,8 +56,12 @@ public static partial class LuaPlayer
 		int count = 0;
 		for (int i = 1; i <= gpGlobals.MaxClients; i++) {
 			BasePlayer? player = Util.PlayerByIndex(i);
-			if (player == null || player.IsMarkedForDeletion() || IsDisconnected(player))
+			if (player == null || player.IsMarkedForDeletion())
 				continue;
+#if GAME_DLL
+			if (player.Connected == PlayerConnectedState.Disconnected)
+				continue;
+#endif
 			g_Lua!.PushNumber(++count);
 			LuaEntity.Push_Entity(player);
 			g_Lua.SetTable(-3);
@@ -78,8 +76,12 @@ public static partial class LuaPlayer
 		int count = 0;
 		for (int i = 1; i <= gpGlobals.MaxClients; i++) {
 			BasePlayer? player = Util.PlayerByIndex(i);
-			if (player == null || player.IsMarkedForDeletion() || !(player.IsBot() || player.IsHLTV()) || IsDisconnected(player))
+			if (player == null || player.IsMarkedForDeletion() || !(player.IsBot() || player.IsHLTV()))
 				continue;
+#if GAME_DLL
+			if (player.Connected == PlayerConnectedState.Disconnected)
+				continue;
+#endif
 			g_Lua!.PushNumber(++count);
 			LuaEntity.Push_Entity(player);
 			g_Lua.SetTable(-3);
@@ -94,8 +96,12 @@ public static partial class LuaPlayer
 		int count = 0;
 		for (int i = 1; i <= gpGlobals.MaxClients; i++) {
 			BasePlayer? player = Util.PlayerByIndex(i);
-			if (player == null || player.IsMarkedForDeletion() || player.IsBot() || player.IsHLTV() || IsDisconnected(player))
+			if (player == null || player.IsMarkedForDeletion() || player.IsBot() || player.IsHLTV())
 				continue;
+#if GAME_DLL
+			if (player.Connected == PlayerConnectedState.Disconnected)
+				continue;
+#endif
 			g_Lua!.PushNumber(++count);
 			LuaEntity.Push_Entity(player);
 			g_Lua.SetTable(-3);

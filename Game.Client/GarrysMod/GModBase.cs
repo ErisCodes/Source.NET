@@ -1,4 +1,9 @@
+using Source.Common.GarrysMod.Lua;
 using Source.Common.GUI;
+
+using System.Numerics;
+
+using static Source.Common.GarrysMod.Lua.PooledStrings;
 using Source.Common.Input;
 using Source.Engine;
 using Source.GUI.Controls;
@@ -11,6 +16,7 @@ public class GModBase : Panel
 
 	static Panel? BasePanel;
 
+	bool ParentToHUD;
 	bool FirstThink;
 
 	public static Panel? GetGModBasePanel(bool create) {
@@ -20,6 +26,32 @@ public class GModBase : Panel
 		return BasePanel;
 	}
 
+	static Panel? MouseInput;
+
+	public static Panel? GetMouseInput() {
+		if (MouseInput == null) {
+			Panel parent = GetGModBasePanel(true)!;
+			GModMouseInput panel = new(parent, "GModMouseInput");
+			panel.SetParent(parent);
+			panel.SetVisible(false);
+			panel.SetPaintBackgroundEnabled(true);
+			panel.SetMoveable(false);
+			panel.SetCloseButtonVisible(true);
+			panel.SetMinimizeButtonVisible(true);
+			panel.SetMaximizeButtonVisible(true);
+			panel.SetMenuButtonVisible(true);
+			panel.SetMenuButtonResponsive(false);
+			panel.SetSizeable(false);
+			panel.SetPos(-500, -500);
+			panel.SetSize(1, 1);
+			MouseInput = panel;
+			MouseInput.SetKeyboardInputEnabled(false);
+			MouseInput.SetVisible(false);
+		}
+
+		return MouseInput;
+	}
+
 	static Panel? ParentToHUDPanel;
 
 	public static Panel? GetGModParentToHUDPanel() {
@@ -27,7 +59,7 @@ public class GModBase : Panel
 			GModBase panel = new("GModParentToHUDPanel");
 			ParentToHUDPanel = panel;
 			ParentToHUDPanel.SetParent(enginevgui.GetPanel(VGuiPanelType.ClientDll));
-			// panel.Unknown1 = true;
+			panel.ParentToHUD = true;
 		}
 
 		return ParentToHUDPanel;
@@ -47,13 +79,18 @@ public class GModBase : Panel
 		for (int i = 0; i < clientDll.GetChildCount(); i++)
 			clientDll.GetChild(i).ClearLuaReferencesRecursive();
 
-		// todo: g_HudGMod children MarkForDeletion + ClearLuaReferencesRecursive
+		if (HudGMod.g_HudGMod != null) {
+			for (int i = 0; i < HudGMod.g_HudGMod.GetChildCount(); i++) {
+				HudGMod.g_HudGMod.GetChild(i).MarkForDeletion();
+				HudGMod.g_HudGMod.GetChild(i).ClearLuaReferencesRecursive();
+			}
+		}
 
-		// todo: GModMouseInput ClearLuaReferencesRecursive
+		MouseInput?.ClearLuaReferencesRecursive();
 		BasePanel?.ClearLuaReferencesRecursive();
 		ParentToHUDPanel?.ClearLuaReferencesRecursive();
 
-		// todo: DestroyPanel(GModMouseInput)
+		DestroyPanel(ref MouseInput);
 		DestroyPanel(ref BasePanel);
 		DestroyPanel(ref ParentToHUDPanel);
 	}
@@ -84,21 +121,42 @@ public class GModBase : Panel
 		if (engine.IsPaused())
 			return;
 
-		// todo: GUIMousePressed hook
+		vguiInput.GetCursorPos(out int x, out int y);
+		Vector3 aim = LuaGui.ScreenToVector(x, y);
+		if (gGM == null || !gGM.CallWithArgs((int)LUA_POOLEDSTRING.GUIMousePressed))
+			return;
+
+		g_Lua!.PushNumber((int)code);
+		g_Lua.PushVector(aim);
+		gGM.CallNoReturns(2);
 	}
 
 	public override void OnMouseDoublePressed(ButtonCode code) {
 		if (engine.IsPaused())
 			return;
 
-		// todo: GUIMouseDoublePressed hook
+		vguiInput.GetCursorPos(out int x, out int y);
+		Vector3 aim = LuaGui.ScreenToVector(x, y);
+		if (gGM == null || !gGM.CallWithArgs((int)LUA_POOLEDSTRING.GUIMouseDoublePressed))
+			return;
+
+		g_Lua!.PushNumber((int)code);
+		g_Lua.PushVector(aim);
+		gGM.CallNoReturns(2);
 	}
 
 	public override void OnMouseReleased(ButtonCode code) {
 		if (engine.IsPaused())
 			return;
 
-		// todo: GUIMouseReleased hook
+		vguiInput.GetCursorPos(out int x, out int y);
+		Vector3 aim = LuaGui.ScreenToVector(x, y);
+		if (gGM == null || !gGM.CallWithArgs((int)LUA_POOLEDSTRING.GUIMouseReleased))
+			return;
+
+		g_Lua!.PushNumber((int)code);
+		g_Lua.PushVector(aim);
+		gGM.CallNoReturns(2);
 	}
 
 	public override void OnScreenSizeChanged(int oldWide, int oldTall) {
@@ -107,8 +165,25 @@ public class GModBase : Panel
 		base.OnScreenSizeChanged(oldWide, oldTall);
 		FirstThink = true;
 
-		if (oldWide != 0) {
-			// todo: OnScreenSizeChanged hook
+		if (oldWide != 0 && !ParentToHUD && gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.OnScreenSizeChanged)) {
+			g_Lua!.PushNumber(oldWide);
+			g_Lua.PushNumber(oldTall);
+			g_Lua.PushNumber(ScreenWidth());
+			g_Lua.PushNumber(ScreenHeight());
+			gGM.CallNoReturns(4);
 		}
+	}
+}
+
+public class GModMouseInput : Frame
+{
+	static GModMouseInput() => ChainToAnimationMap<GModMouseInput>();
+
+	public GModMouseInput(Panel? parent, ReadOnlySpan<char> name) : base(parent, name, true, true) { }
+
+	public override void OnScreenSizeChanged(int oldWide, int oldTall) {
+		base.OnScreenSizeChanged(oldWide, oldTall);
+		SetSize(1, 1);
+		SetPos(-500, -500);
 	}
 }

@@ -19,6 +19,14 @@ public static partial class LuaEngine
 		return 1;
 	}
 
+#if CLIENT_DLL
+	[LuaFunction]
+	static int IsRecordingDemo(ILuaInterface lua) {
+		g_Lua!.PushBool(engine.IsRecordingDemo());
+		return 1;
+	}
+#endif
+
 	[LuaFunction]
 	static int GetGamemodes(ILuaInterface lua) {
 		List<IGamemodeSystem.Information> list = filesystem.Gamemodes().GetList();

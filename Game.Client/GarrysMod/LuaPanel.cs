@@ -149,7 +149,7 @@ public static partial class LuaVGUI
 		if (lua.GetType(2) == LuaType.Panel)
 			parent = Get_Panel(2);
 
-		if (parent != null && parent != GModBase.GetGModBasePanel(true) /* && parent != g_HudGMod */ && parent != GModBase.GetGModParentToHUDPanel()) {
+		if (parent != null && parent != GModBase.GetGModBasePanel(true) && parent != HudGMod.g_HudGMod && parent != GModBase.GetGModParentToHUDPanel()) {
 			if (!parent.LuaPanel || parent.IsMarkedForDeletion())
 				return;
 		}

@@ -473,7 +473,7 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 	}
 
 	public bool IsRecordingDemo() {
-		throw new NotImplementedException();
+		return false; // demorecorder.IsRecording();
 	}
 
 	public int GetDemoRecordingTick() {

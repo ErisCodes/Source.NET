@@ -49,7 +49,7 @@ public static partial class LuaVGUI
 	}
 
 	public static bool IsValidPanel(Panel? panel) {
-		if (panel != null && panel != GModBase.GetGModBasePanel(true) /* && panel != g_HudGMod */ && panel != GModBase.GetGModParentToHUDPanel())
+		if (panel != null && panel != GModBase.GetGModBasePanel(true) && panel != HudGMod.g_HudGMod && panel != GModBase.GetGModParentToHUDPanel())
 			return panel.LuaPanel && !panel.IsMarkedForDeletion();
 		return true;
 	}

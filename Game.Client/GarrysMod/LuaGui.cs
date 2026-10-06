@@ -1,5 +1,7 @@
 using Source.Common.GarrysMod.Lua;
 
+using System.Numerics;
+
 namespace Game.Client.GarrysMod;
 
 public static partial class LuaGui
@@ -7,7 +9,31 @@ public static partial class LuaGui
 	[LuaLibrary]
 	static readonly LuaLibrary LL_Factory_gui = new("gui");
 
-	// todo: EnableScreenClicker
+	[LuaFunction]
+	static int EnableScreenClicker(ILuaInterface lua) {
+		if (!g_Lua!.GetBool(1)) {
+			GModBase.GetMouseInput()!.SetKeyboardInputEnabled(false);
+			GModBase.GetMouseInput()!.SetVisible(false);
+			return 0;
+		}
+
+		GModBase.GetGModBasePanel(true)!.SetKeyboardInputEnabled(true);
+		GModBase.GetMouseInput()!.SetVisible(true);
+		GModBase.GetMouseInput()!.MakePopup(true, false);
+		GModBase.GetMouseInput()!.SetKeyboardInputEnabled(true);
+		GModBase.GetMouseInput()!.SetMouseInputEnabled(false);
+		return 0;
+	}
+
+	public static Vector3 ScreenToVector(int x, int y) {
+		float halfWide = ScreenWidth() * 0.5f;
+		float dx = x - halfWide;
+		float dy = ScreenHeight() * 0.5f - y;
+		float dz = (float)(halfWide / Math.Tan(ViewRender.g_FOV * MathF.PI / 360.0f));
+
+		Vector3 vec = ViewRender.g_VecVRight * dx + ViewRender.g_VecVForward * dz + ViewRender.g_VecVUp * dy;
+		return Vector3.Normalize(vec);
+	}
 
 	[LuaFunction]
 	static (int, int) MousePos() {

@@ -85,7 +85,8 @@ public class MDLCache : IMDLCache, IStudioDataCache
 	}
 
 	public void BeginLock() {
-		throw new NotImplementedException();
+		// ModelCacheSection.BeginFrameLocking();
+		// MeshCacheSection.BeginFrameLocking();
 	}
 
 	public void BeginMapLoad() {
@@ -98,7 +99,8 @@ public class MDLCache : IMDLCache, IStudioDataCache
 	}
 
 	public void EndLock() {
-		throw new NotImplementedException();
+		// MeshCacheSection.EndFrameLocking();
+		// ModelCacheSection.EndFrameLocking();
 	}
 
 	public void EndMapLoad() {

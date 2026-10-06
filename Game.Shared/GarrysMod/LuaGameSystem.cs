@@ -3,6 +3,8 @@ using Game.Shared;
 
 using Source.Common;
 
+using static Source.Common.GarrysMod.Lua.PooledStrings;
+
 #if CLIENT_DLL
 namespace Game.Client.GarrysMod;
 #else
@@ -41,13 +43,51 @@ public class LuaGameSystem : AutoGameSystemPerFrame, IGameEventListener2
 		}
 	}
 	public override void Update(double frametime) {
-		garrysmod.Think();
+		// RemoveQueuedRenderTargets();
+		// RemoveQueuedEntities();
+		// RunMapCleanupIfNeeded();
+		if (g_Lua == null || GarrysMod.g_LuaManager == null || gGM == null)
+			return;
+
+		if (!engine.IsPaused() && C_BasePlayer.GetLocalPlayer() != null)
+			gGM.Call((int)LUA_POOLEDSTRING.Think);
+
+		if (gpGlobals.TickCount == LastTick)
+			return;
+
+		if (engine.GetNetChannelInfo() != null && engine.GetNetChannelInfo()!.IsTimingOut())
+			garrysmod.Think();
+		LastTick = gpGlobals.TickCount;
+		gGM.Call((int)LUA_POOLEDSTRING.Tick);
 	}
 #else
 	public override void FrameUpdatePreEntityThink() {
+		if (gGM == null)
+			return;
+
+		mdlcache.BeginLock();
+		if (gpGlobals.CurTime != LastThink) {
+			gGM.Call((int)LUA_POOLEDSTRING.Think);
+			LastThink = gpGlobals.CurTime;
+		}
 		garrysmod.Think();
+		// RemoveQueuedRecipientFilters();
+		// RemoveQueuedEntities();
+		// RunMapCleanupIfNeeded();
+		if (gpGlobals.TickCount != LastTick) {
+			LastTick = gpGlobals.TickCount;
+			gGM.Call((int)LUA_POOLEDSTRING.Tick);
+		}
+		mdlcache.EndLock();
 	}
 #endif
+
+	static double LastThink;
+	static long LastTick;
+
+	public override void LevelInitPostEntity() {
+		gGM?.Call((int)LUA_POOLEDSTRING.InitPostEntity);
+	}
 
 	public void StopListeningForAllEvents() {
 		if (RegisteredForEvents) {
