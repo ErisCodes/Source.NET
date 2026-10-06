@@ -579,6 +579,7 @@ public interface IMaterialSystem
 	void ReloadMaterials(ReadOnlySpan<char> subString = default);
 
 	// Create a procedural material. The keyvalues looks like a VMT file
+	IMaterial CreateMaterial(ReadOnlySpan<char> name, ReadOnlySpan<char> textureGroupName, KeyValues vmtKeyValues);
 	IMaterial? CreateMaterial(ReadOnlySpan<char> materialName, KeyValues vmtKeyValues);
 
 	// Find a material by name.
@@ -638,7 +639,7 @@ public interface IMaterialSystem
 		int w,
 		int h,
 		ImageFormat fmt,
-		int nFlags);
+		TextureFlags flags);
 
 	//
 	// Render targets

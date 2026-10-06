@@ -113,6 +113,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 	public MaterialSystem(IServiceProvider services) {
 		MaterialDict = new(this);
+		HardwareRenderContext = new(this);
 		this.services = services;
 
 		FileSystem = services.GetRequiredService<IFileSystem>();
@@ -473,8 +474,17 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 	public MaterialSystem_Config GetCurrentConfigForVideoCard() => Config;
 
-	ThreadLocal<MatRenderContext> matContext;
-	public IMatRenderContext GetRenderContext() => matContext!.Value!;
+	readonly ThreadLocal<IMatRenderContextInternal> RenderContext = new();
+	readonly MatRenderContext HardwareRenderContext;
+
+	public IMatRenderContext GetRenderContext() {
+		IMatRenderContext? result = RenderContext.Value;
+		if (result == null) {
+			result = HardwareRenderContext;
+			RenderContext.Value = HardwareRenderContext;
+		}
+		return result;
+	}
 
 	public bool SetMode(IWindow window, MaterialSystem_Config config) {
 		MaterialSystem MaterialSystem = (MaterialSystem)Singleton<IMaterialSystem>();
@@ -734,7 +744,6 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		mode.ScaleToOutputResolution = config.ScaleToOutputResolution();
 		mode.UsingMultipleWindows = config.UsingMultipleWindows();
 	}
-
 	IMaterial IMaterialSystem.CreateMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroup, KeyValues keyValues) => CreateMaterial(materialName, textureGroup, keyValues);
 	IMaterial IMaterialSystem.CreateMaterial(ReadOnlySpan<char> materialName, KeyValues keyValues) => CreateMaterial(materialName, TEXTURE_GROUP_OTHER, keyValues);
 
@@ -768,7 +777,10 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		return GetRenderContextInternal().OnDrawMesh(mesh, firstIndex, indexCount);
 	}
 
-	public IMatRenderContextInternal GetRenderContextInternal() => matContext!.Value!;
+	public IMatRenderContextInternal GetRenderContextInternal() {
+		IMatRenderContextInternal? renderContext = RenderContext.Value;
+		return renderContext ?? HardwareRenderContext;
+	}
 
 	public bool InFlashlightMode() {
 		return GetRenderContextInternal().InFlashlightMode();
@@ -1043,8 +1055,6 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 	public void BeginUpdateLightmaps() => MatLightmaps.BeginUpdateLightmaps();
 	public void EndUpdateLightmaps() => MatLightmaps.EndUpdateLightmaps();
 
-	public void BindStandardTexture(Sampler sampler, StandardTextureId id) => GetRenderContext().BindStandardTexture(sampler, id);
-
 	public IMaterialProxy? DetermineProxyReplacements(Material material, KeyValues fallbackKeyValues) {
 		throw new NotImplementedException();
 	}
@@ -1118,6 +1128,7 @@ public enum MatrixStackFlags : uint
 {
 	Dirty = 1 << 0
 }
+
 public struct MatrixStackItem
 {
 	public Matrix4x4 Matrix;

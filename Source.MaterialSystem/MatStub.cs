@@ -364,6 +364,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public void CacheUsedMaterials() { }
 	public void ReloadTextures() { }
 	public void ReloadMaterials(ReadOnlySpan<char> subString = default) { }
+	public IMaterial? CreateMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, KeyValues vmtKeyValues) => g_DummyMaterial;
 	public IMaterial? CreateMaterial(ReadOnlySpan<char> materialName, KeyValues vmtKeyValues) => g_DummyMaterial;
 	public IMaterial? FindMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, bool complain = true, ReadOnlySpan<char> complainPrefix = default) => RealMaterialSystem != null ? RealMaterialSystem.FindMaterial(materialName, textureGroupName, complain, complainPrefix) : g_DummyMaterial;
 	public bool IsMaterialLoaded(ReadOnlySpan<char> materialName) => RealMaterialSystem != null ? RealMaterialSystem.IsMaterialLoaded(materialName) : false;
@@ -374,7 +375,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public int GetNumMaterials() => RealMaterialSystem != null ? RealMaterialSystem.GetNumMaterials() : 0;
 	public ITexture? FindTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroupName, bool complain = true, CreateTextureFlags additionalCreationFlags = 0) => RealMaterialSystem != null ? RealMaterialSystem.FindTexture(textureName, textureGroupName, complain, additionalCreationFlags) : g_DummyTexture;
 	public bool IsTextureLoaded(ReadOnlySpan<char> textureName) => false;
-	public ITexture? CreateProceduralTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroupName, int w, int h, ImageFormat fmt, int nFlags) => g_DummyTexture;
+	public ITexture? CreateProceduralTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroupName, int w, int h, ImageFormat fmt, TextureFlags flags) => g_DummyTexture;
 	public void BeginRenderTargetAllocation() { }
 	public void EndRenderTargetAllocation() { }
 	public ITexture? CreateRenderTargetTexture(int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared) => null;
