@@ -1991,6 +1991,11 @@ public static class MathLib
 		v = new Vector3(v.X * invlen, v.Y * invlen, v.Z * invlen);
 		return 1.0f / invlen;
 	}
+	public static Vector3 RandomVector(float minVal, float maxVal) {
+		Vector3 random = default;
+		random.Random(minVal, maxVal);
+		return random;
+	}
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static float VectorNormalize(ref Vector3 vec) {
 		float radius = MathF.Sqrt(vec.X * vec.X + vec.Y * vec.Y + vec.Z * vec.Z);
