@@ -389,9 +389,14 @@ BaseEntity
 		g_SoundEmitterSystem.EmitSoundByHandle(filter, entIndex, parms, ref handle);
 	}
 
-	public bool GetParametersForSound(ReadOnlySpan<char> soundName, ref SoundParameters parms, ReadOnlySpan<char> actorModel) {
+	public static bool GetParametersForSound(ReadOnlySpan<char> soundName, ref SoundParameters parms, ReadOnlySpan<char> actorModel) {
 		Gender gender = soundemitterbase.GetActorGender(actorModel);
 		return soundemitterbase.GetParametersForSound(soundName, ref parms, gender);
+	}
+
+	public static bool GetParametersForSound(ReadOnlySpan<char> soundName, ref HSOUNDSCRIPTHANDLE handle, ref SoundParameters parms, ReadOnlySpan<char> actorModel) {
+		Gender gender = soundemitterbase.GetActorGender(actorModel);
+		return soundemitterbase.GetParametersForSoundEx(soundName, ref handle, ref parms, gender);
 	}
 }
 #endif
