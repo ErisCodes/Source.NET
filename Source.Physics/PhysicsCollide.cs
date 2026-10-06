@@ -831,7 +831,7 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 			input.proxy.radius = 0.0f;
 			input.translation = localTranslation;
 			input.maxFraction = 1.0f;
-			input.canEncroach = false;
+			input.canEncroach = true;
 			b3CastOutput output = b3ShapeCastHull(convex.Hull, &input);
 
 			if (output.hit && output.fraction > 0.0f && BoxToSource.Unitless(output.normal).LengthSquared() > 1e-8f) {
@@ -874,7 +874,7 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 			input.proxy.radius = 0.0f;
 			input.translation = localTranslation;
 			input.maxFraction = 1.0f;
-			input.canEncroach = false;
+			input.canEncroach = true;
 			b3CastOutput output = b3ShapeCastMesh(&mesh, &input);
 			if (output.hit && output.fraction > 0.0f && BoxToSource.Unitless(output.normal).LengthSquared() > 1e-8f) {
 				Vector3 normal = Vector3.Normalize(BoxToSource.Unitless(b3RotateVector(xf.q, output.normal)));
