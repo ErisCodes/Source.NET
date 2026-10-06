@@ -184,7 +184,7 @@ public class UnlitTwoTexture : BaseVSShader
 				SetModulationPixelShaderDynamicState_LinearColorSpace(1);
 
 				Span<float> eyePos_SpecExponent = [0, 0, 0, 0];
-				ShaderAPI.GetWorldSpaceCameraPosition(ref eyePos_SpecExponent);
+				ShaderAPI.GetWorldSpaceCameraPosition(eyePos_SpecExponent);
 				eyePos_SpecExponent[3] = 0.0f;
 				ShaderAPI.SetPixelShaderConstant((int)PixelShaderConst.EyePosSpecExponent, eyePos_SpecExponent);
 

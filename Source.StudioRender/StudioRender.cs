@@ -1759,7 +1759,7 @@ public unsafe class StudioRender
 		if (pRC.Config.SoftwareLighting || pRC.NumLocalLights == 0)
 			renderContext.DisableAllLocalLights();
 		else {
-			int maxLightCount = renderContext.GetMaxLights();
+			int maxLightCount = hardwareConfig.MaxNumLights();
 			LightDesc desc = default;
 			desc.Type = LightType.Disable;
 

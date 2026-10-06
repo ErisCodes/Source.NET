@@ -296,7 +296,7 @@ public class VideoMode_MaterialSystem(Sys Sys, IMaterialSystem materials, IGame 
 		PlayedStartupVideo = false;
 
 		int bitsPerPixel = 32;
-		int adapter = materials.GetCurrentAdapter();
+		int adapter = (int)materials.GetCurrentAdapter();
 
 		game.GetDesktopInfo(out uint desktopWidth, out uint desktopHeight, out uint desktopRefresh);
 

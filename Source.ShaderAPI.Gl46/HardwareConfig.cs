@@ -186,7 +186,7 @@ public class HardwareConfig : IMaterialSystemHardwareConfig
 		throw new NotImplementedException();
 	}
 
-	public void OverrideStreamOffsetSupport(bool bOverrideEnabled, bool bEnableSupport) {
+	public void OverrideStreamOffsetSupport(bool overrideEnabled, bool enableSupport) {
 		throw new NotImplementedException();
 	}
 

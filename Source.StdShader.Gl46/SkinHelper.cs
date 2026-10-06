@@ -431,7 +431,7 @@ public partial class BaseVSShader
 				if (hasEnvmap)
 					shader.BindTexture(Sampler.Sampler8, info.Envmap, info.EnvmapFrame);
 
-				shaderAPI.GetLightState(out lightState);
+				shaderAPI.GetDX9LightState(out lightState);
 			}
 
 			MaterialFogMode fogType = shaderAPI.GetSceneFogMode();
@@ -452,7 +452,7 @@ public partial class BaseVSShader
 				DynamicShaderIndex vshIndex = new(shaderAPI!, ShaderType.Vertex);
 				vshIndex.Set("DOWATERFOG", fogIndex);
 				vshIndex.Set("SKINNING", numBones > 0);
-				vshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter(RenderParamInt.EnableFixedLighting) != 0);
+				vshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting) != 0);
 				vshIndex.Set("COMPRESSED_VERTS", (int)vertexCompression);
 				vshIndex.Set("NUM_LIGHTS", useStaticControlFlow ? 0 : lightState.NumLights);
 				shaderAPI.SetVertexShaderIndex(vshIndex.GetIndex());
@@ -471,7 +471,7 @@ public partial class BaseVSShader
 				DynamicShaderIndex vshIndex = new(shaderAPI!, ShaderType.Vertex);
 				vshIndex.Set("DOWATERFOG", fogIndex);
 				vshIndex.Set("SKINNING", numBones > 0);
-				vshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter(RenderParamInt.EnableFixedLighting) != 0);
+				vshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting) != 0);
 				vshIndex.Set("MORPHING", shaderAPI.IsHWMorphingEnabled());
 				vshIndex.Set("COMPRESSED_VERTS", (int)vertexCompression);
 				shaderAPI.SetVertexShaderIndex(vshIndex.GetIndex());
@@ -557,7 +557,7 @@ public partial class BaseVSShader
 
 			Span<float> eyePos_SpecExponent = [0, 0, 0, 0], fresnelRanges_SpecBoost = [1, 0.5f, 1, 1], vRimBoost = [1, 1, 1, 1];
 			Span<float> specularTint = [1, 1, 1, 4];
-			shaderAPI.GetWorldSpaceCameraPosition(ref eyePos_SpecExponent);
+			shaderAPI.GetWorldSpaceCameraPosition(eyePos_SpecExponent);
 
 			eyePos_SpecExponent[3] = -1.0f;
 			if ((info.PhongExponent != -1) && parms[info.PhongExponent].IsDefined()) {
@@ -647,7 +647,7 @@ public partial class BaseVSShader
 					worldToTexture.M31, worldToTexture.M32, worldToTexture.M33, worldToTexture.M34,
 					worldToTexture.M41, worldToTexture.M42, worldToTexture.M43, worldToTexture.M44
 				];
-				shaderAPI.SetPixelShaderConstant((int)PixelShaderConst.FlashlightToWorldTexture, values);
+				shaderAPI.SetPixelShaderConstant((int)PixelShaderConst.FlashlightToWorldTexture, values, 4);
 
 				tweaks[0] = ShadowFilterFromState(flashlightState);
 				tweaks[1] = ShadowAttenFromState(flashlightState);

@@ -1,4 +1,6 @@
-﻿using Source.Common.MaterialSystem;
+﻿using Source.Common;
+using Source.Common.Bitmap;
+using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
 using Source.Common.ShaderAPI;
 using Source.Common.Utilities;
@@ -69,9 +71,9 @@ public class MatRenderContext : IMatRenderContextInternal
 			shaderAPI.GetBackBufferDimensions(out width, out height);
 	}
 
-	public void DepthRange(double near, double far) {
-		ActiveViewport.MinZ = (float)near;
-		ActiveViewport.MaxZ = (float)far;
+	public void DepthRange(float near, float far) {
+		ActiveViewport.MinZ = near;
+		ActiveViewport.MaxZ = far;
 		shaderAPI.SetViewports(new(ref ActiveViewport));
 	}
 
@@ -119,7 +121,7 @@ public class MatRenderContext : IMatRenderContextInternal
 		CurrentMatrixChanged();
 	}
 
-	public void LoadMatrix(in Matrix3x4 matrix) {
+	public void LoadMatrix(Matrix3x4 matrix) {
 		ref MatrixStackItem item = ref CurMatrixItem;
 		item.Matrix = matrix;
 		CurrentMatrixChanged();
@@ -417,7 +419,7 @@ public class MatRenderContext : IMatRenderContextInternal
 	}
 
 
-	private void MultMatrixLocal(in Matrix4x4 mat) {
+	public void MultMatrixLocal(in Matrix4x4 mat) {
 		MathLib.MatrixMultiply(in CurMatrixItem.Matrix, in mat, out Matrix4x4 result);
 		CurMatrixItem.Matrix = result;
 		CurrentMatrixChanged();
@@ -495,16 +497,16 @@ public class MatRenderContext : IMatRenderContextInternal
 		CommitRenderTargetAndViewport();
 	}
 
-	public void CopyRenderTargetToTexture(ITexture texture) => CopyRenderTargetToTextureEx(texture, 0, null, null);
+	public void CopyRenderTargetToTexture(ITexture texture) => CopyRenderTargetToTextureEx(texture, 0, ref Unsafe.NullRef<System.Drawing.Rectangle>(), ref Unsafe.NullRef<System.Drawing.Rectangle>());
 
-	public void CopyRenderTargetToTextureEx(ITexture texture, int renderTargetID, System.Drawing.Rectangle? srcRect, System.Drawing.Rectangle? dstRect = null) {
+	public void CopyRenderTargetToTextureEx(ITexture? texture, int renderTargetID, ref System.Drawing.Rectangle srcRect, ref System.Drawing.Rectangle dstRect) {
 		if (texture == null) {
 			Assert(false);
 			return;
 		}
 
 		Flush(false);
-		((ITextureInternal)texture).CopyFrameBufferToMe(renderTargetID, srcRect, dstRect);
+		((ITextureInternal)texture).CopyFrameBufferToMe(renderTargetID, Unsafe.IsNullRef(ref srcRect) ? null : srcRect, Unsafe.IsNullRef(ref dstRect) ? null : dstRect);
 	}
 
 	public void PushRenderTargetAndViewport(ITexture? thisTexture) {
@@ -547,7 +549,7 @@ public class MatRenderContext : IMatRenderContextInternal
 	public int GetMaxVerticesToRender(IMaterial material) => materials.ShaderAPI.GetMaxVerticesToRender(material);
 	public int GetMaxIndicesToRender() => materials.ShaderAPI.GetMaxIndicesToRender();
 
-	public float ComputePixelDiameterOfSphere(Vector3 absOrigin, float radius) {
+	public float ComputePixelDiameterOfSphere(in Vector3 absOrigin, float radius) {
 		RecomputeViewState();
 		RecomputeViewProjState();
 		// This is sort of faked, but it's faster that way
@@ -635,7 +637,7 @@ public class MatRenderContext : IMatRenderContextInternal
 		viewMatrix = stack.Top().Matrix;
 	}
 
-	public float ComputePixelWidthOfSphere(Vector3 origin, float radius) {
+	public float ComputePixelWidthOfSphere(in Vector3 origin, float radius) {
 		return ComputePixelDiameterOfSphere(origin, radius) * 2.0f;
 	}
 
@@ -643,7 +645,7 @@ public class MatRenderContext : IMatRenderContextInternal
 		shaderAPI.SetNumBoneWeights(numBones);
 	}
 
-	public void SetAmbientLightCube(ReadOnlySpan<Vector4> cube) => shaderAPI.SetAmbientLightCube(cube);
+	public void SetAmbientLightCube(Span<Vector4> cube) => shaderAPI.SetAmbientLightCube(cube);
 
 	public void LoadBoneMatrix(int boneIndex, in Matrix3x4 matrix) {
 		shaderAPI.LoadBoneMatrix(boneIndex, in matrix);
@@ -779,5 +781,485 @@ public class MatRenderContext : IMatRenderContextInternal
 			case StandardLightmap.WhiteBump:
 				break;
 		}
+	}
+
+	public void AccumulateMorph(IMorph morph, ReadOnlySpan<MorphWeight> weights) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public ColorCorrectionHandle_t AddLookup(ReadOnlySpan<char> name) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void AddRefRenderData() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void BeginMorphAccumulation() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void BeginOcclusionQueryDrawing(OcclusionQueryObjectHandle_t handle) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void BeginPIXEvent(Color color, ReadOnlySpan<char> name) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void BindLightmatexture(ITexture? lightmapTexture) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void BindMorph(IMorph morph) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ClearBuffersObeyStencil(bool clearColor, bool clearDepth) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ClearBuffersObeyStencilEx(bool clearColor, bool clearAlpha, bool clearDepth) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ClearSelectionNames() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ClearStencilBufferRectangle(int xmin, int ymin, int xmax, int ymax, int value) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public int CompareMaterialCombos(IMaterial? material1, IMaterial? material2, int lightMapID1, int lightMapID2) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void CopyTextureToRenderTargetEx(int renderTargetID, ITexture? texture, ref System.Drawing.Rectangle pSrcRect, ref System.Drawing.Rectangle pDstRect) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public IMorph CreateMorph(MorphFormatFlags format, ReadOnlySpan<char> debugName) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public OcclusionQueryObjectHandle_t CreateOcclusionQueryObject() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void CullMode(MaterialCullMode cullMode) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void DestroyMorph(IMorph morph) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void DestroyOcclusionQueryObject(OcclusionQueryObjectHandle_t handle) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void DrawScreenSpaceQuad(IMaterial? material) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void DrawScreenSpaceRectangle( IMaterial? material, int destX, int destY, int width, int height, float srcTextureX0, float srcTextureY0, float srcTextureX1, float srcTextureY1, int srcTextureWidth, int srcTextureHeight, IClientRenderable? clientRenderable = null, int xDice = 1, int yDice = 1) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void EnableColorCorrection(bool enable) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void EnableNonInteractiveMode(MaterialNonInteractiveMode mode) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void EnableUserClipTransformOverride(bool enable) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void EndMorphAccumulation() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void EndOcclusionQueryDrawing(OcclusionQueryObjectHandle_t handle) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void EndPIXEvent() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void FogColor3f(float r, float g, float b) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void FogColor3fv(ReadOnlySpan<float> rgb) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void FogColor3ub(byte r, byte g, byte b) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void FogColor3ubv(ReadOnlySpan<byte> rgb) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void FogEnd(float end) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void FogMaxDensity(float maxDensity) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void FogMode(MaterialFogMode fogMode) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void FogStart(float start) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void GMOD_FlushQueue() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public ICallQueue? GetCallQueue() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void GetFogColor(out Color rgb) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void GetFogDistances(out float start, out float end, out float fogZ) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public MaterialFogMode GetFogMode() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void GetMatrix(MaterialMatrixMode matrixMode, out Matrix3x4 matrix) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void GetMaxToRender(IMesh? pMesh, bool bMaxUntilFlush, Span<int> maxVerts, Span<int> maxIndices) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public bool GetMorphAccumulatorTexCoord(out Vector2 texCoord, IMorph morph, int vertex) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public int GetNumActiveDeformations() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public Vector3 GetToneMappingScaleLinear() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void GetWorldSpaceCameraVectors(out Vector3 forward, out Vector3 right, out Vector3 up) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public bool IsRenderData(object? data) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public float Knob(Span<char> knobname, Span<float> setvalue = default) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void LoadLookup(ColorCorrectionHandle_t handle, ReadOnlySpan<char> lookuname) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void LoadSelectionName(int name) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void LockLookup(ColorCorrectionHandle_t handle) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public object? LockRenderData(int sizeInBytes) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public E? LockRenderDataTyped<E>(int count, E? srcData = null) where E : class {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void MultMatrix(in Matrix3x4 matrix) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void MultMatrix(in Matrix4x4 matrix) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void MultMatrixLocal(in Matrix3x4 matrix) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public int OcclusionQuery_GetNumPixelsRendered(OcclusionQueryObjectHandle_t handle) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void OverrideAlphaWriteEnable(bool enable, bool alphaWriteEnable) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void OverrideBlend(bool unk1, bool unk2, int unk3, int unk4, int unk5) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void OverrideBlendSeparateAlpha(bool unk1, bool unk2, int unk3, int unk4, int unk5) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void OverrideColorWriteEnable(bool overrideEnable, bool colorWriteEnable) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void OverrideDepthEnable(bool enable, bool depthEnable) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PerformFullScreenStencilOperation() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PerspectiveOffCenterX(double fovx, double aspect, double zNear, double zFar, double bottom, double top, double left, double right) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PerspectiveX(double fovx, double aspect, double zNear, double zFar) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PickMatrix(int x, int y, int width, int height) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PopCustomClipPlane() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PopDeformation() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PopSelectionName() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PushCustomClipPlane(ReadOnlySpan<float> plane) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PushDeformation(ref readonly DeformationBase deformation) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PushRenderTargetAndViewport() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void PushSelectionName(int name) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ReadPixels(int x, int y, int width, int height, Span<byte> data, ImageFormat dstFormat) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ReadPixelsAndStretch(ref System.Drawing.Rectangle srcRect, ref System.Drawing.Rectangle pDstRect, Span<byte> buffer, ImageFormat dstFormat, int dstStride) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void RefreshFrontBufferNonInteractive() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ReleaseRenderData() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public bool RemoveLookup(ColorCorrectionHandle_t handle) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ResetLookupWeights() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ResetOcclusionQueryObject(OcclusionQueryObjectHandle_t handle) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void ResetToneMappingScale(float monoscale) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void Rotate(float angle, float x, float y, float z) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SelectionBuffer(Span<uint> buffer) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public int SelectionMode(bool selectionMode) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetFlexWeights(int firstWeight, ReadOnlySpan<MorphWeight> weights) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetFloatRenderingParameter(int parm_number, float value) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetFogZ(float fogZ) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetFullScreenDepthTextureValidityFlag(bool isValid) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetGoalToneMappingScale(float monoscale) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetHeightClipZ(float z) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetIntRenderingParameter(int parm_number, int value) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetLookupWeight(ColorCorrectionHandle_t handle, float weight) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetNonInteractivePacifierTexture(ITexture? texture, float normalizedX, float normalizedY, float normalizedSize) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetPIXMarker(Color color, ReadOnlySpan<char> name) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetRenderTarget(ITexture? texture) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetRenderTargetEx(int renderTargetID, ITexture? texture) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetResetable(ColorCorrectionHandle_t handle, bool resetable) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetShadowDepthBiasFactors(float slopeScaleDepthBias, float depthBias) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SetVectorRenderingParameter(int parm_number, in Vector3 value) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void SyncToken(ReadOnlySpan<char> token) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void UnlockLookup(ColorCorrectionHandle_t handle) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void UnlockRenderData(object? data) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void UserClipTransform(in Matrix4x4 worldToView) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContext");
+	}
+
+	public void DrawClearBufferQuad(byte r, byte g, byte b, byte a, bool clearColor, bool clearAlpha, bool clearDepth) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public void ForceDepthFuncEquals(bool force) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public void ForceHardwareSync() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public MorphFormatFlags GetBoundMorphFormat() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public MatCallQueue GetCallQueueInternal() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public float GetFloatRenderingParameter(int parmNumber) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public int GetIntRenderingParameter(int parmNumber) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public void GetLightmapDimensions(out int w, out int h) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public int GetLightmapPage() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public ITexture? GetRenderTargetEx(int renderTargetId) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public Vector3 GetVectorRenderingParameter(int parmNumber) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public unsafe bool OnDrawMesh(IMesh mesh, PrimList* pLists, int nLists) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public bool OnFlushBufferedPrimitives() {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public bool OnSetColorMesh(IMesh staticMesh, IMesh mesh, int nVertexOffsetInBytes) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public bool OnSetFlexMesh(IMesh staticMesh, IMesh mesh, int nVertexOffsetInBytes) {
+		throw new NotImplementedException("Incomplete port of IMatRenderContextInternal");
+	}
+
+	public int AddRef() {
+		throw new NotImplementedException("Incomplete port of IRefCounted");
+	}
+
+	public int Release() {
+		throw new NotImplementedException("Incomplete port of IRefCounted");
 	}
 }

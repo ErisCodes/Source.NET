@@ -44,7 +44,7 @@ public struct SourcePixelSharedShadowState
 public class ShadowStateGl46 : IShaderShadow
 {
 	internal readonly IShaderSystemInternal Shaders;
-	internal readonly IShaderAPI ShaderAPI;
+	internal readonly ShaderAPIGl46 ShaderAPI;
 	readonly IMaterialSystemHardwareConfig HardwareConfig = Singleton<IMaterialSystemHardwareConfig>();
 
 	public uint BASE_UBO;
@@ -79,7 +79,7 @@ public class ShadowStateGl46 : IShaderShadow
 	}
 
 	string? name;
-	public unsafe ShadowStateGl46(IShaderAPI shaderAPI, IShaderSystemInternal shaderSystem, ReadOnlySpan<char> name = default) {
+	public unsafe ShadowStateGl46(ShaderAPIGl46 shaderAPI, IShaderSystemInternal shaderSystem, ReadOnlySpan<char> name = default) {
 		ShaderAPI = shaderAPI;
 		Shaders = shaderSystem;
 		this.name = name.IsEmpty ? null : new(name);
@@ -137,9 +137,9 @@ public class ShadowStateGl46 : IShaderShadow
 		ShaderAPI.SetBoardState(in State);
 
 		// Set VSH and PSH. Shader API can bind these whenever it needs to
-		((ShaderAPIGl46)ShaderAPI).SetCurrentShadow(this);
-		ShaderAPI!.BindVertexShader(in VertexShader);
-		ShaderAPI!.BindPixelShader(in PixelShader);
+		ShaderAPI.SetCurrentShadow(this);
+		ShaderAPI!.BindVertexShader(VertexShader);
+		ShaderAPI!.BindPixelShader(PixelShader);
 
 		// Bind UBO binding locations to their respective ranges in our UBO object
 		UniformBufferBindings.Bind(UniformBufferBindingLocation.SharedBaseShader, BASE_UBO);

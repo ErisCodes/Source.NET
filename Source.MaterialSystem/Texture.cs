@@ -12,6 +12,7 @@ using Source.Common.ShaderAPI;
 using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Source.MaterialSystem;
 
@@ -282,8 +283,12 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 	public void CopyFrameBufferToMe(int renderTargetID = 0, Rectangle? srcRect = null, Rectangle? dstRect = null) {
 		Assert(TextureHandles != null && FrameCount >= 1);
 
-		if (TextureHandles != null && FrameCount >= 1)
-			materials.ShaderAPI.CopyRenderTargetToTextureEx(TextureHandles[0], renderTargetID, srcRect, dstRect);
+		if (TextureHandles != null && FrameCount >= 1) {
+			Rectangle src = srcRect.GetValueOrDefault(), dst = dstRect.GetValueOrDefault();
+			materials.ShaderAPI.CopyRenderTargetToTextureEx(TextureHandles[0], renderTargetID,
+				ref srcRect.HasValue ? ref src : ref Unsafe.NullRef<Rectangle>(),
+				ref dstRect.HasValue ? ref dst : ref Unsafe.NullRef<Rectangle>());
+		}
 	}
 
 	public void Bind(Sampler sampler) => Bind(sampler, 0);
@@ -613,9 +618,9 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 
 		// Create all animated texture frames in a single call
 		materials.ShaderAPI.CreateTextures(
-			TextureHandles!, count,
+			TextureHandles.AsSpan(0, count),
 			DimsAllocated.Width, DimsAllocated.Height, shaderApiCreateTextureDepth, ImageFormat, DimsAllocated.MipCount,
-			nCopies, createFlags, GetName(), GetTextureGroupName());
+			nCopies, (int)createFlags, GetName(), GetTextureGroupName());
 
 		int accountingCount = count;
 
@@ -1062,6 +1067,7 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 						mipRect.Height,
 						vtfTexture.Format(),
 						stride,
+						false,
 						bits);
 				}
 			}

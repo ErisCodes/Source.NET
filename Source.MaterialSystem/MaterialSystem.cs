@@ -42,7 +42,7 @@ public static class MatSysBootstrap
 
 }
 
-public class MaterialSystem : IMaterialSystem, IShaderUtil
+public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 {
 	public readonly MaterialDict MaterialDict;
 	nint graphics;
@@ -123,9 +123,10 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		HardwareConfig = services.GetRequiredService<IMaterialSystemHardwareConfig>(); // todo: interface
 		ShaderSystem = services.GetRequiredService<IShaderSystem>();
 		Config = services.GetRequiredService<MaterialSystem_Config>()!;
+		HardwareRenderContext = new(this);
 
 		// Link up
-		ShaderAPI.PreInit(this, services);
+		ShaderDevice.PreInit(this, services);
 
 		TextureSystem.MaterialSystem = this;
 
@@ -141,7 +142,6 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 	public void ModInit() {
 		launcherMgr = services.GetRequiredService<ILauncherManager>();
-		matContext = new(() => new(this));
 
 		GenerateConfigFromConfigKeyValues(Config, false);
 		UpdateConfig(false);
@@ -390,11 +390,11 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		config.SetFlag(MaterialSystem_Config_Flags.ENABLE_HDR, HardwareConfig.GetHDREnabled());
 	}
 
-	public int GetDisplayAdapterCount() {
+	public uint GetDisplayAdapterCount() {
 		throw new NotImplementedException();
 	}
 
-	public int GetCurrentAdapter() => ShaderDevice.GetCurrentAdapter();
+	public uint GetCurrentAdapter() => (uint)ShaderDevice.GetCurrentAdapter();
 
 	public void ModShutdown() {
 
@@ -473,8 +473,17 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 	public MaterialSystem_Config GetCurrentConfigForVideoCard() => Config;
 
-	ThreadLocal<MatRenderContext> matContext;
-	public IMatRenderContext GetRenderContext() => matContext!.Value!;
+	readonly ThreadLocal<IMatRenderContextInternal> RenderContext = new();
+	readonly MatRenderContext HardwareRenderContext;
+
+	public IMatRenderContext GetRenderContext() {
+		IMatRenderContext? result = RenderContext.Value;
+		if (result == null) {
+			result = HardwareRenderContext;
+			RenderContext.Value = HardwareRenderContext;
+		}
+		return result;
+	}
 
 	public bool SetMode(IWindow window, MaterialSystem_Config config) {
 		MaterialSystem MaterialSystem = (MaterialSystem)Singleton<IMaterialSystem>();
@@ -485,7 +494,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 		bool previouslyUsingGraphics = ShaderDevice.IsUsingGraphics();
 
-		bool bOk = ShaderAPI.SetMode(window, info);
+		bool bOk = ShaderAPI.SetMode(window, GetCurrentAdapter(), info);
 		if (!bOk)
 			return false;
 
@@ -516,7 +525,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		return true;
 	}
 
-	public void AddModeChangeCallBack(Action func) => ShaderAPI.AddModeChangeCallBack(func);
+	public void AddModeChangeCallBack(ModeChangeCallbackFunc func) => ShaderDevice.AddModeChangeCallBack(func);
 
 
 	ShaderAPITextureHandle_t FullbrightLightmapTextureHandle;
@@ -548,7 +557,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		CreateTextureFlags tcFlagsSRGB = CreateTextureFlags.Managed | CreateTextureFlags.SRGB;
 
 
-		FullbrightLightmapTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, tcFlags, "[FULLBRIGHT_LIGHTMAP_TEXID]", TEXTURE_GROUP_LIGHTMAP);
+		FullbrightLightmapTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, (int)tcFlags, "[FULLBRIGHT_LIGHTMAP_TEXID]", TEXTURE_GROUP_LIGHTMAP);
 		ShaderAPI.ModifyTexture(FullbrightLightmapTextureHandle);
 		ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 		ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -556,7 +565,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		ColorSpace.LinearToLightmap(texel, tmpVect);
 		ShaderAPI.TexImage2D(0, 0, ImageFormat.BGRX8888, 0, 1, 1, ImageFormat.BGRX8888, false, texel);
 
-		BlackTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, tcFlagsSRGB, "[BLACK_TEXID]", TEXTURE_GROUP_OTHER);
+		BlackTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, (int)tcFlagsSRGB, "[BLACK_TEXID]", TEXTURE_GROUP_OTHER);
 		ShaderAPI.ModifyTexture(BlackTextureHandle);
 		ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 		ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -564,7 +573,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		ShaderAPI.TexImage2D(0, 0, ImageFormat.BGRX8888, 0, 1, 1, ImageFormat.BGRX8888, false, texel);
 		ShaderAPI.SetStandardTextureHandle(StandardTextureId.Black, BlackTextureHandle);
 
-		WhiteTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, tcFlagsSRGB, "[WHITE_TEXID]", TEXTURE_GROUP_OTHER);
+		WhiteTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, (int)tcFlagsSRGB, "[WHITE_TEXID]", TEXTURE_GROUP_OTHER);
 		ShaderAPI.ModifyTexture(WhiteTextureHandle);
 		ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 		ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -572,7 +581,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		ShaderAPI.TexImage2D(0, 0, ImageFormat.BGRX8888, 0, 1, 1, ImageFormat.BGRX8888, false, texel);
 		ShaderAPI.SetStandardTextureHandle(StandardTextureId.White, WhiteTextureHandle);
 
-		GreyTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, tcFlagsSRGB, "[GREY_TEXID]", TEXTURE_GROUP_OTHER);
+		GreyTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, (int)tcFlagsSRGB, "[GREY_TEXID]", TEXTURE_GROUP_OTHER);
 		ShaderAPI.ModifyTexture(GreyTextureHandle);
 		ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 		ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -581,7 +590,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		ShaderAPI.TexImage2D(0, 0, ImageFormat.BGRX8888, 0, 1, 1, ImageFormat.BGRX8888, false, texel);
 		ShaderAPI.SetStandardTextureHandle(StandardTextureId.Grey, GreyTextureHandle);
 
-		GreyAlphaZeroTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.RGBA8888, 1, 1, tcFlagsSRGB, "[GREYALPHAZERO_TEXID]", TEXTURE_GROUP_OTHER);
+		GreyAlphaZeroTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.RGBA8888, 1, 1, (int)tcFlagsSRGB, "[GREYALPHAZERO_TEXID]", TEXTURE_GROUP_OTHER);
 		ShaderAPI.ModifyTexture(GreyAlphaZeroTextureHandle);
 		ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 		ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -591,7 +600,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		texel[3] = 255;
 		ShaderAPI.SetStandardTextureHandle(StandardTextureId.GreyAlphaZero, GreyAlphaZeroTextureHandle);
 
-		FlatNormalTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, tcFlags, "[FLAT_NORMAL_TEXTURE]", TEXTURE_GROUP_OTHER);
+		FlatNormalTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, (int)tcFlags, "[FLAT_NORMAL_TEXTURE]", TEXTURE_GROUP_OTHER);
 		ShaderAPI.ModifyTexture(FlatNormalTextureHandle);
 		ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 		ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -601,7 +610,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		ShaderAPI.TexImage2D(0, 0, ImageFormat.BGRX8888, 0, 1, 1, ImageFormat.BGRX8888, false, texel);
 		ShaderAPI.SetStandardTextureHandle(StandardTextureId.NormalMapFlat, FlatNormalTextureHandle);
 
-		FullbrightBumpedLightmapTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, tcFlags, "[FULLBRIGHT_BUMPED_LIGHTMAP_TEXID]", TEXTURE_GROUP_LIGHTMAP);
+		FullbrightBumpedLightmapTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.BGRX8888, 1, 1, (int)tcFlags, "[FULLBRIGHT_BUMPED_LIGHTMAP_TEXID]", TEXTURE_GROUP_LIGHTMAP);
 		ShaderAPI.ModifyTexture(FullbrightBumpedLightmapTextureHandle);
 		ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 		ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -618,7 +627,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 			{
 				const int LINEAR_TO_GAMMA_TABLE_WIDTH = 512;
-				LinearToGammaTableTextureHandle = ShaderAPI.CreateTexture(LINEAR_TO_GAMMA_TABLE_WIDTH, 1, 1, gammalookupfmt, 1, 1, iGammaLookupFlags, "[LINEAR_TO_GAMMA_LOOKUP_SRGBON_TEXID]", TEXTURE_GROUP_PIXEL_SHADERS);
+				LinearToGammaTableTextureHandle = ShaderAPI.CreateTexture(LINEAR_TO_GAMMA_TABLE_WIDTH, 1, 1, gammalookupfmt, 1, 1, (int)iGammaLookupFlags, "[LINEAR_TO_GAMMA_LOOKUP_SRGBON_TEXID]", TEXTURE_GROUP_PIXEL_SHADERS);
 				ShaderAPI.ModifyTexture(LinearToGammaTableTextureHandle);
 				ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 				ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -646,7 +655,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 			// generate the identity conversion table texture.
 			{
 				const int LINEAR_TO_GAMMA_IDENTITY_TABLE_WIDTH = 256;
-				LinearToGammaIdentityTableTextureHandle = ShaderAPI.CreateTexture(LINEAR_TO_GAMMA_IDENTITY_TABLE_WIDTH, 1, 1, gammalookupfmt, 1, 1, tcFlags, "[LINEAR_TO_GAMMA_LOOKUP_SRGBOFF_TEXID]", TEXTURE_GROUP_PIXEL_SHADERS);
+				LinearToGammaIdentityTableTextureHandle = ShaderAPI.CreateTexture(LINEAR_TO_GAMMA_IDENTITY_TABLE_WIDTH, 1, 1, gammalookupfmt, 1, 1, (int)tcFlags, "[LINEAR_TO_GAMMA_LOOKUP_SRGBOFF_TEXID]", TEXTURE_GROUP_PIXEL_SHADERS);
 				ShaderAPI.ModifyTexture(LinearToGammaIdentityTableTextureHandle);
 				ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 				ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -674,7 +683,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 		//create the maximum depth texture
 		{
-			MaxDepthTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.RGBA8888, 1, 1, tcFlags, "[MAXDEPTH_TEXID]", TEXTURE_GROUP_OTHER);
+			MaxDepthTextureHandle = ShaderAPI.CreateTexture(1, 1, 1, ImageFormat.RGBA8888, 1, 1, (int)tcFlags, "[MAXDEPTH_TEXID]", TEXTURE_GROUP_OTHER);
 			ShaderAPI.ModifyTexture(MaxDepthTextureHandle);
 			ShaderAPI.TexMinFilter(TexFilterMode.Linear);
 			ShaderAPI.TexMagFilter(TexFilterMode.Linear);
@@ -734,7 +743,6 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		mode.ScaleToOutputResolution = config.ScaleToOutputResolution();
 		mode.UsingMultipleWindows = config.UsingMultipleWindows();
 	}
-
 	IMaterial IMaterialSystem.CreateMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroup, KeyValues keyValues) => CreateMaterial(materialName, textureGroup, keyValues);
 	IMaterial IMaterialSystem.CreateMaterial(ReadOnlySpan<char> materialName, KeyValues keyValues) => CreateMaterial(materialName, TEXTURE_GROUP_OTHER, keyValues);
 
@@ -755,6 +763,31 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		return GetRenderContext().GetCurrentMaterial();
 	}
 
+	public void AddMaterialToMaterialList(IMaterialInternal? material) => MaterialDict.AddMaterialToMaterialList(material!);
+	public void RemoveMaterial(IMaterialInternal? material) => MaterialDict.RemoveMaterial(material!);
+	public void RemoveMaterialSubRect(IMaterialInternal? material) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystemInternal");
+	}
+
+	public int GetLightmapWidth(int lightmap) => MatLightmaps.GetLightmapWidth(lightmap);
+	public int GetLightmapHeight(int lightmap) => MatLightmaps.GetLightmapHeight(lightmap);
+
+	public int GetLightmapPage() => GetRenderContextInternal().GetLightmapPage();
+	public ITexture? GetLocalCubemap() => GetRenderContextInternal().GetLocalCubemap();
+	public void ForceDepthFuncEquals(bool enable) => GetRenderContextInternal().ForceDepthFuncEquals(enable);
+	public MaterialHeightClipMode GetHeightClipMode() => GetRenderContextInternal().GetHeightClipMode();
+
+	public MatCallQueue GetRenderCallQueue() => GetRenderContextInternal().GetCallQueueInternal();
+
+	public void UnbindMaterial(IMaterial? material) {
+		Assert(material == null || ((IMaterialInternal)material).IsRealTimeVersion());
+		if (HardwareRenderContext.GetCurrentMaterial() == material)
+			HardwareRenderContext.Bind(errorMaterial, null);
+	}
+
+	uint RenderThreadID = 0xFFFFFFFF;
+	public uint GetRenderThreadId() => RenderThreadID;
+
 	public bool CanUseEditorMaterials() {
 		return false; //todo
 	}
@@ -768,7 +801,10 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		return GetRenderContextInternal().OnDrawMesh(mesh, firstIndex, indexCount);
 	}
 
-	public IMatRenderContextInternal GetRenderContextInternal() => matContext!.Value!;
+	public IMatRenderContextInternal GetRenderContextInternal() {
+		IMatRenderContextInternal? renderContext = RenderContext.Value;
+		return renderContext ?? HardwareRenderContext;
+	}
 
 	public bool InFlashlightMode() {
 		return GetRenderContextInternal().InFlashlightMode();
@@ -785,8 +821,8 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 	public void SyncMatrices() => GetRenderContextInternal().SyncMatrices();
 	public void SyncMatrix(MaterialMatrixMode mode) => GetRenderContextInternal().SyncMatrix(mode);
 
-	public ITexture FindTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroupName, bool complain, int additionalCreationFlags) {
-		ITextureInternal? texture = TextureSystem.FindOrLoadTexture(textureName, textureGroupName, additionalCreationFlags);
+	public ITexture? FindTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroupName, bool complain = true, CreateTextureFlags additionalCreationFlags = 0) {
+		ITextureInternal? texture = TextureSystem.FindOrLoadTexture(textureName, textureGroupName, (int)additionalCreationFlags);
 		Assert(texture != null);
 		if (texture != null && texture.IsError()) {
 			if (complain) {
@@ -799,10 +835,10 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 	public bool IsTextureLoaded(ReadOnlySpan<char> textureName) => TextureSystem.IsTextureLoaded(textureName);
 
-	internal ReadOnlySpan<char> GetForcedTextureLoadPathID() {
+	public ReadOnlySpan<char> GetForcedTextureLoadPathID() {
 		return "GAME";
 	}
-	public IMaterial FindMaterialEx(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, MaterialFindContext context, bool complain, ReadOnlySpan<char> complainPrefix) {
+	public IMaterial? FindMaterialEx(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, int context, bool complain = true, ReadOnlySpan<char> complainPrefix = default) {
 		materialName = materialName.SliceNullTerminatedString();
 		Span<char> tempNameBuffer = stackalloc char[materialName.Length];
 		for (int i = 0; i < materialName.Length; i++) {
@@ -849,7 +885,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 			else {
 				mat = MaterialDict.AddMaterial(matNameWithExtension, textureGroupName);
 				if (ShaderDevice.IsUsingGraphics()) {
-					mat.PrecacheVars(keyValues, patchKeyValues, includes, context);
+					mat.PrecacheVars(keyValues, patchKeyValues, includes, (MaterialFindContext)context);
 					ForcedTextureLoadPathID = null;
 				}
 			}
@@ -876,7 +912,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 	public string? ForcedTextureLoadPathID;
 
 	public IMaterial? FindMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, bool complain, ReadOnlySpan<char> complainPrefix) {
-		return FindMaterialEx(materialName, textureGroupName, MaterialFindContext.None, complain, complainPrefix);
+		return FindMaterialEx(materialName, textureGroupName, (int)MaterialFindContext.None, complain, complainPrefix);
 	}
 
 	public void CreateDebugMaterials() {
@@ -933,7 +969,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		TextureSystem.RestoreRenderTargets();
 		Restore?.Invoke();
 		for (int i = 0; i < RestoreFunc.Count; i++)
-			RestoreFunc[i](changeFlags);
+			RestoreFunc[i]((RestoreChangeFlags)changeFlags);
 		TextureSystem.RestoreNonRenderTargetTextures();
 	}
 
@@ -1012,7 +1048,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 	public void AddTextureAlias(ReadOnlySpan<char> alias, ReadOnlySpan<char> realName) => TextureSystem.AddTextureAlias(alias, realName);
 	public void RemoveTextureAlias(ReadOnlySpan<char> alias) => TextureSystem.RemoveTextureAlias(alias);
-	public ImageFormat GetBackBufferFormat() => ShaderAPI.GetBackBufferFormat();
+	public ImageFormat GetBackBufferFormat() => ShaderDevice.GetBackBufferFormat();
 
 	public void GetRenderTargetFrameBufferDimensions(out int fbWidth, out int fbHeight) {
 		if (RT_FB_WidthOverride > 0 && RT_FB_HeightOverride > 0) {
@@ -1030,8 +1066,8 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		MatLightmaps.EndLightmapAllocation();
 		AllocateStandardTextures();
 	}
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public short AllocateLightmap(int allocationWidth, int allocationHeight, Span<int> offsetIntoLightmapPage, IMaterial? material) => (short)MatLightmaps.AllocateLightmap(allocationWidth, allocationHeight, offsetIntoLightmapPage, material);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public short AllocateWhiteLightmap(IMaterial? material) => (short)MatLightmaps.AllocateWhiteLightmap(material);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public int AllocateLightmap(int allocationWidth, int allocationHeight, Span<int> offsetIntoLightmapPage, IMaterial? material) => MatLightmaps.AllocateLightmap(allocationWidth, allocationHeight, offsetIntoLightmapPage, material);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public int AllocateWhiteLightmap(IMaterial? material) => MatLightmaps.AllocateWhiteLightmap(material);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public void GetLightmapPageSize(int lightmap, out int width, out int height) => MatLightmaps.GetLightmapPageSize(lightmap, out width, out height);
 
 	public void UpdateLightmap(int lightmapPageID, Span<int> lightmapSize, Span<int> offsetIntoLightmapPage, Span<float> floatImage, Span<float> floatImageBump1, Span<float> floatImageBump2, Span<float> floatImageBump3)
@@ -1043,9 +1079,9 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 	public void BeginUpdateLightmaps() => MatLightmaps.BeginUpdateLightmaps();
 	public void EndUpdateLightmaps() => MatLightmaps.EndUpdateLightmaps();
 
-	public void BindStandardTexture(Sampler sampler, StandardTextureId id) => GetRenderContext().BindStandardTexture(sampler, id);
+	public void BindStandardTexture(Sampler sampler, StandardTextureId id) => GetRenderContextInternal().BindStandardTexture(sampler, id);
 
-	public IMaterialProxy? DetermineProxyReplacements(Material material, KeyValues fallbackKeyValues) {
+	public IMaterialProxy? DetermineProxyReplacements(IMaterial? material, KeyValues? fallbackKeyValues) {
 		throw new NotImplementedException();
 	}
 
@@ -1057,18 +1093,18 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		MaterialProxyFactory = factory;
 	}
 
-	private void UncacheAllMaterials() {
+	public void UncacheAllMaterials() {
 		// todo: finish me!!
 		foreach (var material in MaterialDict) {
 			material.Uncache();
 		}
 	}
 
-	void ReloadTextures() {
+	public void ReloadTextures() {
 		// todo
 	}
 
-	void ReloadMaterials(ReadOnlySpan<char> subString = default) {
+	public void ReloadMaterials(ReadOnlySpan<char> subString = default) {
 		// todo
 	}
 
@@ -1083,24 +1119,24 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 	public event Action? Restore;
 
-	readonly List<Action<int>> RestoreFunc = [];
-	readonly List<Action> ReleaseFunc = [];
+	readonly List<MaterialBufferRestoreFunc> RestoreFunc = [];
+	readonly List<MaterialBufferReleaseFunc> ReleaseFunc = [];
 
-	public void AddReleaseFunc(Action func) {
+	public void AddReleaseFunc(MaterialBufferReleaseFunc func) {
 		Assert(!ReleaseFunc.Contains(func));
 		ReleaseFunc.Add(func);
 	}
 
-	public void RemoveReleaseFunc(Action func) {
+	public void RemoveReleaseFunc(MaterialBufferReleaseFunc func) {
 		ReleaseFunc.Remove(func);
 	}
 
-	public void AddRestoreFunc(Action<int> func) {
+	public void AddRestoreFunc(MaterialBufferRestoreFunc func) {
 		Assert(!RestoreFunc.Contains(func));
 		RestoreFunc.Add(func);
 	}
 
-	public void RemoveRestoreFunc(Action<int> func) {
+	public void RemoveRestoreFunc(MaterialBufferRestoreFunc func) {
 		RestoreFunc.Remove(func);
 	}
 
@@ -1112,12 +1148,325 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 
 	public IMaterialInternal errorMaterial;
 	public readonly MatLightmaps MatLightmaps;
+
+	public bool AddTextureCompositorTemplate(ReadOnlySpan<char> name, KeyValues tmplDesc, int texCompositeTemplateFlags = 0) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool AddView(IWindow hwnd) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public int AllocateDynamicLightmap(Span<int> lightmapSize, Span<int> outOffsetIntoPage, int frameID) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool AllowThreading(bool allow, int serviceThread) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void AsyncFindTexture<T>(ReadOnlySpan<char> pFilename, ReadOnlySpan<char> textureGroupName, IAsyncTextureOperationReceiver<T> recipient, ref T extraArgs, bool complain = true, CreateTextureFlags additionalCreationFlags = 0) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void CacheUsedMaterials() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void ClearBuffers(bool clearColor, bool clearDepth, bool clearStencil = false) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void CompactMemory() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public ITexture? CreateNamedRenderTargetTexture(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared, bool clampTexCoords = true, bool autoMipMap = false) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public ITexture? CreateNamedTextureFromBitsEx(ReadOnlySpan<char> name, ReadOnlySpan<char> textureGroupName, int w, int h, int mips, ImageFormat fmt, int srcBufferSize, Span<byte> srcBits, CreateTextureFlags flags) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public ITexture? CreateRenderTargetTexture(int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public ITexture? CreateTextureFromBits(int w, int h, int mips, ImageFormat fmt, int srcBufferSize, Span<byte> srcBits) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void DebugPrintUsedMaterials(ReadOnlySpan<char> searchSubString, bool verbose) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void DebugPrintUsedTextures() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void DoStartupShaderPreloading() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void EnableEditorMaterials() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void EvictManagedResources() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void ExecuteQueued() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public MaterialHandle_t FirstMaterial() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void Flush(bool flushHardware = false) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void GMOD_ClearMissing(bool unknown) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void GMOD_FlushQueue() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public IMaterial? GMOD_GetErrorMaterial() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool GMOD_IsMaterialMissing(ReadOnlySpan<char> materialName) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void GMOD_MarkMissing(ReadOnlySpan<char> materialName) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool GMOD_TextureExists(ReadOnlySpan<char> textureName) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void GetDisplayAdapterInfo(uint adapter, out MaterialAdapterInfo info) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public ReadOnlySpan<char> GetDisplayDeviceName() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void GetDisplayMode(out UserVideoMode mode) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void GetDriverLevelDefaults(out GraphicsDriver maxLevel, out GraphicsDriver recommendedLevel) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public IMaterialSystemHardwareConfig GetHardwareConfig(ReadOnlySpan<char> pVersion, out int returnCode) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public IMaterial? GetMaterial(MaterialHandle_t h) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public uint GetModeCount(uint adapter) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public int GetNumMaterials() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool GetRecommendedConfigurationInfo(int nDXLevel, KeyValues keyValues) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void GetShaderFallback(ReadOnlySpan<char> shaderName, Span<char> fallbackShader) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public int GetShaders(int firstShader, Span<IShader> shaderList) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public MaterialThreadMode GetThreadMode() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public ref readonly MaterialSystemHardwareIdentifier GetVideoCardIdentifier() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void HandleDeviceLost() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool HasShaderAPI() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void Init(IServiceProvider shaderAPIFactory, IMaterialProxyFactory materialProxyFactory, IServiceProvider fileSystemFactory, IServiceProvider? cvarFactory = null) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public MaterialHandle_t InvalidMaterial() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool IsMaterialLoaded(ReadOnlySpan<char> materialName) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool IsRenderThreadSafe() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public MaterialLock Lock() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public ITextureCompositor? NewTextureCompositor(int w, int h, ReadOnlySpan<char> compositeName, int teamNum, ulong randomSeed, KeyValues stageDesc, CreateTextureFlags texCompositeCreateFlags = 0) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public MaterialHandle_t NextMaterial(MaterialHandle_t h) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void OverrideRenderTargetAllocation(bool rtAlloc) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void ReacquireResources() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void ReleaseResources() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void ReloadFilesInList(IFileList filesToReload) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void RemoveModeChangeCallBack(ModeChangeCallbackFunc func) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void RemoveView(IWindow hwnd) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void ResetMaterialLightmapPageInfo() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void ResetTempHWMemory(bool bExitingLevel = false) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void SetAdapter(uint adapter, int flags) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void SetExcludedTextures(ReadOnlySpan<char> scriptName) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void SetInStubMode(bool inStubMode) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void SetShaderAPI(IServiceProvider shaderAPIFactory) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void SetThreadMode(MaterialThreadMode mode, int nServiceThread = -1) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void SetView(IWindow hwnd) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public int ShaderCount() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public int ShaderFlagCount() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public ReadOnlySpan<char> ShaderFlagName(int index) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void SpewDriverInfo() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public int StencilBufferBits() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool SupportsCSAAMode(int nNumSamples, int nQualityLevel) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool SupportsFetch4() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool SupportsHDRMode(HDRType hdrMode) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool SupportsMSAAMode(int nMSAAMode) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void ToggleDebugMaterial(ReadOnlySpan<char> materialName) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void ToggleSuppressMaterial(ReadOnlySpan<char> materialName) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void UncacheUnusedMaterials(bool bRecomputeStateSnapshots = false) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void Unlock(MaterialLock l) {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public void UpdateExcludedTextures() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool UsingFastClipping() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
+
+	public bool VerifyTextureCompositorTemplates() {
+		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+	}
 }
 
 public enum MatrixStackFlags : uint
 {
 	Dirty = 1 << 0
 }
+
 public struct MatrixStackItem
 {
 	public Matrix4x4 Matrix;

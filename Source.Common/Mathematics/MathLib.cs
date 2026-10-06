@@ -17,6 +17,7 @@ public static class MathLibConsts
 	public const int PITCH = 0;
 	public const int YAW = 1;
 	public const int ROLL = 2;
+	public const vec_t VEC_T_NAN = vec_t.NaN;
 
 	public const float FLT_EPSILON = 1.192092896e-07f; // FLT_EPSILON (2^-23), MathF.BitIncrement(1.0f) - 1.0f, not the same as float.Epsilon
 	public const double DBL_EPSILON = 2.2204460492503131e-16; // DBL_EPSILON (2^-52), Math.BitIncrement(1.0) - 1.0, not the same as double.Epsilon

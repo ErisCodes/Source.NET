@@ -485,7 +485,7 @@ public class MatLightmaps
 					LightmapPageTextureHandles[lightmap] = ShaderAPI.CreateTexture(
 						GetLightmapWidth(lightmap), GetLightmapHeight(lightmap), 1,
 						imageFormat,
-						1, 1, flags, debugName, TEXTURE_GROUP_LIGHTMAP);
+						1, 1, (int)flags, debugName, TEXTURE_GROUP_LIGHTMAP);
 
 					ShaderAPI.ModifyTexture(LightmapPageTextureHandles[lightmap]);
 					ShaderAPI.TexMinFilter(TexFilterMode.Linear);
