@@ -679,6 +679,8 @@ public class MatSystemSurface : IMatSystemSurface
 		int count = 0;
 		Span<SurfaceVertex> quads = stackalloc SurfaceVertex[2 * text.Length];
 		bool underlined = FontManager.GetFontUnderlined(CurrentFont);
+		if (drawType == FontDrawType.Default)
+			drawType = IsFontAdditive(CurrentFont) > 0 ? FontDrawType.Additive : FontDrawType.NonAdditive;
 
 		int totalWidth = 0;
 		Span<TextureID> texID = stackalloc TextureID[1];
@@ -720,10 +722,10 @@ public class MatSystemSurface : IMatSystemSurface
 				lr.Position.X = ul.Position.X + textureWide;
 				lr.Position.Y = ul.Position.Y + tall;
 
-				ul.TexCoord[0] = texCoords[0].X0;
-				ul.TexCoord[1] = texCoords[0].Y0;
-				lr.TexCoord[0] = texCoords[0].X1;
-				lr.TexCoord[1] = texCoords[0].Y1;
+				ul.TexCoord.X = texCoords[0].X0;
+				ul.TexCoord.Y = texCoords[0].Y0;
+				lr.TexCoord.X = texCoords[0].X1;
+				lr.TexCoord.Y = texCoords[0].Y1;
 			}
 			totalWidth += (int)MathF.Floor(flWide + 0.6f);
 		}
@@ -1267,7 +1269,19 @@ public class MatSystemSurface : IMatSystemSurface
 	}
 
 	public void ReleasePanel(IPanel panel) {
-		throw new NotImplementedException();
+		RemovePopup(panel);
+		// todo: m_Titles remove
+	}
+
+	void RemovePopup(IPanel panel) {
+		for (int i = PopupList.Count - 1; i >= 0; i--) {
+			IPanel? popup = PopupList[i];
+			if (popup != null && popup != panel)
+				continue;
+
+			PopupList.RemoveAt(i);
+			break;
+		}
 	}
 
 	public void DrawTexturedPolygon(Span<SurfaceVertex> vertices, bool clipVertices = true) {
@@ -2066,6 +2080,14 @@ public class MatSystemSurface : IMatSystemSurface
 	public void DisableClipping(bool disable) {
 		DrawFlushText();
 		EnableScissor(!disable);
+	}
+
+	public void GetClippingRect(out int left, out int top, out int right, out int bottom, out bool clippingDisabled) {
+		left = scissorRect.Left;
+		top = scissorRect.Top;
+		right = scissorRect.Right;
+		bottom = scissorRect.Bottom;
+		clippingDisabled = !scissorRect.Scissor;
 	}
 
 	public void PushFullscreenViewport() {

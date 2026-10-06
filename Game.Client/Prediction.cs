@@ -323,6 +323,9 @@ public class Prediction : IPrediction
 		Span<char> sz = stackalloc char[32];
 		sprintf(sz, "preentitypacket%d").D(commandsAcknowledged);
 		IncomingPacketNumber = currentWorldUpdatePacket;
+#if GMOD_DLL
+		garrysmod.Think();
+#endif
 
 		if (cl_predict.GetInt() == 0) {
 			ShutdownPredictables();

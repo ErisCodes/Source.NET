@@ -25,6 +25,7 @@ public static class SourceDllMain
 	[Dependency] public static IFileSystem filesystem { get; private set; } = null!;
 	[Dependency] public static ServerGlobalVariables gpGlobals { get; private set; } = null!;
 	[Dependency] public static ICvar cvar { get; private set; } = null!;
+	[Dependency] public static ICommandLine commandLine { get; private set; } = null!;
 	[Dependency] public static ISpatialPartition partition { get; private set; } = null!;
 	[Dependency] public static IUniformRandomStream random { get; private set; } = null!;
 	[Dependency] public static ISoundEmitterSystemBase soundemitterbase { get; private set; } = null!;

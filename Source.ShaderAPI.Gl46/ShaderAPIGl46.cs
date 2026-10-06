@@ -1712,6 +1712,75 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		return supportsSRGBDecode.Value;
 	}
 
+	int ForcedMinFilter;
+	int ForcedMagFilter;
+	readonly uint[] ForcedFilterSamplers = new uint[(int)Sampler.MaxSamplers];
+	readonly bool[] ForcedFilterSamplerBound = new bool[(int)Sampler.MaxSamplers];
+
+	public void GMOD_ForceFilterMode(bool min, int mode) {
+		if (min)
+			ForcedMinFilter = mode;
+		else
+			ForcedMagFilter = mode;
+	}
+
+	unsafe void ApplyForcedFilter(Sampler sampler, ShaderAPITextureHandle_t textureHandle) {
+		int unit = (int)sampler;
+		if (ForcedMinFilter == 0 && ForcedMagFilter == 0) {
+			if (ForcedFilterSamplerBound[unit]) {
+				glBindSampler((uint)unit, 0);
+				ForcedFilterSamplerBound[unit] = false;
+			}
+			return;
+		}
+
+		if (ForcedFilterSamplers[unit] == 0)
+			ForcedFilterSamplers[unit] = glCreateSamplers();
+		uint samplerObject = ForcedFilterSamplers[unit];
+		uint texture = GetGL46Texture(textureHandle);
+
+		int value;
+		foreach (int pname in (ReadOnlySpan<int>)[GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TEXTURE_WRAP_R, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER]) {
+			glGetTextureParameteriv(texture, pname, &value);
+			glSamplerParameteri(samplerObject, pname, value);
+		}
+		if (SupportsSRGBDecode()) {
+			glGetTextureParameteriv(texture, GL_TEXTURE_SRGB_DECODE_EXT, &value);
+			glSamplerParameteri(samplerObject, GL_TEXTURE_SRGB_DECODE_EXT, value);
+		}
+		glSamplerParameterf(samplerObject, GL_TEXTURE_MAX_ANISOTROPY, 1.0f);
+
+		bool mipped = GetTexture(textureHandle).Levels > 1;
+		switch (ForcedMinFilter) {
+			case 0:
+				break;
+			case 1:
+				glSamplerParameteri(samplerObject, GL_TEXTURE_MIN_FILTER, mipped ? GL_NEAREST_MIPMAP_LINEAR : GL_NEAREST);
+				break;
+			case 3:
+				glSamplerParameterf(samplerObject, GL_TEXTURE_MAX_ANISOTROPY, HardwareConfig.MaximumAnisotropicLevel());
+				glSamplerParameteri(samplerObject, GL_TEXTURE_MIN_FILTER, mipped ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+				break;
+			default:
+				glSamplerParameteri(samplerObject, GL_TEXTURE_MIN_FILTER, mipped ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+				break;
+		}
+
+		switch (ForcedMagFilter) {
+			case 0:
+				break;
+			case 1:
+				glSamplerParameteri(samplerObject, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				break;
+			default:
+				glSamplerParameteri(samplerObject, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				break;
+		}
+
+		glBindSampler((uint)unit, samplerObject);
+		ForcedFilterSamplerBound[unit] = true;
+	}
+
 	readonly int[] LastBoundTextures = new int[(int)Sampler.MaxSamplers];
 	public void BindTexture(Sampler sampler, ShaderAPITextureHandle_t textureHandle) {
 		if (textureHandle == INVALID_SHADERAPI_TEXTURE_HANDLE)
@@ -1733,6 +1802,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 				info.LastSRGBDecode = decode;
 			}
 		}
+
+		ApplyForcedFilter(sampler, textureHandle);
 	}
 
 	public bool CanDownloadTextures() {

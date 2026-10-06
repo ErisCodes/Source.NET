@@ -539,8 +539,37 @@ public class VGuiInput : IVGuiInput
 		throw new NotImplementedException();
 	}
 
+	void PanelDeleted(IPanel? focus, ref InputContext context) {
+		if (context.KeyFocus == focus)
+			context.KeyFocus = null;
+		if (context.MouseOver == focus)
+			context.MouseOver = null;
+		if (context.OldMouseFocus == focus)
+			context.OldMouseFocus = null;
+		if (context.MouseFocus == focus)
+			context.MouseFocus = null;
+
+		if (context.MouseCapture == focus) {
+			SetMouseCapture(null);
+			context.MouseCapture = null;
+		}
+		if (context.AppModalPanel == focus)
+			ReleaseAppModalSurface();
+		if (context.UnhandledMouseClickListener == focus)
+			context.UnhandledMouseClickListener = null;
+		if (context.ModalSubTree == focus) {
+			context.ModalSubTree = null;
+			context.RestrictMessagesToModalSubTree = false;
+		}
+
+		if (focus != null)
+			context.KeyCodeUnhandledListeners?.Remove(focus);
+	}
+
 	public void PanelDeleted(IPanel? panel) {
-		throw new NotImplementedException();
+		foreach (HInputContext key in Contexts.Keys)
+			PanelDeleted(panel, ref CollectionsMarshal.GetValueRefOrNullRef(Contexts, key));
+		PanelDeleted(panel, ref DefaultInputContext);
 	}
 
 	public void PostCursorMessage() {

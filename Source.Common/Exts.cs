@@ -785,7 +785,24 @@ public static class StrTools
 				str[i] = char.ToUpper(str[i]);
 	}
 
+	public static void StripFilename(Span<char> path) {
+		int length = (int)(strlen(path) - 1);
+		if (length <= 0)
+			return;
+
+		while (length > 0 && !IsPathSeparator(path[length]))
+			length--;
+
+		path[length] = '\0';
+	}
+
 	public static void StripExtension(ReadOnlySpan<char> input, Span<char> output) {
+		if (input.IsEmpty) {
+			if (!output.IsEmpty)
+				output[0] = '\0';
+			return;
+		}
+
 		int end = input.Length - 1;
 		while (end > 0 && input[end] != '.' && !IsPathSeparator(input[end]))
 			--end;
@@ -910,7 +927,7 @@ public static class StrTools
 			if (c == '/' || c == '\\')
 				break;
 			if (c == '.')
-				return; 
+				return;
 		}
 
 		for (int i = 0; i < extension.Length && len + i < path.Length; i++)

@@ -83,6 +83,8 @@ public class MatRenderContext : IMatRenderContextInternal
 		shaderAPI.FlushBufferedPrimitives();
 	}
 
+	public void GMOD_ForceFilterMode(bool min, int mode) => shaderAPI.GMOD_ForceFilterMode(min, mode);
+
 	public void GetViewport(out int x, out int y, out int width, out int height) {
 		Assert(RenderTargetStack.Count > 0);
 		ref RenderTargetStackElement element = ref RenderTargetStack.Top();

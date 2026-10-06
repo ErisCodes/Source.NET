@@ -39,7 +39,8 @@ static class AssetUtils
 			new("hl2/gamemodes", "garrysmod/gamemodes", IsDirectory: true),
 			new("hl2/lua", "garrysmod/lua", IsDirectory: true),
 			#endif
-			new("hl2/cache/workshop", "garrysmod/cache/workshop", IsDirectory: true, Optional: false)
+			new("hl2/cache/workshop", "garrysmod/cache/workshop", IsDirectory: true, Optional: false),
+			new("hl2/settings", "garrysmod/settings", IsDirectory: true)
 		];
 
 		string[] specificGmodVpks = ["dir", "000", "001", "002"];
@@ -51,7 +52,6 @@ static class AssetUtils
 
 	public static List<AssetMapping> GetOptionalAssets() {
 		return [
-			new("hl2/maps", "garrysmod/maps", IsDirectory: true, Optional: true),
 			new("hl2/cfg/autoexec.cfg", "garrysmod/cfg/autoexec.cfg", Optional: true)
 		];
 	}

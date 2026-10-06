@@ -1,6 +1,7 @@
 using CommunityToolkit.HighPerformance;
 
 using Source.Common.Formats.Keyvalues;
+using Source.Common.GarrysMod.Lua;
 using Source.Common.GUI;
 
 namespace Source.GUI.Controls;
@@ -19,6 +20,11 @@ public class Label : Panel
 	protected bool AutoWideDirty;
 
 	protected TextImage? TextImage;
+
+	public Alignment GetContentAlignment() => ContentAlignment;
+
+	public Color ExpensiveShadowColor;
+	public int ExpensiveShadowDistance;
 
 	public Label(Panel? parent, ReadOnlySpan<char> panelName, ReadOnlySpan<char> text) : base(parent, panelName) {
 		Init();
@@ -190,7 +196,11 @@ public class Label : Panel
 	}
 	public virtual void GetText(Span<char> textOut) => TextImage!.GetText(textOut);
 
+#if GMOD_DLL
+	public override void SetText(ReadOnlySpan<char> text) {
+#else
 	public virtual void SetText(ReadOnlySpan<char> text) {
+#endif
 		if (text.IsEmpty)
 			text = "";
 
@@ -201,9 +211,6 @@ public class Label : Panel
 	}
 
 	public override void ApplySchemeSettings(IScheme scheme) {
-#if GMOD_DLL
-		// todo: ApplySchemeSettings hook
-#endif
 		base.ApplySchemeSettings(scheme);
 
 		if (FontOverrideName != null)
@@ -260,6 +267,12 @@ public class Label : Panel
 				SetFgColor(GetSchemeColor("Label.TextColor", scheme));
 				break;
 		}
+#if GMOD_DLL
+		if (PushLuaHook(LUA_POOLEDSTRING.ApplySchemeSettings)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
+#endif
 	}
 
 	nint TextImageIndex;
@@ -559,7 +572,7 @@ public class Label : Panel
 		ty1 = ty0 + tTall;
 	}
 
-	internal TextImage? GetTextImage() {
+	public TextImage? GetTextImage() {
 		return TextImage;
 	}
 

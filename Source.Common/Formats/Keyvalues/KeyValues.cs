@@ -167,7 +167,7 @@ public class KeyValues : IEnumerable<KeyValues>
 					break;
 				case Types.Double:
 					writer.Write("\"");
-					WriteStringToBuffer(writer, (Value is double d ? d : Value is int i2 ? i2 : 0).ToString());
+					WriteStringToBuffer(writer, ((float)(Value is double d ? d : Value is int i2 ? i2 : 0)).ToString("F6", CultureInfo.InvariantCulture));
 					writer.WriteLine("\"");
 					break;
 				case Types.Pointer:
@@ -454,29 +454,65 @@ public class KeyValues : IEnumerable<KeyValues>
 		return didAnything;
 	}
 
-	// TODO FIXME: These should... return early if parsed successfully
-	// but rn doing that breaks some things :[
 	private void DetermineValueType(string input) {
-		// Try Int32
-		if (int.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out int i32)) {
-			Value = i32;
-			Type = Types.Int;
+		if (input.Length == 0) {
+			Value = input;
+			Type = Types.String;
+			return;
 		}
 
-		// Try UInt64
-		if (ulong.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong ui64)) {
-			Value = ui64;
+		// an 18-byte value prefixed with "0x" (followed by 16 hex digits) is an uint64 value
+		if (input.Length == 18 && input[0] == '0' && input[1] == 'x') {
+			ulong retVal = 0;
+			for (int i = 2; i < 2 + 16; i++) {
+				char digit = input[i];
+				if (digit >= 'a')
+					digit -= (char)('a' - ('9' + 1));
+				else if (digit >= 'A')
+					digit -= (char)('A' - ('9' + 1));
+				retVal = (retVal * 16) + (ulong)(digit - '0');
+			}
+			Value = retVal;
 			Type = Types.Uint64;
+			return;
 		}
 
-		// Try Double
-		if (double.TryParse(input, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double d64)) {
-			Value = d64;
+		// strtol consumes the whole string
+		if (IsIntegerSyntax(input)) {
+			if (int.TryParse(input, NumberStyles.AllowLeadingWhite | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int i32)) {
+				Value = i32;
+				Type = Types.Int;
+			}
+			else {
+				Value = input;
+				Type = Types.String;
+			}
+			return;
+		}
+
+		// strtod consumes the whole string, further than strtol
+		if (double.TryParse(input, NumberStyles.AllowLeadingWhite | NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out double d64)) {
+			Value = (double)(float)d64;
 			Type = Types.Double;
+			return;
 		}
 
 		Value = input;
 		Type = Types.String;
+	}
+
+	static bool IsIntegerSyntax(ReadOnlySpan<char> input) {
+		int i = 0;
+		while (i < input.Length && char.IsWhiteSpace(input[i]))
+			i++;
+		if (i < input.Length && (input[i] == '+' || input[i] == '-'))
+			i++;
+		if (i == input.Length)
+			return false;
+		for (; i < input.Length; i++)
+			if (input[i] < '0' || input[i] > '9')
+				return false;
+		return true;
 	}
 
 	public static string ReadWhitespaceTerminatedString(KeyValuesReader reader) {
@@ -620,11 +656,27 @@ public class KeyValues : IEnumerable<KeyValues>
 		return dat;
 	}
 
-	public ReadOnlySpan<char> GetString() => Value is string str ? (str ?? "") : "";
+	public ReadOnlySpan<char> GetString() {
+		switch (Type) {
+			case Types.Double:
+				Value = ((float)(double)Value!).ToString("F6", CultureInfo.InvariantCulture);
+				Type = Types.String;
+				break;
+			case Types.Int:
+				Value = ((int)Value!).ToString(CultureInfo.InvariantCulture);
+				Type = Types.String;
+				break;
+			case Types.Uint64:
+				Value = ((long)(ulong)Value!).ToString(CultureInfo.InvariantCulture);
+				Type = Types.String;
+				break;
+		}
+		return Value is string str ? str : "";
+	}
 	public ReadOnlySpan<char> GetString(ReadOnlySpan<char> key, ReadOnlySpan<char> defaultValue = default) {
 		var keyob = FindKey(key);
 		if (keyob == null) return defaultValue;
-		return keyob.Value is string str ? (str ?? "") : "";
+		return keyob.GetString();
 	}
 
 	public void SetString(ReadOnlySpan<char> keyName, ReadOnlySpan<char> value) {
@@ -645,13 +697,13 @@ public class KeyValues : IEnumerable<KeyValues>
 		if (keyob == null)
 			return defaultValue;
 
-		return keyob.Value is int i
-			? i
-			: keyob.Value is string str
-				? int.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out int r)
-					? r
-					: defaultValue
-				: defaultValue;
+		return keyob.Value switch {
+			int i => i,
+			double d => (int)d,
+			ulong u => (int)u,
+			string str => int.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out int r) ? r : defaultValue,
+			_ => defaultValue
+		};
 	}
 
 	public Color GetColor(ReadOnlySpan<char> key, Color defaultValue = default) {
@@ -669,13 +721,13 @@ public class KeyValues : IEnumerable<KeyValues>
 		if (keyob == null)
 			return defaultValue;
 
-		return Convert.ToSingle(keyob.Value is double i
-			? i
-			: keyob.Value is string str
-				? double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double r)
-					? r
-					: defaultValue
-				: defaultValue);
+		return keyob.Value switch {
+			double d => (float)d,
+			int i => i,
+			ulong u => u,
+			string str => double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double r) ? (float)r : defaultValue,
+			_ => defaultValue
+		};
 	}
 
 	public double GetDouble(ReadOnlySpan<char> key, double defaultValue = default) {
@@ -684,13 +736,13 @@ public class KeyValues : IEnumerable<KeyValues>
 		if (keyob == null)
 			return defaultValue;
 
-		return keyob.Value is double i
-			? i
-			: keyob.Value is string str
-				? double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double r)
-					? r
-					: defaultValue
-				: defaultValue;
+		return keyob.Value switch {
+			double d => d,
+			int i => i,
+			ulong u => u,
+			string str => double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double r) ? r : defaultValue,
+			_ => defaultValue
+		};
 	}
 
 	public void SetInt(int value) {

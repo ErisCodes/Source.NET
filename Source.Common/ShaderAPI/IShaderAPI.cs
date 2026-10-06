@@ -110,6 +110,7 @@ public interface IShaderAPI : IShaderDynamicAPI
 	bool SetBoardState(in GraphicsBoardState state);
 	bool CanDownloadTextures();
 	void BindTexture(Sampler sampler, ShaderAPITextureHandle_t textureHandle);
+	void GMOD_ForceFilterMode(bool min, int mode);
 	void TexImageFromVTF(IVTFTexture? vtfTexture, int i);
 	void ModifyTexture(int v);
 	ShaderAPITextureHandle_t CreateTexture(

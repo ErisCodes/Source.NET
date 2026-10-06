@@ -345,7 +345,7 @@ public interface IFileSystem : IBaseFileSystem
 	ReadOnlySpan<char> ReadLine(Span<char> output, IFileHandle file);
 
 #if GMOD_DLL
-	void RemoveSearchPathsByGroup(int unk1);
+	void RemoveSearchPathsByGroup(PathGroupName groupName);
 	void SetGet(IGet get);
 	Addon.FileSystem Addons();
 	Gamemode.System Gamemodes();

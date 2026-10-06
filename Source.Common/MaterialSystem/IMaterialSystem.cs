@@ -330,6 +330,7 @@ public interface IMatRenderContext
 	void BeginRender();
 	void EndRender();
 	void Flush(bool flushHardware);
+	void GMOD_ForceFilterMode(bool min, int mode);
 
 	void ClearBuffers(bool clearColor, bool clearDepth, bool clearStencil = false);
 
@@ -437,6 +438,7 @@ public readonly struct MatRenderContextPtr : IDisposable, IMatRenderContext
 	public void BeginRender() => ctx.BeginRender();
 	public void EndRender() => ctx.EndRender();
 	public void Flush(bool flushHardware = false) => ctx.Flush(flushHardware);
+	public void GMOD_ForceFilterMode(bool min, int mode) => ctx.GMOD_ForceFilterMode(min, mode);
 	public void ClearBuffers(bool clearColor, bool clearDepth, bool clearStencil = false) => ctx.ClearBuffers(clearColor, clearDepth, clearStencil);
 	public void Viewport(int x, int y, int width, int height) => ctx.Viewport(x, y, width, height);
 	public void GetViewport(out int x, out int y, out int width, out int height) => ctx.GetViewport(out x, out y, out width, out height);

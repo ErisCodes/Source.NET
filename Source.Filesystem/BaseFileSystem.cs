@@ -950,14 +950,17 @@ public partial class BaseFileSystem : IFileSystem
 		return output[..count];
 	}
 
-	public void RemoveSearchPathsByGroup(int unk1) {
-		throw new NotImplementedException();
+	public void RemoveSearchPathsByGroup(PathGroupName groupName) {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
+		List<searchPathInternal> group = GetSearchPathGroupsFor(groupName);
+		for (int i = group.Count - 1; i >= 0; i--)
+			RemoveSearchPath(group[i].path, group[i].pathID);
 	}
 
 
 #if GMOD_DLL
 	internal static IGet get = null!;
-	static readonly AddonFileSystem g_AddonFileSystem = new();
+	internal static readonly AddonFileSystem g_AddonFileSystem = new();
 	static readonly GamemodeSystem g_GamemodeSystem = new();
 	static readonly GameDepotSystem g_GameDepotSystem = new();
 	static readonly LegacyAddonSystem g_LegacyAddons = new();

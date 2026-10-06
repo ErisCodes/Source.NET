@@ -257,6 +257,7 @@ public partial class BasePlayer : BaseCombatCharacter
 	public virtual bool IsFakeClient() => (GetFlags() & EntityFlags.FakeClient) != 0;
 	public virtual bool IsBotOfType(int botType) => (GetBotType() != 0) && (GetBotType() == botType);
 	public virtual int GetBotType() => 0;
+	public bool IsHLTV() => pl.HLTV;
 
 	public int GetLockViewanglesTickNumber() => LockViewanglesTickNumber;
 	public QAngle GetLockViewanglesData() => LockedViewangles;
@@ -546,7 +547,9 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	bool HasHaptics;
 	[NetworkName("m_bDisableWorldClicking")]
-	bool DisableWorldClicking;
+	public bool DisableWorldClicking;
+	public bool WorldClicking;
+	public Vector3 WorldClickVector;
 	[NetworkName("m_flMaxspeed")]
 	float Maxspeed;
 	[NetworkName("m_iObserverMode")]

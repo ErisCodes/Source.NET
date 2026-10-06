@@ -11,6 +11,7 @@ using Source.Common.MaterialSystem;
 using Source.Common.Utilities;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -472,6 +473,8 @@ public class Panel : IPanel
 	}
 
 #if GMOD_DLL
+	public virtual void SetText(ReadOnlySpan<char> text) { }
+
 	public void SetClipRect(int x0, int y0, int x1, int y1) {
 		ClipRectX = (short)x0;
 		ClipRectY = (short)y0;
@@ -1508,6 +1511,23 @@ public class Panel : IPanel
 		LuaObject.SetFromStack(-1);
 	}
 
+	protected bool PushLuaHook(LUA_POOLEDSTRING name) {
+		if (Lua == null || LuaTable == null || LuaTable.isNil() || IsMarkedForDeletion())
+			return false;
+
+		LuaTable.Push();
+		Lua.PushPooledString((int)name);
+		Lua.GetTable(-2);
+		Lua.Remove(-2);
+		if (Lua.GetType(-1) == LuaType.Function)
+			return true;
+
+		Lua.Pop(1);
+		return false;
+	}
+
+	bool CanCallLuaHook([NotNullWhen(true)] ILuaObject? hook) => Lua != null && LuaTable != null && !LuaTable.isNil() && !IsMarkedForDeletion() && hook != null && hook.isFunction();
+
 	public void ClearLuaReferences() {
 		LuaThink?.UnReference();
 		LuaThink = null;
@@ -1529,6 +1549,12 @@ public class Panel : IPanel
 		LuaTable = null;
 		LuaObject?.UnReference();
 		LuaObject = null;
+	}
+
+	public virtual void ClearLuaReferencesRecursive() {
+		ClearLuaReferences();
+		for (int i = 0; i < GetChildCount(); i++)
+			GetChild(i).ClearLuaReferencesRecursive();
 	}
 #endif
 
@@ -1696,7 +1722,12 @@ public class Panel : IPanel
 		PerformDockLayout();
 
 		LayoutCount++;
-		// todo PerformLayout hook
+		if (PushLuaHook(LUA_POOLEDSTRING.PerformLayout)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber(GetWide());
+			Lua!.PushNumber(GetTall());
+			Lua!.CallInternalNoReturns(3);
+		}
 		LayoutCount--;
 
 		if ((Flags & PanelFlags.NeedsSchemeUpdate) == 0)
@@ -1766,7 +1797,14 @@ public class Panel : IPanel
 			if (vgui_luapaint.GetInt() != 0) {
 				if (NoClipping)
 					matSys.DisableClipping(true);
-				// todo: Paint hook, luaPainted = result
+				if (CanCallLuaHook(LuaPaint)) {
+					GetSize(out int wide, out int tall);
+					LuaPaint!.Push();
+					PushLua(Lua!, LuaType.Panel);
+					Lua!.PushNumber(wide);
+					Lua.PushNumber(tall);
+					luaPainted = Lua.CallInternalGetBool(3);
+				}
 				if (NoClipping)
 					matSys.DisableClipping(false);
 			}
@@ -1819,11 +1857,16 @@ public class Panel : IPanel
 			}
 
 #if GMOD_DLL
-			if (vgui_luapaint.GetInt() != 0) {
+			if (vgui_luapaint.GetInt() != 0 && CanCallLuaHook(LuaPaintOver)) {
+				GetSize(out int wide, out int tall);
+				LuaPaintOver!.Push();
 				Surface.PushMakeCurrent(this, false);
 				if (NoClipping)
 					matSys.DisableClipping(true);
-				// todo: PaintOver hook
+				PushLua(Lua!, LuaType.Panel);
+				Lua!.PushNumber(wide);
+				Lua.PushNumber(tall);
+				Lua.CallInternalNoReturns(3);
 				if (NoClipping)
 					matSys.DisableClipping(false);
 				Surface.PopMakeCurrent(this);
@@ -2143,13 +2186,16 @@ public class Panel : IPanel
 	public static ReadOnlySpan<char> GetDescription() => "string fieldName, int xpos, int ypos, int wide, int tall, bool visible, bool enabled, int tabPosition, corner pinCorner, autoresize autoResize, string tooltiptext".AsSpan();
 
 	public virtual void ApplySchemeSettings(IScheme scheme) {
-#if GMOD_DLL
-		// todo: ApplySchemeSettings hook
-#endif
 		SetFgColor(GetSchemeColor("Panel.FgColor", scheme));
 		SetBgColor(GetSchemeColor("Panel.BgColor", scheme));
 
 		Flags &= ~PanelFlags.NeedsSchemeUpdate;
+#if GMOD_DLL
+		if (PushLuaHook(LUA_POOLEDSTRING.ApplySchemeSettings)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
+#endif
 	}
 
 	public void Repaint() {
@@ -2303,7 +2349,12 @@ public class Panel : IPanel
 				SetMouseInputEnabled(parent.IsMouseInputEnabled());
 		}
 #if GMOD_DLL
-		// todo: oldParent OnChildRemoved hook
+		if (!PaintingManually && oldParent != null && oldParent.CanCallLuaHook(oldParent.LuaOnChildRemoved)) {
+			oldParent.LuaOnChildRemoved!.Push();
+			oldParent.PushLua(oldParent.Lua!, LuaType.Panel);
+			PushLua(oldParent.Lua!, LuaType.Panel);
+			oldParent.Lua!.CallInternalNoReturns(2);
+		}
 #endif
 	}
 
@@ -2482,11 +2533,19 @@ public class Panel : IPanel
 			InvalidateParentDock();
 		}
 
-		// todo: Think hook
+		if (CanCallLuaHook(LuaAnimationThink)) {
+			LuaAnimationThink!.Push();
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
 #endif
 		if (IsVisible()) {
 #if GMOD_DLL
-			// todo: AnimationThink hook
+			if (CanCallLuaHook(LuaThink)) {
+				LuaThink!.Push();
+				PushLua(Lua!, LuaType.Panel);
+				Lua!.CallInternalNoReturns(1);
+			}
 #else
 			Tooltips?.PerformLayout();
 #endif
@@ -2559,7 +2618,12 @@ public class Panel : IPanel
 #if GMOD_DLL
 		if ((Flags & PanelFlags.InPerformLayout) != 0)
 			Warning("vgui: Adding child in layout!\n");
-		// todo OnChildAdded hook
+		if (!PaintingManually && CanCallLuaHook(LuaOnChildAdded)) {
+			LuaOnChildAdded!.Push();
+			PushLua(Lua!, LuaType.Panel);
+			((Panel)child).PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(2);
+		}
 #endif
 	}
 	public virtual void OnSizeChanged(int newWide, int newTall) {
@@ -2569,22 +2633,47 @@ public class Panel : IPanel
 		InvalidateLayout();
 	}
 	public virtual void OnCursorMoved(int x, int y) { }
+#if GMOD_DLL
+	void CallGlobalTooltipFunction(ReadOnlySpan<char> name) {
+		if (Lua == null || Lua.Global() == null || LuaTable == null || IsMarkedForDeletion())
+			return;
+
+		ILuaObject func = Lua.CreateObject();
+		Lua.Global().GetMember(name, func);
+		if (func.isFunction()) {
+			func.Push();
+			PushLua(Lua, LuaType.Panel);
+			Lua.CallInternalNoReturns(1);
+		}
+		func.UnReference();
+	}
+#endif
 	public virtual void OnCursorEntered() {
 #if GMOD_DLL
-		// lua todo ChangeTooltip OnCursorEntered
+		CallGlobalTooltipFunction("ChangeTooltip");
+		if (PushLuaHook(LUA_POOLEDSTRING.OnCursorEntered)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
 #endif
 	}
 	public virtual void OnCursorExited() {
 #if GMOD_DLL
-		// todo OnCursorExited EndTooltip
+		if (PushLuaHook(LUA_POOLEDSTRING.OnCursorExited)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
+		CallGlobalTooltipFunction("EndTooltip");
 #endif
 	}
 	public virtual void OnMousePressed(ButtonCode code) {
 #if GMOD_DLL
 		if (IsWorldClicker())
 			Input.SetMouseCapture(this);
-		else {
-			// todo: OnMousePressed hook
+		if (PushLuaHook(LUA_POOLEDSTRING.OnMousePressed)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber((int)code);
+			Lua.CallInternalGetBool(2);
 		}
 #endif
 	}
@@ -2593,15 +2682,22 @@ public class Panel : IPanel
 #if GMOD_DLL
 		if (IsWorldClicker())
 			Input.SetMouseCapture(null);
-		else {
-			// todo: OnMouseReleased hook
+		if (PushLuaHook(LUA_POOLEDSTRING.OnMouseReleased)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber((int)code);
+			Lua.CallInternalGetBool(2);
 		}
 #endif
 	}
 	public virtual void OnMouseMismatchedRelease(ButtonCode code, IPanel? pressedPanel) { }
 	public virtual void OnMouseWheeled(int delta) {
 #if GMOD_DLL
-		// todo: OnMouseWheeled hook
+		if (PushLuaHook(LUA_POOLEDSTRING.OnMouseWheeled)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber(delta);
+			if (Lua.CallInternalGetBool(2))
+				return;
+		}
 #endif
 		CallParentFunction(new KeyValues("MouseWheeled", "delta", delta));
 	}
@@ -2669,6 +2765,7 @@ public class Panel : IPanel
 #if GMOD_DLL
 		ClearLuaReferences();
 #endif
+		VGui.PanelDeleted(this);
 		GC.SuppressFinalize(this);
 	}
 
@@ -2922,14 +3019,16 @@ public class Panel : IPanel
 		}
 
 #if GMOD_DLL
-		// todo Hovered = true
+		if (Lua != null && LuaTable != null)
+			LuaTable.SetMember("Hovered", true);
 #endif
 		OnCursorEntered();
 	}
 
 	private void InternalCursorExited() {
 #if GMOD_DLL
-		// todo Hovered = false
+		if (Lua != null && LuaTable != null)
+			LuaTable.SetMember("Hovered", false);
 #endif
 		if (IsCursorNone() || !IsMouseInputEnabled())
 			return;

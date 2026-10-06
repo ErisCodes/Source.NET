@@ -34,23 +34,21 @@ public static partial class LuaConVar
 			g_Lua!.ArgError(1, "attempted to modify ConVar not created by Lua");
 	}
 
-	public static bool IsAllowedToGetConvarInfo(ReadOnlySpan<char> name) {
-		foreach (string banned in s_BannedInfo) {
-			if (stricmp(banned, name) == 0)
-				return false;
+	public static bool IsValidConsoleName(ReadOnlySpan<char> name) {
+		foreach (char c in name) {
+			if (char.IsAsciiLetter(c) || char.IsAsciiDigit(c))
+				continue;
+			if (c is '+' or '-' or '.' or '!' or '^' or '_' or '~')
+				continue;
+			return false;
 		}
 		return true;
 	}
 
-	static bool IsValidConsoleName(ReadOnlySpan<char> name) {
-		foreach (char c in name) {
-			if (((c & ~0x20) - 'A') is >= 0 and <= 25)
-				continue;
-			if (c is >= '0' and <= '9')
-				continue;
-			if (c is '+' or '-' or '.' or '^' or '_' or '!' or '~')
-				continue;
-			return false;
+	public static bool IsAllowedToGetConvarInfo(ReadOnlySpan<char> name) {
+		foreach (string banned in s_BannedInfo) {
+			if (stricmp(banned, name) == 0)
+				return false;
 		}
 		return true;
 	}

@@ -12,4 +12,10 @@ public static partial class LuaTexture
 		texture?.IncrementReferenceCount();
 		LC_ITexture.Push(texture);
 	}
+
+	[LuaMethod]
+	static int ITexture__Width(ITexture texture) => texture.GetActualWidth();
+
+	[LuaMethod]
+	static int ITexture__Height(ITexture texture) => texture.GetActualHeight();
 }

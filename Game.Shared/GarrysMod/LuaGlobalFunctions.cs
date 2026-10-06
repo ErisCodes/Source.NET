@@ -6,6 +6,7 @@ using Source.Common.GarrysMod.Lua;
 using Source.Common.Launcher;
 #endif
 
+using System.Numerics;
 using System.Text;
 
 #if CLIENT_DLL
@@ -16,6 +17,116 @@ namespace Game.Server.GarrysMod;
 
 public static partial class LuaGlobalFunctions
 {
+	public static Color HSVToColor(float hue, float saturation, float value) {
+		float h = (float)(hue % 360.0);
+		float v = value * 255.0f;
+		double chroma = (double)(255.0f * saturation) * v / 255.0;
+		double m = v - chroma;
+		double hd = h;
+		float r, g, b;
+
+		if (h > 300.0f) {
+			r = (int)v;
+			g = (int)m;
+			b = (int)-(((hd - 360.0) / 60.0) * chroma - m);
+		}
+		else if (h > 60.0f) {
+			if (h >= 180.0f) {
+				b = (int)v;
+				if (h < 240.0f) {
+					r = (int)m;
+					g = (int)(m - (hd / 60.0 - 4.0) * chroma);
+				}
+				else {
+					g = (int)m;
+					r = (int)((hd / 60.0 - 4.0) * chroma + m);
+				}
+			}
+			else {
+				g = (int)v;
+				if (h >= 120.0f) {
+					r = (int)m;
+					b = (int)((hd / 60.0 - 2.0) * chroma + m);
+				}
+				else {
+					b = (int)m;
+					r = (int)(m - (hd / 60.0 - 2.0) * chroma);
+				}
+			}
+		}
+		else {
+			r = (int)v;
+			b = (int)m;
+			g = (int)((hd / 60.0) * chroma + m);
+		}
+
+		return new Color((byte)(int)r, (byte)(int)g, (byte)(int)b, 255);
+	}
+
+	public static void RGBtoHSV(int r, int g, int b, out float h, out float s, out float v) {
+		int min = Math.Min(r, Math.Min(g, b));
+		double max;
+		if (Math.Max(g, b) < r)
+			max = r;
+		else if (b < g)
+			max = g;
+		else
+			max = b;
+
+		int maxInt = (int)max;
+		double delta = max - min;
+
+		if (delta == 0.0) {
+			h = 0.0f;
+			s = 0.0f;
+		}
+		else {
+			double sat = 255.0 * (delta / max);
+			double hh;
+			if (r == maxInt)
+				hh = (g - b) / delta;
+			else if (g == maxInt)
+				hh = (b - r) / delta + 2.0;
+			else
+				hh = (r - g) / delta + 4.0;
+			hh *= 60.0;
+			if (hh < 0.0)
+				hh += 360.0;
+			h = hh != 360.0 ? (float)hh : 0.0f;
+			s = (int)sat / 255.0f;
+		}
+		v = maxInt / 255.0f;
+	}
+
+	[LuaGlobal]
+	static int HSVToColor(ILuaInterface lua) {
+		float value = (float)lua.CheckNumber(3);
+		float saturation = (float)lua.CheckNumber(2);
+		float hue = (float)lua.CheckNumber(1);
+		lua.PushColor(HSVToColor(hue, saturation, value));
+		return 1;
+	}
+
+	[LuaGlobal]
+	static int ColorToHSV(ILuaInterface lua) {
+		LuaTable color = new(null, 0);
+		color.SetFromStack(1);
+		if (!color.isTable()) {
+			lua.TypeError("table", 1);
+			color.UnReference();
+			return 0;
+		}
+		int b = (int)color.GetMemberFloat("b", 255.0f);
+		int g = (int)color.GetMemberFloat("g", 255.0f);
+		int r = (int)color.GetMemberFloat("r", 255.0f);
+		RGBtoHSV(r, g, b, out float h, out float s, out float v);
+		lua.PushNumber(h);
+		lua.PushNumber(s);
+		lua.PushNumber(v);
+		color.UnReference();
+		return 3;
+	}
+
 	[LuaGlobal]
 	static int include(ILuaInterface lua) {
 		string file = g_Lua!.CheckString(1).ToString();
@@ -24,6 +135,13 @@ public static partial class LuaGlobalFunctions
 		int top = g_Lua.Top();
 		g_Lua.FindAndRunScript(file, true, true, current, false);
 		return g_Lua.Top() - top;
+	}
+
+	[LuaGlobal]
+	static int DeriveGamemode(ILuaInterface lua) {
+		string name = g_Lua!.CheckString(1);
+		gGM!.DeriveGamemode(name);
+		return 0;
 	}
 
 	[LuaGlobal]
@@ -230,6 +348,95 @@ public static partial class LuaGlobalFunctions
 		return Platform.Time;
 #endif
 	}
+
+#if CLIENT_DLL
+	[LuaGlobal]
+	static int DisableClipping(ILuaInterface lua) {
+		surface.GetClippingRect(out _, out _, out _, out _, out bool clippingDisabled);
+		surface.DisableClipping(lua.GetBool(1));
+		lua.PushBool(clippingDisabled);
+		return 1;
+	}
+#endif
+
+	[LuaGlobal]
+	static int RunConsoleCommand(ILuaInterface lua) {
+		string command = g_Lua!.CheckString(1);
+		if (!LuaConVar.IsValidConsoleName(command)) {
+			g_Lua.ErrorFromLua($"RunConsoleCommand: Command has invalid characters! ({command})\n\tThe first parameter of this function should contain only the command, the second parameter should contain arguments.");
+			return 0;
+		}
+
+		string? blocked = LuaConCommands.ConCommand_IsBlocked(command);
+		if (blocked != null) {
+#if CLIENT_DLL
+			if (blocked == "connect") {
+				// todo menu system
+				return 0;
+			}
+#endif
+			g_Lua.ErrorFromLua($"RunConsoleCommand: Command is blocked! ({blocked})");
+			return 0;
+		}
+
+		if (command.Length <= 1) {
+			g_Lua.ErrorFromLua($"RunConsoleCommand: Command is too short, bailing! ({command})");
+			return 0;
+		}
+
+		StringBuilder buffer = new(command);
+		for (int i = 2; i < 64; i++) {
+			LuaType type = g_Lua.GetType(i);
+			if (type == LuaType.Nil)
+				break;
+
+			string? argument = g_Lua.GetString(i);
+			if (argument == null)
+				break;
+
+			string? blockedArg = LuaConCommands.ConCommand_IsBlockedArg(argument);
+			if (blockedArg != null) {
+				g_Lua.ErrorFromLua($"RunConsoleCommand: Command argument is blocked! ({command} {blockedArg})");
+				return 0;
+			}
+
+			if (type == LuaType.Number)
+				argument = g_Lua.GetNumber(i).ToString("F2");
+
+			StringBuilder escaped = new();
+			for (int c = 0; c < argument.Length && c < 511; c++)
+				escaped.Append(argument[c] switch {
+					'"' => '\'',
+					'\n' => ' ',
+					_ => argument[c]
+				});
+
+			buffer.Append(' ').Append('"').Append(escaped).Append('"');
+		}
+		buffer.Append(';');
+
+		string result = buffer.ToString();
+		if (result.Length > 1023)
+			result = result[..1023];
+#if CLIENT_DLL
+		engine.ClientCmd(result);
+#else
+		engine.ServerCommand(result);
+#endif
+		return 0;
+	}
+
+#if CLIENT_DLL
+	static Vector3 EyePosition;
+
+	[LuaGlobal]
+	static int EyePos(ILuaInterface lua) {
+		if (IsCurrentViewAccessAllowed())
+			EyePosition = CurrentViewOrigin();
+		LuaVector.Push_Vector(EyePosition);
+		return 1;
+	}
+#endif
 
 	public static void ReadStackFrom(ref LuaError error, ILuaInterface lua) {
 		error.Stack.Clear();

@@ -282,6 +282,7 @@ public class DummyMaterial : IMaterial
 	}
 	public IMaterialVar? FindVarFast(ReadOnlySpan<char> name, ref TokenCache lightmapVarCache) => null;
 	public int GetEnumerationID() => 0;
+	public void RecomputeStateSnapshots() { }
 	public float GetMappingHeight() => 512;
 	public float GetMappingWidth() => 512;
 	public void GetReflectivity(out Vector3 reflect) => reflect = new(0.2f, 0.2f, 0.2f);
@@ -388,6 +389,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public ITexture FindTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroupName, bool complain = true, int additionalCreationFlags = 0) => g_DummyTexture;
 	public bool IsTextureLoaded(ReadOnlySpan<char> textureName) => false;
 	public void Flush(bool flushHardware) { }
+	public void GMOD_ForceFilterMode(bool min, int mode) { }
 	public void GetBackBufferDimensions(out int width, out int height) {
 		width = 1024;
 		height = 768;

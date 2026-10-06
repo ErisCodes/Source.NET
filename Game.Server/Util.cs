@@ -314,9 +314,9 @@ public static partial class Util
 	public static void ShowMessage(ReadOnlySpan<char> str, BasePlayer? player) {
 		RecipientFilter filter = new();
 
-		if (player != null) 
+		if (player != null)
 			filter.AddRecipient(player);
-		else 
+		else
 			filter.AddAllPlayers();
 
 		filter.MakeReliable();

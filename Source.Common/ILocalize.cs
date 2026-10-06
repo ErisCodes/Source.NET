@@ -5,6 +5,7 @@ namespace Source.Common;
 public interface ILocalize
 {
 	bool AddFile(ReadOnlySpan<char> fileName, ReadOnlySpan<char> pathID = default, bool includeFallbackSearchPaths = false);
+	bool AddString(ReadOnlySpan<char> tokenName, ReadOnlySpan<char> unicodeString, ReadOnlySpan<char> fileName);
 	ReadOnlySpan<char> Find(ReadOnlySpan<char> text);
 	ReadOnlySpan<char> TryFind(ReadOnlySpan<char> text);
 	ulong FindIndex(ReadOnlySpan<char> value);

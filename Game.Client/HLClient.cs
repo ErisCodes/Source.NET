@@ -714,6 +714,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 		bf_read read = new("NetMessage(read_cl)", data, data.Length, numBits);
 		read.Seek(bitOffset);
+		Game.Client.GarrysMod.GarrysMod.RunningNetMessage = true;
 		Game.Client.GarrysMod.LuaNet.g_NetIncoming = read;
 
 		if (g_Lua != null && g_Lua.Global() != null) {
@@ -732,6 +733,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 			net.UnReference();
 		}
 
+		Game.Client.GarrysMod.GarrysMod.RunningNetMessage = false;
 		Game.Client.GarrysMod.LuaNet.g_NetIncoming = null;
 	}
 

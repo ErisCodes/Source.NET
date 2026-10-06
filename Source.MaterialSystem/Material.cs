@@ -176,6 +176,8 @@ public class Material : IMaterialInternal
 
 	static int complainCount = 0;
 	public IMaterialVar FindVar(ReadOnlySpan<char> varName, out bool found, bool complain = true) {
+		PrecacheVars();
+
 		Span<char> lowercased = stackalloc char[varName.Length];
 		varName.ToLowerInvariant(lowercased);
 		ReadOnlySpan<char> lowercasedROS = lowercased; // Need to make a version of that that works on Span...
