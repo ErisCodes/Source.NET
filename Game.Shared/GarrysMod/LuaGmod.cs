@@ -14,12 +14,7 @@ public static partial class LuaGmod
 
 	[LuaFunction]
 	static int GetGamemode(ILuaInterface lua) {
-		// TODO TODO
-		// TODO TODO
-		// TODO TODO
-		// TODO TODO
-		// DONT FORGET TODO
-		lua.PushNil();
+		gGM!.Push();
 		return 1;
 	}
 }

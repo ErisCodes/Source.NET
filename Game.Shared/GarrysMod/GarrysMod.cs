@@ -148,12 +148,12 @@ public class GarrysMod : IGarrysMod
 #endif
 
 #if CLIENT_DLL
-	const string LuaPathID = "lcl";
+	public const string LuaPathID = "lcl";
 #else
-	const string LuaPathID = "lsv";
+	public const string LuaPathID = "lsv";
 #endif
 
-	static LuaManager? g_LuaManager;
+	public static LuaManager? g_LuaManager;
 
 	public static class Lua
 	{
@@ -166,7 +166,7 @@ public class GarrysMod : IGarrysMod
 				g_LuaManager.Shutdown();
 				g_LuaManager = null;
 			}
-			// gGM = null;
+			gGM?.Dispose();
 			// GarrysMod.Lua.Libraries.Timer.Shutdown();
 			return true;
 		}
@@ -190,12 +190,12 @@ public class GarrysMod : IGarrysMod
 			if (g_LuaManager != null)
 				Error("New gLUA when old one exists!\n");
 			g_LuaManager = new LuaManager();
-			// if (gGM != null)
-			// 	Error("New gGM when old one exists!\n");
-			// gGM = new CLuaGamemode();
+			if (gGM != null)
+				Error("New gGM when old one exists!\n");
+			gGM = new();
 			g_LuaManager.Startup();
 #if GAME_DLL
-			// gGM.LoadCurrentlyActiveGamemode();
+			gGM.LoadCurrentlyActiveGamemode();
 			Game.Server.GarrysMod.GModDataPack.DataPack().BuildSearchPaths();
 #endif
 			return true;
@@ -208,8 +208,16 @@ public class GarrysMod : IGarrysMod
 #endif
 	}
 
-	class LuaManager
+	public class LuaManager
 	{
+		public bool RunScript(ReadOnlySpan<char> file, ReadOnlySpan<char> pathId, bool run, ReadOnlySpan<char> source) {
+			if (g_Lua == null)
+				return false;
+			return g_Lua.FindAndRunScript(file, run, true, source, true);
+		}
+
+		public bool ScriptExists(ReadOnlySpan<char> file, ReadOnlySpan<char> pathId) => get.LuaShared()!.LoadFile(file, pathId, false, true) != null;
+
 		public void Startup() {
 #if CLIENT_DLL
 			Msg("Clientside Lua startup!\n");
@@ -259,11 +267,11 @@ public class GarrysMod : IGarrysMod
 #endif
 			g_Lua.FindAndRunScript("includes/init.lua", true, true, "!UNKNOWN", true);
 #if CLIENT_DLL
-			// if (gGM == null)
-			// 	Error("We should have a gGM at this point!");
+			if (gGM == null)
+				Error("We should have a gGM at this point!");
 			g_Lua.FindAndRunScript("derma/init.lua", true, true, "!UNKNOWN", true);
 			g_Lua.RunString("Startup", "", "require('notification');", true, true);
-			// gGM.LoadGamemode("base", false);
+			gGM.LoadGamemode("base", false);
 			RunScriptsInFolder("autorun", "!RELOAD");
 			RunScriptsInFolder("autorun/client", "!RELOAD_CL");
 			RunScriptsInFolder("postprocess", "!RELOAD_CL");

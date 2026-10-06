@@ -673,7 +673,7 @@ public unsafe class LuaInterfaceImpl : ILuaInterface
 	[DoesNotReturn]
 	public void TypeError(ReadOnlySpan<char> name, int index) => throw new LuaException(LuaRaise.Type, ERRRUN, 0, AbsIndex(index), name.ToString());
 
-	public void CallInternal(int args, int rets) {
+	public bool CallInternal(int args, int rets) {
 		if (GetType(-(args + 1)) != LuaType.Function)
 			Dbg.Error("Lua tried to call non functions");
 		if (!ThreadInMainThread())
@@ -685,11 +685,12 @@ public unsafe class LuaInterfaceImpl : ILuaInterface
 			returnObjects[i] = NewTemporaryObject();
 		if (!CallFunctionProtected(args, rets, false)) {
 			gameCallback!.LuaError(in g_LastError);
-			return;
+			return false;
 		}
 		for (int i = 0; i < rets; i++)
 			(returnObjects[i] ??= NewTemporaryObject()).SetFromStack(-1 - i);
 		Pop(rets);
+		return true;
 	}
 
 	public void CallInternalNoReturns(int args) {

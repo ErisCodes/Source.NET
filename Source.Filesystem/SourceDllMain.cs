@@ -9,4 +9,5 @@ public static class SourceDllMain
 {
 	[Dependency] public static IFileSystem g_FullFileSystem = null!;
 	[Dependency] public static ICommandLine CommandLine = null!;
+	[Dependency] public static ICvar cvar { get; private set; } = null!;
 }

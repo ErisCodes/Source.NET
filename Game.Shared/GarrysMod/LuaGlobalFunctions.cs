@@ -27,6 +27,13 @@ public static partial class LuaGlobalFunctions
 	}
 
 	[LuaGlobal]
+	static int DeriveGamemode(ILuaInterface lua) {
+		string name = g_Lua!.CheckString(1);
+		gGM!.DeriveGamemode(name);
+		return 0;
+	}
+
+	[LuaGlobal]
 	static void require(string name) {
 		Bootil.String.Lower(ref name);
 		if (name != "timer") // Wow wtf

@@ -35,10 +35,10 @@ public class LuaGameSystem : AutoGameSystemPerFrame, IGameEventListener2
 #if CLIENT_DLL
 	public override void LevelInitPreEntity() {
 		GarrysMod.Lua.Create();
-		// if (g_Lua != null && gGM != null) {
-		// 	gGM.LoadGamemode(Gamemode, false);
-		// 	gGM.SetGamemode(Gamemode, true);
-		// }
+		if (g_Lua != null && gGM != null) {
+			gGM.LoadGamemode(Gamemode, false);
+			gGM.SetGamemode(Gamemode, true);
+		}
 	}
 	public override void Update(double frametime) {
 		garrysmod.Think();

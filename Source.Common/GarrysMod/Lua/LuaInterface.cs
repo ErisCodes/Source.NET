@@ -26,7 +26,7 @@ public interface ILuaInterface : ILuaBase
 	int HandleException(Exception e);
 	[DoesNotReturn] void LuaError(ReadOnlySpan<char> err, int index);
 	[DoesNotReturn] void TypeError(ReadOnlySpan<char> name, int index);
-	void CallInternal(int args, int rets);
+	bool CallInternal(int args, int rets);
 	void CallInternalNoReturns(int args);
 	bool CallInternalGetBool(int args);
 	string? CallInternalGetString(int args);
