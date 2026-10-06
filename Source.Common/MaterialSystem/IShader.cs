@@ -1,4 +1,5 @@
-﻿using Source.Common.ShaderAPI;
+﻿using Source.Common.Mathematics;
+using Source.Common.ShaderAPI;
 using Source.Common.ShaderLib;
 
 using System.Numerics;
@@ -98,7 +99,8 @@ public ref struct StaticShaderIndex(IShaderShadow shaderShadow, ShaderType type,
 	public readonly int GetIndex() => index;
 }
 
-public struct ShaderColorCorrectionInfo {
+public struct ShaderColorCorrectionInfo
+{
 	public bool IsEnabled;
 	public int LookupCount;
 	public float DefaultWeight;
@@ -107,57 +109,191 @@ public struct ShaderColorCorrectionInfo {
 
 public interface IShaderDynamicAPI
 {
+	void SetViewports(ReadOnlySpan<ShaderViewport> viewports);
+	int GetViewports(Span<ShaderViewport> viewports);
+
+	// returns the current time in seconds....
+	double CurrentTime();
+
+	// Gets the lightmap dimensions
+	void GetLightmapDimensions(out int w, out int h);
+
+	// Scene fog state.
+	// This is used by the shaders for picking the proper vertex shader for fogging based on dynamic state.
 	MaterialFogMode GetSceneFogMode();
-	bool InFlashlightMode();
+	void GetSceneFogColor(Span<byte> rgb);
+
+	// stuff related to matrix stacks
+	void MatrixMode(MaterialMatrixMode matrixMode);
 	void PushMatrix();
 	void PopMatrix();
-	IMesh GetDynamicMesh(IMaterial material, int nCurrentBoneCount, bool buffered, IMesh? vertexOverride, IMesh? indexOverride);
-	IMesh GetDynamicMeshEx(IMaterial material, VertexFormat vertexFormat, int nCurrentBoneCount, bool buffered, IMesh? vertexOverride, IMesh? indexOverride);
-	IMesh GetFlexMesh();
+	void LoadMatrix(Span<float> m);
+	void MultMatrix(Span<float> m);
+	void MultMatrixLocal(Span<float> m);
+	void GetMatrix(MaterialMatrixMode matrixMode, Span<float> dst);
+	void LoadIdentity();
+	void LoadCameraToWorld();
+	void Ortho(double left, double right, double bottom, double top, double zNear, double zFar);
+	void PerspectiveX(double fovx, double aspect, double zNear, double zFar);
+	void PickMatrix(int x, int y, int width, int height);
+	void Rotate(float angle, float x, float y, float z);
+	void Translate(float x, float y, float z);
+	void Scale(float x, float y, float z);
+	void ScaleXY(float x, float y);
+
+	// Sets the color to modulate by
+	void Color3f(float r, float g, float b);
+	void Color3fv(ReadOnlySpan<float> color);
+	void Color4f(float r, float g, float b, float a);
+	void Color4fv(ReadOnlySpan<float> color);
+
+	void Color3ub(byte r, byte g, byte b);
+	void Color3ubv(ReadOnlySpan<byte> color);
+	void Color4ub(byte r, byte g, byte b, byte a);
+	void Color4ubv(ReadOnlySpan<byte> color);
+
+	// Sets the constant register for vertex and pixel shaders
+	void SetVertexShaderConstant(int var, ReadOnlySpan<float> vec, int numConst = 1, bool force = false);
+	void SetPixelShaderConstant(int var, ReadOnlySpan<float> vec, int numConst = 1, bool force = false);
+
+	// Sets the default *dynamic* state
+	void SetDefaultState();
+
+	// Get the current camera position in world space.
+	void GetWorldSpaceCameraPosition(Span<float> pos);
+
+	int GetCurrentNumBones();
+	int GetCurrentLightCombo();
+
+	MaterialFogMode GetCurrentFogType();
+
+	// fixme: move this to shadow state
+	void SetTextureTransformDimension(TextureStage textureStage, int dimension, bool projected);
+	void DisableTextureTransform(TextureStage textureStage);
+	void SetBumpEnvMatrix(TextureStage textureStage, float m00, float m01, float m10, float m11);
+
+	// Sets the vertex and pixel shaders
+	void SetVertexShaderIndex(int vshIndex = -1);
+	void SetPixelShaderIndex(int pshIndex = 0);
+
+	// Get the dimensions of the back buffer.
+	void GetBackBufferDimensions(out int width, out int height );
+
+	// Get the lights
+	int GetMaxLights();
+	ref readonly LightDesc GetLight(int lightNum);
+
+	void SetPixelShaderFogParams(int reg);
+
+	// Render state for the ambient light cube
+	void SetVertexShaderStateAmbientLightCube();
+	void SetPixelShaderStateAmbientLightCube(int reg, bool forceToBlack = false);
+	void CommitPixelShaderLighting(int reg);
+
+	// Use this to get the mesh builder that allows us to modify vertex data
+	ref MeshBuilder GetVertexModifyBuilder();
+	bool InFlashlightMode();
+	ref readonly FlashlightState GetFlashlightState(out Matrix4x4 worldToTexture);
 	bool InEditorMode();
 
+	// Gets the bound morph's vertex format; returns 0 if no morph is bound
+	MorphFormatFlags GetBoundMorphFormat();
 
-	void BindVertexShader(in VertexShaderHandle vertexShader);
-	void BindPixelShader(in PixelShaderHandle pixelShader);
-	void SetVertexShaderIndex(int index);
-	void SetPixelShaderIndex(int index);
-	int GetDynamicComboScale(ShaderType type, ReadOnlySpan<char> name);
-
-	int LocateShaderUniform(ReadOnlySpan<char> name);
-
-	void SetShaderUniform(int uniform, int integer);
-	void SetShaderUniform(int uniform, float fl);
-	void SetShaderUniform(int uniform, ReadOnlySpan<float> flConsts);
-
-	void MatrixMode(MaterialMatrixMode i);
-	void LoadMatrix(in Matrix4x4 transposeTop);
-	void LoadIdentity();
-	int GetCurrentNumBones();
-	GraphicsDriver GetDriver();
-	nint GetCurrentProgram();
-
-	void SetShaderUniform(IMaterialVar variable);
+	// Binds a standard texture
 	void BindStandardTexture(Sampler sampler, StandardTextureId id);
-	void SetVertexShaderConstant(int var, Span<float> vec);
-	void SetPixelShaderConstant(int var, Span<float> vec);
-	void SetVertexShaderStateAmbientLightCube();
-	void GetMatrix(MaterialMatrixMode matrixMode, out Matrix4x4 dst);
-	void CommitVertexShaderLighting();
-	void GetLightState(out LightState state);
-	void GetBackBufferDimensions(out int width, out int height);
-	FlashlightState GetFlashlightState(out Matrix4x4 worldToTexture);
-	bool IsHWMorphingEnabled();
-	void GetWorldSpaceCameraPosition(ref Span<float> eyePos);
-	int GetPixelFogCombo();
-	FlashlightState GetFlashlightStateEx(out Matrix4x4 worldToTexture, out ITexture? flashlightDepthTexture);
-	bool ShouldWriteDepthToDestAlpha();
-	void MarkUnusedVertexFields(int v, Span<bool> unusedTexCoords);
-	int GetIntRenderingParameter(RenderParamInt parm);
-	void ExecuteCommandBuffer(ICommandStorageBuffer storage);
-	void CommitPixelShaderLighting(int lightInfoArray);
-	void SetPixelShaderStateAmbientLightCube(int ambientCube, bool v);
+
+	ITexture? GetRenderTargetEx(int renderTargetID);
+
+	void SetToneMappingScaleLinear( in Vector3 scale );
+	 ref readonly Vector3 GetToneMappingScaleLinear();
 	float GetLightMapScaleFactor();
+
+	void LoadBoneMatrix(int boneIndex, ReadOnlySpan<float> m );
+
+	void PerspectiveOffCenterX(double fovx, double aspect, double zNear, double zFar, double bottom, double top, double left, double right);
+
+	void SetFloatRenderingParameter(int parmNumber, float value);
+
+	void SetIntRenderingParameter(int parmNumber, int value);
+	void SetVectorRenderingParameter(int parmNumber, in Vector3 value);
+
+	 float GetFloatRenderingParameter(int parmNumber);
+
+	int GetIntRenderingParameter(int parmNumber);
+
+	Vector3 GetVectorRenderingParameter(int parmNumber);
+
+	// stencil buffer operations.
+	void SetStencilEnable(bool onoff);
+	void SetStencilFailOperation(StencilOperation op);
+	void SetStencilZFailOperation(StencilOperation op);
+	void SetStencilPassOperation(StencilOperation op);
+	void SetStencilCompareFunction(StencilComparisonFunction cmpfn);
+	void SetStencilReferenceValue(int reference);
+	void SetStencilTestMask(uint msk);
+	void SetStencilWriteMask(uint msk);
+	void ClearStencilBufferRectangle(int xmin, int ymin, int xmax, int ymax, int value);
+
+	void GetDXLevelDefaults(out GraphicsDriver max, out GraphicsDriver recommended);
+
+	ref readonly FlashlightState GetFlashlightStateEx(Matrix4x4 worldToTexture, Span<ITexture> flashlightDepthTexture);
+
 	float GetAmbientLightCubeLuminance();
+
+	void GetDX9LightState(out LightState state);
+	int GetPixelFogCombo(); //0 is either range fog, or no fog simulated with rigged range fog values. 1 is height fog
+
+	void BindStandardVertexTexture(VertexTextureSampler sampler, StandardTextureId id);
+
+	// Is hardware morphing enabled?
+	bool IsHWMorphingEnabled();
+
+	void GetStandardTextureDimensions(out int width, out int height, StandardTextureId id);
+
+	void SetBooleanVertexShaderConstant(int var, ReadOnlySpan<bool> vec, bool force = false );
+	void SetIntegerVertexShaderConstant(int var, ReadOnlySpan<int> vec,  bool force = false );
+	void SetBooleanPixelShaderConstant(int var, ReadOnlySpan<bool> vec, bool force = false );
+	void SetIntegerPixelShaderConstant(int var, ReadOnlySpan<int> vec, bool force = false );
+
+	//Are we in a configuration that needs access to depth data through the alpha channel later?
+	bool ShouldWriteDepthToDestAlpha();
+
+
+	// deformations
+	void PushDeformation(in DeformationBase deformation );
+	void PopDeformation();
+	int GetNumActiveDeformations();
+
+
+	// for shaders to set vertex shader constants. returns a packed state which can be used to set
+	// the dynamic combo. returns # of active deformations
+	int GetPackedDeformationInformation(int maskOfUnderstoodDeformations,
+												Span<float> constantValuesOut,
+												int bufferSize,
+												int maximumDeformations,
+												out int numDefsOut);
+
+	// This lets the lower level system that certain vertex fields requested 
+	// in the shadow state aren't actually being read given particular state
+	// known only at dynamic state time. It's here only to silence warnings.
+	void MarkUnusedVertexFields(uint flags, Span<bool> unusedTexCoords);
+
+
+	void ExecuteCommandBuffer(Span<byte> cmdBuffer);
+
+	// interface for mat system to tell shaderapi about standard texture handles
+	void SetStandardTextureHandle(StandardTextureId id, ShaderAPITextureHandle_t handle);
+
+	// Interface for mat system to tell shaderapi about color correction
+	void GetCurrentColorCorrection(out ShaderColorCorrectionInfo info);
+
+	void SetPSNearAndFarZ(int reg);
+
+	void SetDepthFeatheringPixelShaderConstant(int constant, float depthBlendScale);
+
+#if GMOD_DLL
+	void GMOD_SamplerBorderClamp(Sampler sampler);
+#endif
 }
 
 public struct LightState

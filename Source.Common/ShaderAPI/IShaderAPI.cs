@@ -86,10 +86,6 @@ public struct RasterState
 
 public interface IShaderAPI : IShaderDynamicAPI
 {
-	// Viewport methods
-	void SetViewports(ReadOnlySpan<ShaderViewport> viewports);
-	int GetViewports(Span<ShaderViewport> viewports);
-
 	// Buffer clearing
 	void ClearBuffers(bool clearColor, bool clearDepth, bool clearStencil, int renderTargetWidth, int renderTargetHeight);
 	void ClearColor3ub(byte r, byte g, byte b);
@@ -350,16 +346,6 @@ public interface IShaderAPI : IShaderDynamicAPI
 	// Lets the shader know about the full-screen texture so it can 
 	void SetFullScreenTextureHandle(ShaderAPITextureHandle_t h);
 
-	// Rendering parameters control special drawing modes withing the material system, shader
-	// system, shaders, and engine. renderparm.h has their definitions.
-	void SetFloatRenderingParameter(int parmNumber, float value);
-	void SetIntRenderingParameter(int parmNumber, int value);
-	void SetVectorRenderingParameter(int parmNumber, in Vector3 value);
-
-	float GetFloatRenderingParameter(int parmNumber);
-	int GetIntRenderingParameter(int parmNumber);
-	Vector3 GetVectorRenderingParameter(int parmNumber);
-
 	void SetFastClipPlane(ReadOnlySpan<float> plane);
 	void EnableFastClip(bool enable);
 
@@ -374,17 +360,6 @@ public interface IShaderAPI : IShaderDynamicAPI
 	// Returns the max number of vertices we can render for a given material
 	int GetMaxVerticesToRender(IMaterial material);
 	int GetMaxIndicesToRender();
-
-	// stencil methods
-	void SetStencilEnable(bool onoff);
-	void SetStencilFailOperation(StencilOperation op);
-	void SetStencilZFailOperation(StencilOperation op);
-	void SetStencilPassOperation(StencilOperation op);
-	void SetStencilCompareFunction(StencilComparisonFunction cmpfn);
-	void SetStencilReferenceValue(int reference);
-	void SetStencilTestMask(uint msk);
-	void SetStencilWriteMask(uint msk);
-	void ClearStencilBufferRectangle(int xmin, int ymin, int xmax, int ymax, int value);
 
 	// disables all local lights
 	void DisableAllLocalLights();
@@ -467,8 +442,6 @@ public interface IShaderAPI : IShaderDynamicAPI
 
 	void AcquireThreadOwnership();
 	void ReleaseThreadOwnership();
-
-	void SetDepthFeatheringPixelShaderConstant(int iConstant, float fDepthBlendScale);
 
 	// debug logging
 	// only implemented in some subclasses
