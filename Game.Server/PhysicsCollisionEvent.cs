@@ -940,7 +940,7 @@ public class CollisionEvent : IPhysicsCollisionEvent, IPhysicsCollisionSolver, I
 		if (entity0 == entity1) {
 			if ((obj0.GetGameFlags() & PhysicsFlags.PartOfRagdoll) != 0) {
 				DevMsg(2, $"Solving ragdoll self penetration! {obj0.GetName()} ({entity0.GetDebugName()}) ({obj0.GetGameIndex()} v {obj1.GetGameIndex()})\n");
-				Ragdoll? ragdoll = Ragdoll_GetRagdoll(entity0);
+				Ragdoll? ragdoll = RagdollProp.Ragdoll_GetRagdoll(entity0);
 				ragdoll?.Group?.SolvePenetration(obj0, obj1);
 				return 0;
 			}
