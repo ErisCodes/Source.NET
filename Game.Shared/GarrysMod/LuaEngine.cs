@@ -25,7 +25,35 @@ public static partial class LuaEngine
 		g_Lua!.PushBool(engine.IsRecordingDemo());
 		return 1;
 	}
+
+	[LuaFunction]
+	static int IsPlayingDemo(ILuaInterface lua) {
+		g_Lua!.PushBool(engine.IsPlayingDemo());
+		return 1;
+	}
 #endif
+
+	[LuaFunction]
+	static int GetGames(ILuaInterface lua) {
+		List<IGameDepotSystem.Information> list = filesystem.Games().GetList();
+		LuaTable table = new(null, (uint)list.Count);
+		int i = 1;
+		foreach (IGameDepotSystem.Information info in list) {
+			LuaTable entry = new(null, 0);
+			entry.SetMember("depot", (int)info.Depot);
+			entry.SetMember("title", info.Title);
+			entry.SetMember("mounted", info.Mounted && info.Owned && info.Installed);
+			entry.SetMember("installed", info.Installed);
+			entry.SetMember("owned", info.Owned);
+			entry.SetMember("folder", info.Folder);
+			table.SetMember((float)i, entry);
+			i++;
+			entry.UnReference();
+		}
+		table.Push();
+		table.UnReference();
+		return 1;
+	}
 
 	[LuaFunction]
 	static int GetGamemodes(ILuaInterface lua) {

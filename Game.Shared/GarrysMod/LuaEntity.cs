@@ -173,6 +173,13 @@ public static partial class LuaEntity
 	static int Entity____index(ILuaInterface lua) => EntityBaseIndex();
 
 	[LuaMethod]
+	static int Entity__EyePos(ILuaInterface lua) {
+		BaseEntity ent = Get_Entity(1, false)!;
+		LuaVector.Push_Vector(ent.EyePosition());
+		return 1;
+	}
+
+	[LuaMethod]
 	static int Entity__EntIndex(ILuaInterface lua) {
 		LuaType type = lua.GetType(1);
 		if (type != LuaType.Entity && type != LuaType.Nil)

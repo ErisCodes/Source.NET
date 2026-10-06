@@ -349,6 +349,15 @@ public static partial class LuaConCommands
 
 	static readonly bool[] g_bKeyState = new bool[(int)ButtonCode.KeyCount];
 
+	static readonly string[] s_BannedArguments = ["con_logfile", "quitnoconfirm"];
+
+	public static string? ConCommand_IsBlockedArg(ReadOnlySpan<char> argument) {
+		foreach (string banned in s_BannedArguments)
+			if (stricmp(banned, argument) == 0)
+				return banned;
+		return null;
+	}
+
 	public static string? ConCommand_IsBlocked(ReadOnlySpan<char> name) {
 #if CLIENT_DLL
 		if (garrysmod.BlockRetryCommand || gpGlobals.MaxClients <= 1) {

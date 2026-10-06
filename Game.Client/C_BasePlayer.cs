@@ -518,7 +518,9 @@ public partial class C_BasePlayer : C_BaseCombatCharacter, IGameEventListener2
 	[NetworkName("m_hViewModel")]
 	InlineArrayNewMaxViewmodels<Handle<C_BaseViewModel>> ViewModel = new();
 	[NetworkName("m_bDisableWorldClicking")]
-	bool DisableWorldClicking;
+	public bool DisableWorldClicking;
+	public bool WorldClicking;
+	public Vector3 WorldClickVector;
 	[NetworkName("m_flMaxspeed")]
 	public float Maxspeed;
 	int BonusProgress;

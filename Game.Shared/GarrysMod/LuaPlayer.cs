@@ -1,5 +1,8 @@
 #if CLIENT_DLL || GAME_DLL
 using Source.Common.GarrysMod.Lua;
+using Source.Common.Mathematics;
+
+using System.Numerics;
 
 #if CLIENT_DLL
 namespace Game.Client.GarrysMod;
@@ -11,6 +14,39 @@ public static partial class LuaPlayer
 {
 	[LuaLibrary]
 	static readonly LuaLibrary LL_Factory_player = new("player");
+
+	[LuaClass]
+	static readonly LuaEntityClass LC_Player = LuaEntity.LC_Player;
+
+	public static BasePlayer? Get_Player(int stackPos, bool allowNull) {
+		BaseEntity? ent = LuaEntity.Get_Entity(stackPos, allowNull);
+		if (ent != null && ent.IsPlayer())
+			return (BasePlayer)ent;
+		if (allowNull)
+			return null;
+		g_Lua!.Error("Player entity is NULL or not a player (!?)");
+		return null;
+	}
+
+	[LuaMethod]
+	static int Player__GetAimVector(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+		Vector3 forward;
+		if (!player.WorldClicking || player.DisableWorldClicking) {
+			QAngle angles;
+			if (player.IsInAVehicle()) {
+				player.CacheVehicleView();
+				angles = player.VehicleViewAngles;
+			}
+			else
+				angles = player.EyeAngles();
+			MathLib.AngleVectors(angles, out forward);
+		}
+		else
+			forward = player.WorldClickVector;
+		LuaVector.Push_Vector(forward);
+		return 1;
+	}
 
 	[LuaFunction]
 	static int GetByID(ILuaInterface lua) {

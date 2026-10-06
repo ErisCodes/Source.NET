@@ -9,6 +9,6 @@ public interface Language
 	void ChangeLanguage(ReadOnlySpan<char> unk1);
 	void ChangeLanguage_Steam(ReadOnlySpan<char> unk1);
 	void ReloadLanguage();
-	void GetString(ReadOnlySpan<char> unk1, Span<char> unk2 /* unk3: likely unk2's size */);
+	bool GetString(ReadOnlySpan<char> token, Span<char> buffer);
 	void UpdateSourceEngineLanguage();
 }

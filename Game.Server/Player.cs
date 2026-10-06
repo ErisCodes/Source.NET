@@ -547,7 +547,9 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	bool HasHaptics;
 	[NetworkName("m_bDisableWorldClicking")]
-	bool DisableWorldClicking;
+	public bool DisableWorldClicking;
+	public bool WorldClicking;
+	public Vector3 WorldClickVector;
 	[NetworkName("m_flMaxspeed")]
 	float Maxspeed;
 	[NetworkName("m_iObserverMode")]

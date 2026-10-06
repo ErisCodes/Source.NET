@@ -16,8 +16,18 @@ internal class Language2 : Language
 		throw new NotImplementedException();
 	}
 
-	public void GetString(ReadOnlySpan<char> unk1, Span<char> unk2) {
-		throw new NotImplementedException();
+	readonly SortedDictionary<string, string> Strings = new(StringComparer.Ordinal);
+
+	public bool GetString(ReadOnlySpan<char> token, Span<char> buffer) {
+		if (!Strings.TryGetValue(new(token), out string? value)) {
+			if (token.Length == 0 || token[0] != '#' || !Strings.TryGetValue(new(token[1..]), out value))
+				return false;
+		}
+
+		buffer.Clear();
+		int len = Math.Min(value.Length, buffer.Length - 1);
+		value.AsSpan(0, len).CopyTo(buffer);
+		return true;
 	}
 
 	public void ReloadLanguage() {

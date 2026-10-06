@@ -158,6 +158,16 @@ public static partial class LuaVGUI
 	}
 
 	[LuaMethod]
+	static int Panel__ParentToHUD(ILuaInterface lua) {
+		Panel? panel = Get_Panel(1);
+		if (panel == null)
+			lua.Error("Tried to use a NULL Panel!");
+		else if (!panel.IsMarkedForDeletion())
+			panel.SetParent(GModBase.GetGModParentToHUDPanel());
+		return 0;
+	}
+
+	[LuaMethod]
 	static int Panel__IsValid(ILuaInterface lua) {
 		Panel? panel = Get_Panel(1);
 		lua.PushBool(panel != null && (!panel.IsMarkedForDeletion() || panel.RunningOnRemove));
@@ -606,6 +616,34 @@ public static partial class LuaVGUI
 			return 0;
 		}
 		panel.SetBgColor(new Color((int)lua.CheckNumber(2), (int)lua.CheckNumber(3), (int)lua.CheckNumber(4), (int)lua.CheckNumber(5)));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetExpensiveShadow(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is not Label label)
+			return 0;
+
+		Color color;
+		ILuaObject? obj = lua.GetObject(3);
+		if (obj == null || !obj.isTable())
+			color = new(0, 0, 0, 180);
+		else {
+			int a = obj.GetMemberInt("a", 255);
+			int b = obj.GetMemberInt("b", 0);
+			int g = obj.GetMemberInt("g", 0);
+			int r = obj.GetMemberInt("r", 0);
+			color = new(r, g, b, a);
+		}
+
+		label.ExpensiveShadowDistance = (int)lua.CheckNumber(2);
+		label.ExpensiveShadowColor = color;
 		return 0;
 	}
 

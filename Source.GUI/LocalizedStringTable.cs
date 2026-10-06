@@ -102,6 +102,18 @@ public class LocalizedStringTable(ISystem system, IFileSystem fileSystem) : ILoc
 
 	}
 
+	public bool AddString(ReadOnlySpan<char> tokenName, ReadOnlySpan<char> unicodeString, ReadOnlySpan<char> fileName) {
+		if (tokenName.IsEmpty)
+			return false;
+
+		if (!Find(tokenName).IsEmpty)
+			return false;
+
+		ulong symbol = HashToSymbol[tokenName.Hash()] = ++curSymbol;
+		Lookup[symbol] = new string(unicodeString);
+		return true;
+	}
+
 	private bool AddAllLanguageFiles(ReadOnlySpan<char> fileBase) {
 		throw new NotImplementedException();
 	}

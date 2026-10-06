@@ -90,7 +90,78 @@ public static partial class LuaSurface
 		return (x, y);
 	}
 
-	// todo: DrawText
+	struct LocalizeCacheEntry
+	{
+		public string Name;
+		public string Text;
+	}
+
+	static readonly List<LocalizeCacheEntry> LocalizeCache = [];
+
+	static ReadOnlySpan<char> LocalizeFind(ReadOnlySpan<char> token) {
+		ReadOnlySpan<char> found = localize.Find(token);
+		if (!found.IsEmpty)
+			return found;
+
+		foreach (LocalizeCacheEntry entry in LocalizeCache)
+			if (token.SequenceEqual(entry.Name))
+				return entry.Text;
+
+		found = localize.Find($"#@{token[1..]}");
+		if (found.IsEmpty)
+			return null;
+
+		int start = 0;
+		for (int i = 0; i < found.Length; i++) {
+			if (found[i] == '{')
+				start = i;
+			else if (found[i] == '}') {
+				if (start == 0 || i == 0)
+					break;
+
+				ReadOnlySpan<char> binding = found[(start + 1)..i];
+				if (binding.Length > 0 && binding[0] == '+')
+					binding = binding[1..];
+				ReadOnlySpan<char> key = engine.Key_LookupBinding(binding);
+				if (key.IsEmpty)
+					key = "< NONE >";
+
+				string text = $"{found[..start]}{key.ToString().ToUpperInvariant()}{found[(i + 1)..]}";
+				LocalizeCache.Add(new() { Name = new(token), Text = text });
+				return text;
+			}
+		}
+
+		return null;
+	}
+
+	[InlineArray(2048)] struct InlineArrayDrawTextBuffer { char first; }
+	static InlineArrayDrawTextBuffer DrawTextBuffer;
+
+	[LuaFunction]
+	static int DrawText(ILuaInterface lua) {
+		string text = lua.CheckString(1);
+
+		FontDrawType drawType = FontDrawType.Default;
+		if (lua.GetType(2) != LuaType.Nil)
+			drawType = lua.GetBool(2) ? FontDrawType.Additive : FontDrawType.NonAdditive;
+
+		if (text.Length > 0 && text[0] == '#') {
+			if (filesystem.Language().GetString(text.AsSpan(1), DrawTextBuffer)) {
+				surface.DrawPrintText(((ReadOnlySpan<char>)DrawTextBuffer).SliceNullTerminatedString(), drawType);
+				return 0;
+			}
+
+			ReadOnlySpan<char> localized = LocalizeFind(text);
+			if (!localized.IsEmpty) {
+				surface.DrawPrintText(localized, drawType);
+				return 0;
+			}
+		}
+
+		surface.DrawPrintText(text, drawType);
+		return 0;
+	}
 
 	[LuaFunction]
 	[LuaGlobal("ScrW")]

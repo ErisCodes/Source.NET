@@ -105,6 +105,32 @@ public static partial class LuaMaterial
 		return 1;
 	}
 
+	[LuaMethod]
+	static int IMaterial__SetTexture(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		ITexture? texture;
+		if (lua.GetType(3) == LuaType.String)
+			texture = materials.FindTexture(lua.CheckString(3), "", true, 0);
+		else
+			texture = (ITexture?)LuaTexture.LC_ITexture.Get(3);
+
+		if (texture == null || texture == GetTextureValue(var))
+			return 0;
+
+		var.SetTextureValue(texture);
+		material.RecomputeStateSnapshots();
+		return 0;
+	}
+
 	static bool IsAllowedMaterialPath(ReadOnlySpan<char> name) {
 		Span<char> buffer = stackalloc char[MAX_PATH];
 		strcpy(buffer, name);

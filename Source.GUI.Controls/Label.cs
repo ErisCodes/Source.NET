@@ -21,6 +21,9 @@ public class Label : Panel
 
 	protected TextImage? TextImage;
 
+	public Color ExpensiveShadowColor;
+	public int ExpensiveShadowDistance;
+
 	public Label(Panel? parent, ReadOnlySpan<char> panelName, ReadOnlySpan<char> text) : base(parent, panelName) {
 		Init();
 

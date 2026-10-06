@@ -6,6 +6,7 @@ using Source.Common.GarrysMod.Lua;
 using Source.Common.Launcher;
 #endif
 
+using System.Numerics;
 using System.Text;
 
 #if CLIENT_DLL
@@ -244,6 +245,85 @@ public static partial class LuaGlobalFunctions
 		surface.GetClippingRect(out _, out _, out _, out _, out bool clippingDisabled);
 		surface.DisableClipping(lua.GetBool(1));
 		lua.PushBool(clippingDisabled);
+		return 1;
+	}
+#endif
+
+	[LuaGlobal]
+	static int RunConsoleCommand(ILuaInterface lua) {
+		string command = g_Lua!.CheckString(1);
+		if (!LuaConVar.IsValidConsoleName(command)) {
+			g_Lua.ErrorFromLua($"RunConsoleCommand: Command has invalid characters! ({command})\n\tThe first parameter of this function should contain only the command, the second parameter should contain arguments.");
+			return 0;
+		}
+
+		string? blocked = LuaConCommands.ConCommand_IsBlocked(command);
+		if (blocked != null) {
+#if CLIENT_DLL
+			if (blocked == "connect") {
+				// todo menu system
+				return 0;
+			}
+#endif
+			g_Lua.ErrorFromLua($"RunConsoleCommand: Command is blocked! ({blocked})");
+			return 0;
+		}
+
+		if (command.Length <= 1) {
+			g_Lua.ErrorFromLua($"RunConsoleCommand: Command is too short, bailing! ({command})");
+			return 0;
+		}
+
+		StringBuilder buffer = new(command);
+		for (int i = 2; i < 64; i++) {
+			LuaType type = g_Lua.GetType(i);
+			if (type == LuaType.Nil)
+				break;
+
+			string? argument = g_Lua.GetString(i);
+			if (argument == null)
+				break;
+
+			string? blockedArg = LuaConCommands.ConCommand_IsBlockedArg(argument);
+			if (blockedArg != null) {
+				g_Lua.ErrorFromLua($"RunConsoleCommand: Command argument is blocked! ({command} {blockedArg})");
+				return 0;
+			}
+
+			if (type == LuaType.Number)
+				argument = g_Lua.GetNumber(i).ToString("F2");
+
+			StringBuilder escaped = new();
+			for (int c = 0; c < argument.Length && c < 511; c++)
+				escaped.Append(argument[c] switch {
+					'"' => '\'',
+					'\n' => ' ',
+					_ => argument[c]
+				});
+
+			buffer.Append(' ').Append('"').Append(escaped).Append('"');
+		}
+		buffer.Append(';');
+
+		string result = buffer.ToString();
+		if (result.Length > 1023)
+			result = result[..1023];
+#if CLIENT_DLL
+		engine.ClientCmd(result);
+#else
+		engine.ServerCommand(result);
+#endif
+		return 0;
+	}
+
+#if CLIENT_DLL
+	static Vector3 EyePosition;
+
+	[LuaGlobal]
+	static int EyePos(ILuaInterface lua) {
+		if (IsCurrentViewAccessAllowed())
+			EyePosition = CurrentViewOrigin();
+		LuaVector.Push_Vector(EyePosition);
 		return 1;
 	}
 #endif
