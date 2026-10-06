@@ -166,6 +166,13 @@ public class LuaObject : ILuaObject
 		SetMember(name);
 	}
 
+	public void SetMember(ReadOnlySpan<char> name, double val) {
+		if (!isTable())
+			return;
+		g_Lua!.PushNumber(val);
+		SetMember(name);
+	}
+
 	public void SetMember(ReadOnlySpan<char> name, bool val) {
 		if (!isTable())
 			return;

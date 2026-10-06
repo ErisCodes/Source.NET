@@ -12,6 +12,42 @@ public static partial class LuaMaterial
 	public static readonly LuaClass LC_IMaterial = new("IMaterial", LuaType.Material, null, null);
 
 	[LuaMethod]
+	static string IMaterial__GetName(IMaterial material) => new(material.GetName());
+
+	[LuaMethod]
+	static int IMaterial__GetShader(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		material.IsTwoSided();
+		lua.PushString(material.GetShaderName());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int IMaterial__GetString(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		string? value = var.GetStringValue();
+		if (value == null || (value.Length > 0 && value[0] == '<'))
+			return 0;
+
+		lua.PushString(value);
+		return 1;
+	}
+
+	[LuaMethod]
 	static bool IMaterial__IsError(IMaterial material) => material.IsErrorMaterialInternal();
 
 	static readonly TextureReference ErrorTexture = new();

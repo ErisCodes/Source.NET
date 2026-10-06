@@ -620,6 +620,146 @@ public static partial class LuaVGUI
 	}
 
 	[LuaMethod]
+	static int Panel__DrawTexturedRect(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		panel.GetSize(out int wide, out int tall);
+		surface.DrawTexturedRect(0, 0, wide, tall);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__NewObject(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html)
+			html.NewObject(lua.CheckString(2));
+		return 0;
+	}
+
+	static string OpenURLBuffer = "";
+
+	[LuaMethod]
+	static int Panel__OpenURL(ILuaInterface lua) {
+		string url = lua.CheckString(2);
+		if (!url.Contains(':')) {
+			OpenURLBuffer = $"http://{url}";
+			if (OpenURLBuffer.Length > 2047)
+				OpenURLBuffer = OpenURLBuffer[..2047];
+			url = OpenURLBuffer;
+		}
+
+		if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) {
+			if (commandLine.FindParm("-disablehttp") != 0) {
+				lua.ErrorFromLua($"Panel:OpenURL external URLs blocked by -disablehttp launch parameter. URL: {url}\n");
+				return 0;
+			}
+		}
+		else if (!url.StartsWith("asset://", StringComparison.OrdinalIgnoreCase) && url != "about:blank" && url != "chrome://credits/")
+			return 0;
+
+		if (url.Length == 0 || url.Contains("10.") || url.Contains("172.16.") || url.Contains("192.168.") || url.Contains("127.") || url.Contains("://localhost"))
+			return 0;
+
+		string trimmed = url.TrimStart().Trim(' ').Replace("\n", "").Replace("\r", "");
+		if (trimmed.StartsWith("file", StringComparison.Ordinal))
+			return 0;
+
+		ReadOnlySpan<string> blockedExtensions = [".dll", ".swf", ".mov", ".lua", ".mp4", ".exe", ".bat", ".zip", ".mp3"];
+		foreach (string extension in blockedExtensions)
+			if (trimmed.EndsWith(extension, StringComparison.Ordinal))
+				return 0;
+
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html)
+			html.OpenURL(url);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__HasChildren(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		lua.PushBool(panel.GetChildCount() != 0);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__NewObjectCallback(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html) {
+			string funcName = lua.CheckString(3);
+			string objName = lua.CheckString(2);
+			html.NewObjectCallback(objName, funcName);
+		}
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__IsLoading(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is not HtmlPanel html)
+			return 0;
+
+		lua.PushBool(html.IsLoading());
+		return 1;
+	}
+
+	static readonly int[] ContentAlignmentToNumpad = [7, 8, 9, 4, 5, 6, 1, 2, 3];
+
+	[LuaMethod]
+	static int Panel__GetContentAlignment(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is not Label label)
+			return 0;
+
+		uint alignment = (uint)label.GetContentAlignment();
+		lua.PushNumber(alignment < 9 ? ContentAlignmentToNumpad[alignment] : 4);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__GetName(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		lua.PushString(panel.GetName());
+		return 1;
+	}
+
+	[LuaMethod]
 	static int Panel__SetExpensiveShadow(ILuaInterface lua) {
 		Panel? panel = (Panel?)PanelClass.Get(1);
 		if (panel == null) {

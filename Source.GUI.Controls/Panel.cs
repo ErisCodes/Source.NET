@@ -2633,22 +2633,47 @@ public class Panel : IPanel
 		InvalidateLayout();
 	}
 	public virtual void OnCursorMoved(int x, int y) { }
+#if GMOD_DLL
+	void CallGlobalTooltipFunction(ReadOnlySpan<char> name) {
+		if (Lua == null || Lua.Global() == null || LuaTable == null || IsMarkedForDeletion())
+			return;
+
+		ILuaObject func = Lua.CreateObject();
+		Lua.Global().GetMember(name, func);
+		if (func.isFunction()) {
+			func.Push();
+			PushLua(Lua, LuaType.Panel);
+			Lua.CallInternalNoReturns(1);
+		}
+		func.UnReference();
+	}
+#endif
 	public virtual void OnCursorEntered() {
 #if GMOD_DLL
-		// lua todo ChangeTooltip OnCursorEntered
+		CallGlobalTooltipFunction("ChangeTooltip");
+		if (PushLuaHook(LUA_POOLEDSTRING.OnCursorEntered)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
 #endif
 	}
 	public virtual void OnCursorExited() {
 #if GMOD_DLL
-		// todo OnCursorExited EndTooltip
+		if (PushLuaHook(LUA_POOLEDSTRING.OnCursorExited)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
+		CallGlobalTooltipFunction("EndTooltip");
 #endif
 	}
 	public virtual void OnMousePressed(ButtonCode code) {
 #if GMOD_DLL
 		if (IsWorldClicker())
 			Input.SetMouseCapture(this);
-		else {
-			// todo: OnMousePressed hook
+		if (PushLuaHook(LUA_POOLEDSTRING.OnMousePressed)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber((int)code);
+			Lua.CallInternalGetBool(2);
 		}
 #endif
 	}
@@ -2657,15 +2682,22 @@ public class Panel : IPanel
 #if GMOD_DLL
 		if (IsWorldClicker())
 			Input.SetMouseCapture(null);
-		else {
-			// todo: OnMouseReleased hook
+		if (PushLuaHook(LUA_POOLEDSTRING.OnMouseReleased)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber((int)code);
+			Lua.CallInternalGetBool(2);
 		}
 #endif
 	}
 	public virtual void OnMouseMismatchedRelease(ButtonCode code, IPanel? pressedPanel) { }
 	public virtual void OnMouseWheeled(int delta) {
 #if GMOD_DLL
-		// todo: OnMouseWheeled hook
+		if (PushLuaHook(LUA_POOLEDSTRING.OnMouseWheeled)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber(delta);
+			if (Lua.CallInternalGetBool(2))
+				return;
+		}
 #endif
 		CallParentFunction(new KeyValues("MouseWheeled", "delta", delta));
 	}

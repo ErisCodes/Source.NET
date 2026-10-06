@@ -218,7 +218,17 @@ public static partial class LuaSurface
 	}
 
 	// todo: GetHUDTexture
-	// todo: DrawTexturedRect
+	[LuaFunction]
+	static int DrawTexturedRect(ILuaInterface lua) {
+		int x = (int)lua.CheckNumber(1);
+		int y = (int)lua.CheckNumber(2);
+		int w = (int)lua.CheckNumber(3);
+		int h = (int)lua.CheckNumber(4);
+		// TODO: poster cmd split scaling (?)
+		surface.DrawTexturedRect(x, y, x + w, y + h);
+		return 0;
+	}
+
 	// todo: DrawTexturedRectRotated
 	// todo: PlaySound
 	[InlineArray(4096)] struct InlineArrayPolyVerts { SurfaceVertex first; }

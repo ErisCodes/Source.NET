@@ -767,7 +767,10 @@ public class MDLCache : IMDLCache, IStudioDataCache
 	}
 
 	public bool IsErrorModel(MDLHandle_t handle) {
-		throw new NotImplementedException();
+		if (handle == MDLHANDLE_INVALID)
+			return false;
+
+		return (HandleToMDLDict[handle].Flags & StudioDataFlags.ErrorModel) != 0;
 	}
 
 	public StudioHeader? LockStudioHdr(MDLHandle_t handle) {

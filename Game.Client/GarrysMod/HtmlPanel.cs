@@ -211,6 +211,10 @@ public class HtmlPanel : EditablePanel
 		// todo: send to cef
 	}
 
+	public void NewObject(ReadOnlySpan<char> objName) {
+		// todo: send to cef
+	}
+
 	public void NewObjectCallback(ReadOnlySpan<char> objName, ReadOnlySpan<char> funcName) {
 		// todo: send to cef
 	}

@@ -15,7 +15,7 @@ public delegate BaseAchievement AchievementCreateFunc();
 public class BaseAchievement : GameEventListener, IAchievement
 {
 	internal readonly static ConVar cc_achievement_debug = new("achievement_debug",
-#if DEBUG
+#if false //DEBUG
 	"1"
 #else
 	"0"

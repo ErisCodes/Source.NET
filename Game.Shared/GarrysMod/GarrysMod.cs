@@ -120,6 +120,7 @@ public class GarrysMod : IGarrysMod
 	public bool BlockRetryCommand;
 
 	public static bool RunningLuaCmd;
+	public static bool RunningNetMessage;
 	static readonly byte[] LuaCmd = new byte[0x1800];
 
 	public static void RunLuaCmd(bf_read buffer) {
@@ -178,7 +179,7 @@ public class GarrysMod : IGarrysMod
 		public static bool Create() {
 			Kill();
 #if CLIENT_DLL
-			// filesystem.Language().ReloadLanguage();
+			filesystem.Language().ReloadLanguage();
 #endif
 
 			foreach (ILegacyAddons.Information addon in filesystem.LegacyAddons().GetList()) {

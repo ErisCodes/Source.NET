@@ -383,6 +383,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public ITexture FindTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroupName, bool complain = true, int additionalCreationFlags = 0) => g_DummyTexture;
 	public bool IsTextureLoaded(ReadOnlySpan<char> textureName) => false;
 	public void Flush(bool flushHardware) { }
+	public void GMOD_ForceFilterMode(bool min, int mode) { }
 	public void GetBackBufferDimensions(out int width, out int height) {
 		width = 1024;
 		height = 768;

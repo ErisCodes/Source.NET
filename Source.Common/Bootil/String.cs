@@ -228,6 +228,22 @@ public static class String
 			}
 		}
 
+		public static void TrimBefore(ref string str, string strFind, bool includeFind) {
+			int i = str.IndexOf(strFind, StringComparison.Ordinal);
+			if (i == -1)
+				return;
+			str = str[(includeFind ? i + strFind.Length : i + 1)..];
+		}
+
+		public static void TrimAfter(ref string str, string strFind, bool includeFind) {
+			int i = str.IndexOf(strFind, StringComparison.Ordinal);
+			if (i == -1)
+				return;
+			if (!includeFind)
+				i += strFind.Length;
+			str = str[..i];
+		}
+
 		public static void TrimRight(ref string str, string strChars) => str = str.TrimEnd(strChars.ToCharArray());
 		public static void TrimLeft(ref string str, string strChars) => str = str.TrimStart(strChars.ToCharArray());
 

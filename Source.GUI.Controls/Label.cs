@@ -21,6 +21,8 @@ public class Label : Panel
 
 	protected TextImage? TextImage;
 
+	public Alignment GetContentAlignment() => ContentAlignment;
+
 	public Color ExpensiveShadowColor;
 	public int ExpensiveShadowDistance;
 

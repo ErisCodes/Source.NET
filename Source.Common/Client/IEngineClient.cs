@@ -320,6 +320,7 @@ public interface IEngineClient
 	void DrawPortals();
 	// Determine whether the client is playing back or recording a demo
 	bool IsPlayingDemo();
+	bool CopyFile(ReadOnlySpan<char> source, ReadOnlySpan<char> destination);
 	bool IsRecordingDemo();
 	bool IsPlayingTimeDemo();
 	int GetDemoRecordingTick();
