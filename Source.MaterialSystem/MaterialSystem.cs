@@ -975,6 +975,7 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		}
 
 		ITextureInternal? tex = TextureSystem.CreateRenderTargetTexture(rtName, w, h, sizeMode, format, rtType, textureFlags, renderTargetFlags);
+		tex?.IncrementReferenceCount();
 
 		if (!AllocatingRenderTargets)
 			EndRenderTargetAllocation();
@@ -982,8 +983,33 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		return tex;
 	}
 
+	/// <summary>
+	/// New version which must be called inside BeginRenderTargetAllocation-EndRenderTargetAllocation block
+	/// </summary>
+	public ITexture? CreateNamedRenderTargetTextureEx2(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared, TextureFlags textureFlags = TextureFlags.ClampS | TextureFlags.ClampT, CreateRenderTargetFlags renderTargetFlags = 0) {
+		// Only proceed if we are between BeginRenderTargetAllocation and EndRenderTargetAllocation
+		if (!AllocatingRenderTargets) {
+			Warning("Tried to create render target outside of MaterialSystem.BeginRenderTargetAllocation/EndRenderTargetAllocation block\n");
+			return null;
+		}
+
+		ITexture? texture = CreateNamedRenderTargetTextureEx(rtName, w, h, sizeMode, format, depth, textureFlags, renderTargetFlags);
+
+		texture?.DecrementReferenceCount(); // Follow the same convention as TextureManager.LoadTexture (return refcount of 0).
+		return texture;
+	}
+
 	int RT_FB_WidthOverride;
 	int RT_FB_HeightOverride;
+
+	public void SetRenderTargetFrameBufferSizeOverrides(int width, int height) {
+		RT_FB_WidthOverride = width;
+		RT_FB_HeightOverride = height;
+	}
+
+	public void AddTextureAlias(ReadOnlySpan<char> alias, ReadOnlySpan<char> realName) => TextureSystem.AddTextureAlias(alias, realName);
+	public void RemoveTextureAlias(ReadOnlySpan<char> alias) => TextureSystem.RemoveTextureAlias(alias);
+	public ImageFormat GetBackBufferFormat() => ShaderAPI.GetBackBufferFormat();
 
 	public void GetRenderTargetFrameBufferDimensions(out int fbWidth, out int fbHeight) {
 		if (RT_FB_WidthOverride > 0 && RT_FB_HeightOverride > 0) {

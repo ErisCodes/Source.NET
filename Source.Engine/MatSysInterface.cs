@@ -5,6 +5,7 @@ using CommunityToolkit.HighPerformance;
 using DStruct.BinaryTrees;
 
 using Source.Common;
+using Source.Common.Bitmap;
 using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
@@ -33,6 +34,7 @@ public static class MatSysVars
 	public static readonly ConVar mat_envmaptgasize = new("mat_envmaptgasize", "32.0");
 	public static readonly ConVar mat_levelflush = new("mat_levelflush", "1");
 	public static readonly ConVar mat_fullbright = new("mat_fullbright", "0", FCvar.Cheat);
+	public static readonly ConVar mat_debugalttab = new("mat_debugalttab", "0", FCvar.Cheat);
 	public static readonly ConVar mat_monitorgamma = new("mat_monitorgamma", "2.2", FCvar.Archive, "monitor gamma (typically 2.2 for CRT and 1.7 for LCD)", 1.6f, 2.6f);
 	public static readonly ConVar mat_monitorgamma_tv_range_min = new("mat_monitorgamma_tv_range_min", "16");
 	public static readonly ConVar mat_monitorgamma_tv_range_max = new("mat_monitorgamma_tv_range_max", "255");
@@ -258,8 +260,21 @@ public class MSurfaceSortList
 }
 public class MatSysInterface(IMaterialSystem materials, IServiceProvider services)
 {
-	public readonly TextureReference FullFrameFBTexture0 = new();
-	public readonly TextureReference FullFrameFBTexture1 = new();
+	public static readonly TextureReference g_PowerOfTwoFBTexture = new();
+	public static readonly TextureReference g_WaterReflectionTexture = new();
+	public static readonly TextureReference g_WaterRefractionTexture = new();
+	public static readonly TextureReference g_CameraTexture = new();
+	public static readonly TextureReference g_BuildCubemaps16BitTexture = new();
+	public static readonly TextureReference g_QuarterSizedFBTexture0 = new();
+	public static readonly TextureReference g_QuarterSizedFBTexture1 = new();
+	public static readonly TextureReference g_TeenyFBTexture0 = new();
+	public static readonly TextureReference g_TeenyFBTexture1 = new();
+	public static readonly TextureReference g_TeenyFBTexture2 = new();
+	public static readonly TextureReference g_FullFrameFBTexture0 = new();
+	public static readonly TextureReference g_FullFrameFBTexture1 = new();
+	public static readonly TextureReference g_FullFrameFBTexture2 = new();
+	public static readonly TextureReference g_FullFrameDepth = new();
+	public static readonly TextureReference g_ResolvedFullFrameDepth = new();
 
 	public int FrameCount = 1;
 	public static readonly int[] LightStyleValue = new int[256];
@@ -283,16 +298,87 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 #endif
 	}
 
-	private void InitWellKnownRenderTargets() {
-#if !SWDS
-		materials.BeginRenderTargetAllocation();
-		FullFrameFBTexture0.Init(CreateFullFrameFBTexture(0));
-		FullFrameFBTexture1.Init(CreateFullFrameFBTexture(1));
-		materials.EndRenderTargetAllocation();
-#endif
+	private ITexture? CreatePowerOfTwoFBTexture() {
+		if (IsX360())
+			return null;
+
+		return materials.CreateNamedRenderTargetTextureEx2(
+			"_rt_PowerOfTwoFB",
+			1024, 1024, RenderTargetSizeMode.Default,
+			// Has dest alpha for vort warp effect
+			ImageFormat.RGBA8888,
+			MaterialRenderTargetDepth.Shared,
+			TextureFlags.ClampS | TextureFlags.ClampT,
+			CreateRenderTargetFlags.HDR);
 	}
 
-	private ITexture CreateFullFrameFBTexture(int textureIndex, CreateRenderTargetFlags extraFlags = 0) {
+	private ITexture? CreateWaterReflectionTexture() {
+		return materials.CreateNamedRenderTargetTextureEx2(
+			"_rt_WaterReflection",
+			1024, 1024, RenderTargetSizeMode.Picmip,
+			materials.GetBackBufferFormat(),
+			MaterialRenderTargetDepth.Shared,
+			TextureFlags.ClampS | TextureFlags.ClampT,
+			CreateRenderTargetFlags.HDR);
+	}
+
+	private ITexture? CreateWaterRefractionTexture() {
+		return materials.CreateNamedRenderTargetTextureEx2(
+			"_rt_WaterRefraction",
+			1024, 1024, RenderTargetSizeMode.Picmip,
+			// This is different than reflection because it has to have alpha for fog factor.
+			ImageFormat.RGBA8888,
+			MaterialRenderTargetDepth.Shared,
+			TextureFlags.ClampS | TextureFlags.ClampT,
+			CreateRenderTargetFlags.HDR);
+	}
+
+	private ITexture? CreateCameraTexture() {
+		return materials.CreateNamedRenderTargetTextureEx2(
+			"_rt_Camera",
+			256, 256, RenderTargetSizeMode.Default,
+			materials.GetBackBufferFormat(),
+			MaterialRenderTargetDepth.Shared,
+			0,
+			CreateRenderTargetFlags.HDR);
+	}
+
+	private ITexture? CreateBuildCubemaps16BitTexture() {
+		return materials.CreateNamedRenderTargetTextureEx2(
+			"_rt_BuildCubemaps16bit",
+			0, 0,
+			RenderTargetSizeMode.FullFrameBuffer,
+			ImageFormat.RGBA16161616,
+			MaterialRenderTargetDepth.Shared);
+	}
+
+	private ITexture? CreateQuarterSizedFBTexture(int n, CreateRenderTargetFlags renderTargetFlags) {
+		string nbuf = $"_rt_SmallFB{n}";
+
+		ImageFormat fmt = materials.GetBackBufferFormat();
+		if (HardwareConfig.GetHDRType() == HDRType.Float)
+			fmt = ImageFormat.RGBA16161616F;
+
+		return materials.CreateNamedRenderTargetTextureEx2(
+			nbuf, 0, 0, RenderTargetSizeMode.HDR,
+			fmt, MaterialRenderTargetDepth.Shared,
+			TextureFlags.ClampS | TextureFlags.ClampT,
+			renderTargetFlags);
+	}
+
+	private ITexture? CreateTeenyFBTexture(int n) {
+		string nbuf = $"_rt_TeenyFB{n}";
+
+		ImageFormat fmt = materials.GetBackBufferFormat();
+		if (HardwareConfig.GetHDRType() == HDRType.Float)
+			fmt = ImageFormat.RGBA16161616F;
+
+		return materials.CreateNamedRenderTargetTextureEx2(
+			nbuf, 32, 32, RenderTargetSizeMode.Default,
+			fmt, MaterialRenderTargetDepth.Shared);
+	}
+
+	private ITexture? CreateFullFrameFBTexture(int textureIndex, CreateRenderTargetFlags extraFlags = 0) {
 		Span<char> textureName = stackalloc char[256];
 
 		if (textureIndex > 0)
@@ -301,12 +387,122 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 			strcpy(textureName, MaterialDefines.FULL_FRAME_FRAMEBUFFER);
 
 		CreateRenderTargetFlags rtFlags = extraFlags | CreateRenderTargetFlags.HDR;
-		return materials.CreateNamedRenderTargetTextureEx(
+		if (IsX360()) {
+			// just make the system memory texture only
+			rtFlags |= CreateRenderTargetFlags.NoEDRAM;
+		}
+		return materials.CreateNamedRenderTargetTextureEx2(
 			textureName.SliceNullTerminatedString(),
-			1, 1, RenderTargetSizeMode.FullFrameBuffer,
-			materials.GetRenderContext().GetShaderAPI().GetBackBufferFormat(), MaterialRenderTargetDepth.Shared,
+			1, 1, RenderTargetSizeMode.FullFrameBuffer, materials.GetBackBufferFormat(),
+			MaterialRenderTargetDepth.Shared,
 			TextureFlags.ClampS | TextureFlags.ClampT,
-			rtFlags)!;
+			rtFlags);
+	}
+
+	private ITexture? CreateFullFrameDepthTexture() {
+		if (IsX360()) {
+			return materials.CreateNamedRenderTargetTextureEx2("_rt_FullFrameDepth", 1, 1,
+				RenderTargetSizeMode.FullFrameBuffer, materials.GetShadowDepthTextureFormat(), MaterialRenderTargetDepth.None,
+				TextureFlags.ClampS | TextureFlags.ClampT | TextureFlags.PointSample,
+				CreateRenderTargetFlags.NoEDRAM);
+		}
+		else
+			materials.AddTextureAlias("_rt_FullFrameDepth", "_rt_PowerOfTwoFB");
+
+		return null;
+	}
+
+	private ITexture? CreateResolvedFullFrameDepthTexture() {
+		if (IsPC()) {
+			return materials.CreateNamedRenderTargetTextureEx2("_rt_ResolvedFullFrameDepth", 1, 1,
+				RenderTargetSizeMode.FullFrameBuffer, ImageFormat.RGBA8888, MaterialRenderTargetDepth.Separate,
+				TextureFlags.ClampS | TextureFlags.ClampT | TextureFlags.PointSample,
+				CreateRenderTargetFlags.NoEDRAM);
+		}
+
+		return null;
+	}
+
+	/// <summary>
+	/// Create render targets which mods rely upon to render correctly
+	/// </summary>
+	private void InitWellKnownRenderTargets() {
+#if !SWDS
+		if (mat_debugalttab.GetBool())
+			Warning("mat_debugalttab: InitWellKnownRenderTargets\n");
+
+		// Begin block in which all render targets should be allocated
+		materials.BeginRenderTargetAllocation();
+
+		// TODO: JasonM - Do we put logic in here to determine which of these to create, based upon DX level, HDR enable etc?
+		// YES! DX Level should gate these
+
+		// before we create anything, see if VR mode wants to override the "framebuffer" size
+		// if (UseVR()) {
+		// 	int nWidth, nHeight;
+		// 	g_pSourceVR.GetRenderTargetFrameBufferDimensions(nWidth, nHeight);
+		// 	g_pMaterialSystem.SetRenderTargetFrameBufferSizeOverrides(nWidth, nHeight);
+		// }
+		// else {
+			materials.SetRenderTargetFrameBufferSizeOverrides(0, 0);
+		// }
+
+		// Create the render targets upon which mods may rely
+
+		if (IsPC())
+			// Create for all mods as vgui2 uses it for 3D painting
+			g_PowerOfTwoFBTexture.Init(CreatePowerOfTwoFBTexture());
+
+		// Create these for all mods because the engine references them
+		if (HardwareConfig.GetDXSupportLevel() >= 80) {
+			if (IsPC() && HardwareConfig.GetDXSupportLevel() >= 90 && HardwareConfig.GetHDRType() == HDRType.Float)
+				// Used for building HDR Cubemaps
+				g_BuildCubemaps16BitTexture.Init(CreateBuildCubemaps16BitTexture());
+
+			// Used in Bloom effects
+			g_QuarterSizedFBTexture0.Init(CreateQuarterSizedFBTexture(0, 0));
+			// if (IsX360())
+			// 	materials.AddTextureAlias("_rt_SmallFB1", "_rt_SmallFB0"); //an alias is good enough on the 360 since we don't have a texture lock problem during post processing
+			// else
+				g_QuarterSizedFBTexture1.Init(CreateQuarterSizedFBTexture(1, 0));
+		}
+
+		if (IsPC()) {
+			g_TeenyFBTexture0.Init(CreateTeenyFBTexture(0));
+			g_TeenyFBTexture1.Init(CreateTeenyFBTexture(1));
+			g_TeenyFBTexture2.Init(CreateTeenyFBTexture(2));
+		}
+
+		g_FullFrameFBTexture0.Init(CreateFullFrameFBTexture(0));
+		g_FullFrameFBTexture1.Init(CreateFullFrameFBTexture(1));
+
+		// if (IsX360())
+		// 	g_FullFrameFBTexture2.Init(CreateFullFrameFBTexture(2, CREATERENDERTARGETFLAGS_TEMP));
+
+		g_FullFrameDepth.Init(CreateFullFrameDepthTexture());
+		g_ResolvedFullFrameDepth.Init(CreateResolvedFullFrameDepthTexture());
+
+		// if we're in stereo mode init a render target for VGUI
+		// if (UseVR())
+		// 	g_pSourceVR.CreateRenderTargets(materials);
+
+		// Allow the client to init their own mod-specific render targets
+		if (g_pClientRenderTargets != null)
+			g_pClientRenderTargets.InitClientRenderTargets(materials, HardwareConfig);
+		else {
+			// If this mod doesn't define the interface, fallback to initializing the standard render textures 
+			// NOTE: these should match up with the 'Get' functions in cl_dll/rendertexture.h/cpp
+			g_WaterReflectionTexture.Init(CreateWaterReflectionTexture());
+			g_WaterRefractionTexture.Init(CreateWaterRefractionTexture());
+			g_CameraTexture.Init(CreateCameraTexture());
+		}
+
+		// End block in which all render targets should be allocated (kicking off an Alt-Tab type behavior)
+		materials.EndRenderTargetAllocation();
+
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetNonInteractiveTempFullscreenBuffer(g_FullFrameFBTexture0.Get(), MaterialNonInteractiveMode.LevelLoad);
+#endif
 	}
 
 	internal struct MeshList

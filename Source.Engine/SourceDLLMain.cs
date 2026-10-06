@@ -45,6 +45,7 @@ public static class SourceDllMain
 	[Dependency] public static IModelRender modelrender { get; private set; } = null!;
 	[Dependency] public static IStudioRender studiorender { get; private set; } = null!;
 	[Dependency(Required = false)] public static IClientLeafSystemEngine clientleafsystem { get; private set; } = null!;
+	[Dependency(Required = false)] public static IClientRenderTargets? g_pClientRenderTargets { get; private set; } = null!;
 #endif
 	[Dependency] public static IPhysicsCollision physcollision { get; private set; } = null!;
 	[Dependency] public static IPhysicsSurfaceProps physprop { get; private set; } = null!;

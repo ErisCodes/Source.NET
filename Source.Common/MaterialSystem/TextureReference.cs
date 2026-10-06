@@ -33,7 +33,7 @@ public class TextureReference : Reference<ITexture>
 		Assert(reference != null);
 	}
 
-	public void Init(ITexture texture) {
+	public void Init(ITexture? texture) {
 		Shutdown();
 
 		reference = texture;

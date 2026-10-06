@@ -114,10 +114,39 @@ public class TextureManager : ITextureManager
 			return null;
 
 		Span<char> cleanName = stackalloc char[MATERIAL_MAX_PATH];
-		if (TextureList.TryGetValue(ITextureInternal.NormalizeTextureName(textureName, cleanName).Hash(), out ITextureInternal? tex))
+		ReadOnlySpan<char> normalized = ITextureInternal.NormalizeTextureName(textureName, cleanName);
+		if (TextureList.TryGetValue(normalized.Hash(), out ITextureInternal? tex))
 			return tex;
 
+		if (TextureAliases.TryGetValue(normalized.Hash(), out string? realName))
+			return FindTexture(realName);
+
 		return null;
+	}
+
+	readonly Dictionary<ulong, string> TextureAliases = [];
+
+	public void AddTextureAlias(ReadOnlySpan<char> alias, ReadOnlySpan<char> realName) {
+		if (alias.IsEmpty || realName.IsEmpty)
+			return; //invalid alias
+
+		Span<char> cleanName = stackalloc char[MATERIAL_MAX_PATH];
+		ulong hash = ITextureInternal.NormalizeTextureName(alias, cleanName).Hash();
+
+		if (TextureAliases.TryGetValue(hash, out string? existing)) {
+			AssertMsg(realName.Equals(existing, StringComparison.OrdinalIgnoreCase), "Trying to use one name to alias two different textures.");
+			RemoveTextureAlias(alias); //remove the old alias to make room for the new one.
+		}
+
+		TextureAliases[hash] = new(realName);
+	}
+
+	public void RemoveTextureAlias(ReadOnlySpan<char> alias) {
+		if (alias.IsEmpty)
+			return;
+
+		Span<char> cleanName = stackalloc char[MATERIAL_MAX_PATH];
+		TextureAliases.Remove(ITextureInternal.NormalizeTextureName(alias, cleanName).Hash());
 	}
 
 	internal void RestoreRenderTargets() {
