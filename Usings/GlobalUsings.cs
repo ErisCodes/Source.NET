@@ -60,6 +60,7 @@ global using ClientSideAnimationListHandle_t = uint;
 global using HSOUNDSCRIPTHANDLE = short;
 global using BSPTreeDataHandle_t = ushort;
 global using LeafIndex_t = ushort;
+global using ShaderAPIOcclusionQuery_t = nint;
 global using MaterialHandle_t = nint;
 global using OcclusionQueryObjectHandle_t = nint;
 global using ColorCorrectionHandle_t = nint;
