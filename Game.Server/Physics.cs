@@ -5,9 +5,11 @@ using Game.Shared;
 using Source;
 using Source.Common;
 using Source.Common.Audio;
+using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Mathematics;
 using Source.Common.Physics;
+using Source.Common.SoundEmitterSystem;
 using Source.Engine;
 
 using System;
@@ -15,6 +17,7 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Game.Server;
@@ -78,6 +81,93 @@ public static class PhysicsHookGlobals {
 			list[i].Sleep();
 		}
 		System.Buffers.ArrayPool<IPhysicsObject>.Shared.Return(list);
+	}
+
+	static readonly ConVar collision_shake_amp = new("collision_shake_amp", "0.2");
+	static readonly ConVar collision_shake_freq = new("collision_shake_freq", "0.5");
+	static readonly ConVar collision_shake_time = new("collision_shake_time", "0.5");
+
+	public static void PhysCollisionScreenShake(ref GameVCollisionEvent ev, int index) {
+		int otherIndex = index == 0 ? 1 : 0;
+		float mass = ev.VCollisionEvent.Objects[index]!.GetMass();
+		if (mass >= VPHYSICS_LARGE_OBJECT_MASS && ev.VCollisionEvent.Objects[otherIndex]!.IsStatic() &&
+			(ev.VCollisionEvent.Objects[index]!.GetGameFlags() & PhysicsFlags.Penetrating) == 0) {
+			mass = Math.Clamp(mass, VPHYSICS_LARGE_OBJECT_MASS, 2000.0f);
+			if (ev.VCollisionEvent.CollisionSpeed > 30 && ev.VCollisionEvent.DeltaCollisionTime > 0.25f) {
+				ev.VCollisionEvent.InternalData!.GetContactPoint(out Vector3 pos);
+				float impulse = ev.VCollisionEvent.CollisionSpeed * mass;
+				float amplitude = impulse * (collision_shake_amp.GetFloat() / (30.0f * VPHYSICS_LARGE_OBJECT_MASS));
+				Util.ScreenShake(pos, amplitude, collision_shake_freq.GetFloat(), collision_shake_time.GetFloat(), amplitude * 60, ShakeCommand.Start);
+			}
+		}
+	}
+
+	public static void PhysCollisionDust(ref GameVCollisionEvent ev, SurfaceData_ptr hit) {
+		switch ((CharTex)hit.Game.Material) {
+			case CharTex.Sand:
+			case CharTex.Dirt:
+				if (ev.VCollisionEvent.CollisionSpeed < 200.0f)
+					return;
+
+				break;
+
+			case CharTex.Concrete:
+				if (ev.VCollisionEvent.CollisionSpeed < 340.0f)
+					return;
+
+				break;
+
+			default:
+				return;
+		}
+
+		ev.VCollisionEvent.InternalData!.GetContactPoint(out Vector3 pos);
+
+		Vector3 vel = default;
+		vel.Random(-1.0f, 1.0f);
+		vel.Z = random.RandomFloat(0.3f, 1.0f);
+		MathLib.VectorNormalize(ref vel);
+		g_pEffects.Dust(pos, vel, 8.0f, ev.VCollisionEvent.CollisionSpeed);
+	}
+
+	public static void PhysFrictionSound(BaseEntity? entity, IPhysicsObject obj, ReadOnlySpan<char> soundName, ref HSOUNDSCRIPTHANDLE handle, float volume) {
+		if (entity == null)
+			return;
+
+		volume = Math.Clamp(volume, 0.0f, 1.0f);
+		if (volume > (1.0f / 128.0f)) {
+			ref Friction friction = ref g_Collisions.FindFriction(entity);
+			if (Unsafe.IsNullRef(ref friction))
+				return;
+
+			SoundParameters parms = new();
+			if (!BaseEntity.GetParametersForSound(soundName, ref handle, ref parms, null))
+				return;
+
+			if (friction.Object == null) {
+				if (parms.Volume * volume <= 0.1f)
+					return;
+
+				friction.Object = entity;
+				PASAttenuationFilter filter = new(entity, parms.SoundLevel);
+				friction.Patch = SoundEnvelopeController.GetController().SoundCreate(filter, entity.EntIndex(), (int)SoundEntityChannel.Body, soundName, parms.SoundLevel);
+				SoundEnvelopeController.GetController().Play(friction.Patch, parms.Volume * volume, parms.Pitch);
+			}
+			else {
+				float pitch = (volume * (parms.PitchHigh - parms.PitchLow)) + parms.PitchLow;
+				SoundEnvelopeController.GetController().SoundChangeVolume(friction.Patch!, parms.Volume * volume, 0.1);
+				SoundEnvelopeController.GetController().SoundChangePitch(friction.Patch!, pitch, 0.1);
+			}
+
+			friction.LastUpdateTime = gpGlobals.CurTime;
+			friction.LastEffectTime = gpGlobals.CurTime;
+		}
+	}
+
+	public static void PhysCleanupFrictionSounds(BaseEntity entity) {
+		ref Friction friction = ref g_Collisions.FindFriction(entity);
+		if (!Unsafe.IsNullRef(ref friction) && friction.Patch != null)
+			g_Collisions.ShutdownFriction(ref friction);
 	}
 
 	public static bool PhysIsInCallback(){
