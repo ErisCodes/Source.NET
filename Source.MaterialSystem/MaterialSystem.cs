@@ -113,7 +113,6 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 	public MaterialSystem(IServiceProvider services) {
 		MaterialDict = new(this);
-		HardwareRenderContext = new(this);
 		this.services = services;
 
 		FileSystem = services.GetRequiredService<IFileSystem>();
@@ -124,6 +123,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		HardwareConfig = services.GetRequiredService<IMaterialSystemHardwareConfig>(); // todo: interface
 		ShaderSystem = services.GetRequiredService<IShaderSystem>();
 		Config = services.GetRequiredService<MaterialSystem_Config>()!;
+		HardwareRenderContext = new(this);
 
 		// Link up
 		ShaderDevice.PreInit(this, services);
