@@ -200,6 +200,40 @@ public class Common(IServiceProvider providers, Sys Sys)
 		return data;
 	}
 
+	public static void CreatePath(ReadOnlySpan<char> path) {
+		Span<char> tempPath = stackalloc char[1024];
+		strcpy(tempPath, path);
+		StrTools.StripFilename(tempPath);
+		g_pFileSystem.CreateDirHierarchy(((ReadOnlySpan<char>)tempPath).SliceNullTerminatedString(), "DEFAULT_WRITE_PATH");
+	}
+
+	public static bool CopyFile(ReadOnlySpan<char> sourcePath, ReadOnlySpan<char> destPath) {
+		const int bufferSize = 4096 * 32;
+
+		using IFileHandle? input = g_pFileSystem.Open(sourcePath, FileOpenOptions.Read | FileOpenOptions.Binary);
+		AssertMsg(input != null, $"COM_CopyFile(): Input file '{sourcePath}' failed to open");
+		if (input == null)
+			return false;
+
+		CreatePath(destPath);
+
+		using IFileHandle? output = g_pFileSystem.Open(destPath, FileOpenOptions.Write | FileOpenOptions.Binary);
+		AssertMsg(output != null, $"COM_CopyFile(): Output file '{destPath}' failed to open");
+		if (output == null)
+			return false;
+
+		byte[] buf = new byte[bufferSize];
+		long remaining = input.Stream.Length;
+		while (remaining > 0) {
+			int count = remaining < bufferSize ? (int)remaining : bufferSize;
+			int read = input.Stream.Read(buf, 0, count);
+			output.Stream.Write(buf, 0, read);
+			remaining -= read;
+		}
+
+		return true;
+	}
+
 	public static bool IsValidPath(ReadOnlySpan<char> filename) {
 		if (filename.IsEmpty)
 			return false;

@@ -1327,6 +1327,8 @@ public partial class C_BaseEntity : IClientEntity
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public int GetModelIndex() => ModelIndex;
 
+	public static int PrecacheModel(ReadOnlySpan<char> name) => modelinfo.GetModelIndex(name);
+
 	public void OnPostRestoreData() {
 		InvalidatePhysicsRecursive(InvalidatePhysicsBits.PositionChanged | InvalidatePhysicsBits.AnglesChanged | InvalidatePhysicsBits.VelocityChanged);
 

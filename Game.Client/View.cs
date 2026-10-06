@@ -262,6 +262,8 @@ public class ViewRender : IViewRender
 
 		engine.SetAudioState(in audioState);
 
+		ViewRender.g_FOV = ScaleFOVByWidthRatio(viewEye.FOV, viewEye.AspectRatio / (4.0f / 3.0f));
+
 		C_BaseAnimating.PopAllowBoneAccess(new("OnRenderStart->ViewRender.SetUpView")); // pops the (true, false) bone access set in OnRenderStart
 		C_BaseAnimating.PushAllowBoneAccess(true, true, new("ViewRender.SetUpView->OnRenderEnd")); // pop is in OnRenderEnd()
 	}
@@ -478,8 +480,10 @@ public class ViewRender : IViewRender
 
 			AllowCurrentViewAccess(false);
 			// VGui_PostRender();
-			// ClientMode.PostRenderVGui();
 			using (renderContext = new MatRenderContextPtr(materials)) {
+#if GMOD_DLL
+				((ClientModeShared)clientMode).PostRenderVGui(renderContext);
+#endif
 				if (pTexture != null) {
 					// renderContext.OverrideAlphaWriteEnable(false, true);
 				}
@@ -627,6 +631,7 @@ public class ViewRender : IViewRender
 	public static QAngle g_VecPrevRenderAngles = new(0, 0, 0);
 	public static Vector3 g_VecVForward = new(0, 0, 0), g_VecVRight = new(0, 0, 0), g_VecVUp = new(0, 0, 0);
 	public static Matrix4x4 g_MatCamInverse;
+	public static float g_FOV;
 
 	public static Vector3 g_VecCurrentRenderOrigin = new(0, 0, 0);
 	public static QAngle g_VecCurrentRenderAngles = new(0, 0, 0);

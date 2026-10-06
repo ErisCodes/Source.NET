@@ -1,4 +1,5 @@
 using Source.Common.Formats.Keyvalues;
+using Source.Common.GarrysMod.Lua;
 using Source.Common.GUI;
 using Source.Common.Input;
 
@@ -120,9 +121,6 @@ public class Button : Label
 	}
 
 	public virtual void DoClick() {
-#if GMOD_DLL
-		// todo: DoClick hook
-#endif
 		SetSelected(true);
 		FireActionSignal();
 		PlayButtonReleasedSound();
@@ -131,6 +129,16 @@ public class Button : Label
 
 		if (!StaySelectedOnClick)
 			SetSelected(false);
+#if GMOD_DLL
+		if (PushLuaHook(LUA_POOLEDSTRING.DoClick)) {
+			Input.GetCursorPos(out int x, out int y);
+			ScreenToLocal(ref x, ref y);
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber(x);
+			Lua!.PushNumber(y);
+			Lua!.CallInternalNoReturns(3);
+		}
+#endif
 	}
 
 	public void SetArmedSound(ReadOnlySpan<char> fileName) {

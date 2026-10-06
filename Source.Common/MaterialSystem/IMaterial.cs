@@ -457,6 +457,7 @@ public interface IMaterial
 	ReadOnlySpan<char> GetName();
 	string? GetShaderName();
 	int GetEnumerationID();
+	void RecomputeStateSnapshots();
 	IMaterialVar[]? GetShaderParams();
 	int ShaderParamCount();
 	bool GetPropertyFlag(MaterialPropertyTypes needsBumpedLightmaps);

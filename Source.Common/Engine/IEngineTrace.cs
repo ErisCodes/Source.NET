@@ -18,6 +18,7 @@ public interface ITraceFilter
 {
 	public bool ShouldHitEntity(IHandleEntity entity, Contents contentsMask);
 	public TraceType GetTraceType() => TraceType.Everything;
+	public bool ShouldHitClientEntities() => false;
 }
 
 public struct TraceFilterEntitiesOnly : ITraceFilter

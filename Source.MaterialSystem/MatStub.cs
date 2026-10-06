@@ -281,6 +281,7 @@ public class DummyMaterial : IMaterial
 	}
 	public IMaterialVar? FindVarFast(ReadOnlySpan<char> name, ref TokenCache lightmapVarCache) => null;
 	public int GetEnumerationID() => 0;
+	public void RecomputeStateSnapshots() { }
 	public float GetMappingHeight() => 512;
 	public float GetMappingWidth() => 512;
 	public void GetReflectivity(out Vector3 reflect) => reflect = new(0.2f, 0.2f, 0.2f);

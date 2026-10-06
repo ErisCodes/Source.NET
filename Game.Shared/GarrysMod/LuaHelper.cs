@@ -1,5 +1,6 @@
 #if CLIENT_DLL || GAME_DLL
 using Source;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.GarrysMod.Lua;
 
 #if CLIENT_DLL
@@ -15,6 +16,33 @@ public static class LuaHelper
 	public static int cvttsd2si(double value) => double.IsNaN(value) || value >= 2147483648.0 || value <= -2147483649.0 ? int.MinValue : (int)value;
 
 	public static long cvttsd2si64(double value) => double.IsNaN(value) || value >= 9223372036854775808.0 || value < -9223372036854775808.0 ? long.MinValue : (long)value;
+
+	public static void KeyValuesToTable(KeyValues kv, ILuaObject table, bool preserveKeyCase) {
+		for (KeyValues? sub = kv.GetFirstSubKey(); sub != null; sub = sub.GetNextKey()) {
+			string name = sub.Name.Length > 511 ? sub.Name[..511] : sub.Name;
+			if (!preserveKeyCase)
+				name = name.ToLowerInvariant();
+
+			switch (sub.Type) {
+				case KeyValues.Types.Int:
+					table.SetMember(name, sub.GetInt());
+					break;
+				case KeyValues.Types.Double:
+					table.SetMember(name, MathF.Floor(sub.GetFloat() * 10000.0f) / 10000.0f);
+					break;
+				case KeyValues.Types.None: {
+						LuaTable subTable = new(null, 0);
+						table.SetMember(name, subTable);
+						KeyValuesToTable(sub, subTable, preserveKeyCase);
+						subTable.UnReference();
+						break;
+					}
+				default:
+					table.SetMember(name, sub.GetString());
+					break;
+			}
+		}
+	}
 
 	public static void CallOnLuaErrorHook(in LuaError error, string? addonTitle, ulong workshopID) {
 		if (g_Lua == null || g_Lua.Global() == null)

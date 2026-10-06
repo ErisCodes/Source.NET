@@ -10,6 +10,7 @@ public static partial class LuaRender
 	[LuaLibrary]
 	static readonly LuaLibrary LL_Factory_render = new("render");
 	static readonly IMaterialSystemHardwareConfig HardwareConfig = Singleton<IMaterialSystemHardwareConfig>();
+	static readonly TextureReference RenderTextureReference = new();
 
 	// todo: DrawSprite
 	// todo: DrawQuadEasy
@@ -176,10 +177,78 @@ public static partial class LuaRender
 	// todo: ModelMaterialOverride
 	// todo: SetLightingMode
 	// todo: Capture
-	// todo: PushFilterMag
-	// todo: PopFilterMag
-	// todo: PushFilterMin
-	// todo: PopFilterMin
+	static readonly List<int> FilterMinStack = [0];
+	static readonly List<int> FilterMagStack = [0];
+
+	[LuaFunction]
+	static int PushFilterMag(ILuaInterface lua) {
+		RenderTextureReference.Shutdown();
+		int mode = Math.Max(Math.Min((int)lua.CheckNumber(1), 8), 0);
+		if (FilterMagStack.Count > 200) {
+			lua.ErrorFromLua("render.PushFilterMag overflow\n");
+			return 0;
+		}
+
+		using MatRenderContextPtr renderContext = new(materials);
+		FilterMagStack.Add(mode);
+		renderContext.GMOD_ForceFilterMode(false, FilterMagStack[^1]);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetScissorRect(ILuaInterface lua) {
+		int left = (int)lua.CheckNumber(1);
+		int top = (int)lua.CheckNumber(2);
+		int right = (int)lua.CheckNumber(3);
+		int bottom = (int)lua.CheckNumber(4);
+		bool enable = lua.GetBool(5);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetScissorRect(left, top, right, bottom, enable);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int PopFilterMag(ILuaInterface lua) {
+		RenderTextureReference.Shutdown();
+		if (FilterMagStack.Count <= 1) {
+			lua.ErrorFromLua("render.PopFilterMag underflow!\n");
+			return 0;
+		}
+
+		using MatRenderContextPtr renderContext = new(materials);
+		FilterMagStack.RemoveAt(FilterMagStack.Count - 1);
+		renderContext.GMOD_ForceFilterMode(false, FilterMagStack[^1]);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int PushFilterMin(ILuaInterface lua) {
+		RenderTextureReference.Shutdown();
+		int mode = Math.Max(Math.Min((int)lua.CheckNumber(1), 8), 0);
+		if (FilterMinStack.Count > 200) {
+			lua.ErrorFromLua("render.PushFilterMin overflow\n");
+			return 0;
+		}
+
+		using MatRenderContextPtr renderContext = new(materials);
+		FilterMinStack.Add(mode);
+		renderContext.GMOD_ForceFilterMode(true, FilterMinStack[^1]);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int PopFilterMin(ILuaInterface lua) {
+		RenderTextureReference.Shutdown();
+		if (FilterMinStack.Count <= 1) {
+			lua.ErrorFromLua("render.PopFilterMin underflow!\n");
+			return 0;
+		}
+
+		using MatRenderContextPtr renderContext = new(materials);
+		FilterMinStack.RemoveAt(FilterMinStack.Count - 1);
+		renderContext.GMOD_ForceFilterMode(true, FilterMinStack[^1]);
+		return 0;
+	}
 	// todo: RedownloadAllLightmaps
 	// todo: SetWriteDepthToDestAlpha
 	// todo: RenderFlashlights

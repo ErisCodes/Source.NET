@@ -10,6 +10,7 @@ using Source.Common;
 using Source.Common.Bitbuffers;
 using Source.Common.Commands;
 using Source.Common.Filesystem;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.GarrysMod;
 using Source.Common.MaterialSystem;
 using Source.Common.Networking;
@@ -55,12 +56,50 @@ public class GarrysMod : IGarrysMod
 
 
 
+#if CLIENT_DLL
+	void AddLanguageFiles(ReadOnlySpan<char> language) {
+		ReadOnlySpan<char> fileName = filesystem.FindFirstEx($"resource/language/*{language}.txt", null, out ulong handle);
+		while (!fileName.IsEmpty) {
+			string path = $"resource/language/{fileName}";
+			if (!localize.AddFile(path, null, false)) {
+				Warning($"Failed to add language file '{path}', trying different method...\n");
+				KeyValues kv = new("");
+				bool loaded = kv.LoadFromFile(filesystem, path, null);
+				KeyValues? tokens = kv.FindKey("Tokens", false);
+				if (tokens == null)
+					Warning($"Failed to load language file '{path}' - {(loaded ? 1 : 0)}\n");
+				else {
+					for (KeyValues? token = tokens.GetFirstSubKey(); token != null; token = token.GetNextKey())
+						localize.AddString(token.Name, token.GetString(), path);
+				}
+			}
+			fileName = filesystem.FindNext(handle);
+		}
+		filesystem.FindClose(handle);
+	}
+#endif
+
 	public void InitializeMod(IServiceProvider services) {
 #if !SWDS
 		get.IntroScreen()?.Update("Adding Custom Fonts", true);
 		// todo: AddCustomFonts
+#if CLIENT_DLL
+		if (filesystem == null)
+			Error("g_pFullFileSystem is NULL!?");
+		if (filesystem!.Language() == null)
+			Error("->Language() is NULL!?");
+
+		Span<char> uiLanguage = stackalloc char[64];
+		uiLanguage.Clear();
+		engine.GetUILanguage(uiLanguage);
+		filesystem.Language().ChangeLanguage_Steam(uiLanguage.SliceNullTerminatedString());
+#endif
 		get.IntroScreen()!.Update("Adding Language Files", true);
-		// todo: AddLanguageFiles
+#if CLIENT_DLL
+		AddLanguageFiles("english");
+		if (uiLanguage[0] != '\0' && stricmp(uiLanguage.SliceNullTerminatedString(), "english") != 0)
+			AddLanguageFiles(uiLanguage.SliceNullTerminatedString());
+#endif
 		get.IntroScreen()!.Update("Setup Menu System", true);
 		// todo: menu system init
 		get.IntroScreen()!.Update("Setting Convar Defaults", true);
@@ -120,6 +159,7 @@ public class GarrysMod : IGarrysMod
 	public bool BlockRetryCommand;
 
 	public static bool RunningLuaCmd;
+	public static bool RunningNetMessage;
 	static readonly byte[] LuaCmd = new byte[0x1800];
 
 	public static void RunLuaCmd(bf_read buffer) {
@@ -148,12 +188,12 @@ public class GarrysMod : IGarrysMod
 #endif
 
 #if CLIENT_DLL
-	const string LuaPathID = "lcl";
+	public const string LuaPathID = "lcl";
 #else
-	const string LuaPathID = "lsv";
+	public const string LuaPathID = "lsv";
 #endif
 
-	static LuaManager? g_LuaManager;
+	public static LuaManager? g_LuaManager;
 
 	public static class Lua
 	{
@@ -166,15 +206,19 @@ public class GarrysMod : IGarrysMod
 				g_LuaManager.Shutdown();
 				g_LuaManager = null;
 			}
-			// gGM = null;
-			// GarrysMod.Lua.Libraries.Timer.Shutdown();
+			gGM?.Dispose();
+#if CLIENT_DLL
+			LuaTimer.Shutdown();
+#else
+			Game.Server.GarrysMod.LuaTimer.Shutdown();
+#endif
 			return true;
 		}
 
 		public static bool Create() {
 			Kill();
 #if CLIENT_DLL
-			// filesystem.Language().ReloadLanguage();
+			filesystem.Language().ReloadLanguage();
 #endif
 
 			foreach (ILegacyAddons.Information addon in filesystem.LegacyAddons().GetList()) {
@@ -190,12 +234,12 @@ public class GarrysMod : IGarrysMod
 			if (g_LuaManager != null)
 				Error("New gLUA when old one exists!\n");
 			g_LuaManager = new LuaManager();
-			// if (gGM != null)
-			// 	Error("New gGM when old one exists!\n");
-			// gGM = new CLuaGamemode();
+			if (gGM != null)
+				Error("New gGM when old one exists!\n");
+			gGM = new();
 			g_LuaManager.Startup();
 #if GAME_DLL
-			// gGM.LoadCurrentlyActiveGamemode();
+			gGM.LoadCurrentlyActiveGamemode();
 			Game.Server.GarrysMod.GModDataPack.DataPack().BuildSearchPaths();
 #endif
 			return true;
@@ -208,8 +252,16 @@ public class GarrysMod : IGarrysMod
 #endif
 	}
 
-	class LuaManager
+	public class LuaManager
 	{
+		public bool RunScript(ReadOnlySpan<char> file, ReadOnlySpan<char> pathId, bool run, ReadOnlySpan<char> source) {
+			if (g_Lua == null)
+				return false;
+			return g_Lua.FindAndRunScript(file, run, true, source, true);
+		}
+
+		public bool ScriptExists(ReadOnlySpan<char> file, ReadOnlySpan<char> pathId) => get.LuaShared()!.LoadFile(file, pathId, false, true) != null;
+
 		public void Startup() {
 #if CLIENT_DLL
 			Msg("Clientside Lua startup!\n");
@@ -259,11 +311,11 @@ public class GarrysMod : IGarrysMod
 #endif
 			g_Lua.FindAndRunScript("includes/init.lua", true, true, "!UNKNOWN", true);
 #if CLIENT_DLL
-			// if (gGM == null)
-			// 	Error("We should have a gGM at this point!");
+			if (gGM == null)
+				Error("We should have a gGM at this point!");
 			g_Lua.FindAndRunScript("derma/init.lua", true, true, "!UNKNOWN", true);
 			g_Lua.RunString("Startup", "", "require('notification');", true, true);
-			// gGM.LoadGamemode("base", false);
+			gGM.LoadGamemode("base", false);
 			RunScriptsInFolder("autorun", "!RELOAD");
 			RunScriptsInFolder("autorun/client", "!RELOAD_CL");
 			RunScriptsInFolder("postprocess", "!RELOAD_CL");
@@ -271,8 +323,35 @@ public class GarrysMod : IGarrysMod
 			RunScriptsInFolder("matproxy", "!RELOAD_CL");
 			g_Lua.FindAndRunScript("skins/default.lua", true, true, "!UNKNOWN", true);
 			enginevgui.UpdateCustomProgressBar(0.96f, "Lua Started!");
+#else
+			if (gGM == null)
+				Error("We should have a gGM at this point!");
+			gGM.LoadGamemode("base", false);
+			RunScriptsInFolder("autorun", "!RELOAD");
+			SendScriptsInFolder("matproxy", "!RELOAD_CL");
+			SendScriptsInFolder("postprocess", "!RELOAD_CL");
+			SendScriptsInFolder("vgui", "!RELOAD_CL");
+			SendScriptsInFolder("skins", "!RELOAD_CL");
+			SendScriptsInFolder("autorun", "!RELOAD");
+			SendScriptsInFolder("autorun/client", "!RELOAD_CL");
+			RunScriptsInFolder("autorun/server", "!RELOAD_SV");
+			RunScriptsInFolder("autorun/server/sensorbones", "!RELOAD_SV");
+			if (commandLine.FindParm("-systemtest") != 0)
+				g_Lua.FindAndRunScript("includes/dev_server_test.lua", true, true, "!UNKNOWN", true);
 #endif
 		}
+
+#if GAME_DLL
+		public void SendScriptsInFolder(ReadOnlySpan<char> folder, ReadOnlySpan<char> source) {
+			if (g_LuaManager == null)
+				return;
+
+			List<LuaFindResult> files = [];
+			get.LuaShared()!.FindScripts($"{folder}/*.lua", "lsv", files);
+			foreach (LuaFindResult file in files)
+				Game.Server.GarrysMod.FileServ.AddCSLuaFile($"{folder}/{file.FileName}", new string(source));
+		}
+#endif
 
 		public void RunScriptsInFolder(ReadOnlySpan<char> folder, ReadOnlySpan<char> source) {
 			if (g_LuaManager == null) {
@@ -289,6 +368,9 @@ public class GarrysMod : IGarrysMod
 		}
 
 		public void Shutdown() {
+#if CLIENT_DLL
+			GModBase.Shutdown();
+#endif
 			g_LuaID++;
 #if CLIENT_DLL
 			LuaClass.ShutdownLuaClasses(g_Lua!);
@@ -388,10 +470,11 @@ public class GarrysMod : IGarrysMod
 			g_Lua.Cycle();
 			// if (g_LuaNetworkedVars != null)
 			// 	g_LuaNetworkedVars.Cycle();
-			// Timer.Cycle();
 #if CLIENT_DLL
+			LuaTimer.Cycle();
 			LuaFileLibrary.AsyncCycle();
 #else
+			Game.Server.GarrysMod.LuaTimer.Cycle();
 			Game.Server.GarrysMod.LuaFileLibrary.AsyncCycle();
 #endif
 			// HTTP.Cycle();

@@ -1,6 +1,8 @@
 using Source.Common;
 using Source.Common.GUI;
 
+using System.Runtime.CompilerServices;
+
 namespace Source.GUI.Controls;
 
 public struct ColorChange
@@ -56,10 +58,33 @@ public class TextImage : Image
 		RecalculateTruncation = true;
 	}
 
+#if GMOD_DLL
+	string LocalizationToken = "";
+	[InlineArray(4096)] struct InlineArrayLocalizeBuffer { char first; }
+#endif
+
 	public void SetText(ReadOnlySpan<char> text) {
 		if (text.IsEmpty)
 			text = "";
 
+#if GMOD_DLL
+		LocalizationToken = "";
+		if (text.Length > 0 && text[0] == '#') {
+			InlineArrayLocalizeBuffer buffer = default;
+			if (fileSystem.Language().GetString(text, ((Span<char>)buffer)[..1024])) {
+				LocalizationToken = new(text);
+				SetText(((ReadOnlySpan<char>)buffer).SliceNullTerminatedString(), false);
+				return;
+			}
+
+			text = text[1..];
+			UnlocalizedTextSymbol = Localize.FindIndex(text);
+			if (UnlocalizedTextSymbol != ulong.MaxValue) {
+				SetText(Localize.GetValueByIndex(UnlocalizedTextSymbol), false);
+				return;
+			}
+		}
+#else
 		if (!text.IsEmpty && text.Length > 0 && text[0] == '#') {
 			UnlocalizedTextSymbol = Localize.FindIndex(text[1..]);
 			if (UnlocalizedTextSymbol != ulong.MaxValue) {
@@ -67,6 +92,7 @@ public class TextImage : Image
 				return;
 			}
 		}
+#endif
 
 		SetText(text, false);
 	}
@@ -243,6 +269,7 @@ public class TextImage : Image
 				else
 					x = 0;
 				y += lineHeight;
+				continue;
 			}
 			else if (ch == '&') {
 				if (i + 1 < len && Text[(int)(i + 1)] == '&')

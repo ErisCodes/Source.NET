@@ -41,4 +41,5 @@ public interface IVGui
 	IAnimationController GetAnimationController();
 	void AddTickSignal(IPanel panel, long intervalMilliseconds = 0);
 	void RemoveTickSignal(IPanel panel);
+	void PanelDeleted(IPanel focus);
 }

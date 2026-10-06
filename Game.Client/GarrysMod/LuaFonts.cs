@@ -22,6 +22,13 @@ public static class LuaFonts
 
 	public static bool IsLuaFont(ReadOnlySpan<char> name) => Fonts.ContainsKey(new string(name));
 
+	public static IFont? GetFont(ReadOnlySpan<char> name) {
+		string key = new(name);
+		if (!Fonts.TryGetValue(key, out LuaFont font))
+			Fonts[key] = font;
+		return font.Handle;
+	}
+
 	public static LuaFont? FindFont(IFont handle) {
 		foreach (LuaFont font in Fonts.Values)
 			if (font.Handle == handle)

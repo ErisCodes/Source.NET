@@ -85,6 +85,8 @@ public class MatRenderContext : IMatRenderContextInternal
 		shaderAPI.FlushBufferedPrimitives();
 	}
 
+	public void GMOD_ForceFilterMode(bool min, int mode) => shaderAPI.GMOD_ForceFilterMode(min, mode);
+
 	public void GetViewport(out int x, out int y, out int width, out int height) {
 		Assert(RenderTargetStack.Count > 0);
 		ref RenderTargetStackElement element = ref RenderTargetStack.Top();
@@ -922,10 +924,6 @@ public class MatRenderContext : IMatRenderContextInternal
 	}
 
 	public void GMOD_FlushQueue() {
-		throw new NotImplementedException("Incomplete port of IMatRenderContext");
-	}
-
-	public void GMOD_ForceFilterMode(bool unk1, int unk2) {
 		throw new NotImplementedException("Incomplete port of IMatRenderContext");
 	}
 

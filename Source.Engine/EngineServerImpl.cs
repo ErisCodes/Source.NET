@@ -251,9 +251,7 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 #endif
 
-	public bool CopyFile(ReadOnlySpan<char> source, ReadOnlySpan<char> destination) {
-		throw new NotImplementedException();
-	}
+	public bool CopyFile(ReadOnlySpan<char> source, ReadOnlySpan<char> destination) => Common.CopyFile(source, destination);
 
 	public Edict? CreateEdict(int forceEdictIndex = -1) {
 		Edict? edict = ED.Alloc(forceEdictIndex);

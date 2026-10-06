@@ -90,7 +90,7 @@ public class RichText : Panel
 	bool Interactive;
 	bool UnusedScrollbarInvis;
 	bool AllTextAlphaIsZero;
-	readonly List<char> TextStream = [];
+	public readonly List<char> TextStream = [];
 	readonly List<int> LineBreaks = [];
 	readonly List<FormatStreamPiece> FormatStream = [];
 	bool RecalcLineBreaks;
@@ -952,7 +952,11 @@ public class RichText : Panel
 		buf[^1] = '\0';
 	}
 
+#if GMOD_DLL
+	public override void SetText(ReadOnlySpan<char> text) {
+#else
 	public void SetText(ReadOnlySpan<char> text) {
+#endif
 		if (text.IsEmpty)
 			text = "";
 

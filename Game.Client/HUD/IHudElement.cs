@@ -1,5 +1,7 @@
 using Game.Shared;
 
+using Source.Common.GarrysMod.Lua;
+
 namespace Game.Client.HUD;
 
 // Since C# can't do multiple inheritance, this interface acts as the bridge, with other sub-panel types "EditableHudElement" for example
@@ -29,6 +31,16 @@ public interface IHudElement
 	ReadOnlySpan<char> GetName() => ElementName;
 	public bool ShouldDraw() => DefaultShouldDraw(this);
 	public static bool DefaultShouldDraw(IHudElement self) {
+#if GMOD_DLL
+		if (gGM == null)
+			return true;
+
+		if (!gGM.CallWithArgs((int)PooledStrings.LUA_POOLEDSTRING.HUDShouldDraw))
+			return true;
+
+		g_Lua!.PushString(self.ElementName);
+		return gGM.CallFinish(1);
+#else
 		bool shouldDraw = !gHUD.IsHidden(self.HiddenBits);
 
 		if (shouldDraw) {
@@ -40,6 +52,7 @@ public interface IHudElement
 		}
 
 		return shouldDraw;
+#endif
 	}
 	bool IsActive() => Active;
 	public bool SetActive(bool active) => Active = active;

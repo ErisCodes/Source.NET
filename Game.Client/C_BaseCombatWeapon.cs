@@ -12,6 +12,8 @@ public partial class C_BaseCombatWeapon : C_BaseAnimating
 {
 	public override bool IsBaseCombatWeapon() => true;
 	public override GarrysMod.LuaClass Lua_GetLuaClass() => GarrysMod.LuaEntity.LC_Weapon;
+	public virtual void DrawHUD() { }
+	public virtual void DrawHUDBackground() { }
 	public override bool IsWeapon() => true;
 	public static BaseCombatWeapon? GetActiveWeapon() {
 		BasePlayer? player = C_BasePlayer.GetLocalPlayer();

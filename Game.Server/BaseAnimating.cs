@@ -94,6 +94,8 @@ public class BaseAnimating : BaseEntity
 	[NetworkName("m_nHitboxSet")]
 	public int HitboxSet;
 
+	public int GetHitboxSet() => HitboxSet;
+
 	[NetworkName("m_flModelScale")]
 	public float ModelScale = 1.0f;
 	[NetworkName("m_flPoseParameter")]

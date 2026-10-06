@@ -1292,10 +1292,8 @@ public static class MathLib
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProduct(in Vector3 v1, ReadOnlySpan<vec_t> v2) => v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProduct(in Vector3 v1, in Vector3 v2) => v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(ReadOnlySpan<vec_t> v1, ReadOnlySpan<vec_t> v2) => MathF.Abs(v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(ReadOnlySpan<vec_t> v1, in Vector3 v2) => MathF.Abs(v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(in Vector3 v1, ReadOnlySpan<vec_t> v2) => MathF.Abs(v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(in Vector3 v1, in Vector3 v2) => MathF.Abs(v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(in Vector3 v0, ReadOnlySpan<vec_t> v1) => FloatMakePositive(v0.X * v1[0]) + FloatMakePositive(v0.Y * v1[1]) + FloatMakePositive(v0.Z * v1[2]);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(in Vector3 v0, in Vector3 v1) => FloatMakePositive(v0.X * v1.X) + FloatMakePositive(v0.Y * v1.Y) + FloatMakePositive(v0.Z * v1.Z);
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

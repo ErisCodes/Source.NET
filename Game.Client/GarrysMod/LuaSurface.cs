@@ -2,6 +2,7 @@ using Source;
 using Source.Common.GarrysMod.Lua;
 using Source.Common.GUI;
 using Source.Common.MaterialSystem;
+using Source.Common.SoundEmitterSystem;
 
 using System.Runtime.CompilerServices;
 
@@ -90,7 +91,78 @@ public static partial class LuaSurface
 		return (x, y);
 	}
 
-	// todo: DrawText
+	struct LocalizeCacheEntry
+	{
+		public string Name;
+		public string Text;
+	}
+
+	static readonly List<LocalizeCacheEntry> LocalizeCache = [];
+
+	static ReadOnlySpan<char> LocalizeFind(ReadOnlySpan<char> token) {
+		ReadOnlySpan<char> found = localize.Find(token);
+		if (!found.IsEmpty)
+			return found;
+
+		foreach (LocalizeCacheEntry entry in LocalizeCache)
+			if (token.SequenceEqual(entry.Name))
+				return entry.Text;
+
+		found = localize.Find($"#@{token[1..]}");
+		if (found.IsEmpty)
+			return null;
+
+		int start = 0;
+		for (int i = 0; i < found.Length; i++) {
+			if (found[i] == '{')
+				start = i;
+			else if (found[i] == '}') {
+				if (start == 0 || i == 0)
+					break;
+
+				ReadOnlySpan<char> binding = found[(start + 1)..i];
+				if (binding.Length > 0 && binding[0] == '+')
+					binding = binding[1..];
+				ReadOnlySpan<char> key = engine.Key_LookupBinding(binding);
+				if (key.IsEmpty)
+					key = "< NONE >";
+
+				string text = $"{found[..start]}{key.ToString().ToUpperInvariant()}{found[(i + 1)..]}";
+				LocalizeCache.Add(new() { Name = new(token), Text = text });
+				return text;
+			}
+		}
+
+		return null;
+	}
+
+	[InlineArray(2048)] struct InlineArrayDrawTextBuffer { char first; }
+	static InlineArrayDrawTextBuffer DrawTextBuffer;
+
+	[LuaFunction]
+	static int DrawText(ILuaInterface lua) {
+		string text = lua.CheckString(1);
+
+		FontDrawType drawType = FontDrawType.Default;
+		if (lua.GetType(2) != LuaType.Nil)
+			drawType = lua.GetBool(2) ? FontDrawType.Additive : FontDrawType.NonAdditive;
+
+		if (text.Length > 0 && text[0] == '#') {
+			if (filesystem.Language().GetString(text.AsSpan(1), DrawTextBuffer)) {
+				surface.DrawPrintText(((ReadOnlySpan<char>)DrawTextBuffer).SliceNullTerminatedString(), drawType);
+				return 0;
+			}
+
+			ReadOnlySpan<char> localized = LocalizeFind(text);
+			if (!localized.IsEmpty) {
+				surface.DrawPrintText(localized, drawType);
+				return 0;
+			}
+		}
+
+		surface.DrawPrintText(text, drawType);
+		return 0;
+	}
 
 	[LuaFunction]
 	[LuaGlobal("ScrW")]
@@ -106,8 +178,57 @@ public static partial class LuaSurface
 		return tall;
 	}
 
-	// todo: GetTextSize
-	// todo: SetFont
+	static IFont? CurrentFont;
+
+	[LuaFunction]
+	static int GetTextSize(ILuaInterface lua) {
+		if (CurrentFont == null)
+			return 0;
+
+		string? text = lua.CheckString(1);
+		if (text == null) {
+			lua.PushNumber(0);
+			lua.PushNumber(0);
+			return 2;
+		}
+
+		int wide, tall;
+		if (text.Length > 0 && text[0] == '#' && !filesystem.Language().GetString(text.AsSpan(1), DrawTextBuffer)) {
+			ReadOnlySpan<char> localized = LocalizeFind(text);
+			if (!localized.IsEmpty) {
+				surface.GetTextSize(CurrentFont, localized, out wide, out tall);
+				lua.PushNumber(wide);
+				lua.PushNumber(tall);
+				return 2;
+			}
+			text.AsSpan().ClampedCopyTo(DrawTextBuffer);
+			((Span<char>)DrawTextBuffer)[Math.Min(text.Length, 2047)] = '\0';
+		}
+		else if (text.Length == 0 || text[0] != '#') {
+			text.AsSpan().ClampedCopyTo(DrawTextBuffer);
+			((Span<char>)DrawTextBuffer)[Math.Min(text.Length, 2047)] = '\0';
+		}
+
+		surface.GetTextSize(CurrentFont, ((ReadOnlySpan<char>)DrawTextBuffer).SliceNullTerminatedString(), out wide, out tall);
+		lua.PushNumber(wide);
+		lua.PushNumber(tall);
+		return 2;
+	}
+
+	[LuaFunction]
+	static int SetFont(ILuaInterface lua) {
+		string name = lua.CheckString(1);
+		CurrentFont = LuaFonts.GetFont(name);
+		if (CurrentFont == null) {
+			CurrentFont = GModBase.GetGModBasePanel(true)!.GetScheme()!.GetFont(name, false);
+			if (CurrentFont == null) {
+				lua.ErrorFromLua($"'{name}' isn't a valid font\n");
+				return 0;
+			}
+		}
+		surface.DrawSetTextFont(CurrentFont);
+		return 0;
+	}
 
 	[LuaFunction]
 	static int GetTextureID([LuaGet] string? name) {
@@ -147,9 +268,31 @@ public static partial class LuaSurface
 	}
 
 	// todo: GetHUDTexture
-	// todo: DrawTexturedRect
+	[LuaFunction]
+	static int DrawTexturedRect(ILuaInterface lua) {
+		int x = (int)lua.CheckNumber(1);
+		int y = (int)lua.CheckNumber(2);
+		int w = (int)lua.CheckNumber(3);
+		int h = (int)lua.CheckNumber(4);
+		// TODO: poster cmd split scaling (?)
+		surface.DrawTexturedRect(x, y, x + w, y + h);
+		return 0;
+	}
+
 	// todo: DrawTexturedRectRotated
-	// todo: PlaySound
+	[LuaFunction]
+	static int PlaySound(ILuaInterface lua) {
+		ReadOnlySpan<char> sound = lua.CheckString(1);
+		int index = soundemitterbase.GetSoundIndex(sound);
+		if (soundemitterbase.IsValidIndex(index)) {
+			ref SoundParametersInternal internalParams = ref soundemitterbase.InternalGetParametersForSound(index);
+			Span<SoundFile> soundNames = internalParams.GetSoundNames();
+			int pick = RandomInt(0, soundNames.Length - 1);
+			sound = soundemitterbase.GetWaveName(soundNames[pick].Symbol);
+		}
+		surface.PlaySound(sound);
+		return 0;
+	}
 	[InlineArray(4096)] struct InlineArrayPolyVerts { SurfaceVertex first; }
 	static InlineArrayPolyVerts PolyVerts;
 
@@ -184,7 +327,16 @@ public static partial class LuaSurface
 	}
 	// todo: DisableClipping
 	// todo: DrawCircle
-	// todo: DrawTexturedRectUV
+	[LuaFunction]
+	static int DrawTexturedRectUV(ILuaInterface lua) {
+		int x = (int)lua.GetNumber(1);
+		int y = (int)lua.GetNumber(2);
+		int w = (int)lua.GetNumber(3);
+		int h = (int)lua.GetNumber(4);
+		// TODO: poster cmd split scaling (?)
+		surface.DrawTexturedSubRect(x, y, w + x, h + y, (float)lua.GetNumber(5), (float)lua.GetNumber(6), (float)lua.GetNumber(7), (float)lua.GetNumber(8));
+		return 0;
+	}
 
 	[LuaFunction]
 	static void SetAlphaMultiplier([LuaGet] float alpha) => surface.DrawSetAlphaMultiplier(alpha);
