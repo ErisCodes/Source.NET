@@ -44,7 +44,7 @@ public static class ClientShadowMgrGlobals
 
 	public static readonly VisibleShadowList s_VisibleShadowList = new();
 
-	public static void ShadowRestoreFunc(int changeFlags) {
+	public static void ShadowRestoreFunc(RestoreChangeFlags changeFlags) {
 		s_ClientShadowMgr.RestoreRenderState();
 	}
 

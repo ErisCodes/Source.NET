@@ -100,7 +100,7 @@ public interface IMaterialSystemHardwareConfig
 	int StencilBufferBits();
 	int MaxViewports();
 
-	void OverrideStreamOffsetSupport(bool bOverrideEnabled, bool bEnableSupport);
+	void OverrideStreamOffsetSupport(bool overrideEnabled, bool enableSupport);
 
 	int GetShadowFilterMode();
 

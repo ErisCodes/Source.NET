@@ -11,6 +11,10 @@ using System.Runtime.Intrinsics;
 
 namespace Source.Common.MaterialSystem;
 
+public static class MaterialSystemGlobals {
+	public const OcclusionQueryObjectHandle_t INVALID_OCCLUSION_QUERY_OBJECT_HANDLE = (OcclusionQueryObjectHandle_t)0;
+}
+
 public enum MaterialIndexFormat
 {
 	Unknown = -1,
@@ -342,17 +346,14 @@ public interface IMaterialSystem
 	public const float GAMMA = 2.2f;
 	public const float TEXGAMMA = 2.2f;
 
-	void Init(ReadOnlySpan<char> pShaderAPIDLL,
-		IMaterialProxyFactory materialProxyFactory,
-		IServiceProvider fileSystemFactory,
-		IServiceProvider? cvarFactory = null);
+	void Init(IServiceProvider shaderAPIFactory, IMaterialProxyFactory materialProxyFactory, IServiceProvider fileSystemFactory, IServiceProvider? cvarFactory = null);
 
 	// Call this to set an explicit shader version to use 
 	// Must be called before Init().
-	void SetShaderAPI(ReadOnlySpan<char> pShaderAPIDLL);
+	void SetShaderAPI(IServiceProvider shaderAPIFactory);
 
 	// Must be called before Init(), if you're going to call it at all...
-	void SetAdapter(uint nAdapter, int nFlags);
+	void SetAdapter(uint adapter, int flags);
 
 	// Call this when the mod has been set up, which may occur after init
 	// At this point, the game + gamebin paths have been set up
@@ -416,7 +417,7 @@ public interface IMaterialSystem
 	void GetDisplayMode(out UserVideoMode mode);
 
 	// Sets the mode...
-	bool SetMode(IWindow window, in UserVideoMode mode);
+	bool SetMode(IWindow window, MaterialSystem_Config mode);
 
 	bool SupportsMSAAMode(int nMSAAMode);
 
@@ -432,7 +433,7 @@ public interface IMaterialSystem
 	void GetBackBufferDimensions(out int width, out int height);
 	ImageFormat GetBackBufferFormat();
 
-	bool SupportsHDRMode(HDRType nHDRModede);
+	bool SupportsHDRMode(HDRType hdrMode);
 
 
 	// -----------------------------------------------------------
@@ -492,12 +493,12 @@ public interface IMaterialSystem
 	// Used to iterate over all shaders for editing purposes
 	// GetShaders returns the number of shaders it actually found
 	int ShaderCount();
-	int GetShaders(int nFirstShader, Span<IShader> shaderList);
+	int GetShaders(int firstShader, Span<IShader> shaderList);
 
 	// FIXME: Is there a better way of doing this?
 	// Returns shader flag names for editors to be able to edit them
 	int ShaderFlagCount();
-	ReadOnlySpan<char> ShaderFlagName(int nIndex);
+	ReadOnlySpan<char> ShaderFlagName(int index);
 
 	// Gets the actual shader fallback for a particular shader
 	void GetShaderFallback(ReadOnlySpan<char> shaderName, Span<char> fallbackShader);
@@ -507,10 +508,10 @@ public interface IMaterialSystem
 	// Material proxies
 	// -----------------------------------------------------------
 
-	IMaterialProxyFactory GetMaterialProxyFactory();
+	IMaterialProxyFactory? GetMaterialProxyFactory();
 
 	// Sets the material proxy factory. Calling this causes all materials to be uncached.
-	void SetMaterialProxyFactory(IMaterialProxyFactory factory);
+	void SetMaterialProxyFactory(IMaterialProxyFactory? factory);
 
 
 	// -----------------------------------------------------------
@@ -526,14 +527,14 @@ public interface IMaterialSystem
 	// -----------------------------------------------------------
 
 	// Force it to ignore Draw calls.
-	void SetInStubMode(bool bInStubMode);
+	void SetInStubMode(bool inStubMode);
 
 
 
 	// Debug support
 
 
-	void DebugPrintUsedMaterials(ReadOnlySpan<char> pSearchSubString, bool bVerbose);
+	void DebugPrintUsedMaterials(ReadOnlySpan<char> searchSubString, bool verbose);
 	void DebugPrintUsedTextures();
 
 	void ToggleSuppressMaterial(ReadOnlySpan<char> materialName);
@@ -578,7 +579,7 @@ public interface IMaterialSystem
 	void ReloadMaterials(ReadOnlySpan<char> subString = default);
 
 	// Create a procedural material. The keyvalues looks like a VMT file
-	IMaterial? CreateMaterial(ReadOnlySpan<char> materialName, KeyValues pVMTKeyValues);
+	IMaterial? CreateMaterial(ReadOnlySpan<char> materialName, KeyValues vmtKeyValues);
 
 	// Find a material by name.
 	// The name of a material is a full path to 
@@ -587,12 +588,12 @@ public interface IMaterialSystem
 	// eg. "dev/dev_bumptest" refers to somethign similar to:
 	// "d:/hl2/hl2/materials/dev/dev_bumptest.vmt"
 	//
-	// Most of the texture groups for textureGrouname are listed in texture_group_names.h.
+	// Most of the texture groups for textureGroupName are listed in texture_group_names.h.
 	// 
 	// Note: if the material can't be found, this returns a checkerboard material. You can 
 	// find out if you have that material by calling IMaterial::IsErrorMaterial().
 	// (Or use the global IsErrorMaterial function, which checks if it's null too).
-	IMaterial? FindMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGrouname, bool complain = true, ReadOnlySpan<char> complainPrefix = default);
+	IMaterial? FindMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, bool complain = true, ReadOnlySpan<char> complainPrefix = default);
 
 	// Query whether a material is loaded (eg, whether FindMaterial will be nonblocking)
 	bool IsMaterialLoaded(ReadOnlySpan<char> materialName);
@@ -626,14 +627,14 @@ public interface IMaterialSystem
 
 	// void SetAsyncTextureLoadCache(void* hFileCache);
 
-	ITexture? FindTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGrouname, bool complain = true, CreateTextureFlags additionalCreationFlags = 0);
+	ITexture? FindTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroupName, bool complain = true, CreateTextureFlags additionalCreationFlags = 0);
 
 	// Checks to see if a particular texture is loaded
 	bool IsTextureLoaded(ReadOnlySpan<char> textureName);
 
 	// Creates a procedural texture
 	ITexture? CreateProceduralTexture(ReadOnlySpan<char> textureName,
-		ReadOnlySpan<char> textureGrouname,
+		ReadOnlySpan<char> textureGroupName,
 		int w,
 		int h,
 		ImageFormat fmt,
@@ -655,7 +656,7 @@ public interface IMaterialSystem
 		ImageFormat format,
 		MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared);
 
-	ITexture? CreateNamedRenderTargetTextureEx(ReadOnlySpan<char> pRTName,               // Pass in nullptr here for an unnamed render target.
+	ITexture? CreateNamedRenderTargetTextureEx(ReadOnlySpan<char> rtName,               // Pass in nullptr here for an unnamed render target.
 		int w,
 		int h,
 		RenderTargetSizeMode sizeMode,  // Controls how size is generated (and regenerated on video mode change).
@@ -664,7 +665,7 @@ public interface IMaterialSystem
 		TextureFlags textureFlags = TextureFlags.ClampS | TextureFlags.ClampT,
 		uint renderTargetFlags = 0);
 
-	ITexture? CreateNamedRenderTargetTexture(ReadOnlySpan<char> pRTName,
+	ITexture? CreateNamedRenderTargetTexture(ReadOnlySpan<char> rtName,
 		int w,
 		int h,
 		RenderTargetSizeMode sizeMode,  // Controls how size is generated (and regenerated on video mode change).
@@ -674,7 +675,7 @@ public interface IMaterialSystem
 		bool bAutoMipMap = false);
 
 	// Must be called between the above Begin-End calls!
-	ITexture? CreateNamedRenderTargetTextureEx2(ReadOnlySpan<char> pRTName,               // Pass in nullptr here for an unnamed render target.
+	ITexture? CreateNamedRenderTargetTextureEx2(ReadOnlySpan<char> rtName,               // Pass in nullptr here for an unnamed render target.
 		int w,
 		int h,
 		RenderTargetSizeMode sizeMode,  // Controls how size is generated (and regenerated on video mode change).
@@ -759,7 +760,7 @@ public interface IMaterialSystem
 	void RemoveModeChangeCallBack(ModeChangeCallbackFunc func);
 
 	// Finds or create a procedural material.
-	IMaterial? FindProceduralMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGrouname, KeyValues vmtKeyValues);
+	IMaterial? FindProceduralMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, KeyValues vmtKeyValues);
 
 	ImageFormat GetNullTextureFormat();
 
@@ -780,11 +781,11 @@ public interface IMaterialSystem
 
 	// For sv_pure mode. The filesystem figures out which files the client needs to reload to be "pure" ala the server's preferences.
 	void ReloadFilesInList(IFileList filesToReload);
-	bool AllowThreading(bool bAllow, int nServiceThread);
+	bool AllowThreading(bool allow, int serviceThread);
 
 	// Extended version of FindMaterial().
 	// Contains context in so it can make decisions (i.e. if it's a model, ignore certain cheat parameters)
-	IMaterial? FindMaterialEx(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGrouname, int context, bool complain = true, ReadOnlySpan<char> complainPrefix = default);
+	IMaterial? FindMaterialEx(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, int context, bool complain = true, ReadOnlySpan<char> complainPrefix = default);
 
 	void DoStartupShaderPreloading();
 
@@ -822,16 +823,16 @@ public interface IMaterialSystem
 	// for the old games because it's easier than testing them.
 	void OverrideRenderTargetAllocation(bool rtAlloc);
 
-	// creates a texture compositor that will attempt to composite a new textuer from the steps of the specified KeyValues.
-	ITextureCompositor NewTextureCompositor(int w, int h, ReadOnlySpan<char> compositeName, int teamNum, ulong randomSeed, KeyValues stageDesc, CreateTextureFlags texCompositeCreateFlags = 0);
+	// creates a texture compositor that will attempt to composite a new texture from the steps of the specified KeyValues.
+	ITextureCompositor? NewTextureCompositor(int w, int h, ReadOnlySpan<char> compositeName, int teamNum, ulong randomSeed, KeyValues stageDesc, CreateTextureFlags texCompositeCreateFlags = 0);
 
 	// Loads the texture with the specified name, calls pRecipient->OnAsyncFindComplete with the result from the main thread.
 	// once the texture load is complete. If the texture cannot be found, the returned texture will return true for IsError().
-	void AsyncFindTexture<T>(ReadOnlySpan<char> pFilename, ReadOnlySpan<char> textureGrouname, IAsyncTextureOperationReceiver<T> recipient, ref T extraArgs, bool complain = true, CreateTextureFlags additionalCreationFlags = 0);
+	void AsyncFindTexture<T>(ReadOnlySpan<char> pFilename, ReadOnlySpan<char> textureGroupName, IAsyncTextureOperationReceiver<T> recipient, ref T extraArgs, bool complain = true, CreateTextureFlags additionalCreationFlags = 0);
 
 	// creates a texture suitable for use with materials from a raw stream of bits.
 	// The bits will be retained by the material system and can be freed upon return.
-	ITexture? CreateNamedTextureFromBitsEx(ReadOnlySpan<char> name, ReadOnlySpan<char> textureGrouname, int w, int h, int mips, ImageFormat fmt, int srcBufferSize, Span<byte> srcBits, CreateTextureFlags flags);
+	ITexture? CreateNamedTextureFromBitsEx(ReadOnlySpan<char> name, ReadOnlySpan<char> textureGroupName, int w, int h, int mips, ImageFormat fmt, int srcBufferSize, Span<byte> srcBits, CreateTextureFlags flags);
 
 	// Creates a texture compositor template for use in later code. 
 	bool AddTextureCompositorTemplate(ReadOnlySpan<char> name, KeyValues tmplDesc, int texCompositeTemplateFlags = 0);
@@ -927,8 +928,8 @@ public interface IMatRenderContext : IRefCounted
 
 	// Fog methods...
 	void FogMode(MaterialFogMode fogMode);
-	void FogStart(float fStart);
-	void FogEnd(float fEnd);
+	void FogStart(float start);
+	void FogEnd(float end);
 	void SetFogZ(float fogZ);
 	MaterialFogMode GetFogMode();
 
@@ -1034,7 +1035,7 @@ public interface IMatRenderContext : IRefCounted
 	// planes (which are specified in world space) to generate projection-space user clip planes
 	// Occasionally (for the particle system in hl2, for example), we want to override that
 	// behavior and explictly specify a ViewProj transform for user clip planes
-	void EnableUserClipTransformOverride(bool bEnable);
+	void EnableUserClipTransformOverride(bool enable);
 	void UserClipTransform(in Matrix4x4 worldToView);
 
 	bool GetFlashlightMode();
@@ -1154,7 +1155,7 @@ public interface IMatRenderContext : IRefCounted
 	void ClearBuffersObeyStencil(bool clearColor, bool clearDepth);
 
 	//enables/disables all entered clipping planes, returns the input from the last time it was called.
-	bool EnableClipping(bool bEnable);
+	bool EnableClipping(bool enable);
 
 	//get fog distances entered with FogStart(), FogEnd(), and SetFogZ()
 	void GetFogDistances(out float start, out float end, out float fogZ);
@@ -1173,7 +1174,7 @@ public interface IMatRenderContext : IRefCounted
 	void EndBatch();
 
 	// Raw access to the call queue, which can be NULL if not in a queued mode
-	ref ICallQueue GetCallQueue();
+	ICallQueue? GetCallQueue();
 
 	// Returns the world-space camera position
 	void GetWorldSpaceCameraPosition(out Vector3 cameraPos);
@@ -1181,7 +1182,7 @@ public interface IMatRenderContext : IRefCounted
 
 	// Tone mapping
 	void ResetToneMappingScale(float monoscale);            // set scale to monoscale instantly with no chasing
-	void SetGoalToneMappingScale(float monoscale); 			// set scale to monoscale instantly with no chasing
+	void SetGoalToneMappingScale(float monoscale);          // set scale to monoscale instantly with no chasing
 
 	// call TurnOnToneMapping before drawing the 3d scene to get the proper interpolated brightness
 	// value set.
@@ -1217,7 +1218,7 @@ public interface IMatRenderContext : IRefCounted
 	// Version of get dynamic mesh that specifies a specific vertex format
 	IMesh? GetDynamicMeshEx(VertexFormat vertexFormat, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null);
 
-	void FogMaxDensity(float flMaxDensity);
+	void FogMaxDensity(float maxDensity);
 
 	IMaterial? GetCurrentMaterial();
 	int GetCurrentNumBones();
@@ -1226,7 +1227,7 @@ public interface IMatRenderContext : IRefCounted
 	// Color correction related methods..
 	// Client cannot call IColorCorrectionSystem directly because it is not thread-safe
 	// FIXME: Make IColorCorrectionSystem threadsafe?
-	void EnableColorCorrection(bool bEnable);
+	void EnableColorCorrection(bool enable);
 	ColorCorrectionHandle_t AddLookup(ReadOnlySpan<char> name);
 	bool RemoveLookup(ColorCorrectionHandle_t handle);
 	void LockLookup(ColorCorrectionHandle_t handle);
@@ -1260,7 +1261,7 @@ public interface IMatRenderContext : IRefCounted
 	void ReleaseRenderData();
 
 	// Returns whether a pointer is render data. NOTE: passing nullptr returns true
-	bool IsRenderData( object? data );
+	bool IsRenderData(object? data);
 	float Knob(Span<char> knobname, Span<float> setvalue = default);
 	// Allows us to override the alpha write setting of a material
 	void OverrideAlphaWriteEnable(bool enable, bool alphaWriteEnable);
@@ -1268,11 +1269,11 @@ public interface IMatRenderContext : IRefCounted
 
 	void ClearBuffersObeyStencilEx(bool clearColor, bool clearAlpha, bool clearDepth);
 
-#if BUILD_GMOD
-	void GMOD_ForceFilterMode(bool, int );
+#if GMOD_DLL
+	void GMOD_ForceFilterMode(bool unk1, int unk2);
 	void GMOD_FlushQueue();
-	void OverrideBlend(bool, bool, int, int, int );
-	void OverrideBlendSeparateAlpha(bool, bool, int, int, int );
+	void OverrideBlend(bool unk1, bool unk2, int unk3, int unk4, int unk5);
+	void OverrideBlendSeparateAlpha(bool unk1, bool unk2, int unk3, int unk4, int unk5);
 #else
 	// Create a texture from the specified src render target, then call pRecipient->OnAsyncCreateComplete from the main thread.
 	// The texture will be created using the destination format, and will optionally have mipmaps generated.
@@ -1283,16 +1284,753 @@ public interface IMatRenderContext : IRefCounted
 
 public readonly struct MatRenderContextPtr : IDisposable, IMatRenderContext
 {
-	readonly IMatRenderContext ctx;
-	public readonly IMatRenderContext Context => ctx;
+	public readonly IMatRenderContext Context;
 
 	public MatRenderContextPtr(IMatRenderContext init) {
-		ctx = init;
+		Context = init;
 		init.BeginRender();
 	}
+
 	public MatRenderContextPtr(IMaterialSystem from) {
-		ctx = from.GetRenderContext();
-		ctx.BeginRender();
+		Context = from.GetRenderContext();
+		Context.BeginRender();
 	}
 
+	public void AccumulateMorph(IMorph morph, ReadOnlySpan<MorphWeight> weights) {
+		Context.AccumulateMorph(morph, weights);
+	}
+
+	public nint AddLookup(ReadOnlySpan<char> name) {
+		return Context.AddLookup(name);
+	}
+
+	public int AddRef() {
+		return Context.AddRef();
+	}
+
+	public void AddRefRenderData() {
+		Context.AddRefRenderData();
+	}
+
+	public void BeginBatch(IMesh? pIndices) {
+		Context.BeginBatch(pIndices);
+	}
+
+	public void BeginMorphAccumulation() {
+		Context.BeginMorphAccumulation();
+	}
+
+	public void BeginOcclusionQueryDrawing(nint handle) {
+		Context.BeginOcclusionQueryDrawing(handle);
+	}
+
+	public void BeginPIXEvent(Color color, ReadOnlySpan<char> name) {
+		Context.BeginPIXEvent(color, name);
+	}
+
+	public void BeginRender() {
+		Context.BeginRender();
+	}
+
+	public void Bind(IMaterial? material, object? proxyData = null) {
+		Context.Bind(material, proxyData);
+	}
+
+	public void BindBatch(IMesh? pVertices, IMaterial? autoBind = null) {
+		Context.BindBatch(pVertices, autoBind);
+	}
+
+	public void BindLightmapPage(int lightmapPageID) {
+		Context.BindLightmapPage(lightmapPageID);
+	}
+
+	public void BindLightmatexture(ITexture? lightmapTexture) {
+		Context.BindLightmatexture(lightmapTexture);
+	}
+
+	public void BindLocalCubemap(ITexture? texture) {
+		Context.BindLocalCubemap(texture);
+	}
+
+	public void BindMorph(IMorph morph) {
+		Context.BindMorph(morph);
+	}
+
+	public void ClearBuffers(bool clearColor, bool clearDepth, bool clearStencil = false) {
+		Context.ClearBuffers(clearColor, clearDepth, clearStencil);
+	}
+
+	public void ClearBuffersObeyStencil(bool clearColor, bool clearDepth) {
+		Context.ClearBuffersObeyStencil(clearColor, clearDepth);
+	}
+
+	public void ClearBuffersObeyStencilEx(bool clearColor, bool clearAlpha, bool clearDepth) {
+		Context.ClearBuffersObeyStencilEx(clearColor, clearAlpha, clearDepth);
+	}
+
+	public void ClearColor3ub(byte r, byte g, byte b) {
+		Context.ClearColor3ub(r, g, b);
+	}
+
+	public void ClearColor4ub(byte r, byte g, byte b, byte a) {
+		Context.ClearColor4ub(r, g, b, a);
+	}
+
+	public void ClearSelectionNames() {
+		Context.ClearSelectionNames();
+	}
+
+	public void ClearStencilBufferRectangle(int xmin, int ymin, int xmax, int ymax, int value) {
+		Context.ClearStencilBufferRectangle(xmin, ymin, xmax, ymax, value);
+	}
+
+	public int CompareMaterialCombos(IMaterial? material1, IMaterial? material2, int lightMapID1, int lightMapID2) {
+		return Context.CompareMaterialCombos(material1, material2, lightMapID1, lightMapID2);
+	}
+
+	public float ComputePixelDiameterOfSphere(in Vector3 absOrigin, float radius) {
+		return Context.ComputePixelDiameterOfSphere(absOrigin, radius);
+	}
+
+	public float ComputePixelWidthOfSphere(in Vector3 origin, float radius) {
+		return Context.ComputePixelWidthOfSphere(origin, radius);
+	}
+
+	public void CopyRenderTargetToTexture(ITexture? texture) {
+		Context.CopyRenderTargetToTexture(texture);
+	}
+
+	public void CopyRenderTargetToTextureEx(ITexture? texture, int renderTargetID, ref System.Drawing.Rectangle pSrcRect, ref System.Drawing.Rectangle pDstRect) {
+		Context.CopyRenderTargetToTextureEx(texture, renderTargetID, ref pSrcRect, ref pDstRect);
+	}
+
+	public void CopyTextureToRenderTargetEx(int renderTargetID, ITexture? texture, ref System.Drawing.Rectangle pSrcRect, ref System.Drawing.Rectangle pDstRect) {
+		Context.CopyTextureToRenderTargetEx(renderTargetID, texture, ref pSrcRect, ref pDstRect);
+	}
+
+	public IMorph CreateMorph(MorphFormatFlags format, ReadOnlySpan<char> debugName) {
+		return Context.CreateMorph(format, debugName);
+	}
+
+	public nint CreateOcclusionQueryObject() {
+		return Context.CreateOcclusionQueryObject();
+	}
+
+	public IMesh? CreateStaticMesh(VertexFormat fmt, ReadOnlySpan<char> textureBudgetGroup, IMaterial material = null) {
+		return Context.CreateStaticMesh(fmt, textureBudgetGroup, material);
+	}
+
+	public void CullMode(MaterialCullMode cullMode) {
+		Context.CullMode(cullMode);
+	}
+
+	public void DepthRange(float zNear, float zFar) {
+		Context.DepthRange(zNear, zFar);
+	}
+
+	public void DestroyMorph(IMorph morph) {
+		Context.DestroyMorph(morph);
+	}
+
+	public void DestroyOcclusionQueryObject(nint handle) {
+		Context.DestroyOcclusionQueryObject(handle);
+	}
+
+	public void DestroyStaticMesh(IMesh? mesh) {
+		Context.DestroyStaticMesh(mesh);
+	}
+
+	public void DisableAllLocalLights() {
+		Context.DisableAllLocalLights();
+	}
+
+	public readonly void Dispose() => Context.EndRender();
+
+	public void DrawBatch(int firstIndex, int numIndices) {
+		Context.DrawBatch(firstIndex, numIndices);
+	}
+
+	public void DrawScreenSpaceQuad(IMaterial? material) {
+		Context.DrawScreenSpaceQuad(material);
+	}
+
+	public void DrawScreenSpaceRectangle(IMaterial? material, int destX, int destY, int width, int height, float srcTextureX0, float srcTextureY0, float srcTextureX1, float srcTextureY1, int srcTextureWidth, int srcTextureHeight, IClientRenderable? clientRenderable = null, int xDice = 1, int yDice = 1) {
+		Context.DrawScreenSpaceRectangle(material, destX, destY, width, height, srcTextureX0, srcTextureY0, srcTextureX1, srcTextureY1, srcTextureWidth, srcTextureHeight, clientRenderable, xDice, yDice);
+	}
+
+	public bool EnableClipping(bool enable) {
+		return Context.EnableClipping(enable);
+	}
+
+	public void EnableColorCorrection(bool enable) {
+		Context.EnableColorCorrection(enable);
+	}
+
+	public void EnableNonInteractiveMode(MaterialNonInteractiveMode mode) {
+		Context.EnableNonInteractiveMode(mode);
+	}
+
+	public void EnableUserClipTransformOverride(bool enable) {
+		Context.EnableUserClipTransformOverride(enable);
+	}
+
+	public void EndBatch() {
+		Context.EndBatch();
+	}
+
+	public void EndMorphAccumulation() {
+		Context.EndMorphAccumulation();
+	}
+
+	public void EndOcclusionQueryDrawing(nint handle) {
+		Context.EndOcclusionQueryDrawing(handle);
+	}
+
+	public void EndPIXEvent() {
+		Context.EndPIXEvent();
+	}
+
+	public void EndRender() {
+		Context.EndRender();
+	}
+
+	public void Flush(bool flushHardware = false) {
+		Context.Flush(flushHardware);
+	}
+
+	public void FogColor3f(float r, float g, float b) {
+		Context.FogColor3f(r, g, b);
+	}
+
+	public void FogColor3fv(ReadOnlySpan<float> rgb) {
+		Context.FogColor3fv(rgb);
+	}
+
+	public void FogColor3ub(byte r, byte g, byte b) {
+		Context.FogColor3ub(r, g, b);
+	}
+
+	public void FogColor3ubv(ReadOnlySpan<byte> rgb) {
+		Context.FogColor3ubv(rgb);
+	}
+
+	public void FogEnd(float end) {
+		Context.FogEnd(end);
+	}
+
+	public void FogMaxDensity(float maxDensity) {
+		Context.FogMaxDensity(maxDensity);
+	}
+
+	public void FogMode(MaterialFogMode fogMode) {
+		Context.FogMode(fogMode);
+	}
+
+	public void FogStart(float start) {
+		Context.FogStart(start);
+	}
+
+	public ICallQueue? GetCallQueue() {
+		return Context.GetCallQueue();
+	}
+
+	public IMaterial? GetCurrentMaterial() {
+		return Context.GetCurrentMaterial();
+	}
+
+	public int GetCurrentNumBones() {
+		return Context.GetCurrentNumBones();
+	}
+
+	public object? GetCurrentProxy() {
+		return Context.GetCurrentProxy();
+	}
+
+	public IMesh? GetDynamicMesh(bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) {
+		return Context.GetDynamicMesh(buffered, vertexOverride, indexOverride, autoBind);
+	}
+
+	public IMesh? GetDynamicMeshEx(VertexFormat vertexFormat, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) {
+		return Context.GetDynamicMeshEx(vertexFormat, buffered, vertexOverride, indexOverride, autoBind);
+	}
+
+	public bool GetFlashlightMode() {
+		return Context.GetFlashlightMode();
+	}
+
+	public IMesh? GetFlexMesh() {
+		return Context.GetFlexMesh();
+	}
+
+	public void GetFogColor(out Color rgb) {
+		Context.GetFogColor(out rgb);
+	}
+
+	public void GetFogDistances(out float start, out float end, out float fogZ) {
+		Context.GetFogDistances(out start, out end, out fogZ);
+	}
+
+	public MaterialFogMode GetFogMode() {
+		return Context.GetFogMode();
+	}
+
+	public ITexture? GetFrameBufferCopyTexture(int textureIndex) {
+		return Context.GetFrameBufferCopyTexture(textureIndex);
+	}
+
+	public MaterialHeightClipMode GetHeightClipMode() {
+		return Context.GetHeightClipMode();
+	}
+
+	public ITexture? GetLocalCubemap() {
+		return Context.GetLocalCubemap();
+	}
+
+	public void GetMatrix(MaterialMatrixMode matrixMode, out Matrix4x4 matrix) {
+		Context.GetMatrix(matrixMode, out matrix);
+	}
+
+	public void GetMatrix(MaterialMatrixMode matrixMode, out Matrix3x4 matrix) {
+		Context.GetMatrix(matrixMode, out matrix);
+	}
+
+	public int GetMaxIndicesToRender() {
+		return Context.GetMaxIndicesToRender();
+	}
+
+	public void GetMaxToRender(IMesh? pMesh, bool bMaxUntilFlush, Span<int> maxVerts, Span<int> maxIndices) {
+		Context.GetMaxToRender(pMesh, bMaxUntilFlush, maxVerts, maxIndices);
+	}
+
+	public int GetMaxVerticesToRender(IMaterial? material) {
+		return Context.GetMaxVerticesToRender(material);
+	}
+
+	public bool GetMorphAccumulatorTexCoord(out Vector2 texCoord, IMorph morph, int vertex) {
+		return Context.GetMorphAccumulatorTexCoord(out texCoord, morph, vertex);
+	}
+
+	public int GetNumActiveDeformations() {
+		return Context.GetNumActiveDeformations();
+	}
+
+	public ITexture? GetRenderTarget() {
+		return Context.GetRenderTarget();
+	}
+
+	public void GetRenderTargetDimensions(out int width, out int height) {
+		Context.GetRenderTargetDimensions(out width, out height);
+	}
+
+	public Vector3 GetToneMappingScaleLinear() {
+		return Context.GetToneMappingScaleLinear();
+	}
+
+	public void GetViewport(out int x, out int y, out int width, out int height) {
+		Context.GetViewport(out x, out y, out width, out height);
+	}
+
+	public void GetWindowSize(out int width, out int height) {
+		Context.GetWindowSize(out width, out height);
+	}
+
+	public void GetWorldSpaceCameraPosition(out Vector3 cameraPos) {
+		Context.GetWorldSpaceCameraPosition(out cameraPos);
+	}
+
+	public void GetWorldSpaceCameraVectors(out Vector3 forward, out Vector3 right, out Vector3 up) {
+		Context.GetWorldSpaceCameraVectors(out forward, out right, out up);
+	}
+
+	public void GMOD_FlushQueue() {
+		Context.GMOD_FlushQueue();
+	}
+
+	public void GMOD_ForceFilterMode(bool unk1, int unk2) {
+		Context.GMOD_ForceFilterMode(unk1, unk2);
+	}
+
+	public bool IsRenderData(object? data) {
+		return Context.IsRenderData(data);
+	}
+
+	public float Knob(Span<char> knobname, Span<float> setvalue = default) {
+		return Context.Knob(knobname, setvalue);
+	}
+
+	public void LoadBoneMatrix(int boneIndex, in Matrix3x4 matrix) {
+		Context.LoadBoneMatrix(boneIndex, matrix);
+	}
+
+	public void LoadIdentity() {
+		Context.LoadIdentity();
+	}
+
+	public void LoadLookup(nint handle, ReadOnlySpan<char> lookuname) {
+		Context.LoadLookup(handle, lookuname);
+	}
+
+	public void LoadMatrix(in Matrix4x4 matrix) {
+		Context.LoadMatrix(matrix);
+	}
+
+	public void LoadMatrix(Matrix3x4 matrix) {
+		Context.LoadMatrix(matrix);
+	}
+
+	public void LoadSelectionName(int name) {
+		Context.LoadSelectionName(name);
+	}
+
+	public void LockLookup(nint handle) {
+		Context.LockLookup(handle);
+	}
+
+	public object? LockRenderData(int sizeInBytes) {
+		return Context.LockRenderData(sizeInBytes);
+	}
+
+	public E? LockRenderDataTyped<E>(int count, E? srcData = null) where E : class {
+		return Context.LockRenderDataTyped(count, srcData);
+	}
+
+	public void MatrixMode(MaterialMatrixMode matrixMode) {
+		Context.MatrixMode(matrixMode);
+	}
+
+	public void MultMatrix(in Matrix4x4 matrix) {
+		Context.MultMatrix(matrix);
+	}
+
+	public void MultMatrix(in Matrix3x4 matrix) {
+		Context.MultMatrix(matrix);
+	}
+
+	public void MultMatrixLocal(in Matrix4x4 matrix) {
+		Context.MultMatrixLocal(matrix);
+	}
+
+	public void MultMatrixLocal(in Matrix3x4 matrix) {
+		Context.MultMatrixLocal(matrix);
+	}
+
+	public int OcclusionQuery_GetNumPixelsRendered(nint handle) {
+		return Context.OcclusionQuery_GetNumPixelsRendered(handle);
+	}
+
+	public void Ortho(double left, double top, double right, double bottom, double zNear, double zFar) {
+		Context.Ortho(left, top, right, bottom, zNear, zFar);
+	}
+
+	public void OverrideAlphaWriteEnable(bool enable, bool alphaWriteEnable) {
+		Context.OverrideAlphaWriteEnable(enable, alphaWriteEnable);
+	}
+
+	public void OverrideBlend(bool unk1, bool unk2, int unk3, int unk4, int unk5) {
+		Context.OverrideBlend(unk1, unk2, unk3, unk4, unk5);
+	}
+
+	public void OverrideBlendSeparateAlpha(bool unk1, bool unk2, int unk3, int unk4, int unk5) {
+		Context.OverrideBlendSeparateAlpha(unk1, unk2, unk3, unk4, unk5);
+	}
+
+	public void OverrideColorWriteEnable(bool overrideEnable, bool colorWriteEnable) {
+		Context.OverrideColorWriteEnable(overrideEnable, colorWriteEnable);
+	}
+
+	public void OverrideDepthEnable(bool enable, bool depthEnable) {
+		Context.OverrideDepthEnable(enable, depthEnable);
+	}
+
+	public void PerformFullScreenStencilOperation() {
+		Context.PerformFullScreenStencilOperation();
+	}
+
+	public void PerspectiveOffCenterX(double fovx, double aspect, double zNear, double zFar, double bottom, double top, double left, double right) {
+		Context.PerspectiveOffCenterX(fovx, aspect, zNear, zFar, bottom, top, left, right);
+	}
+
+	public void PerspectiveX(double fovx, double aspect, double zNear, double zFar) {
+		Context.PerspectiveX(fovx, aspect, zNear, zFar);
+	}
+
+	public void PickMatrix(int x, int y, int width, int height) {
+		Context.PickMatrix(x, y, width, height);
+	}
+
+	public void PopCustomClipPlane() {
+		Context.PopCustomClipPlane();
+	}
+
+	public void PopDeformation() {
+		Context.PopDeformation();
+	}
+
+	public void PopMatrix() {
+		Context.PopMatrix();
+	}
+
+	public void PopRenderTargetAndViewport() {
+		Context.PopRenderTargetAndViewport();
+	}
+
+	public void PopSelectionName() {
+		Context.PopSelectionName();
+	}
+
+	public void PushCustomClipPlane(ReadOnlySpan<float> plane) {
+		Context.PushCustomClipPlane(plane);
+	}
+
+	public void PushDeformation(ref readonly DeformationBase deformation) {
+		Context.PushDeformation(in deformation);
+	}
+
+	public void PushMatrix() {
+		Context.PushMatrix();
+	}
+
+	public void PushRenderTargetAndViewport() {
+		Context.PushRenderTargetAndViewport();
+	}
+
+	public void PushRenderTargetAndViewport(ITexture? texture) {
+		Context.PushRenderTargetAndViewport(texture);
+	}
+
+	public void PushRenderTargetAndViewport(ITexture? texture, int viewX, int viewY, int viewW, int viewH) {
+		Context.PushRenderTargetAndViewport(texture, viewX, viewY, viewW, viewH);
+	}
+
+	public void PushRenderTargetAndViewport(ITexture? texture, ITexture? depthTexture, int viewX, int viewY, int viewW, int viewH) {
+		Context.PushRenderTargetAndViewport(texture, depthTexture, viewX, viewY, viewW, viewH);
+	}
+
+	public void PushSelectionName(int name) {
+		Context.PushSelectionName(name);
+	}
+
+	public void ReadPixels(int x, int y, int width, int height, Span<byte> data, ImageFormat dstFormat) {
+		Context.ReadPixels(x, y, width, height, data, dstFormat);
+	}
+
+	public void ReadPixelsAndStretch(ref System.Drawing.Rectangle srcRect, ref System.Drawing.Rectangle pDstRect, Span<byte> buffer, ImageFormat dstFormat, int dstStride) {
+		Context.ReadPixelsAndStretch(ref srcRect, ref pDstRect, buffer, dstFormat, dstStride);
+	}
+
+	public void RefreshFrontBufferNonInteractive() {
+		Context.RefreshFrontBufferNonInteractive();
+	}
+
+	public int Release() {
+		return Context.Release();
+	}
+
+	public void ReleaseRenderData() {
+		Context.ReleaseRenderData();
+	}
+
+	public bool RemoveLookup(nint handle) {
+		return Context.RemoveLookup(handle);
+	}
+
+	public void ResetLookupWeights() {
+		Context.ResetLookupWeights();
+	}
+
+	public void ResetOcclusionQueryObject(nint handle) {
+		Context.ResetOcclusionQueryObject(handle);
+	}
+
+	public void ResetToneMappingScale(float monoscale) {
+		Context.ResetToneMappingScale(monoscale);
+	}
+
+	public void Rotate(float angle, float x, float y, float z) {
+		Context.Rotate(angle, x, y, z);
+	}
+
+	public void Scale(float x, float y, float z) {
+		Context.Scale(x, y, z);
+	}
+
+	public void SelectionBuffer(Span<uint> buffer) {
+		Context.SelectionBuffer(buffer);
+	}
+
+	public int SelectionMode(bool selectionMode) {
+		return Context.SelectionMode(selectionMode);
+	}
+
+	public void SetAmbientLight(float r, float g, float b) {
+		Context.SetAmbientLight(r, g, b);
+	}
+
+	public void SetAmbientLightCube(Span<Vector4> cube) {
+		Context.SetAmbientLightCube(cube);
+	}
+
+	public void SetFlashlightMode(bool enable) {
+		Context.SetFlashlightMode(enable);
+	}
+
+	public void SetFlashlightState(in FlashlightState state, in Matrix4x4 worldToTexture) {
+		Context.SetFlashlightState(state, worldToTexture);
+	}
+
+	public void SetFlashlightStateEx(in FlashlightState state, in Matrix4x4 worldToTexture, ITexture? flashlightDepthTexture) {
+		Context.SetFlashlightStateEx(state, worldToTexture, flashlightDepthTexture);
+	}
+
+	public void SetFlexWeights(int firstWeight, ReadOnlySpan<MorphWeight> weights) {
+		Context.SetFlexWeights(firstWeight, weights);
+	}
+
+	public void SetFloatRenderingParameter(int parm_number, float value) {
+		Context.SetFloatRenderingParameter(parm_number, value);
+	}
+
+	public void SetFogZ(float fogZ) {
+		Context.SetFogZ(fogZ);
+	}
+
+	public void SetFrameBufferCopyTexture(ITexture? texture, int textureIndex = 0) {
+		Context.SetFrameBufferCopyTexture(texture, textureIndex);
+	}
+
+	public void SetFullScreenDepthTextureValidityFlag(bool isValid) {
+		Context.SetFullScreenDepthTextureValidityFlag(isValid);
+	}
+
+	public void SetGoalToneMappingScale(float monoscale) {
+		Context.SetGoalToneMappingScale(monoscale);
+	}
+
+	public void SetHeightClipMode(MaterialHeightClipMode heightClipMode) {
+		Context.SetHeightClipMode(heightClipMode);
+	}
+
+	public void SetHeightClipZ(float z) {
+		Context.SetHeightClipZ(z);
+	}
+
+	public void SetIntRenderingParameter(int parm_number, int value) {
+		Context.SetIntRenderingParameter(parm_number, value);
+	}
+
+	public void SetLight(int lightNum, in LightDesc desc) {
+		Context.SetLight(lightNum, desc);
+	}
+
+	public void SetLightingOrigin(Vector3 lightingOrigin) {
+		Context.SetLightingOrigin(lightingOrigin);
+	}
+
+	public void SetLookupWeight(nint handle, float weight) {
+		Context.SetLookupWeight(handle, weight);
+	}
+
+	public void SetNonInteractivePacifierTexture(ITexture? texture, float normalizedX, float normalizedY, float normalizedSize) {
+		Context.SetNonInteractivePacifierTexture(texture, normalizedX, normalizedY, normalizedSize);
+	}
+
+	public void SetNonInteractiveTempFullscreenBuffer(ITexture? texture, MaterialNonInteractiveMode mode) {
+		Context.SetNonInteractiveTempFullscreenBuffer(texture, mode);
+	}
+
+	public void SetNumBoneWeights(int numBones) {
+		Context.SetNumBoneWeights(numBones);
+	}
+
+	public void SetPIXMarker(Color color, ReadOnlySpan<char> name) {
+		Context.SetPIXMarker(color, name);
+	}
+
+	public void SetRenderTarget(ITexture? texture) {
+		Context.SetRenderTarget(texture);
+	}
+
+	public void SetRenderTargetEx(int renderTargetID, ITexture? texture) {
+		Context.SetRenderTargetEx(renderTargetID, texture);
+	}
+
+	public void SetResetable(nint handle, bool resetable) {
+		Context.SetResetable(handle, resetable);
+	}
+
+	public void SetScissorRect(int left, int top, int right, int bottom, bool enableScissor) {
+		Context.SetScissorRect(left, top, right, bottom, enableScissor);
+	}
+
+	public void SetShadowDepthBiasFactors(float slopeScaleDepthBias, float depthBias) {
+		Context.SetShadowDepthBiasFactors(slopeScaleDepthBias, depthBias);
+	}
+
+	public void SetStencilCompareFunction(StencilComparisonFunction cmpfn) {
+		Context.SetStencilCompareFunction(cmpfn);
+	}
+
+	public void SetStencilEnable(bool onoff) {
+		Context.SetStencilEnable(onoff);
+	}
+
+	public void SetStencilFailOperation(StencilOperation op) {
+		Context.SetStencilFailOperation(op);
+	}
+
+	public void SetStencilPassOperation(StencilOperation op) {
+		Context.SetStencilPassOperation(op);
+	}
+
+	public void SetStencilReferenceValue(int reference) {
+		Context.SetStencilReferenceValue(reference);
+	}
+
+	public void SetStencilTestMask(uint msk) {
+		Context.SetStencilTestMask(msk);
+	}
+
+	public void SetStencilWriteMask(uint msk) {
+		Context.SetStencilWriteMask(msk);
+	}
+
+	public void SetStencilZFailOperation(StencilOperation op) {
+		Context.SetStencilZFailOperation(op);
+	}
+
+	public void SetToneMappingScaleLinear(in Vector3 scale) {
+		Context.SetToneMappingScaleLinear(scale);
+	}
+
+	public void SetVectorRenderingParameter(int parm_number, in Vector3 value) {
+		Context.SetVectorRenderingParameter(parm_number, value);
+	}
+
+	public void SyncToken(ReadOnlySpan<char> token) {
+		Context.SyncToken(token);
+	}
+
+	public void Translate(float x, float y, float z) {
+		Context.Translate(x, y, z);
+	}
+
+	public void TurnOnToneMapping() {
+		Context.TurnOnToneMapping();
+	}
+
+	public void UnlockLookup(nint handle) {
+		Context.UnlockLookup(handle);
+	}
+
+	public void UnlockRenderData(object? data) {
+		Context.UnlockRenderData(data);
+	}
+
+	public void UserClipTransform(in Matrix4x4 worldToView) {
+		Context.UserClipTransform(worldToView);
+	}
+
+	public void Viewport(int x, int y, int width, int height) {
+		Context.Viewport(x, y, width, height);
+	}
 }
