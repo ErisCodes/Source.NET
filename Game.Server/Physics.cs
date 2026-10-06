@@ -316,6 +316,7 @@ public class PhysicsHook : BaseGameSystemPerFrame
 			deltaTime = 0.1; // limit incoming time to 100ms
 
 		physenv!.DebugCheckContacts();
+		g_Collisions.BufferTouchEvents(true);
 		physenv.Simulate(deltaTime);
 
 		int activeCount = physenv.GetActiveObjectCount();
@@ -331,6 +332,9 @@ public class PhysicsHook : BaseGameSystemPerFrame
 
 			ArrayPool<IPhysicsObject>.Shared.Return(activeList, true);
 		}
+
+		g_Collisions.BufferTouchEvents(false);
+		g_Collisions.FrameUpdate();
 	}
 	public override void LevelShutdownPreEntity() {
 		base.LevelShutdownPreEntity();

@@ -82,6 +82,8 @@ public class CollisionEvent : IPhysicsCollisionEvent, IPhysicsCollisionSolver, I
 
 	public bool IsInCallback() => inCallback > 0;
 
+	public void BufferTouchEvents(bool enable) => bufferTouchEvents = enable;
+
 
 	public virtual void AddDamageEvent(BaseEntity entity, in TakeDamageInfo info, IPhysicsObject inflictorPhysics, bool restoreVelocity, in Vector3 savedVel, in Vector3 savedAngVel) {
 		if (entity.IsMarkedForDeletion())
