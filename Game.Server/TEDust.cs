@@ -21,3 +21,19 @@ public class TEDust(ReadOnlySpan<char> name) : TEParticleSystem(name)
 	[NetworkName("m_vecDirection")]
 	public Vector3 Direction;
 }
+
+public static partial class TempEnts
+{
+	static readonly TEDust g_TEDust = new("Dust");
+
+	public static void TE_Dust<IRF>(scoped ref IRF filter, float delay, in Vector3 pos, in Vector3 dir, float size, float speed) where IRF : IRecipientFilter {
+		g_TEDust.Origin = pos;
+		g_TEDust.Direction = dir;
+		g_TEDust.LSize = size;
+		g_TEDust.LSpeed = speed;
+
+		Assert(dir.Length() < 1.01);
+
+		g_TEDust.Create(ref filter, delay);
+	}
+}
