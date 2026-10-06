@@ -347,6 +347,13 @@ public partial class BasePlayer : BaseCombatCharacter
 	public bool ForcedObserverMode;
 	PlayerPhysFlag PhysicsFlags;
 
+	public void SetPhysicsFlag(PlayerPhysFlag flag, bool set) {
+		if (set)
+			PhysicsFlags |= flag;
+		else
+			PhysicsFlags &= ~flag;
+	}
+
 	int LastDmageAmount;
 	Vector3 DmgOrigin;
 	Vector3 OldOrigin;
@@ -369,10 +376,10 @@ public partial class BasePlayer : BaseCombatCharacter
 	int LockViewanglesTickNumber;
 	QAngle LockedViewangles;
 
-	int UpdateRate;
-	TimeUnit_t LerpTime;
-	bool LagCompensation;
-	bool PredictWeapons;
+	public int UpdateRate;
+	public TimeUnit_t LerpTime;
+	public bool LagCompensation;
+	public bool PredictWeapons;
 
 	public static void SendProxy_CropFlagsToPlayerFlagBitsLength(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
 		int mask = (1 << Constants.PLAYER_FLAG_BITS) - 1;
@@ -513,11 +520,13 @@ public partial class BasePlayer : BaseCombatCharacter
 	readonly List<Handle<BaseEntity>> SimulatedByThisPlayer = [];
 
 	public IServerVehicle? GetVehicle() => Vehicle.Get()?.GetServerVehicle();
-	public BaseEntity? GetVehicleEntity() => Vehicle.Get();
-	public bool IsInAVehicle() => Vehicle.Get() != null;
+	public override BaseEntity? GetVehicleEntity() => Vehicle.Get();
+	public override bool IsInAVehicle() => Vehicle.Get() != null;
 	public float GetStepSize() => Local.StepSize;
 
 	public BaseEntity? GetViewEntity() => ViewEntity.Get();
+
+	public virtual ReadOnlySpan<char> GetSceneSoundToken() => "";
 
 	public void SetViewEntity(BaseEntity? entity) {
 		ViewEntity.Set(entity);
@@ -649,6 +658,16 @@ public partial class BasePlayer : BaseCombatCharacter
 			fFOV = Math.Min(fFOV, FOVStart);
 
 		return fFOV;
+	}
+
+	public float GetFOVDistanceAdjustFactorForNetworking() {
+		float defaultFOV = GetDefaultFOV();
+		float localFOV = GetFOVForNetworking();
+
+		if (localFOV == defaultFOV || defaultFOV < 0.001f)
+			return 1.0f;
+
+		return localFOV / defaultFOV;
 	}
 
 	public int GetFOV() {
@@ -1373,6 +1392,21 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	TimeUnit_t GetTimeSinceLastUserCommand() => /*(!IsConnected() || IsFakeClient() || IsBot()) ? 0.0f :*/ gpGlobals.CurTime - LastUserCommandTime;
 
+	public virtual void SetupVisibility(BaseEntity? viewEntity, byte[] pvs, int pvssize) {
+		if (viewEntity != null)
+			return;
+
+		Vector3 org = EyePosition();
+
+#if GMOD_DLL
+		BaseEntity? observerTarget = GetObserverTarget();
+		if (observerTarget != null)
+			engine.AddOriginToPVS(observerTarget.EyePosition());
+#endif
+
+		engine.AddOriginToPVS(org);
+	}
+
 	public override EdictFlags UpdateTransmitState() => SetTransmitState(EdictFlags.FullCheck);
 
 	public override EdictFlags ShouldTransmit(CheckTransmitInfo info) {
@@ -1383,6 +1417,15 @@ public partial class BasePlayer : BaseCombatCharacter
 
 		return base.ShouldTransmit(info);
 	}
+
+	public virtual bool WantsLagCompensationOnEntity(BaseEntity entity, in UserCmd cmd, ref readonly MaxEdictsBitVec entityTransmitBits) {
+		if (!Unsafe.IsNullRef(in entityTransmitBits) && !entityTransmitBits.IsBitSet(entity.EntIndex()))
+			return false;
+
+		return true;
+	}
+
+	public ref UserCmd GetCurrentUserCommand() => ref CurrentCommand.IsNull ? ref Unsafe.NullRef<UserCmd>() : ref CurrentCommand.Get();
 
 	public int Frags;
 	public int Deaths;

@@ -4,6 +4,7 @@ using Game.Shared;
 
 using Source;
 using Source.Common;
+using Source.Common.Audio;
 using Source.Common.Engine;
 using Source.Common.Mathematics;
 using Source.Common.Physics;
@@ -32,12 +33,64 @@ public static class PhysicsHookGlobals {
 		SetPhysicsGameSystem(g_PhysicsHook);
 	}
 
+	public static float PhysGetEntityMass(BaseEntity entity) {
+		IPhysicsObject[] list = System.Buffers.ArrayPool<IPhysicsObject>.Shared.Rent(VPHYSICS_MAX_OBJECT_LIST_COUNT);
+		int physCount = entity.VPhysicsGetObjectList(list.AsSpan(0, VPHYSICS_MAX_OBJECT_LIST_COUNT));
+		float otherMass = 0;
+		for (int i = 0; i < physCount; i++)
+			otherMass += list[i].GetMass();
+
+		System.Buffers.ArrayPool<IPhysicsObject>.Shared.Return(list);
+		return otherMass;
+	}
+
+	public static void PhysicsImpactSound(BaseEntity entity, IPhysicsObject physObject, SoundEntityChannel channel, int surfaceProps, int surfacePropsHit, float volume, float impactSpeed) {
+		PhysicsSound.AddImpactSound(g_PhysicsHook.ImpactSounds, entity, entity.EntIndex(), channel, physObject, surfaceProps, surfacePropsHit, volume, impactSpeed);
+	}
+
+	public static void PhysCollisionSound(BaseEntity entity, IPhysicsObject physObject, SoundEntityChannel channel, int surfaceProps, int surfacePropsHit, float deltaTime, float speed) {
+		if (deltaTime < 0.05f || speed < 70.0f)
+			return;
+
+		float volume = speed * speed * (1.0f / (320.0f * 320.0f));
+		if (volume > 1.0f)
+			volume = 1.0f;
+
+		PhysicsImpactSound(entity, physObject, channel, surfaceProps, surfacePropsHit, volume, speed);
+	}
+
+	public static void PhysBreakSound(BaseEntity entity, IPhysicsObject? physObject, Vector3 origin) {
+		if (physObject == null)
+			return;
+
+		PhysicsSound.AddBreakSound(g_PhysicsHook.BreakSounds, origin, (ushort)physObject.GetMaterialIndex());
+	}
+
+	public static void PhysForceEntityToSleep(BaseEntity entity, IPhysicsObject? obj) {
+		if (obj == null || !obj.IsMoveable())
+			return;
+
+		DevMsg(2, $"Putting entity to sleep: {entity.GetClassname()}\n");
+		IPhysicsObject[] list = System.Buffers.ArrayPool<IPhysicsObject>.Shared.Rent(VPHYSICS_MAX_OBJECT_LIST_COUNT);
+		int physCount = entity.VPhysicsGetObjectList(list.AsSpan(0, VPHYSICS_MAX_OBJECT_LIST_COUNT));
+		for (int i = 0; i < physCount; i++) {
+			PhysForceClearVelocity(list[i]);
+			list[i].Sleep();
+		}
+		System.Buffers.ArrayPool<IPhysicsObject>.Shared.Return(list);
+	}
+
 	public static bool PhysIsInCallback(){
 		return (physenv != null && physenv.IsInSimulation()) || g_Collisions.IsInCallback();
 	}
 
 	public static void PhysAddShadow(BaseEntity entity) => g_ShadowEntities!.AddEntity(entity);
 	public static void PhysRemoveShadow(BaseEntity entity) => g_ShadowEntities!.DeleteEntity(entity);
+
+	public static void PhysOnCleanupDeleteList() {
+		g_Collisions.FlushQueuedOperations();
+		physenv?.CleanupDeleteList();
+	}
 
 	public static void PhysCallbackRemove(IServerNetworkable remove){
 		if (PhysIsInCallback()) 
@@ -175,6 +228,15 @@ public class PhysicsHook : BaseGameSystemPerFrame
 		PhysFrame(gpGlobals.FrameTime);
 	}
 	public override void PreClientUpdate() {
-		base.PreClientUpdate();
+		ImpactSoundTime += gpGlobals.FrameTime;
+		if (ImpactSoundTime > 0.05) {
+			PhysicsSound.PlayImpactSounds(ImpactSounds);
+			ImpactSoundTime = 0.0;
+			PhysicsSound.PlayBreakSounds(BreakSounds);
+		}
 	}
+
+	TimeUnit_t ImpactSoundTime;
+	public readonly List<ImpactSound> ImpactSounds = [];
+	public readonly List<BreakSound> BreakSounds = [];
 }

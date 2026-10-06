@@ -295,6 +295,7 @@ public static class Physics
 	public static bool g_bTestMoveTypeStepSimulation = true;
 	static readonly ConVar sv_teststepsimulation = new("1", 0);
 	public readonly static ConVar npc_vphysics = new("0", 0);
+	public static readonly PhysicsPushedEntities PushedEntities = new();
 
 	const float PLAYER_PACKETS_STOPPED_SO_RETURN_TO_PHYSICS_TIME = 1.0f;
 
@@ -443,7 +444,43 @@ public partial class BaseEntity
 		// PhysicsRelinkChildren(dt);
 	}
 
-	void PhysicsPusher() { }
+	BaseEntity? PhysicsPushMove(TimeUnit_t movetime) {
+		IncrementLocalTime(movetime);
+
+		if (GetLocalVelocity() == vec3_origin)
+			return null;
+
+		BaseEntity? blocker = Physics.PushedEntities.PerformLinearPush(this, movetime);
+		if (blocker != null)
+			IncrementLocalTime(-movetime);
+		return blocker;
+	}
+
+	BaseEntity? PhysicsPushRotate(TimeUnit_t movetime) {
+		IncrementLocalTime(movetime);
+
+		if (GetLocalAngularVelocity() == vec3_angle)
+			return null;
+
+		BaseEntity? blocker = Physics.PushedEntities.PerformRotatePush(this, movetime);
+		if (blocker != null)
+			IncrementLocalTime(-movetime);
+
+		return blocker;
+	}
+
+	void PhysicsPusher() {
+		if (!PhysicsRunThink())
+			return;
+
+		VPhysicsUpdateLocalTime = LocalTime;
+
+		TimeUnit_t movetime = GetMoveDoneTime();
+		if (movetime > gpGlobals.FrameTime)
+			movetime = gpGlobals.FrameTime;
+
+		PerformPush(movetime);
+	}
 
 	void PhysicsNone() {
 		PhysicsRunThink();
@@ -466,8 +503,55 @@ public partial class BaseEntity
 
 	void PhysicsCustom() { }
 
-	void PerformPush(TimeUnit_t movetime) { }
+	void PerformPush(TimeUnit_t movetime) {
+		uint prevBlocker = Blocker.Index;
+		BaseEntity? blocker;
+		Physics.PushedEntities.BeginPush(this);
+		if (movetime > 0) {
+			if (GetLocalAngularVelocity() != vec3_angle) {
+				if (GetLocalVelocity() != vec3_origin) {
+					TimeUnit_t initialLocalTime = LocalTime;
 
+					blocker = PhysicsPushRotate(movetime);
+					if (blocker == null) {
+						TimeUnit_t rotateLocalTime = LocalTime;
+
+						LocalTime = initialLocalTime;
+						blocker = PhysicsPushMove(movetime);
+						if (LocalTime < rotateLocalTime)
+							LocalTime = rotateLocalTime;
+					}
+				}
+				else
+					blocker = PhysicsPushRotate(movetime);
+			}
+			else
+				blocker = PhysicsPushMove(movetime);
+
+			Blocker.Set(blocker);
+			if (Blocker.Index != prevBlocker) {
+				if (prevBlocker != Source.Constants.INVALID_EHANDLE_INDEX)
+					EndBlocked();
+				if (Blocker.Get() != null)
+					StartBlocked(blocker);
+			}
+			if (Blocker.Get() != null)
+				Blocked(Blocker.Get());
+
+			VPhysicsGetObject()?.Wake();
+		}
+
+		if (VPhysicsGetObject() != null) {
+			if (movetime > 0 && Blocker.Get() == null && GetSolid() == SolidType.VPhysics && Physics.PushedEntities.CountMovedEntities() > 0)
+				throw new NotImplementedException();
+		}
+		else {
+			if (MoveDoneTime <= LocalTime && MoveDoneTime > 0) {
+				SetMoveDoneTime(-1);
+				MoveDone();
+			}
+		}
+	}
 	void StepSimulationThink(TimeUnit_t dt) {
 		CheckStepSimulationChanged();
 

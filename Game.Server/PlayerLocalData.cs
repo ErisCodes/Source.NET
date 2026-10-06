@@ -4,6 +4,8 @@ using Source;
 using Source.Common;
 using Source.Common.Mathematics;
 
+using System.Numerics;
+
 namespace Game.Server;
 
 using FIELD = FIELD<PlayerLocalData>;
@@ -135,6 +137,27 @@ public class PlayerLocalData
 	public FogPlayerParams PlayerFog = new();
 	[NetworkName("m_audio")]
 	public AudioParams Audio = new();
+
+	public void UpdateAreaBits(BasePlayer pl, ReadOnlySpan<byte> areaPortalBits) {
+		Vector3 origin = pl.EyePosition();
+
+		Span<byte> tempBits = stackalloc byte[32];
+
+		int i;
+		int area = engine.GetArea(origin);
+		engine.GetAreaBits(area, tempBits);
+		Span<byte> areaBits = AreaBits;
+		for (i = 0; i < areaBits.Length; i++) {
+			if (tempBits[i] != areaBits[i])
+				areaBits[i] = tempBits[i];
+		}
+
+		Span<byte> portalBits = AreaPortalBits;
+		for (i = 0; i < Constants.MAX_AREA_PORTAL_STATE_BYTES; i++) {
+			if (areaPortalBits[i] != portalBits[i])
+				portalBits[i] = areaPortalBits[i];
+		}
+	}
 
 	public static void ClientData_Update(BasePlayer pl) {
 		// TODO!

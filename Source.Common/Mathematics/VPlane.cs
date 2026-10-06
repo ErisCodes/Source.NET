@@ -63,9 +63,10 @@ public struct VPlane
 	public vec_t Dist;
 
 	public void Init(in Vector3 normal, in vec_t dist) {
-
+		Normal = normal;
+		Dist = dist;
 	}
-	public vec_t DistTo(in Vector3 vec) {
-		return 0; // todo
+	public readonly vec_t DistTo(in Vector3 vec) {
+		return Vector3.Dot(vec, Normal) - Dist;
 	}
 }

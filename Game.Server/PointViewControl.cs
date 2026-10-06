@@ -23,8 +23,8 @@ public class PointViewControl : BaseEntity
 	const int SF_CAMERA_PLAYER_NOT_SOLID = 32;
 	const int SF_CAMERA_PLAYER_INTERRUPT = 64;
 
-	readonly EHANDLE Player = new();
-	readonly EHANDLE TargetEnt = new();
+	EHANDLE Player = new();
+	EHANDLE TargetEnt = new();
 
 	BaseEntity? Path;
 	string? PathName;

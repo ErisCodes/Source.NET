@@ -34,7 +34,7 @@ public class AI_BlendedMotor : AI_Motor
 		DoTurn = 0.0f;
 		DoLeft = 0.0f;
 		DoRight = 0.0f;
-		NextTurnAct = 0.0f;
+		NextTurnAct = 0.0;
 	}
 
 	public float GetMoveScriptTotalTime() => throw new NotImplementedException();
@@ -59,6 +59,80 @@ public class AI_BlendedMotor : AI_Motor
 				return 45;
 		}
 	}
+
+	public override void MoveStop() {
+		base.MoveStop();
+
+		if (PrimaryLayer != -1) {
+			GetOuter()!.RemoveLayer(PrimaryLayer, 0.2f, 0.1f);
+			PrimaryLayer = -1;
+		}
+		if (SecondaryLayer != -1) {
+			GetOuter()!.RemoveLayer(SecondaryLayer, 0.2f, 0.1f);
+			SecondaryLayer = -1;
+		}
+		PrimarySequence = (int)Activity.ACT_INVALID;
+		SecondarySequence = (int)Activity.ACT_INVALID;
+		PrevMovementSequence = (int)Activity.ACT_INVALID;
+		InteriorSequence = (int)Activity.ACT_INVALID;
+	}
+
+	public override void UpdateYaw(int speed = -1) {
+		if (IsYawLocked())
+			return;
+
+		GetOuter()!.UpdateTurnGesture();
+		base.UpdateYaw(speed);
+	}
+
+	public override void MaintainTurnActivity() {
+		if (NextTurnGesture > gpGlobals.CurTime || NextTurnAct > gpGlobals.CurTime || GetOuter()!.IsMoving()) {
+			DoTurn = DoRight = DoLeft = 0;
+			if (GetOuter()!.IsMoving())
+				NextTurnAct = gpGlobals.CurTime + 0.3;
+		}
+		else {
+			if (PrevYaw != GetOuter()!.GetAbsAngles().Y) {
+				float diff = Util.AngleDiff(PrevYaw, GetOuter()!.GetAbsAngles().Y);
+				if (diff < 0.0)
+					DoLeft += -diff;
+				else
+					DoRight += diff;
+				PrevYaw = GetOuter()!.GetAbsAngles().Y;
+			}
+			DoTurn += DoRight + DoLeft;
+			DoTurn += RandomFloat(0.4f, 0.6f);
+		}
+
+		if (DoTurn > 15.0f) {
+			int seq = (int)Activity.ACT_INVALID;
+			if (DoLeft > DoRight)
+				seq = GetOuter()!.SelectWeightedSequence(Activity.ACT_GESTURE_TURN_LEFT);
+			else
+				seq = GetOuter()!.SelectWeightedSequence(Activity.ACT_GESTURE_TURN_RIGHT);
+			DoLeft = 0;
+			DoRight = 0;
+
+			if (seq != (int)Activity.ACT_INVALID) {
+				int layer = GetOuter()!.AddGestureSequence(seq);
+				if (layer != -1) {
+					GetOuter()!.SetLayerPriority(layer, 100);
+					float rate = RandomFloat(0.8f, 1.2f);
+					if (DoTurn > 90.0)
+						rate *= 1.5f;
+					GetOuter()!.SetLayerPlaybackRate(layer, rate);
+					NextTurnAct = gpGlobals.CurTime + GetOuter()!.GetLayerDuration(layer);
+				}
+				else
+					NextTurnAct = gpGlobals.CurTime + 0.3;
+			}
+			DoTurn = DoRight = DoLeft = 0;
+		}
+	}
+
+	public override bool AddTurnGesture(float yd) => false;
+
+	public TimeUnit_t NextTurnGesture;
 
 	public override void RecalculateYawSpeed() {
 		if (IsYawLocked()) {
@@ -122,5 +196,5 @@ public class AI_BlendedMotor : AI_Motor
 	public float DoTurn;
 	public float DoLeft;
 	public float DoRight;
-	public float NextTurnAct;
+	public TimeUnit_t NextTurnAct;
 }

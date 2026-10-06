@@ -452,8 +452,7 @@ public static class SendPropHelpers
 
 		return ret;
 	}
-	delegate void EnsureCapacityBasicFn(int length);
-	public static SendProp SendPropList(IFieldAccessor field, int maxElements, SendProp arrayProp, SendTableProxyFn? proxyFn = null) {
+	public static SendProp SendPropList<T>(IFieldAccessor field, int maxElements, SendProp arrayProp, SendTableProxyFn? proxyFn = null) {
 		proxyFn ??= SendProxy_DataTableToDataTable;
 
 		SendProp ret = new();
@@ -464,13 +463,9 @@ public static class SendPropHelpers
 		if (proxyFn == SendProxy_DataTableToDataTable)
 			ret.SetFlags(PropFlags.ProxyAlwaysYes);
 
-		// Hack to get this to work. This is also rather slow. I'm just lazy and need it to work
-		MethodInfo ensureCapacity = field.FieldType.GetMethod("EnsureCapacity")!;
 		SendPropExtra_UtlVector extraData = new() {
 			MaxElements = maxElements,
-			EnsureCapacityFn = ensureCapacity.ReturnType == typeof(int)
-				? (instance, list, size) => ensureCapacity.CreateDelegate<Func<int, int>>(list)(size)
-				: (instance, list, size) => ensureCapacity.CreateDelegate<EnsureCapacityBasicFn>(list)(size)
+			EnsureCapacityFn = static (instance, list, size) => ((List<T>)list).EnsureCapacity(size)
 		};
 
 		if (arrayProp.Type == SendPropType.DataTable)
@@ -502,6 +497,7 @@ public static class SendPropHelpers
 				// todo: make sure this is okay...
 			}
 			else {
+				indexedData.ElementFieldInfo = new ListElementAccessor<T>(i - 1);
 				props[i].SetProxyFn(SendProxy_UtlVectorElement);
 			}
 		}
@@ -543,7 +539,16 @@ public static class SendPropHelpers
 	}
 
 	private static void SendProxy_UtlVectorElement(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		throw new NotImplementedException();
+		SendPropExtra_UtlVector extra = (SendPropExtra_UtlVector)prop.GetExtraData()!;
+		Assert(extra != null);
+
+		int iElement = extra.Index;
+
+		ICollection utlVec = (ICollection)instance;
+		if (iElement >= utlVec.Count) 
+			outData = default;
+		else 
+			extra.ProxyFn(prop, instance, extra.ElementFieldInfo, ref outData, 0, objectID);
 	}
 
 	private static object? SendProxy_LengthTable(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {

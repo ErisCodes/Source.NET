@@ -29,6 +29,7 @@ public interface ITextureInternal : ITexture
 	void OnRestore();
 	void Precache();
 	bool SetRenderTarget(int rt, ITexture? depthTexture = null);
+	void CopyFrameBufferToMe(int renderTargetID = 0, Rectangle? srcRect = null, Rectangle? dstRect = null);
 	void GetReflectivity(out Vector3 reflectivity);
 
 	public static readonly ITextureInternal EnvCubemap = new EnvCubemapSentinel();
@@ -55,6 +56,7 @@ file sealed class EnvCubemapSentinel : ITextureInternal
 	public void DecrementReferenceCount() => throw new NotSupportedException();
 	public void DeleteIfUnreferenced() => throw new NotSupportedException();
 	public void Download(Rectangle rect = default, int additionalCreationFlags = 0) => throw new NotSupportedException();
+	public void CopyFrameBufferToMe(int renderTargetID = 0, Rectangle? srcRect = null, Rectangle? dstRect = null) => throw new NotSupportedException();
 	public nint GetApproximateVidMemBytes() => throw new NotSupportedException();
 	public bool IsError() => false;
 	public bool IsVolumeTexture() => throw new NotSupportedException();

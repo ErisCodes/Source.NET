@@ -106,11 +106,13 @@ public class TempEntsSystem : ITempEntsSystem
 	}
 
 	public override void DispatchEffect<IRF>(scoped ref IRF filter, float delay, in Vector3 pos, ReadOnlySpan<char> name, EffectData data) {
-		throw new NotImplementedException();
+		if (!SuppressTE(ref filter))
+			TE_DispatchEffect(ref filter, delay, pos, name, data);
 	}
 
 	public override void Dust<IRF>(scoped ref IRF filer, float delay, in Vector3 pos, in Vector3 dir, float size, float speed) {
-		throw new NotImplementedException();
+		if (!SuppressTE(ref filer))
+			TE_Dust(ref filer, delay, pos, dir, size, speed);
 	}
 
 	public override void DynamicLight<IRF>(scoped ref IRF filer, float delay, in Vector3 org, int r, int g, int b, int exponent, float radius, float time, float decay) {
@@ -150,7 +152,8 @@ public class TempEntsSystem : ITempEntsSystem
 	}
 
 	public override void MetalSparks<IRF>(scoped ref IRF filer, float delay, in Vector3 pos, in Vector3 dir) {
-		throw new NotImplementedException();
+		if (!SuppressTE(ref filer))
+			TE_MetalSparks(ref filer, delay, pos, dir);
 	}
 
 	public override void MuzzleFlash<IRF>(scoped ref IRF filer, float delay, in Vector3 start, in QAngle angles, float scale, int type) {

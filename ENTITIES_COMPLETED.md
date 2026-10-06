@@ -12,53 +12,53 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
 
 ## Progress
 
-`█░░░░░░░░░░░░░░░░░░░` **26 / 788 classnames complete (3.3%)**
+`█░░░░░░░░░░░░░░░░░░░` **32 / 788 classnames complete (4.1%)**
 
-`██░░░░░░░░░░░░░░░░░░` **1,514 / 15,450 boxes checked (9.8%)**
+`███░░░░░░░░░░░░░░░░░` **2,215 / 15,450 boxes checked (14.3%)**
 
-- 223 / 691 GMod C++ classes have a C# class (32.3%)
-- 0 / 49 base classes complete
-- 503 classnames have no boxes checked
+- 240 / 691 GMod C++ classes have a C# class (34.7%)
+- 1 / 49 base classes complete
+- 488 classnames have no boxes checked
 
 | Kind                      | Checked |  Total |   Done |
 | ------------------------- | ------: | -----: | -----: |
-| Linked                    |     285 |    788 |  36.2% |
+| Linked                    |     298 |    788 |  37.8% |
 | Networked                 |     244 |    244 | 100.0% |
-| KeyValues                 |      62 |  1,590 |   3.9% |
-| Inputs                    |      43 |  1,382 |   3.1% |
-| Outputs                   |      27 |    543 |   5.0% |
-| Think/Touch/Use functions |       9 |    409 |   2.2% |
-| Methods                   |     844 | 10,494 |   8.0% |
+| KeyValues                 |     101 |  1,590 |   6.4% |
+| Inputs                    |     102 |  1,382 |   7.4% |
+| Outputs                   |      53 |    543 |   9.8% |
+| Think/Touch/Use functions |      20 |    409 |   4.9% |
+| Methods                   |   1,397 | 10,494 |  13.3% |
 
 ### Closest to done
 
-| Entry                  | Checked |  Done | Left |
-| ---------------------- | ------: | ----: | ---: |
-| CBaseTrigger           |   33/35 | 94.3% |    2 |
-| trigger_hurt           |   16/17 | 94.1% |    1 |
-| logic_auto             |   11/12 | 91.7% |    1 |
-| trigger_look           |   11/12 | 91.7% |    1 |
-| soundent               |   17/19 | 89.5% |    2 |
-| weapon_physgun         |   22/25 | 88.0% |    3 |
-| trigger_playermovement |     5/6 | 83.3% |    1 |
-| trigger_impact         |    9/11 | 81.8% |    2 |
-| info_landmark          |     3/4 | 75.0% |    1 |
-| CBaseAnimatingOverlay  |   27/37 | 73.0% |   10 |
+| Entry          | Checked |  Done | Left |
+| -------------- | ------: | ----: | ---: |
+| script_intro   |   19/20 | 95.0% |    1 |
+| path_track     |   38/40 | 95.0% |    2 |
+| CBaseTrigger   |   33/35 | 94.3% |    2 |
+| trigger_hurt   |   16/17 | 94.1% |    1 |
+| scripted_scene | 124/133 | 93.2% |    9 |
+| logic_auto     |   11/12 | 91.7% |    1 |
+| trigger_look   |   11/12 | 91.7% |    1 |
+| CBaseFlex      |   44/49 | 89.8% |    5 |
+| soundent       |   17/19 | 89.5% |    2 |
+| npc_gman       |     8/9 | 88.9% |    1 |
 
 ### Most work left
 
 | Entry                | Checked |  Done | Left |
 | -------------------- | ------: | ----: | ---: |
-| CAI_BaseNPC          |   2/578 |  0.3% |  576 |
-| CBaseEntity          | 259/535 | 48.4% |  276 |
-| CBasePlayer          | 124/324 | 38.3% |  200 |
+| CAI_BaseNPC          | 199/578 | 34.4% |  379 |
+| CBaseEntity          | 298/535 | 55.7% |  237 |
+| CBasePlayer          | 132/324 | 40.7% |  192 |
 | npc_strider          |   2/157 |  1.3% |  155 |
 | npc_metropolice      |   0/150 |  0.0% |  150 |
-| CBaseAnimating       |  37/185 | 20.0% |  148 |
 | npc_hunter           |   0/142 |  0.0% |  142 |
 | CNPC_PlayerCompanion |   0/135 |  0.0% |  135 |
 | npc_helicopter       |   0/135 |  0.0% |  135 |
-| scripted_scene       |   2/133 |  1.5% |  131 |
+| CBaseAnimating       |  51/185 | 27.6% |  134 |
+| npc_citizen          |   0/125 |  0.0% |  125 |
 
 ### By family (5+ classnames)
 
@@ -66,24 +66,24 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
 | --------- | -------: | ------------: | ----: |
 | filter_*  |     6/11 |         30/54 | 55.6% |
 | trigger_* |    11/34 |       104/286 | 36.4% |
+| cycler_*  |      1/6 |          7/25 | 28.0% |
 | light_*   |      0/6 |          7/36 | 19.4% |
 | weapon_*  |     0/37 |       139/737 | 18.9% |
-| env_*     |     3/82 |       118/956 | 12.3% |
+| env_*     |     4/82 |       140/956 | 14.6% |
+| func_*    |     4/69 |       131/942 | 13.9% |
+| info_*    |     0/40 |        26/245 | 10.6% |
 | prop_*    |     0/50 |        82/793 | 10.3% |
-| info_*    |     0/40 |        24/245 |  9.8% |
-| cycler_*  |      0/6 |          2/25 |  8.0% |
-| player_*  |      0/6 |          7/91 |  7.7% |
-| func_*    |     2/69 |        70/942 |  7.4% |
+| player_*  |      0/6 |          8/91 |  8.8% |
+| logic_*   |     1/23 |        26/320 |  8.1% |
+| point_*   |     0/29 |        29/432 |  6.7% |
 | physics_* |      0/5 |          4/62 |  6.5% |
-| logic_*   |     0/23 |        14/320 |  4.4% |
 | sent_*    |      0/6 |         8/192 |  4.2% |
-| point_*   |     0/29 |        12/432 |  2.8% |
 | phys_*    |     0/17 |         4/186 |  2.2% |
 | game_*    |     0/11 |         2/103 |  1.9% |
 | grenade_* |     0/10 |         2/106 |  1.9% |
+| npc_*     |     0/97 |      34/3,210 |  1.1% |
 | item_*    |     0/37 |         2/197 |  1.0% |
-| npc_*     |     0/97 |      26/3,210 |  0.8% |
-| ai_*      |     0/24 |         0/391 |  0.0% |
+| ai_*      |     0/24 |         2/391 |  0.5% |
 | ammo_*    |     0/13 |          0/43 |  0.0% |
 | monster_* |     0/41 |         0/739 |  0.0% |
 | xen_*     |      0/8 |          0/32 |  0.0% |
@@ -414,7 +414,7 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `EnableGoal`
     - [ ] `InputActivate`
     - [ ] `InputDeactivate`
-- [ ] **ai_hint** · `CAI_Hint` · `game/server/ai_hint.cpp` · C#: *none*
+- [ ] **ai_hint** · `CAI_Hint` · `game/server/ai_hint.cpp` · C# `AI_Hint` ([Game.Server/AI_Hint.cs](Game.Server/AI_Hint.cs))
   - [ ] Linked (`ai_hint`)
   - KeyValues
     - [ ] `nodeFOV`
@@ -449,8 +449,8 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `Unlock`
     - [ ] `UpdateOnRemove`
     - [ ] `Yaw`
-- [ ] **ai_network** · `CAI_NetworkManager` · `game/server/ai_networkmanager.cpp` · C#: *none*
-  - [ ] Linked (`ai_network`)
+- [ ] **ai_network** · `CAI_NetworkManager` · `game/server/ai_networkmanager.cpp` · C# `AI_NetworkManager` ([Game.Server/AI_NetworkManager.cs](Game.Server/AI_NetworkManager.cs))
+  - [x] Linked (`ai_network`)
   - Think/Touch/Use functions
     - [ ] `DelayedInit`
     - [ ] `RebuildThink`
@@ -458,7 +458,7 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `BuildNetworkGraph`
     - [ ] `DeleteAllAINetworks`
     - [ ] `FixupHints`
-    - [ ] `InitializeAINetworks`
+    - [x] `InitializeAINetworks`
     - [ ] `IsAIFileCurrent`
     - [ ] `LoadNetworkGraph`
     - [ ] `MarkDontSaveGraph`
@@ -1178,14 +1178,14 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
   - Methods
     - [ ] `Spawn`
   - Also linked as: `model_studio`
-- [ ] **cycler_actor** · `CFlextalkActor` · `game/server/genericactor.cpp` · C#: *none*
-  - [ ] Linked (`cycler_actor`)
+- [x] **cycler_actor** · `CFlextalkActor` · `game/server/genericactor.cpp` · C# `FlextalkActor` ([Game.Server/GenericActor.cs](Game.Server/GenericActor.cs))
+  - [x] Linked (`cycler_actor`)
   - KeyValues
-    - [ ] `Sentence`
+    - [x] `Sentence`
   - Methods
-    - [ ] `LookupFlex`
-    - [ ] `ProcessSceneEvents`
-    - [ ] `SetFlexTarget`
+    - [x] `LookupFlex`
+    - [x] `ProcessSceneEvents`
+    - [x] `SetFlexTarget`
 - [ ] **cycler_blender** · `CBlendingCycler` · `game/server/h_cycler.cpp` · C#: *none*
   - [ ] Linked (`cycler_blender`)
   - Methods
@@ -1433,19 +1433,19 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `StartDischarge`
     - [ ] `StopDischarge`
     - [ ] `UpdateTransmitState`
-- [ ] **env_credits** · `CCredits` · `game/server/EnvMessage.cpp` · C#: *none*
-  - [ ] Linked (`env_credits`)
+- [x] **env_credits** · `CCredits` · `game/server/EnvMessage.cpp` · C# `Credits` ([Game.Server/EnvMessage.cs](Game.Server/EnvMessage.cs))
+  - [x] Linked (`env_credits`)
   - Inputs
-    - [ ] `RollCredits`
-    - [ ] `RollOutroCredits`
-    - [ ] `ShowLogo`
-    - [ ] `SetLogoLength`
+    - [x] `RollCredits`
+    - [x] `RollOutroCredits`
+    - [x] `ShowLogo`
+    - [x] `SetLogoLength`
   - Outputs
-    - [ ] `OnCreditsDone`
+    - [x] `OnCreditsDone`
   - Methods
-    - [ ] `OnRestore`
-    - [ ] `RollOutroCredits`
-    - [ ] `Spawn`
+    - [x] `OnRestore`
+    - [x] `RollOutroCredits`
+    - [x] `Spawn`
 - [ ] **env_detail_controller** · `CEnvDetailController` · `game/shared/env_detail_controller.cpp` · C# `EnvDetailController` ([Game.Server/EnvDetailController.cs](Game.Server/EnvDetailController.cs))
   - [x] Linked (`env_detail_controller`)
   - [x] Networked (SendTable for `CEnvDetailController`)
@@ -1565,18 +1565,18 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
   - Methods
     - [ ] `DrawDebugTextOverlays`
     - [ ] `Spawn`
-- [ ] **env_fade** · `CEnvFade` · `game/server/EnvFade.cpp` · C#: *none*
-  - [ ] Linked (`env_fade`)
+- [ ] **env_fade** · `CEnvFade` · `game/server/EnvFade.cpp` · C# `EnvFade` ([Game.Server/EnvFade.cs](Game.Server/EnvFade.cs))
+  - [x] Linked (`env_fade`)
   - KeyValues
-    - [ ] `duration`
-    - [ ] `holdtime`
+    - [x] `duration`
+    - [x] `holdtime`
   - Inputs
-    - [ ] `Fade`
+    - [x] `Fade`
   - Outputs
-    - [ ] `OnBeginFade`
+    - [x] `OnBeginFade`
   - Methods
     - [ ] `DrawDebugTextOverlays`
-    - [ ] `Spawn`
+    - [x] `Spawn`
 - [ ] **env_fire** · `CFire` · `game/server/fire.cpp` · C#: *none*
   - [ ] Linked (`env_fire`)
   - KeyValues
@@ -1878,7 +1878,7 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `Activate`
     - [ ] `Spawn`
     - [ ] `UpdateTransmitState`
-- [ ] **env_message** · `CMessage` · `game/server/EnvMessage.cpp` · C#: *none*
+- [ ] **env_message** · `CMessage` · `game/server/EnvMessage.cpp` · C# `Message` ([Game.Server/EnvMessage.cs](Game.Server/EnvMessage.cs))
   - [ ] Linked (`env_message`)
   - KeyValues
     - [ ] `message`
@@ -1890,9 +1890,9 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
   - Outputs
     - [ ] `OnShowMessage`
   - Methods
-    - [ ] `Precache`
-    - [ ] `Spawn`
-    - [ ] `Use`
+    - [x] `Precache`
+    - [x] `Spawn`
+    - [x] `Use`
 - [ ] **env_microphone** · `CEnvMicrophone` · `game/server/envmicrophone.cpp` · C#: *none*
   - [ ] Linked (`env_microphone`)
   - KeyValues
@@ -2551,11 +2551,11 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
 - [ ] **env_zoom** · `CEnvZoom` · `game/server/env_zoom.cpp` · C# `EnvZoom` ([Game.Server/EnvZoom.cs](Game.Server/EnvZoom.cs))
   - [x] Linked (`env_zoom`)
   - KeyValues
-    - [ ] `Rate`
-    - [ ] `FOV`
+    - [x] `Rate`
+    - [x] `FOV`
   - Inputs
-    - [ ] `Zoom`
-    - [ ] `UnZoom`
+    - [x] `Zoom`
+    - [x] `UnZoom`
   - Methods
     - [ ] `UpdateOnRemove`
 
@@ -2717,24 +2717,24 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
 
 ## func_*
 
-- [ ] **func_areaportal** · `CAreaPortal` · `game/server/func_areaportal.cpp` · C#: *none*
-  - [ ] Linked (`func_areaportal`)
+- [x] **func_areaportal** · `CAreaPortal` · `game/server/func_areaportal.cpp` · C# `AreaPortal` ([Game.Server/FuncAreaPortal.cs](Game.Server/FuncAreaPortal.cs))
+  - [x] Linked (`func_areaportal`)
   - KeyValues
-    - [ ] `portalnumber`
+    - [x] `portalnumber`
   - Inputs
-    - [ ] `Open`
-    - [ ] `Close`
-    - [ ] `Toggle`
-    - [ ] `TurnOn`
-    - [ ] `TurnOff`
+    - [x] `Open`
+    - [x] `Close`
+    - [x] `Toggle`
+    - [x] `TurnOn`
+    - [x] `TurnOff`
   - Methods
-    - [ ] `KeyValue`
-    - [ ] `Precache`
-    - [ ] `Spawn`
-    - [ ] `UpdateState`
-    - [ ] `UpdateTransmitState`
-    - [ ] `UpdateVisibility`
-    - [ ] `Use`
+    - [x] `KeyValue`
+    - [x] `Precache`
+    - [x] `Spawn`
+    - [x] `UpdateState`
+    - [x] `UpdateTransmitState`
+    - [x] `UpdateVisibility`
+    - [x] `Use`
 - [ ] **func_areaportal_oneway** · `CAreaPortalOneWay` · *GMod-only* · C#: *none*
   - [ ] Linked (`func_areaportal_oneway`)
   - KeyValues
@@ -2753,23 +2753,23 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `Restore`
     - [ ] `Spawn`
     - [ ] `UpdateVisibility`
-- [ ] **func_areaportalwindow** · `CFuncAreaPortalWindow` · `game/server/func_areaportalwindow.cpp` · C# `FuncAreaPortalWindow` ([Game.Server/FuncAreaPortalWindow.cs](Game.Server/FuncAreaPortalWindow.cs))
+- [x] **func_areaportalwindow** · `CFuncAreaPortalWindow` · `game/server/func_areaportalwindow.cpp` · C# `FuncAreaPortalWindow` ([Game.Server/FuncAreaPortalWindow.cs](Game.Server/FuncAreaPortalWindow.cs))
   - [x] Linked (`func_areaportalwindow`)
   - [x] Networked (SendTable for `CFuncAreaPortalWindow`)
   - KeyValues
-    - [ ] `portalnumber`
-    - [ ] `FadeStartDist`
-    - [ ] `FadeDist`
-    - [ ] `TranslucencyLimit`
-    - [ ] `BackgroundBModel`
+    - [x] `portalnumber`
+    - [x] `FadeStartDist`
+    - [x] `FadeDist`
+    - [x] `TranslucencyLimit`
+    - [x] `BackgroundBModel`
   - Inputs
-    - [ ] `SetFadeStartDistance`
-    - [ ] `SetFadeEndDistance`
+    - [x] `SetFadeStartDistance`
+    - [x] `SetFadeEndDistance`
   - Methods
-    - [ ] `Activate`
-    - [ ] `IsWindowOpen`
-    - [ ] `Spawn`
-    - [ ] `UpdateVisibility`
+    - [x] `Activate`
+    - [x] `IsWindowOpen`
+    - [x] `Spawn`
+    - [x] `UpdateVisibility`
 - [ ] **func_breakable** · `CBreakable` · `game/server/func_break.cpp` · C# `Breakable` ([Game.Server/FuncBreak.cs](Game.Server/FuncBreak.cs))
   - [x] Linked (`func_breakable`)
   - KeyValues
@@ -2882,9 +2882,9 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
 - [ ] **func_brush** · `CFuncBrush` · `game/server/modelentities.cpp` · C# `FuncBrush` ([Game.Server/ModelEntities.cs](Game.Server/ModelEntities.cs))
   - [x] Linked (`func_brush`)
   - KeyValues
-    - [ ] `StartDisabled`
-    - [ ] `Solidity`
-    - [ ] `solidbsp`
+    - [x] `StartDisabled`
+    - [x] `Solidity`
+    - [x] `solidbsp`
     - [ ] `excludednpc`
     - [ ] `invert_exclusion`
   - Inputs
@@ -2894,12 +2894,12 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `SetExcluded`
     - [ ] `SetInvert`
   - Methods
-    - [ ] `CreateVPhysics`
+    - [x] `CreateVPhysics`
     - [ ] `DrawDebugTextOverlays`
-    - [ ] `IsOn`
+    - [x] `IsOn`
     - [ ] `ObjectCaps`
-    - [ ] `Spawn`
-    - [ ] `TurnOff`
+    - [x] `Spawn`
+    - [x] `TurnOff`
     - [ ] `TurnOn`
   - Also linked as: `func_simpleladder`
 - [ ] **func_button** · `CBaseButton` · `game/server/buttons.cpp` · C#: *none*
@@ -3497,44 +3497,44 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
   - [x] Linked (`func_rotating`)
   - [x] Networked (SendTable for `CFuncRotating`)
   - KeyValues
-    - [ ] `maxspeed`
-    - [ ] `dmg`
-    - [ ] `message`
-    - [ ] `solidbsp`
+    - [x] `maxspeed`
+    - [x] `dmg`
+    - [x] `message`
+    - [x] `solidbsp`
   - Inputs
-    - [ ] `SetSpeed`
+    - [x] `SetSpeed`
     - [ ] `GetSpeed`
-    - [ ] `Start`
-    - [ ] `Stop`
-    - [ ] `Toggle`
-    - [ ] `Reverse`
-    - [ ] `StartForward`
-    - [ ] `StartBackward`
-    - [ ] `StopAtStartPos`
+    - [x] `Start`
+    - [x] `Stop`
+    - [x] `Toggle`
+    - [x] `Reverse`
+    - [x] `StartForward`
+    - [x] `StartBackward`
+    - [x] `StopAtStartPos`
     - [ ] `SnapToStartPos`
   - Outputs
     - [ ] `OnGetSpeed`
   - Think/Touch/Use functions
-    - [ ] `SpinUpMove`
-    - [ ] `SpinDownMove`
-    - [ ] `HurtTouch`
-    - [ ] `RotatingUse`
-    - [ ] `RotateMove`
-    - [ ] `ReverseMove`
+    - [x] `SpinUpMove`
+    - [x] `SpinDownMove`
+    - [x] `HurtTouch`
+    - [x] `RotatingUse`
+    - [x] `RotateMove`
+    - [x] `ReverseMove`
   - Methods
-    - [ ] `Blocked`
-    - [ ] `CreateVPhysics`
+    - [x] `Blocked`
+    - [x] `CreateVPhysics`
     - [ ] `DrawDebugTextOverlays`
-    - [ ] `GetMoveSpeed`
-    - [ ] `GetNextMoveInterval`
-    - [ ] `KeyValue`
-    - [ ] `Precache`
-    - [ ] `RampPitchVol`
-    - [ ] `SetTargetSpeed`
-    - [ ] `Spawn`
-    - [ ] `SpinDown`
+    - [x] `GetMoveSpeed`
+    - [x] `GetNextMoveInterval`
+    - [x] `KeyValue`
+    - [x] `Precache`
+    - [x] `RampPitchVol`
+    - [x] `SetTargetSpeed`
+    - [x] `Spawn`
+    - [x] `SpinDown`
     - [ ] `StopLoopingSounds`
-    - [ ] `UpdateSpeed`
+    - [x] `UpdateSpeed`
 - [ ] **func_simpleladder** · `CFuncBrush` · `game/server/modelentities.cpp` · C# `FuncBrush` ([Game.Server/ModelEntities.cs](Game.Server/ModelEntities.cs))
   - [x] Linked (`func_simpleladder`)
   - [ ] Shares `CFuncBrush` with `func_brush`, which tracks its functionality
@@ -4058,17 +4058,17 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
 
 ## generic_*
 
-- [ ] **generic_actor** · `CGenericActor` · `game/server/genericactor.cpp` · C#: *none*
-  - [ ] Linked (`generic_actor`)
+- [ ] **generic_actor** · `CGenericActor` · `game/server/genericactor.cpp` · C# `GenericActor` ([Game.Server/GenericActor.cs](Game.Server/GenericActor.cs))
+  - [x] Linked (`generic_actor`)
   - KeyValues
-    - [ ] `hull_name`
+    - [x] `hull_name`
   - Methods
-    - [ ] `Classify`
-    - [ ] `GetSoundInterests`
+    - [x] `Classify`
+    - [x] `GetSoundInterests`
     - [ ] `HandleAnimEvent`
-    - [ ] `MaxYawSpeed`
-    - [ ] `Precache`
-    - [ ] `Spawn`
+    - [x] `MaxYawSpeed`
+    - [x] `Precache`
+    - [x] `Spawn`
 
 ## gib
 
@@ -4677,7 +4677,7 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `StartParticleSystemThink`
     - [ ] `StopParticleSystem`
     - [ ] `UpdateTransmitState`
-- [ ] **info_particle_target** · `CInfoTarget` · `game/shared/beam_shared.cpp` · C#: *none*
+- [ ] **info_particle_target** · `CInfoTarget` · `game/shared/beam_shared.cpp` · C# `InfoTarget` ([Game.Server/InfoTarget.cs](Game.Server/InfoTarget.cs))
   - [ ] Linked (`info_particle_target`)
   - [ ] Shares `CInfoTarget` with `info_target`, which tracks its functionality
 - [ ] **info_player_combine** · `CPointEntity` · `game/server/gmod/gmod_player.cpp` · C# `PointEntity` ([Game.Server/BaseEntity.cs](Game.Server/BaseEntity.cs))
@@ -4748,10 +4748,10 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
   - [ ] Linked (`info_snipertarget`)
   - Methods
     - [ ] `KeyValue`
-- [ ] **info_target** · `CInfoTarget` · `game/shared/beam_shared.cpp` · C#: *none*
-  - [ ] Linked (`info_target`)
+- [ ] **info_target** · `CInfoTarget` · `game/shared/beam_shared.cpp` · C# `InfoTarget` ([Game.Server/InfoTarget.cs](Game.Server/InfoTarget.cs))
+  - [x] Linked (`info_target`)
   - Methods
-    - [ ] `Spawn`
+    - [x] `Spawn`
     - [ ] `UpdateTransmitState`
   - Also linked as: `info_particle_target`
 - [ ] **info_target_command_point** · `CCommandPoint` · `game/server/hl2/npc_citizen17.cpp` · C#: *none*
@@ -4816,7 +4816,7 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
 
 ## instanced_*
 
-- [ ] **instanced_scripted_scene** · `CInstancedSceneEntity` · `game/server/sceneentity.cpp` · C#: *none*
+- [ ] **instanced_scripted_scene** · `CInstancedSceneEntity` · `game/server/sceneentity.cpp` · C# `InstancedSceneEntity` ([Game.Server/SceneEntity.cs](Game.Server/SceneEntity.cs))
   - [ ] Linked (`instanced_scripted_scene`)
   - Methods
     - [ ] `DispatchEndFace`
@@ -5572,24 +5572,24 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `OnRegisteredActivate2`
     - [ ] `OnRegisteredActivate3`
     - [ ] `OnRegisteredActivate4`
-- [ ] **logic_relay** · `CLogicRelay` · `game/server/logicrelay.cpp` · C#: *none*
-  - [ ] Linked (`logic_relay`)
+- [x] **logic_relay** · `CLogicRelay` · `game/server/logicrelay.cpp` · C# `LogicRelay` ([Game.Server/LogicRelay.cs](Game.Server/LogicRelay.cs))
+  - [x] Linked (`logic_relay`)
   - KeyValues
-    - [ ] `StartDisabled`
+    - [x] `StartDisabled`
   - Inputs
-    - [ ] `Enable`
-    - [ ] `EnableRefire`
-    - [ ] `Disable`
-    - [ ] `Toggle`
-    - [ ] `Trigger`
-    - [ ] `CancelPending`
+    - [x] `Enable`
+    - [x] `EnableRefire`
+    - [x] `Disable`
+    - [x] `Toggle`
+    - [x] `Trigger`
+    - [x] `CancelPending`
   - Outputs
-    - [ ] `OnTrigger`
-    - [ ] `OnSpawn`
+    - [x] `OnTrigger`
+    - [x] `OnSpawn`
   - Methods
-    - [ ] `Activate`
-    - [ ] `Think`
-- [ ] **logic_scene_list_manager** · `CSceneListManager` · `game/server/sceneentity.cpp` · C#: *none*
+    - [x] `Activate`
+    - [x] `Think`
+- [ ] **logic_scene_list_manager** · `CSceneListManager` · `game/server/sceneentity.cpp` · C# `SceneListManager` ([Game.Server/SceneEntity.cs](Game.Server/SceneEntity.cs))
   - [ ] Linked (`logic_scene_list_manager`)
   - KeyValues
     - [ ] `scene0`
@@ -8383,17 +8383,17 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `UpdateEfficiency`
     - [ ] `UpdateOnRemove`
   - Also linked as: `monster_furniture`
-- [ ] **npc_gman** · `CNPC_GMan` · `game/server/hl2/npc_gman.cpp` · C#: *none*
-  - [ ] Linked (`npc_gman`)
+- [ ] **npc_gman** · `CNPC_GMan` · `game/server/hl2/npc_gman.cpp` · C# `NPC_GMan` ([Game.Server/NPC_GMan.cs](Game.Server/NPC_GMan.cs))
+  - [x] Linked (`npc_gman`)
   - Methods
-    - [ ] `Classify`
-    - [ ] `CreateBehaviors`
-    - [ ] `GetSoundInterests`
+    - [x] `Classify`
+    - [x] `CreateBehaviors`
+    - [x] `GetSoundInterests`
     - [ ] `HandleAnimEvent`
-    - [ ] `IRelationType`
-    - [ ] `Precache`
-    - [ ] `SelectSchedule`
-    - [ ] `Spawn`
+    - [x] `IRelationType`
+    - [x] `Precache`
+    - [x] `SelectSchedule`
+    - [x] `Spawn`
 - [ ] **npc_grenade_bugbait** · `CGrenadeBugBait` · `game/server/hl2/grenade_bugbait.cpp` · C#: *none*
   - [ ] Linked (`npc_grenade_bugbait`)
   - Think/Touch/Use functions
@@ -10443,51 +10443,51 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `Spawn`
 - [ ] **path_corner_crash** · `CPathCornerCrash` · `game/server/pathcorner.cpp` · C#: *none*
   - [ ] Linked (`path_corner_crash`)
-- [ ] **path_track** · `CPathTrack` · `game/server/pathtrack.cpp` · C#: *none*
-  - [ ] Linked (`path_track`)
+- [ ] **path_track** · `CPathTrack` · `game/server/pathtrack.cpp` · C# `PathTrack` ([Game.Server/PathTrack.cs](Game.Server/PathTrack.cs))
+  - [x] Linked (`path_track`)
   - KeyValues
-    - [ ] `radius`
-    - [ ] `altpath`
-    - [ ] `orientationtype`
+    - [x] `radius`
+    - [x] `altpath`
+    - [x] `orientationtype`
   - Inputs
-    - [ ] `InPass`
-    - [ ] `InTeleport`
-    - [ ] `EnableAlternatePath`
-    - [ ] `DisableAlternatePath`
-    - [ ] `ToggleAlternatePath`
-    - [ ] `EnablePath`
-    - [ ] `DisablePath`
-    - [ ] `TogglePath`
+    - [x] `InPass`
+    - [x] `InTeleport`
+    - [x] `EnableAlternatePath`
+    - [x] `DisableAlternatePath`
+    - [x] `ToggleAlternatePath`
+    - [x] `EnablePath`
+    - [x] `DisablePath`
+    - [x] `TogglePath`
   - Outputs
-    - [ ] `OnPass`
-    - [ ] `OnTeleport`
+    - [x] `OnPass`
+    - [x] `OnTeleport`
   - Methods
-    - [ ] `Activate`
-    - [ ] `BeginIteration`
-    - [ ] `DisableAlternatePath`
-    - [ ] `DisablePath`
+    - [x] `Activate`
+    - [x] `BeginIteration`
+    - [x] `DisableAlternatePath`
+    - [x] `DisablePath`
     - [ ] `DrawDebugGeometryOverlays`
-    - [ ] `EnableAlternatePath`
-    - [ ] `EnablePath`
-    - [ ] `EndIteration`
-    - [ ] `GetNext`
-    - [ ] `GetNextInDir`
-    - [ ] `GetOrientation`
-    - [ ] `GetOrientationType`
-    - [ ] `GetPrevious`
-    - [ ] `HasAlternathPath`
-    - [ ] `HasBeenVisited`
+    - [x] `EnableAlternatePath`
+    - [x] `EnablePath`
+    - [x] `EndIteration`
+    - [x] `GetNext`
+    - [x] `GetNextInDir`
+    - [x] `GetOrientation`
+    - [x] `GetOrientationType`
+    - [x] `GetPrevious`
+    - [x] `HasAlternathPath`
+    - [x] `HasBeenVisited`
     - [ ] `Instance`
-    - [ ] `Link`
-    - [ ] `LookAhead`
-    - [ ] `Nearest`
-    - [ ] `Project`
-    - [ ] `SetPrevious`
-    - [ ] `Spawn`
-    - [ ] `ToggleAlternatePath`
-    - [ ] `TogglePath`
-    - [ ] `ValidPath`
-    - [ ] `Visit`
+    - [x] `Link`
+    - [x] `LookAhead`
+    - [x] `Nearest`
+    - [x] `Project`
+    - [x] `SetPrevious`
+    - [x] `Spawn`
+    - [x] `ToggleAlternatePath`
+    - [x] `TogglePath`
+    - [x] `ValidPath`
+    - [x] `Visit`
 
 ## phys_*
 
@@ -10841,7 +10841,7 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `CreateViewModel`
     - [ ] `DeathSound`
     - [ ] `DoImpactEffect`
-    - [ ] `EntSelectSpawnPoint`
+    - [x] `EntSelectSpawnPoint`
     - [ ] `Event_Killed`
     - [ ] `FindUseEntity`
     - [ ] `FireBullets`
@@ -11297,16 +11297,16 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `SpotlightUpdate`
     - [ ] `UpdateOnRemove`
     - [ ] `UpdateTransmitState`
-- [ ] **point_teleport** · `CPointTeleport` · `game/server/pointteleport.cpp` · C#: *none*
-  - [ ] Linked (`point_teleport`)
+- [ ] **point_teleport** · `CPointTeleport` · `game/server/pointteleport.cpp` · C# `PointTeleport` ([Game.Server/PointTeleport.cs](Game.Server/PointTeleport.cs))
+  - [x] Linked (`point_teleport`)
   - Inputs
-    - [ ] `Teleport`
+    - [x] `Teleport`
     - [ ] `TeleportEntity`
     - [ ] `TeleportToCurrentPos`
   - Methods
-    - [ ] `Activate`
+    - [x] `Activate`
     - [ ] `DoTeleport`
-    - [ ] `EntityMayTeleport`
+    - [x] `EntityMayTeleport`
     - [ ] `ObjectCaps`
 - [ ] **point_template** · `CPointTemplate` · `game/server/point_template.cpp` · C# `PointTemplate` ([Game.Server/MapEntities.cs](Game.Server/MapEntities.cs))
   - [x] Linked (`point_template`)
@@ -11391,16 +11391,17 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `SampleVelocity`
     - [ ] `Spawn`
     - [ ] `Think`
-- [ ] **point_viewcontrol** · `CTriggerCamera` · `game/server/triggers.cpp` · C#: *none*
-  - [ ] Linked (`point_viewcontrol`)
+- [ ] **point_viewcontrol** · `CTriggerCamera` · `game/server/triggers.cpp` · C# `PointViewControl` ([Game.Server/PointViewControl.cs](Game.Server/PointViewControl.cs))
+  - [x] Linked (`point_viewcontrol`)
+  - ⚠ C# links `point_viewcontrol` to `PointViewControl`, but GMod uses `CTriggerCamera`
   - KeyValues
-    - [ ] `targetattachment`
+    - [x] `targetattachment`
     - [ ] `trackspeed`
     - [ ] `fov`
     - [ ] `fov_rate`
   - Inputs
-    - [ ] `Enable`
-    - [ ] `Disable`
+    - [x] `Enable`
+    - [x] `Disable`
     - [ ] `SetTarget`
     - [ ] `SetTargetAttachment`
     - [ ] `ReturnToEyes`
@@ -11408,21 +11409,21 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `SetPath`
     - [ ] `SetTrackSpeed`
   - Outputs
-    - [ ] `OnEndFollow`
+    - [x] `OnEndFollow`
   - Think/Touch/Use functions
-    - [ ] `FollowTarget`
+    - [x] `FollowTarget`
     - [ ] `ReturnToEyes`
   - Methods
-    - [ ] `Disable`
-    - [ ] `Enable`
+    - [x] `Disable`
+    - [x] `Enable`
     - [ ] `FindAttachment`
-    - [ ] `KeyValue`
-    - [ ] `Move`
+    - [x] `KeyValue`
+    - [x] `Move`
     - [ ] `MoveViewTo`
-    - [ ] `Spawn`
+    - [x] `Spawn`
     - [ ] `UpdateOnRemove`
-    - [ ] `UpdateTransmitState`
-    - [ ] `Use`
+    - [x] `UpdateTransmitState`
+    - [x] `Use`
 - [ ] **point_viewcontrol_multiplayer** · `CTriggerCameraMultiplayer` · *GMod-only* · C#: *none*
   - [ ] Linked (`point_viewcontrol_multiplayer`)
   - KeyValues
@@ -12553,27 +12554,27 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
 
 ## scene_*
 
-- [ ] **scene_manager** · `CSceneManager` · `game/server/sceneentity.cpp` · C#: *none*
-  - [ ] Linked (`scene_manager`)
+- [x] **scene_manager** · `CSceneManager` · `game/server/sceneentity.cpp` · C# `SceneManager` ([Game.Server/SceneManager.cs](Game.Server/SceneManager.cs))
+  - [x] Linked (`scene_manager`)
   - Methods
-    - [ ] `AddSceneEntity`
-    - [ ] `ClearAllScenes`
-    - [ ] `IsInInterruptableScenes`
-    - [ ] `IsRunningScriptedScene`
-    - [ ] `IsRunningScriptedSceneAndNotPaused`
-    - [ ] `IsRunningScriptedSceneWithSpeech`
-    - [ ] `IsRunningScriptedSceneWithSpeechAndNotPaused`
-    - [ ] `ObjectCaps`
-    - [ ] `OnClientActive`
-    - [ ] `PauseActorsScenes`
-    - [ ] `QueueActorsScenesToResume`
-    - [ ] `QueueRestoredSound`
-    - [ ] `RemoveActorFromScenes`
-    - [ ] `RemoveSceneEntity`
-    - [ ] `RemoveScenesInvolvingActor`
-    - [ ] `ResumeActorsScenes`
-    - [ ] `Spawn`
-    - [ ] `Think`
+    - [x] `AddSceneEntity`
+    - [x] `ClearAllScenes`
+    - [x] `IsInInterruptableScenes`
+    - [x] `IsRunningScriptedScene`
+    - [x] `IsRunningScriptedSceneAndNotPaused`
+    - [x] `IsRunningScriptedSceneWithSpeech`
+    - [x] `IsRunningScriptedSceneWithSpeechAndNotPaused`
+    - [x] `ObjectCaps`
+    - [x] `OnClientActive`
+    - [x] `PauseActorsScenes`
+    - [x] `QueueActorsScenesToResume`
+    - [x] `QueueRestoredSound`
+    - [x] `RemoveActorFromScenes`
+    - [x] `RemoveSceneEntity`
+    - [x] `RemoveScenesInvolvingActor`
+    - [x] `ResumeActorsScenes`
+    - [x] `Spawn`
+    - [x] `Think`
 
 ## script_*
 
@@ -12581,27 +12582,27 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
   - [x] Linked (`script_intro`)
   - [x] Networked (SendTable for `CScriptIntro`)
   - KeyValues
-    - [ ] `alternatefovchange`
+    - [x] `alternatefovchange`
   - Inputs
-    - [ ] `SetCameraViewEntity`
-    - [ ] `SetBlendMode`
-    - [ ] `SetNextFOV`
-    - [ ] `SetFOVBlendTime`
-    - [ ] `SetFOV`
-    - [ ] `SetNextBlendMode`
-    - [ ] `SetNextBlendTime`
-    - [ ] `Activate`
-    - [ ] `Deactivate`
-    - [ ] `FadeTo`
-    - [ ] `SetFadeColor`
+    - [x] `SetCameraViewEntity`
+    - [x] `SetBlendMode`
+    - [x] `SetNextFOV`
+    - [x] `SetFOVBlendTime`
+    - [x] `SetFOV`
+    - [x] `SetNextBlendMode`
+    - [x] `SetNextBlendTime`
+    - [x] `Activate`
+    - [x] `Deactivate`
+    - [x] `FadeTo`
+    - [x] `SetFadeColor`
   - Think/Touch/Use functions
-    - [ ] `BlendComplete`
+    - [x] `BlendComplete`
   - Methods
-    - [ ] `Activate`
-    - [ ] `GetIncludedPVSOrigin`
+    - [x] `Activate`
+    - [x] `GetIncludedPVSOrigin`
     - [ ] `Precache`
-    - [ ] `Spawn`
-    - [ ] `UpdateTransmitState`
+    - [x] `Spawn`
+    - [x] `UpdateTransmitState`
 
 ## scripted_*
 
@@ -12609,140 +12610,140 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
   - [x] Linked (`scripted_scene`)
   - [x] Networked (SendTable for `CSceneEntity`)
   - KeyValues
-    - [ ] `SceneFile`
-    - [ ] `ResumeSceneFile`
-    - [ ] `target1`
-    - [ ] `target2`
-    - [ ] `target3`
-    - [ ] `target4`
-    - [ ] `target5`
-    - [ ] `target6`
-    - [ ] `target7`
-    - [ ] `target8`
-    - [ ] `busyactor`
-    - [ ] `onplayerdeath`
+    - [x] `SceneFile`
+    - [x] `ResumeSceneFile`
+    - [x] `target1`
+    - [x] `target2`
+    - [x] `target3`
+    - [x] `target4`
+    - [x] `target5`
+    - [x] `target6`
+    - [x] `target7`
+    - [x] `target8`
+    - [x] `busyactor`
+    - [x] `onplayerdeath`
   - Inputs
-    - [ ] `Start`
-    - [ ] `Pause`
-    - [ ] `Resume`
-    - [ ] `Cancel`
-    - [ ] `CancelAtNextInterrupt`
-    - [ ] `PitchShift`
+    - [x] `Start`
+    - [x] `Pause`
+    - [x] `Resume`
+    - [x] `Cancel`
+    - [x] `CancelAtNextInterrupt`
+    - [x] `PitchShift`
     - [ ] `InterjectResponse`
-    - [ ] `StopWaitingForActor`
-    - [ ] `Trigger`
-    - [ ] `ScriptPlayerDeath`
+    - [x] `StopWaitingForActor`
+    - [x] `Trigger`
+    - [x] `ScriptPlayerDeath`
     - [ ] `SetTarget1`
     - [ ] `SetTarget2`
     - [ ] `SetTarget3`
     - [ ] `SetTarget4`
   - Outputs
-    - [ ] `OnStart`
-    - [ ] `OnCompletion`
-    - [ ] `OnCanceled`
-    - [ ] `OnTrigger1`
-    - [ ] `OnTrigger2`
-    - [ ] `OnTrigger3`
-    - [ ] `OnTrigger4`
-    - [ ] `OnTrigger5`
-    - [ ] `OnTrigger6`
-    - [ ] `OnTrigger7`
-    - [ ] `OnTrigger8`
-    - [ ] `OnTrigger9`
-    - [ ] `OnTrigger10`
-    - [ ] `OnTrigger11`
-    - [ ] `OnTrigger12`
-    - [ ] `OnTrigger13`
-    - [ ] `OnTrigger14`
-    - [ ] `OnTrigger15`
-    - [ ] `OnTrigger16`
+    - [x] `OnStart`
+    - [x] `OnCompletion`
+    - [x] `OnCanceled`
+    - [x] `OnTrigger1`
+    - [x] `OnTrigger2`
+    - [x] `OnTrigger3`
+    - [x] `OnTrigger4`
+    - [x] `OnTrigger5`
+    - [x] `OnTrigger6`
+    - [x] `OnTrigger7`
+    - [x] `OnTrigger8`
+    - [x] `OnTrigger9`
+    - [x] `OnTrigger10`
+    - [x] `OnTrigger11`
+    - [x] `OnTrigger12`
+    - [x] `OnTrigger13`
+    - [x] `OnTrigger14`
+    - [x] `OnTrigger15`
+    - [x] `OnTrigger16`
   - Methods
-    - [ ] `Activate`
-    - [ ] `AddListManager`
-    - [ ] `BuildSortedSpeakEventSoundsPrefetchList`
-    - [ ] `CancelIfSceneInvolvesActor`
-    - [ ] `CancelPlayback`
-    - [ ] `CheckActors`
-    - [ ] `CheckEvent`
-    - [ ] `CheckInterruptCompletion`
-    - [ ] `ClearActivatorTargets`
-    - [ ] `ClearInterrupt`
-    - [ ] `ClearSceneEvents`
-    - [ ] `ClearSchedules`
-    - [ ] `DispatchEndExpression`
-    - [ ] `DispatchEndFace`
-    - [ ] `DispatchEndFlexAnimation`
-    - [ ] `DispatchEndGeneric`
-    - [ ] `DispatchEndGesture`
-    - [ ] `DispatchEndInterrupt`
-    - [ ] `DispatchEndLookAt`
-    - [ ] `DispatchEndMoveTo`
-    - [ ] `DispatchEndPermitResponses`
-    - [ ] `DispatchEndSequence`
-    - [ ] `DispatchEndSpeak`
-    - [ ] `DispatchPauseScene`
-    - [ ] `DispatchProcessLoop`
-    - [ ] `DispatchStartExpression`
-    - [ ] `DispatchStartFace`
-    - [ ] `DispatchStartFlexAnimation`
-    - [ ] `DispatchStartGeneric`
-    - [ ] `DispatchStartGesture`
-    - [ ] `DispatchStartInterrupt`
-    - [ ] `DispatchStartLookAt`
-    - [ ] `DispatchStartMoveTo`
-    - [ ] `DispatchStartPermitResponses`
-    - [ ] `DispatchStartSequence`
-    - [ ] `DispatchStartSpeak`
-    - [ ] `DispatchStartSubScene`
-    - [ ] `DispatchStopPoint`
-    - [ ] `DoThink`
-    - [ ] `EndEvent`
-    - [ ] `EstimateLength`
-    - [ ] `FindNamedActor`
-    - [ ] `FindNamedEntity`
-    - [ ] `FindNamedEntityClosest`
-    - [ ] `FindNamedTarget`
+    - [x] `Activate`
+    - [x] `AddListManager`
+    - [x] `BuildSortedSpeakEventSoundsPrefetchList`
+    - [x] `CancelIfSceneInvolvesActor`
+    - [x] `CancelPlayback`
+    - [x] `CheckActors`
+    - [x] `CheckEvent`
+    - [x] `CheckInterruptCompletion`
+    - [x] `ClearActivatorTargets`
+    - [x] `ClearInterrupt`
+    - [x] `ClearSceneEvents`
+    - [x] `ClearSchedules`
+    - [x] `DispatchEndExpression`
+    - [x] `DispatchEndFace`
+    - [x] `DispatchEndFlexAnimation`
+    - [x] `DispatchEndGeneric`
+    - [x] `DispatchEndGesture`
+    - [x] `DispatchEndInterrupt`
+    - [x] `DispatchEndLookAt`
+    - [x] `DispatchEndMoveTo`
+    - [x] `DispatchEndPermitResponses`
+    - [x] `DispatchEndSequence`
+    - [x] `DispatchEndSpeak`
+    - [x] `DispatchPauseScene`
+    - [x] `DispatchProcessLoop`
+    - [x] `DispatchStartExpression`
+    - [x] `DispatchStartFace`
+    - [x] `DispatchStartFlexAnimation`
+    - [x] `DispatchStartGeneric`
+    - [x] `DispatchStartGesture`
+    - [x] `DispatchStartInterrupt`
+    - [x] `DispatchStartLookAt`
+    - [x] `DispatchStartMoveTo`
+    - [x] `DispatchStartPermitResponses`
+    - [x] `DispatchStartSequence`
+    - [x] `DispatchStartSpeak`
+    - [x] `DispatchStartSubScene`
+    - [x] `DispatchStopPoint`
+    - [x] `DoThink`
+    - [x] `EndEvent`
+    - [x] `EstimateLength`
+    - [x] `FindNamedActor`
+    - [x] `FindNamedEntity`
+    - [x] `FindNamedEntityClosest`
+    - [x] `FindNamedTarget`
     - [ ] `GenerateSceneForSound`
-    - [ ] `GenerateSoundScene`
-    - [ ] `GetPostSpeakDelay`
-    - [ ] `GetSoundNameForPlayer`
-    - [ ] `GetSoundSystemLatency`
-    - [ ] `HasFlexAnimation`
-    - [ ] `HasUnplayedSpeech`
-    - [ ] `InterruptThisScene`
-    - [ ] `InvolvesActor`
-    - [ ] `IsBackground`
-    - [ ] `IsInterruptable`
-    - [ ] `LoadScene`
-    - [ ] `NotifyOfCompletion`
-    - [ ] `OnLoaded`
+    - [x] `GenerateSoundScene`
+    - [x] `GetPostSpeakDelay`
+    - [x] `GetSoundNameForPlayer`
+    - [x] `GetSoundSystemLatency`
+    - [x] `HasFlexAnimation`
+    - [x] `HasUnplayedSpeech`
+    - [x] `InterruptThisScene`
+    - [x] `InvolvesActor`
+    - [x] `IsBackground`
+    - [x] `IsInterruptable`
+    - [x] `LoadScene`
+    - [x] `NotifyOfCompletion`
+    - [x] `OnLoaded`
     - [ ] `OnRestore`
-    - [ ] `OnSceneFinished`
-    - [ ] `PausePlayback`
-    - [ ] `PauseThink`
-    - [ ] `PitchShiftPlayback`
-    - [ ] `Precache`
+    - [x] `OnSceneFinished`
+    - [x] `PausePlayback`
+    - [x] `PauseThink`
+    - [x] `PitchShiftPlayback`
+    - [x] `Precache`
     - [ ] `PrecacheScene`
-    - [ ] `PrefetchAnimBlocks`
-    - [ ] `PrefetchSpeakEventSounds`
-    - [ ] `ProcessEvent`
+    - [x] `PrefetchAnimBlocks`
+    - [x] `PrefetchSpeakEventSounds`
+    - [x] `ProcessEvent`
     - [ ] `QueueResumePlayback`
-    - [ ] `RequestCompletionNotification`
-    - [ ] `ResumePlayback`
-    - [ ] `SetBackground`
-    - [ ] `SetCurrentTime`
-    - [ ] `SetRecipientFilter`
-    - [ ] `ShouldNetwork`
-    - [ ] `ShouldTransmit`
-    - [ ] `Spawn`
-    - [ ] `SpeakEventSoundLessFunc`
-    - [ ] `StartEvent`
-    - [ ] `StartPlayback`
-    - [ ] `Think`
-    - [ ] `UnloadScene`
-    - [ ] `UpdateOnRemove`
-    - [ ] `UpdateTransmitState`
-    - [ ] `ValidScene`
+    - [x] `RequestCompletionNotification`
+    - [x] `ResumePlayback`
+    - [x] `SetBackground`
+    - [x] `SetCurrentTime`
+    - [x] `SetRecipientFilter`
+    - [x] `ShouldNetwork`
+    - [x] `ShouldTransmit`
+    - [x] `Spawn`
+    - [x] `SpeakEventSoundLessFunc`
+    - [x] `StartEvent`
+    - [x] `StartPlayback`
+    - [x] `Think`
+    - [x] `UnloadScene`
+    - [x] `UpdateOnRemove`
+    - [x] `UpdateTransmitState`
+    - [x] `ValidScene`
   - Also linked as: `logic_choreographed_scene`
 - [ ] **scripted_sentence** · `CAI_ScriptedSentence` · `game/server/scripted.cpp` · C#: *none*
   - [ ] Linked (`scripted_sentence`)
@@ -12769,7 +12770,7 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `ObjectCaps`
     - [ ] `Spawn`
     - [ ] `StartSentence`
-- [ ] **scripted_sequence** · `CAI_ScriptedSequence` · `game/server/scripted.cpp` · C#: *none*
+- [ ] **scripted_sequence** · `CAI_ScriptedSequence` · `game/server/scripted.cpp` · C# `AI_ScriptedSequence` ([Game.Server/Scripted.cs](Game.Server/Scripted.cs))
   - [ ] Linked (`scripted_sequence`)
   - KeyValues
     - [ ] `m_iszEntry`
@@ -12827,7 +12828,7 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
     - [ ] `FixFlyFlag`
     - [ ] `FixScriptNPCSchedule`
     - [ ] `ForceSetTargetEntity`
-    - [ ] `GetSpawnPreIdleSequenceForScript`
+    - [x] `GetSpawnPreIdleSequenceForScript`
     - [ ] `IsTimeToStart`
     - [ ] `IsWaitingForBegin`
     - [ ] `ModifyScriptedAutoMovement`
@@ -14860,63 +14861,63 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
 
 Datadesc and methods that the entities above inherit.
 
-- [ ] **CAI_BaseActor** : `CAI_BaseNPC` · `game/server/ai_baseactor.cpp` · C#: *none*
+- [ ] **CAI_BaseActor** : `CAI_BaseNPC` · `game/server/ai_baseactor.cpp` · C# `AI_BaseActor` ([Game.Server/AI_BaseActor.cs](Game.Server/AI_BaseActor.cs))
   - KeyValues
     - [ ] `DontUseSpeechSemaphore`
     - [ ] `ExpressionOverride`
   - Inputs
     - [ ] `SetExpressionOverride`
   - Methods
-    - [ ] `AccumulateIdealYaw`
-    - [ ] `AddLookTarget`
-    - [ ] `CheckSceneEventCompletion`
-    - [ ] `ClampWithBias`
+    - [x] `AccumulateIdealYaw`
+    - [x] `AddLookTarget`
+    - [x] `CheckSceneEventCompletion`
+    - [x] `ClampWithBias`
     - [ ] `ClearExpression`
-    - [ ] `ClearLookTarget`
-    - [ ] `ClearSceneEvent`
-    - [ ] `CreateComponents`
-    - [ ] `CreateExpresser`
-    - [ ] `ExpireCurrentRandomLookTarget`
-    - [ ] `EyeDirection2D`
-    - [ ] `EyeDirection3D`
-    - [ ] `EyePosition`
-    - [ ] `GetExpresser`
-    - [ ] `GetExpression`
-    - [ ] `GetHeadDebounce`
-    - [ ] `HasActiveLookTargets`
-    - [ ] `HeadDirection2D`
-    - [ ] `HeadDirection3D`
-    - [ ] `HeadTargetValidity`
-    - [ ] `IsServerSideFlexController`
+    - [x] `ClearLookTarget`
+    - [x] `ClearSceneEvent`
+    - [x] `CreateComponents`
+    - [x] `CreateExpresser`
+    - [x] `ExpireCurrentRandomLookTarget`
+    - [x] `EyeDirection2D`
+    - [x] `EyeDirection3D`
+    - [x] `EyePosition`
+    - [x] `GetExpresser`
+    - [x] `GetExpression`
+    - [x] `GetHeadDebounce`
+    - [x] `HasActiveLookTargets`
+    - [x] `HeadDirection2D`
+    - [x] `HeadDirection3D`
+    - [x] `HeadTargetValidity`
+    - [x] `IsServerSideFlexController`
     - [ ] `MaintainLookTargets`
-    - [ ] `MakeRandomLookTarget`
+    - [x] `MakeRandomLookTarget`
     - [ ] `NPC_TranslateActivity`
-    - [ ] `OnNewLookTarget`
-    - [ ] `OnSelectedLookTarget`
-    - [ ] `OnStateChange`
-    - [ ] `PickLookTarget`
+    - [x] `OnNewLookTarget`
+    - [x] `OnSelectedLookTarget`
+    - [x] `OnStateChange`
+    - [x] `PickLookTarget`
     - [ ] `PickRandomLookTarget`
     - [ ] `PickTacticalLookTarget`
-    - [ ] `PlayExpressionForState`
-    - [ ] `Precache`
-    - [ ] `ProcessSceneEvent`
-    - [ ] `RandomFaceFlex`
-    - [ ] `SelectRandomExpressionForState`
-    - [ ] `SetAccumulatedYawAndUpdate`
+    - [x] `PlayExpressionForState`
+    - [x] `Precache`
+    - [x] `ProcessSceneEvent`
+    - [x] `RandomFaceFlex`
+    - [x] `SelectRandomExpressionForState`
+    - [x] `SetAccumulatedYawAndUpdate`
     - [ ] `SetExpression`
-    - [ ] `SetHeadDirection`
-    - [ ] `SetModel`
-    - [ ] `SetViewtarget`
+    - [x] `SetHeadDirection`
+    - [x] `SetModel`
+    - [x] `SetViewtarget`
     - [ ] `ShouldBruteForceFailedNav`
-    - [ ] `StartSceneEvent`
+    - [x] `StartSceneEvent`
     - [ ] `StartTaskRangeAttack1`
-    - [ ] `StudioFrameAdvance`
-    - [ ] `UpdateBodyControl`
-    - [ ] `UpdateHeadControl`
-    - [ ] `UpdateLatchedValues`
+    - [x] `StudioFrameAdvance`
+    - [x] `UpdateBodyControl`
+    - [x] `UpdateHeadControl`
+    - [x] `UpdateLatchedValues`
     - [ ] `UseSemaphore`
-    - [ ] `ValidEyeTarget`
-    - [ ] `ValidHeadTarget`
+    - [x] `ValidEyeTarget`
+    - [x] `ValidHeadTarget`
 - [ ] **CAI_BaseFlyingBot** : `CAI_BaseNPC` · `game/server/ai_basenpc_flyer.cpp` · C#: *none*
   - Methods
     - [ ] `BodyAngles`
@@ -14986,23 +14987,23 @@ Datadesc and methods that the entities above inherit.
     - [ ] `OnForcedInteractionAborted`
     - [ ] `OnForcedInteractionFinished`
   - Think/Touch/Use functions
-    - [ ] `NPCUse`
-    - [ ] `CallNPCThink`
+    - [x] `NPCUse`
+    - [x] `CallNPCThink`
     - [ ] `CorpseFallThink`
-    - [ ] `NPCInitThink`
+    - [x] `NPCInitThink`
   - Methods
     - [ ] `AccessBehaviors`
     - [ ] `Activate`
-    - [ ] `AddActivityToSR`
-    - [ ] `AddClassRelationship`
-    - [ ] `AddEntityRelationship`
+    - [x] `AddActivityToSR`
+    - [x] `AddClassRelationship`
+    - [x] `AddEntityRelationship`
     - [ ] `AddEventToSR`
-    - [ ] `AddFacingTarget`
-    - [ ] `AddLookTarget`
-    - [ ] `AddRelationship`
+    - [x] `AddFacingTarget`
+    - [x] `AddLookTarget`
+    - [x] `AddRelationship`
     - [ ] `AddScriptedNPCInteraction`
     - [ ] `AddToSquad`
-    - [ ] `AdvanceToIdealActivity`
+    - [x] `AdvanceToIdealActivity`
     - [ ] `AimGun`
     - [ ] `AlertSound`
     - [ ] `AllowedToIgnite`
@@ -15013,34 +15014,34 @@ Datadesc and methods that the entities above inherit.
     - [ ] `BestEnemy`
     - [ ] `BodyTarget`
     - [ ] `Break`
-    - [ ] `BuildScheduleTestBits`
-    - [ ] `CalcIdealYaw`
+    - [x] `BuildScheduleTestBits`
+    - [x] `CalcIdealYaw`
     - [ ] `CalcReasonableFacing`
     - [ ] `CalcThrowVelocity`
-    - [ ] `CalcYawSpeed`
+    - [x] `CalcYawSpeed`
     - [ ] `CalculateForcedInteractionPosition`
     - [ ] `CalculateValidEnemyInteractions`
-    - [ ] `CanBeAnEnemyOf`
+    - [x] `CanBeAnEnemyOf`
     - [ ] `CanBeUsedAsAFriend`
-    - [ ] `CanFlinch`
+    - [x] `CanFlinch`
     - [ ] `CanHolsterWeapon`
     - [ ] `CanPlaySentence`
     - [ ] `CanPlaySequence`
     - [ ] `CanRespondToEvent`
     - [ ] `CanRunAScriptedNPCInteraction`
     - [ ] `CanStandOn`
-    - [ ] `CapabilitiesAdd`
+    - [x] `CapabilitiesAdd`
     - [ ] `CapabilitiesClear`
-    - [ ] `CapabilitiesGet`
-    - [ ] `CapabilitiesRemove`
+    - [x] `CapabilitiesGet`
+    - [x] `CapabilitiesRemove`
     - [ ] `CascadePlayerPush`
-    - [ ] `CheckAmmo`
-    - [ ] `CheckFlinches`
+    - [x] `CheckAmmo`
+    - [x] `CheckFlinches`
     - [ ] `CheckForScriptedNPCInteractions`
     - [ ] `CheckForcedNPCInteractions`
-    - [ ] `CheckOnGround`
-    - [ ] `CheckPVSCondition`
-    - [ ] `CheckPhysicsContacts`
+    - [x] `CheckOnGround`
+    - [x] `CheckPVSCondition`
+    - [x] `CheckPhysicsContacts`
     - [ ] `CheckSquad`
     - [ ] `CheckTarget`
     - [ ] `ChooseEnemy`
@@ -15049,35 +15050,35 @@ Datadesc and methods that the entities above inherit.
     - [ ] `CleanupOnDeath`
     - [ ] `CleanupScriptsOnTeleport`
     - [ ] `ClearAllSchedules`
-    - [ ] `ClearAttackConditions`
-    - [ ] `ClearCommandGoal`
-    - [ ] `ClearCondition`
-    - [ ] `ClearConditions`
-    - [ ] `ClearCustomInterruptCondition`
+    - [x] `ClearAttackConditions`
+    - [x] `ClearCommandGoal`
+    - [x] `ClearCondition`
+    - [x] `ClearConditions`
+    - [x] `ClearCustomInterruptCondition`
     - [ ] `ClearCustomInterruptConditions`
     - [ ] `ClearEnemyMemory`
     - [ ] `ClearHintNode`
     - [ ] `ClearIgnoreConditions`
-    - [ ] `ClearSchedule`
-    - [ ] `ClearSenseConditions`
-    - [ ] `ClearTransientConditions`
-    - [ ] `ClearWait`
+    - [x] `ClearSchedule`
+    - [x] `ClearSenseConditions`
+    - [x] `ClearTransientConditions`
+    - [x] `ClearWait`
     - [ ] `CollectShotStats`
     - [ ] `ConditionInterruptsCurSchedule`
     - [ ] `ConditionInterruptsSchedule`
-    - [ ] `ConditionName`
+    - [x] `ConditionName`
     - [ ] `CouldShootIfCrouching`
     - [ ] `CoverRadius`
-    - [ ] `CreateComponents`
+    - [x] `CreateComponents`
     - [ ] `CreateCustomTarget`
-    - [ ] `CreateLocalNavigator`
-    - [ ] `CreateMotor`
-    - [ ] `CreateMoveProbe`
-    - [ ] `CreateNavigator`
-    - [ ] `CreatePathfinder`
-    - [ ] `CreateSenses`
-    - [ ] `CreateTacticalServices`
-    - [ ] `CreateVPhysics`
+    - [x] `CreateLocalNavigator`
+    - [x] `CreateMotor`
+    - [x] `CreateMoveProbe`
+    - [x] `CreateNavigator`
+    - [x] `CreatePathfinder`
+    - [x] `CreateSenses`
+    - [x] `CreateTacticalServices`
+    - [x] `CreateVPhysics`
     - [ ] `Crouch`
     - [ ] `CurrentWeaponLOSCondition`
     - [ ] `DeathSound`
@@ -15090,32 +15091,32 @@ Datadesc and methods that the entities above inherit.
     - [ ] `DrawDebugTextOverlays`
     - [ ] `DropItem`
     - [ ] `DumpTaskTimings`
-    - [ ] `EndTaskOverlay`
+    - [x] `EndTaskOverlay`
     - [ ] `EnemyDistTolerance`
-    - [ ] `EnemyDistance`
+    - [x] `EnemyDistance`
     - [ ] `EnemyHasEludedMe`
     - [ ] `Event_Gibbed`
     - [ ] `Event_Killed`
-    - [ ] `ExitScriptedSequence`
-    - [ ] `EyeDirection2D`
-    - [ ] `EyeDirection3D`
+    - [x] `ExitScriptedSequence`
+    - [x] `EyeDirection2D`
+    - [x] `EyeDirection3D`
     - [ ] `EyeLookTarget`
-    - [ ] `EyeOffset`
+    - [x] `EyeOffset`
     - [ ] `EyePosition`
     - [ ] `FCanCheckAttacks`
     - [ ] `FHaveSchedule`
     - [ ] `FInAimCone`
     - [ ] `FOkToMakeSound`
-    - [ ] `FScheduleDone`
+    - [x] `FScheduleDone`
     - [ ] `FValidateHintType`
-    - [ ] `FacingIdeal`
-    - [ ] `FacingPosition`
+    - [x] `FacingIdeal`
+    - [x] `FacingPosition`
     - [ ] `FearSound`
     - [ ] `FindCoverFromBestSound`
     - [ ] `FindCoverFromEnemy`
     - [ ] `FindCoverPos`
     - [ ] `FindCoverPosInRadius`
-    - [ ] `FindNamedEntity`
+    - [x] `FindNamedEntity`
     - [ ] `FindNearestValidGoalPos`
     - [ ] `FindSpotForNPCInRadius`
     - [ ] `FireBullets`
@@ -15124,11 +15125,11 @@ Datadesc and methods that the entities above inherit.
     - [ ] `FlyMove`
     - [ ] `ForceSelectedGo`
     - [ ] `ForceSelectedGoRandom`
-    - [ ] `FoundEnemySound`
+    - [x] `FoundEnemySound`
     - [ ] `GatherAttackConditions`
-    - [ ] `GatherConditions`
+    - [x] `GatherConditions`
     - [ ] `GatherEnemyConditions`
-    - [ ] `GetActivityID`
+    - [x] `GetActivityID`
     - [x] `GetActivityName`
     - [ ] `GetActualShootPosition`
     - [ ] `GetActualShootTrajectory`
@@ -15137,121 +15138,121 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetAutoAimCenter`
     - [ ] `GetBestScent`
     - [ ] `GetBestSound`
-    - [ ] `GetClassScheduleIdSpace`
-    - [ ] `GetConditionID`
+    - [x] `GetClassScheduleIdSpace`
+    - [x] `GetConditionID`
     - [ ] `GetCoverActivity`
-    - [ ] `GetCrouchEyeOffset`
+    - [x] `GetCrouchEyeOffset`
     - [ ] `GetCrouchGunOffset`
     - [ ] `GetDefaultNavGoalTolerance`
     - [ ] `GetEnemies`
-    - [ ] `GetEnemy`
+    - [x] `GetEnemy`
     - [ ] `GetEnemyCombatCharacterPointer`
     - [ ] `GetEnemyLKP`
     - [ ] `GetEnemyLastTimeSeen`
     - [ ] `GetEnemyOccluder`
     - [ ] `GetEventID`
     - [ ] `GetEventName`
-    - [ ] `GetExpresser`
+    - [x] `GetExpresser`
     - [ ] `GetFacingDirection`
-    - [ ] `GetFailSchedule`
+    - [x] `GetFailSchedule`
     - [ ] `GetFlinchActivity`
-    - [ ] `GetGlobalScheduleId`
+    - [x] `GetGlobalScheduleId`
     - [ ] `GetGoalRepathTolerance`
     - [ ] `GetHintActivity`
-    - [ ] `GetHintDelay`
+    - [x] `GetHintDelay`
     - [ ] `GetHitgroupDamageMultiplier`
     - [ ] `GetInteractionPartner`
     - [ ] `GetJumpGravity`
-    - [ ] `GetLocalScheduleId`
+    - [x] `GetLocalScheduleId`
     - [ ] `GetLocalTaskId`
     - [ ] `GetLoudestSoundOfType`
     - [ ] `GetMaxJumpSpeed`
     - [ ] `GetMaxTacticalLateralMovement`
     - [ ] `GetNavTargetEntity`
-    - [ ] `GetNavType`
-    - [ ] `GetNewSchedule`
+    - [x] `GetNavType`
+    - [x] `GetNewSchedule`
     - [ ] `GetNodeViewOffset`
-    - [ ] `GetPlayerAvoidBounds`
+    - [x] `GetPlayerAvoidBounds`
     - [ ] `GetReactionDelay`
     - [ ] `GetReasonableFacingDist`
     - [ ] `GetReloadActivity`
-    - [ ] `GetRunningBehavior`
-    - [ ] `GetSchedule`
-    - [ ] `GetScheduleID`
-    - [ ] `GetScheduleOfType`
-    - [ ] `GetSchedulingErrorName`
+    - [x] `GetRunningBehavior`
+    - [x] `GetSchedule`
+    - [x] `GetScheduleID`
+    - [x] `GetScheduleOfType`
+    - [x] `GetSchedulingErrorName`
     - [ ] `GetScriptCustomMoveActivity`
     - [ ] `GetScriptCustomMoveSequence`
     - [ ] `GetScriptedNPCInteractionSequence`
     - [ ] `GetShootEnemyDir`
     - [ ] `GetSmoothedVelocity`
-    - [ ] `GetSoundInterests`
-    - [ ] `GetSoundPriority`
+    - [x] `GetSoundInterests`
+    - [x] `GetSoundPriority`
     - [ ] `GetSpreadBias`
     - [ ] `GetSquadCommandRepresentative`
     - [ ] `GetSquadSlotDebugName`
     - [ ] `GetSquadSlotID`
     - [ ] `GetStepDownMultiplier`
-    - [ ] `GetStoppedActivity`
-    - [ ] `GetTask`
-    - [ ] `GetTaskID`
+    - [x] `GetStoppedActivity`
+    - [x] `GetTask`
+    - [x] `GetTaskID`
     - [ ] `GetTimeToNavGoal`
     - [ ] `GetTracerType`
     - [ ] `GiveWeapon`
     - [ ] `HandleAnimEvent`
     - [ ] `HandleInteraction`
-    - [ ] `HasCondition`
+    - [x] `HasCondition`
     - [ ] `HasConditionsToInterruptSchedule`
     - [ ] `HasInteractionCantDie`
-    - [ ] `HasInterruptCondition`
+    - [x] `HasInterruptCondition`
     - [ ] `HasStrategySlot`
     - [ ] `HasStrategySlotRange`
-    - [ ] `HaveSequenceForActivity`
-    - [ ] `HeadDirection2D`
-    - [ ] `HeadDirection3D`
-    - [ ] `HearingSensitivity`
+    - [x] `HaveSequenceForActivity`
+    - [x] `HeadDirection2D`
+    - [x] `HeadDirection3D`
+    - [x] `HearingSensitivity`
     - [ ] `HolsterWeapon`
-    - [ ] `IdleSound`
+    - [x] `IdleSound`
     - [ ] `Ignite`
     - [ ] `ImpactTrace`
     - [ ] `IncomingGrenade`
-    - [ ] `InitDefaultActivitySR`
-    - [ ] `InitDefaultConditionSR`
-    - [ ] `InitDefaultScheduleSR`
+    - [x] `InitDefaultActivitySR`
+    - [x] `InitDefaultConditionSR`
+    - [x] `InitDefaultScheduleSR`
     - [ ] `InitDefaultSquadSlotSR`
-    - [ ] `InitDefaultTaskSR`
-    - [ ] `InitRelationshipTable`
-    - [ ] `InitSchedulingTables`
+    - [x] `InitDefaultTaskSR`
+    - [x] `InitRelationshipTable`
+    - [x] `InitSchedulingTables`
     - [ ] `InitSquad`
     - [ ] `InnateRange1MaxRange`
     - [ ] `InnateRange1MinRange`
     - [ ] `InnateWeaponLOSCondition`
     - [ ] `InteractionCouldStart`
-    - [ ] `IsActivityFinished`
-    - [ ] `IsActivityMovementPhased`
+    - [x] `IsActivityFinished`
+    - [x] `IsActivityMovementPhased`
     - [ ] `IsAllowedToDodge`
     - [ ] `IsCommandMoving`
     - [ ] `IsCommandable`
     - [ ] `IsCoverPosition`
     - [ ] `IsCrouchedActivity`
-    - [ ] `IsCrouching`
-    - [ ] `IsCurSchedule`
-    - [ ] `IsCurTaskContinuousMove`
-    - [ ] `IsCustomInterruptConditionSet`
+    - [x] `IsCrouching`
+    - [x] `IsCurSchedule`
+    - [x] `IsCurTaskContinuousMove`
+    - [x] `IsCustomInterruptConditionSet`
     - [ ] `IsHeavyDamage`
     - [ ] `IsInChoreo`
     - [ ] `IsInPlayerSquad`
-    - [ ] `IsInterruptable`
+    - [x] `IsInterruptable`
     - [ ] `IsJumpLegal`
     - [ ] `IsLightDamage`
     - [ ] `IsMedic`
-    - [ ] `IsMoving`
-    - [ ] `IsMovingToPickupWeapon`
-    - [ ] `IsNPC`
+    - [x] `IsMoving`
+    - [x] `IsMovingToPickupWeapon`
+    - [x] `IsNPC`
     - [ ] `IsNavHullValid`
     - [ ] `IsNavigationUrgent`
-    - [ ] `IsPlayerAlly`
-    - [ ] `IsScheduleValid`
+    - [x] `IsPlayerAlly`
+    - [x] `IsScheduleValid`
     - [ ] `IsSilentSquadMember`
     - [ ] `IsSquadmateInSpread`
     - [ ] `IsStrategySlotRangeOccupied`
@@ -15264,41 +15265,41 @@ Datadesc and methods that the entities above inherit.
     - [ ] `IsValidMoveAwayDest`
     - [ ] `IsValidReasonableFacing`
     - [ ] `IsValidShootPosition`
-    - [ ] `IsWaitFinished`
-    - [ ] `IsWaitSet`
-    - [ ] `IsWaitingToRappel`
+    - [x] `IsWaitFinished`
+    - [x] `IsWaitSet`
+    - [x] `IsWaitingToRappel`
     - [ ] `IsWeaponHolstered`
     - [ ] `IsWeaponStateChanging`
     - [ ] `JustMadeSound`
     - [ ] `KeyValue`
     - [ ] `LineOfSightDist`
-    - [ ] `LoadDefaultSchedules`
-    - [ ] `LoadSchedules`
-    - [ ] `LoadedSchedules`
+    - [x] `LoadDefaultSchedules`
+    - [x] `LoadSchedules`
+    - [x] `LoadedSchedules`
     - [ ] `LockBestSound`
-    - [ ] `LostEnemySound`
-    - [ ] `MaintainActivity`
-    - [ ] `MaintainLookTargets`
-    - [ ] `MaintainSchedule`
-    - [ ] `MaintainTurnActivity`
+    - [x] `LostEnemySound`
+    - [x] `MaintainActivity`
+    - [x] `MaintainLookTargets`
+    - [x] `MaintainSchedule`
+    - [x] `MaintainTurnActivity`
     - [ ] `MakeAIFootstepSound`
     - [ ] `MakeDamageBloodDecal`
     - [ ] `MakeTracer`
     - [ ] `MarkEnemyAsEluded`
-    - [ ] `MaxYawSpeed`
+    - [x] `MaxYawSpeed`
     - [ ] `MeleeAttack1Conditions`
     - [ ] `MeleeAttack2Conditions`
     - [ ] `ModifyOrAppendCriteria`
     - [ ] `MoveOrder`
     - [ ] `MovementCost`
-    - [ ] `NPCInit`
+    - [x] `NPCInit`
     - [ ] `NPCInitDead`
-    - [ ] `NPCThink`
-    - [ ] `NPC_TranslateActivity`
-    - [ ] `NextScheduledTask`
+    - [x] `NPCThink`
+    - [x] `NPC_TranslateActivity`
+    - [x] `NextScheduledTask`
     - [ ] `NotifyDeadFriend`
     - [ ] `NotifyFriendsOfDamage`
-    - [ ] `NotifyPushMove`
+    - [x] `NotifyPushMove`
     - [ ] `NumBehaviors`
     - [ ] `NumWeaponsInSquad`
     - [ ] `ObjectCaps`
@@ -15308,7 +15309,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `OnBehaviorChangeStatus`
     - [ ] `OnCalcBaseMove`
     - [ ] `OnChangeActiveWeapon`
-    - [ ] `OnChangeActivity`
+    - [x] `OnChangeActivity`
     - [ ] `OnChangeHintGroup`
     - [ ] `OnClearGoal`
     - [ ] `OnDoorBlocked`
@@ -15326,11 +15327,11 @@ Datadesc and methods that the entities above inherit.
     - [ ] `OnObstructionPreSteer`
     - [ ] `OnRangeAttack1`
     - [ ] `OnRestore`
-    - [ ] `OnScheduleChange`
-    - [ ] `OnSeeEntity`
-    - [ ] `OnStartScene`
-    - [ ] `OnStartSchedule`
-    - [ ] `OnStateChange`
+    - [x] `OnScheduleChange`
+    - [x] `OnSeeEntity`
+    - [x] `OnStartScene`
+    - [x] `OnStartSchedule`
+    - [x] `OnStateChange`
     - [ ] `OnTakeDamage_Alive`
     - [ ] `OnTakeDamage_Dead`
     - [ ] `OnTakeDamage_Dying`
@@ -15340,14 +15341,14 @@ Datadesc and methods that the entities above inherit.
     - [ ] `OpenDoorAndWait`
     - [ ] `OpenPropDoorBegin`
     - [ ] `OpenPropDoorNow`
-    - [ ] `OverrideMove`
+    - [x] `OverrideMove`
     - [ ] `OverrideMoveFacing`
     - [ ] `PainSound`
     - [ ] `ParseScriptedNPCInteractions`
     - [ ] `PassesDamageFilter`
-    - [ ] `PerformMovement`
+    - [x] `PerformMovement`
     - [ ] `PerformSensing`
-    - [ ] `PhysicsSolidMaskForEntity`
+    - [x] `PhysicsSolidMaskForEntity`
     - [ ] `PickupItem`
     - [ ] `PickupWeapon`
     - [ ] `PlayFlinchGesture`
@@ -15359,152 +15360,152 @@ Datadesc and methods that the entities above inherit.
     - [ ] `PlayerPenetratingVPhysics`
     - [ ] `PointInSpread`
     - [ ] `PopulatePoseParameters`
-    - [ ] `PostMovement`
-    - [ ] `PostNPCInit`
-    - [ ] `PostNPCThink`
-    - [ ] `PostRun`
-    - [ ] `PostRunStopMoving`
-    - [ ] `PostscheduleThink`
-    - [ ] `PreNPCThink`
-    - [ ] `PreThink`
-    - [ ] `Precache`
-    - [ ] `PrescheduleThink`
+    - [x] `PostMovement`
+    - [x] `PostNPCInit`
+    - [x] `PostNPCThink`
+    - [x] `PostRun`
+    - [x] `PostRunStopMoving`
+    - [x] `PostscheduleThink`
+    - [x] `PreNPCThink`
+    - [x] `PreThink`
+    - [x] `Precache`
+    - [x] `PrescheduleThink`
     - [ ] `QueryHearSound`
     - [ ] `QuerySeeEntity`
     - [ ] `RangeAttack1Conditions`
     - [ ] `RangeAttack2Conditions`
-    - [ ] `RebalanceThinks`
+    - [x] `RebalanceThinks`
     - [ ] `RelaxAim`
     - [ ] `RememberUnreachable`
     - [ ] `RemoveFromSquad`
-    - [ ] `RemoveIgnoredConditions`
+    - [x] `RemoveIgnoredConditions`
     - [ ] `RemoveMemory`
     - [ ] `ReportAIState`
     - [ ] `ReportOverThinkLimit`
-    - [ ] `ResetIdealActivity`
-    - [ ] `ResolveActivityToSequence`
+    - [x] `ResetIdealActivity`
+    - [x] `ResolveActivityToSequence`
     - [ ] `RespondedTo`
     - [ ] `Restore`
     - [ ] `RestoreConditions`
-    - [ ] `RunAI`
-    - [ ] `RunAnimation`
+    - [x] `RunAI`
+    - [x] `RunAnimation`
     - [ ] `RunAttackTask`
     - [ ] `RunDieTask`
     - [ ] `RunTask`
-    - [ ] `RunTaskOverlay`
+    - [x] `RunTaskOverlay`
     - [ ] `Save`
     - [ ] `SaveConditions`
     - [ ] `ScheduleInList`
     - [ ] `ScheduledFollowPath`
     - [ ] `ScheduledMoveToGoalEntity`
     - [ ] `SelectAlertIdealState`
-    - [ ] `SelectAlertSchedule`
+    - [x] `SelectAlertSchedule`
     - [ ] `SelectCombatSchedule`
     - [ ] `SelectDeadSchedule`
     - [ ] `SelectDeathPose`
-    - [ ] `SelectFailSchedule`
-    - [ ] `SelectFlinchSchedule`
-    - [ ] `SelectIdealState`
+    - [x] `SelectFailSchedule`
+    - [x] `SelectFlinchSchedule`
+    - [x] `SelectIdealState`
     - [ ] `SelectIdleIdealState`
-    - [ ] `SelectIdleSchedule`
+    - [x] `SelectIdleSchedule`
     - [ ] `SelectInteractionSchedule`
-    - [ ] `SelectSchedule`
-    - [ ] `SelectScriptIdealState`
-    - [ ] `SelectScriptSchedule`
-    - [ ] `SetActivity`
-    - [ ] `SetActivityAndSequence`
+    - [x] `SelectSchedule`
+    - [x] `SelectScriptIdealState`
+    - [x] `SelectScriptSchedule`
+    - [x] `SetActivity`
+    - [x] `SetActivityAndSequence`
     - [ ] `SetAim`
     - [ ] `SetCommandGoal`
-    - [ ] `SetCondition`
-    - [ ] `SetCustomInterruptCondition`
-    - [ ] `SetDefaultEyeOffset`
-    - [ ] `SetDistLook`
-    - [ ] `SetEnemy`
+    - [x] `SetCondition`
+    - [x] `SetCustomInterruptCondition`
+    - [x] `SetDefaultEyeOffset`
+    - [x] `SetDistLook`
+    - [x] `SetEnemy`
     - [ ] `SetEnemyOccluder`
-    - [ ] `SetHeadDirection`
+    - [x] `SetHeadDirection`
     - [ ] `SetHintGroup`
-    - [ ] `SetHintNode`
-    - [ ] `SetHullSizeNormal`
+    - [x] `SetHintNode`
+    - [x] `SetHullSizeNormal`
     - [ ] `SetHullSizeSmall`
-    - [ ] `SetIdealActivity`
+    - [x] `SetIdealActivity`
     - [ ] `SetIgnoreConditions`
     - [ ] `SetNavType`
-    - [ ] `SetPlayerAvoidState`
-    - [ ] `SetSchedule`
+    - [x] `SetPlayerAvoidState`
+    - [x] `SetSchedule`
     - [ ] `SetScriptedScheduleIgnoreConditions`
     - [ ] `SetSequenceById`
     - [ ] `SetSequenceByName`
     - [ ] `SetSquad`
-    - [ ] `SetState`
-    - [ ] `SetTarget`
-    - [ ] `SetTurnActivity`
-    - [ ] `SetWait`
-    - [ ] `SetupVPhysicsHull`
+    - [x] `SetState`
+    - [x] `SetTarget`
+    - [x] `SetTurnActivity`
+    - [x] `SetWait`
+    - [x] `SetupVPhysicsHull`
     - [ ] `ShouldAcceptGoal`
-    - [ ] `ShouldAlwaysThink`
+    - [x] `ShouldAlwaysThink`
     - [ ] `ShouldAutoSummon`
     - [ ] `ShouldBruteForceFailedNav`
     - [ ] `ShouldChooseNewEnemy`
     - [ ] `ShouldFadeOnDeath`
     - [ ] `ShouldFailNav`
     - [ ] `ShouldGib`
-    - [ ] `ShouldGoToIdleState`
-    - [ ] `ShouldIgnoreSound`
-    - [ ] `ShouldLookForBetterWeapon`
-    - [ ] `ShouldMoveAndShoot`
-    - [ ] `ShouldMoveWait`
-    - [ ] `ShouldNotDistanceCull`
+    - [x] `ShouldGoToIdleState`
+    - [x] `ShouldIgnoreSound`
+    - [x] `ShouldLookForBetterWeapon`
+    - [x] `ShouldMoveAndShoot`
+    - [x] `ShouldMoveWait`
+    - [x] `ShouldNotDistanceCull`
     - [ ] `ShouldPickADeathPose`
-    - [ ] `ShouldPlayIdleSound`
-    - [ ] `ShouldPlayerAvoid`
-    - [ ] `ShouldProbeCollideAgainstEntity`
+    - [x] `ShouldPlayIdleSound`
+    - [x] `ShouldPlayerAvoid`
+    - [x] `ShouldProbeCollideAgainstEntity`
     - [ ] `ShouldSavePhysics`
-    - [ ] `ShouldSelectIdealState`
+    - [x] `ShouldSelectIdealState`
     - [ ] `Sleep`
     - [ ] `SoundIsVisible`
     - [ ] `SpeakSentence`
     - [ ] `SquadSlotName`
-    - [ ] `Stand`
+    - [x] `Stand`
     - [ ] `StartForcedInteraction`
-    - [ ] `StartNPC`
+    - [x] `StartNPC`
     - [ ] `StartRunningInteraction`
     - [ ] `StartScriptMoveToTargetTask`
     - [ ] `StartScriptedNPCInteraction`
     - [ ] `StartTargetHandling`
     - [ ] `StartTask`
-    - [ ] `StartTaskOverlay`
+    - [x] `StartTaskOverlay`
     - [ ] `StartTouch`
     - [ ] `StartTurn`
     - [ ] `StepHeight`
     - [ ] `TargetOrder`
-    - [ ] `TaskComplete`
-    - [ ] `TaskFail`
-    - [ ] `TaskIsRunning`
+    - [x] `TaskComplete`
+    - [x] `TaskFail`
+    - [x] `TaskIsRunning`
     - [ ] `TaskMovementComplete`
-    - [ ] `TaskName`
+    - [x] `TaskName`
     - [ ] `Teleport`
     - [ ] `TestPlayerPushing`
     - [ ] `TestShootPosition`
     - [ ] `ThrowLimit`
     - [ ] `ToggleFreeze`
     - [ ] `TraceAttack`
-    - [ ] `TranslateActivity`
+    - [x] `TranslateActivity`
     - [ ] `TranslateNavGoal`
-    - [ ] `TranslateSchedule`
-    - [ ] `TryRestoreHull`
+    - [x] `TranslateSchedule`
+    - [x] `TryRestoreHull`
     - [ ] `UnholsterWeapon`
     - [ ] `UnlockBestSound`
-    - [ ] `UpdateEfficiency`
+    - [x] `UpdateEfficiency`
     - [ ] `UpdateEnemyMemory`
     - [ ] `UpdateEnemyPos`
-    - [ ] `UpdateOnRemove`
-    - [ ] `UpdateSleepState`
+    - [x] `UpdateOnRemove`
+    - [x] `UpdateSleepState`
     - [ ] `UpdateTargetPos`
     - [ ] `UpdateTransmitState`
-    - [ ] `UpdateTurnGesture`
+    - [x] `UpdateTurnGesture`
     - [ ] `UseAttackSquadSlots`
     - [ ] `VacateStrategySlot`
-    - [ ] `ValidEyeTarget`
+    - [x] `ValidEyeTarget`
     - [ ] `ValidateNavGoal`
     - [ ] `VecToYaw`
     - [ ] `Wake`
@@ -15555,7 +15556,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `ResolveNames`
     - [ ] `Spawn`
     - [ ] `UpdateOnRemove`
-- [ ] **CAI_PlayerAlly** : `CAI_BaseActor` · `game/server/ai_playerally.cpp` · C#: *none*
+- [ ] **CAI_PlayerAlly** : `CAI_BaseActor` · `game/server/ai_playerally.cpp` · C# `AI_PlayerAlly` ([Game.Server/AI_PlayerAlly.cs](Game.Server/AI_PlayerAlly.cs))
   - KeyValues
     - [ ] `GameEndAlly`
   - Inputs
@@ -15740,13 +15741,13 @@ Datadesc and methods that the entities above inherit.
     - [ ] `ComputeHitboxSurroundingBox`
     - [ ] `CopyAnimationDataFrom`
     - [ ] `DisableServerIK`
-    - [ ] `DispatchAnimEvents`
+    - [x] `DispatchAnimEvents`
     - [ ] `Dissolve`
     - [x] `DoMuzzleFlash`
     - [ ] `DrawDebugTextOverlays`
     - [ ] `DrawRawSkeleton`
     - [ ] `DrawServerHitboxes`
-    - [ ] `EdgeLimitPoseParameter`
+    - [x] `EdgeLimitPoseParameter`
     - [ ] `EnableServerIK`
     - [ ] `Extinguish`
     - [ ] `ExtractBbox`
@@ -15762,7 +15763,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetBodygroupCount`
     - [ ] `GetBodygroupName`
     - [x] `GetBoneCache`
-    - [ ] `GetBoneController`
+    - [x] `GetBoneController`
     - [ ] `GetBoneManipulator`
     - [ ] `GetBonePosition`
     - [ ] `GetBoneScale`
@@ -15772,8 +15773,8 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetExitNode`
     - [ ] `GetExitVelocity`
     - [ ] `GetEyeballs`
-    - [ ] `GetFlexControllerName`
-    - [ ] `GetFlexControllerType`
+    - [x] `GetFlexControllerName`
+    - [x] `GetFlexControllerType`
     - [ ] `GetFlexDescFacs`
     - [ ] `GetFlexManipulator`
     - [ ] `GetGroundSpeedVelocity`
@@ -15792,7 +15793,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetMovementFrame`
     - [ ] `GetNumBodyGroups`
     - [ ] `GetNumBones`
-    - [ ] `GetNumFlexControllers`
+    - [x] `GetNumFlexControllers`
     - [ ] `GetPhysBoneNumber`
     - [ ] `GetPhysicsBone`
     - [x] `GetPoseParameter`
@@ -15801,14 +15802,14 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetSequenceActivityName`
     - [x] `GetSequenceCycleRate`
     - [x] `GetSequenceGroundSpeed`
-    - [ ] `GetSequenceKeyValues`
+    - [x] `GetSequenceKeyValues`
     - [ ] `GetSequenceLinearMotion`
     - [x] `GetSequenceMoveDist`
     - [ ] `GetSequenceMoveYaw`
     - [ ] `GetSequenceMovement`
     - [ ] `GetSequenceName`
     - [ ] `GetSequenceVelocity`
-    - [ ] `GetSkeleton`
+    - [x] `GetSkeleton`
     - [ ] `GetStepAngles`
     - [ ] `GetStepOrigin`
     - [ ] `GetVelocity`
@@ -15821,12 +15822,12 @@ Datadesc and methods that the entities above inherit.
     - [ ] `IgniteHitboxFireScale`
     - [ ] `IgniteLifetime`
     - [ ] `IgniteNumHitboxFires`
-    - [ ] `InitBoneControllers`
+    - [x] `InitBoneControllers`
     - [ ] `InitStepHeightAdjust`
     - [x] `InvalidateBoneCache`
     - [x] `InvalidateBoneCacheIfOlderThan`
     - [ ] `IsActivityFinished`
-    - [ ] `IsRagdoll`
+    - [x] `IsRagdoll`
     - [ ] `IsSequenceLooping`
     - [ ] `IsValidSequence`
     - [x] `LockStudioHdr`
@@ -15846,20 +15847,20 @@ Datadesc and methods that the entities above inherit.
     - [ ] `RefreshCollisionBounds`
     - [ ] `RegisterPrivateActivity`
     - [ ] `ReportMissingActivity`
-    - [ ] `ResetActivityIndexes`
+    - [x] `ResetActivityIndexes`
     - [ ] `ResetClientsideFrame`
-    - [ ] `ResetEventIndexes`
+    - [x] `ResetEventIndexes`
     - [ ] `ResetPoseParameters`
     - [x] `ResetSequence`
     - [x] `ResetSequenceInfo`
     - [ ] `Restore`
     - [ ] `Scorch`
-    - [ ] `SelectHeaviestSequence`
+    - [x] `SelectHeaviestSequence`
     - [x] `SelectWeightedSequence`
     - [x] `SequenceDuration`
     - [ ] `SetAnimStateRenderAngles`
     - [x] `SetBodygroup`
-    - [ ] `SetBoneController`
+    - [x] `SetBoneController`
     - [ ] `SetBoneManipulator`
     - [ ] `SetFadeDistance`
     - [ ] `SetFlexManipulator`
@@ -15906,7 +15907,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `GetLayerDuration`
     - [x] `GetLayerSequence`
     - [x] `GetLayerWeight`
-    - [ ] `GetSkeleton`
+    - [x] `GetSkeleton`
     - [x] `HasActiveLayer`
     - [x] `IsPlayingGesture`
     - [x] `IsValidLayer`
@@ -15921,7 +15922,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `SetLayerCycle`
     - [x] `SetLayerDuration`
     - [x] `SetLayerLooping`
-    - [ ] `SetLayerNoRestore`
+    - [x] `SetLayerNoRestore`
     - [x] `SetLayerPlaybackRate`
     - [x] `SetLayerPriority`
     - [x] `SetLayerWeight`
@@ -15939,7 +15940,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `AddClassRelationship`
     - [ ] `AddEntityRelationship`
     - [ ] `AddPlayerItem`
-    - [ ] `AllocateDefaultRelationships`
+    - [x] `AllocateDefaultRelationships`
     - [ ] `ApplyStressDamage`
     - [ ] `BecomeRagdoll`
     - [ ] `BecomeRagdollBoogie`
@@ -15962,13 +15963,13 @@ Datadesc and methods that the entities above inherit.
     - [ ] `Event_Dying`
     - [ ] `Event_Gibbed`
     - [ ] `Event_Killed`
-    - [ ] `ExitVehicle`
-    - [ ] `EyeDirection2D`
+    - [x] `ExitVehicle`
+    - [x] `EyeDirection2D`
     - [x] `EyeDirection3D`
     - [ ] `FInAimCone`
-    - [ ] `FInViewCone`
+    - [x] `FInViewCone`
     - [ ] `FVisible`
-    - [ ] `FindEntityRelationship`
+    - [x] `FindEntityRelationship`
     - [ ] `FindHealthItem`
     - [ ] `FindMissTarget`
     - [ ] `FixupBurningServerRagdoll`
@@ -15977,7 +15978,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `GetAmmoCount`
     - [x] `GetAttackSpread`
     - [ ] `GetDeathActivity`
-    - [ ] `GetDefaultRelationshipDisposition`
+    - [x] `GetDefaultRelationshipDisposition`
     - [ ] `GetFogObscuredRatio`
     - [ ] `GetInteractionID`
     - [ ] `GetLastKnownArea`
@@ -15985,26 +15986,26 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetSpreadBias`
     - [ ] `GetTimeSinceLastInjury`
     - [ ] `GetVehicle`
-    - [ ] `GetVehicleEntity`
+    - [x] `GetVehicleEntity`
     - [ ] `GiveAmmo`
     - [ ] `HandleInteraction`
     - [ ] `HasAlienGibs`
     - [ ] `HasEverBeenInjured`
     - [ ] `HasHumanGibs`
-    - [ ] `HeadDirection2D`
+    - [x] `HeadDirection2D`
     - [x] `HeadDirection3D`
-    - [ ] `IRelationPriority`
-    - [ ] `IRelationType`
+    - [x] `IRelationPriority`
+    - [x] `IRelationType`
     - [ ] `InitInteractionSystem`
     - [ ] `IsAbleToSee`
     - [ ] `IsAreaTraversable`
     - [ ] `IsHiddenByFog`
-    - [ ] `IsInAVehicle`
+    - [x] `IsInAVehicle`
     - [ ] `IsInFieldOfView`
     - [ ] `IsLineOfSightClear`
     - [ ] `IsLookingTowards`
     - [ ] `MyCombatCharacterPointer`
-    - [ ] `NPC_TranslateActivity`
+    - [x] `NPC_TranslateActivity`
     - [ ] `NotifyFriendsOfDamage`
     - [ ] `OnChangeActiveWeapon`
     - [ ] `OnFriendDamaged`
@@ -16022,7 +16023,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `RemoveAllAmmo`
     - [ ] `RemoveAllWeapons`
     - [x] `RemoveAmmo`
-    - [ ] `RemoveEntityRelationship`
+    - [x] `RemoveEntityRelationship`
     - [ ] `RemovePlayerItem`
     - [ ] `ResetVisibilityCache`
     - [ ] `Restore`
@@ -16030,7 +16031,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `SetAmmo`
     - [ ] `SetAmmoCount`
     - [ ] `SetBloodColor`
-    - [ ] `SetDefaultRelationship`
+    - [x] `SetDefaultRelationship`
     - [ ] `SetLightingOriginRelative`
     - [ ] `SetTransmit`
     - [ ] `ShouldGib`
@@ -16052,17 +16053,17 @@ Datadesc and methods that the entities above inherit.
     - [ ] `Weapon_Equip`
     - [ ] `Weapon_EquipAmmoOnly`
     - [ ] `Weapon_FindUsable`
-    - [ ] `Weapon_FrameUpdate`
+    - [x] `Weapon_FrameUpdate`
     - [ ] `Weapon_GetSlot`
     - [ ] `Weapon_GetWpnForAmmo`
     - [ ] `Weapon_HandleAnimEvent`
     - [ ] `Weapon_IsOnGround`
     - [x] `Weapon_OwnsThisType`
-    - [ ] `Weapon_SetActivity`
+    - [x] `Weapon_SetActivity`
     - [x] `Weapon_ShootPosition`
     - [ ] `Weapon_SlotOccupied`
     - [x] `Weapon_Switch`
-    - [ ] `Weapon_TranslateActivity`
+    - [x] `Weapon_TranslateActivity`
 - [ ] **CBaseCombatWeapon** : `CBaseAnimating` · `game/shared/basecombatweapon_shared.cpp` · C# `BaseCombatWeapon` ([Game.Server/BaseCombatWeapon.cs](Game.Server/BaseCombatWeapon.cs))
   - [x] Networked (SendTable for `CBaseCombatWeapon`)
   - Inputs
@@ -16098,7 +16099,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `CanLower`
     - [x] `CanPerformSecondaryAttack`
     - [x] `CanReload`
-    - [ ] `CapabilitiesGet`
+    - [x] `CapabilitiesGet`
     - [x] `CheckReload`
     - [ ] `CheckRespawn`
     - [x] `Clip1`
@@ -16184,7 +16185,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `IsMeleeWeapon`
     - [ ] `IsPredicted`
     - [x] `IsViewModelSequenceFinished`
-    - [ ] `IsWeapon`
+    - [x] `IsWeapon`
     - [x] `IsWeaponVisible`
     - [ ] `IsWeaponZoomed`
     - [x] `ItemBusyFrame`
@@ -16194,7 +16195,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `Kill`
     - [ ] `Lock`
     - [ ] `Lower`
-    - [ ] `Lua_GetLuaClass`
+    - [x] `Lua_GetLuaClass`
     - [x] `MaintainIdealActivity`
     - [ ] `MakeTracer`
     - [ ] `MarkAsDropped`
@@ -16219,7 +16220,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `SecondaryAttack`
     - [x] `SendViewModelAnim`
     - [x] `SendWeaponAnim`
-    - [x] `SetActivity`
+    - [ ] `SetActivity`
     - [ ] `SetDeploySpeed`
     - [ ] `SetHoldType`
     - [x] `SetIdealActivity`
@@ -16282,7 +16283,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `waterlevel`
     - [x] `gravity`
     - [x] `friction`
-    - [ ] `ltime`
+    - [x] `ltime`
     - [x] `velocity`
     - [x] `texframeindex`
     - [x] `spawnflags`
@@ -16333,7 +16334,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `SUB_FadeOut`
     - [ ] `SUB_Vanish`
   - Methods
-    - [ ] `AI_GetClosestPlayer`
+    - [x] `AI_GetClosestPlayer`
     - [x] `AcceptInput`
     - [x] `Activate`
     - [ ] `AddContext`
@@ -16344,7 +16345,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `AddPoints`
     - [ ] `AddPointsToTeam`
     - [ ] `AddStepDiscontinuity`
-    - [ ] `AddTimedOverlay`
+    - [x] `AddTimedOverlay`
     - [ ] `AdjustDamageDirection`
     - [ ] `AppendContextToCriteria`
     - [x] `ApplyAbsVelocityImpulse`
@@ -16352,14 +16353,14 @@ Datadesc and methods that the entities above inherit.
     - [x] `ApplyLocalVelocityImpulse`
     - [ ] `AttachObjectToMotionController`
     - [x] `Blocked`
-    - [ ] `BlocksLOS`
+    - [x] `BlocksLOS`
     - [ ] `BloodColor`
     - [x] `BodyTarget`
     - [x] `CalcAbsolutePosition`
     - [ ] `CalcAbsoluteVelocity`
     - [ ] `CanBeHitByMeleeAttack`
-    - [ ] `CanBeSeenBy`
-    - [ ] `CanStandOn`
+    - [x] `CanBeSeenBy`
+    - [x] `CanStandOn`
     - [x] `ChangeTeam`
     - [x] `CheckHasGamePhysicsSimulation`
     - [x] `CheckHasThinkFunction`
@@ -16375,7 +16376,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `CollisionRulesChanged`
     - [ ] `ComputeAbsDirection`
     - [x] `ComputeAbsPosition`
-    - [ ] `ComputeStepSimulationNetwork`
+    - [x] `ComputeStepSimulationNetwork`
     - [ ] `ComputeTracerStartPosition`
     - [x] `ComputeWorldSpaceSurroundingBox`
     - [ ] `ContextExpired`
@@ -16453,7 +16454,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetContextValue`
     - [ ] `GetCreationTime`
     - [ ] `GetDamage`
-    - [ ] `GetDamageType`
+    - [x] `GetDamageType`
     - [ ] `GetDataObject`
     - [x] `GetDebugName`
     - [ ] `GetDelay`
@@ -16461,7 +16462,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetEntitySkybox`
     - [x] `GetFirstThinkTick`
     - [ ] `GetFollowedEntity`
-    - [ ] `GetGroundChangeTime`
+    - [x] `GetGroundChangeTime`
     - [x] `GetGroundEntity`
     - [ ] `GetGroundVelocityToApply`
     - [x] `GetIndexForThinkContext`
@@ -16469,10 +16470,10 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetKeyValue`
     - [x] `GetLastThink`
     - [x] `GetLastThinkTick`
-    - [ ] `GetLuaEntity`
+    - [x] `GetLuaEntity`
     - [ ] `GetLuaEntityType`
     - [ ] `GetLuaScriptName`
-    - [ ] `GetLuaTable`
+    - [x] `GetLuaTable`
     - [ ] `GetLuaVector`
     - [ ] `GetMaterialOverride`
     - [ ] `GetMaterialType`
@@ -16505,14 +16506,14 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetTracerAttachment`
     - [ ] `GetTracerType`
     - [ ] `GetTransmitState`
-    - [ ] `GetVectors`
+    - [x] `GetVectors`
     - [x] `GetVelocity`
     - [ ] `GetViewOffset`
     - [x] `GetWaterType`
     - [ ] `HandleShotImpactingGlass`
     - [ ] `HandleShotImpactingWater`
     - [x] `HasDataObjectType`
-    - [ ] `HasLuaTable`
+    - [x] `HasLuaTable`
     - [ ] `HasNPCsOnIt`
     - [ ] `HasPhysicsAttacker`
     - [ ] `HasTarget`
@@ -16550,28 +16551,28 @@ Datadesc and methods that the entities above inherit.
     - [x] `IsPrecacheAllowed`
     - [x] `IsPredicted`
     - [x] `IsSimulatingOnAlternateTicks`
-    - [ ] `IsStandable`
+    - [x] `IsStandable`
     - [x] `IsTemplate`
     - [ ] `IsTriggered`
-    - [ ] `IsVehicle`
+    - [x] `IsVehicle`
     - [x] `IsViewable`
-    - [ ] `IsWeapon`
+    - [x] `IsWeapon`
     - [ ] `IsWearable`
     - [x] `KeyValue`
     - [ ] `LoadLua`
     - [ ] `LocalEyeAngles`
     - [x] `LookupSoundLevel`
-    - [ ] `Lua_GetLuaClass`
+    - [x] `Lua_GetLuaClass`
     - [ ] `Lua_OnEntityInitialized`
     - [x] `MakeDormant`
     - [ ] `MakeTracer`
     - [x] `ModifyEmitSoundParams`
     - [ ] `ModifyFireBulletsDamage`
     - [ ] `ModifyOrAppendCriteria`
-    - [ ] `MoveDone`
+    - [x] `MoveDone`
     - [ ] `MyCombatCharacterPointer`
     - [ ] `MyCombatWeaponPointer`
-    - [ ] `MyNPCPointer`
+    - [x] `MyNPCPointer`
     - [ ] `MyNextBotPointer`
     - [x] `NameMatchesComplex`
     - [ ] `NotifySystemEvent`
@@ -16589,15 +16590,15 @@ Datadesc and methods that the entities above inherit.
     - [x] `PassesDamageFilter`
     - [ ] `PerformCustomPhysics`
     - [ ] `PerformFlyCollisionResolution`
-    - [x] `PerformPush`
+    - [ ] `PerformPush`
     - [ ] `PhysicsAddGravityMove`
-    - [ ] `PhysicsAddHalfGravity`
+    - [x] `PhysicsAddHalfGravity`
     - [x] `PhysicsCheckForEntityUntouch`
     - [ ] `PhysicsCheckSweep`
-    - [ ] `PhysicsCheckVelocity`
-    - [ ] `PhysicsCheckWater`
+    - [x] `PhysicsCheckVelocity`
+    - [x] `PhysicsCheckWater`
     - [ ] `PhysicsCheckWaterTransition`
-    - [ ] `PhysicsClipVelocity`
+    - [x] `PhysicsClipVelocity`
     - [x] `PhysicsCustom`
     - [x] `PhysicsDispatchThink`
     - [x] `PhysicsImpact`
@@ -16609,8 +16610,8 @@ Datadesc and methods that the entities above inherit.
     - [x] `PhysicsNotifyOtherOfGroundRemoval`
     - [x] `PhysicsNotifyOtherOfUntouch`
     - [ ] `PhysicsPushEntity`
-    - [ ] `PhysicsPushMove`
-    - [ ] `PhysicsPushRotate`
+    - [x] `PhysicsPushMove`
+    - [x] `PhysicsPushRotate`
     - [x] `PhysicsPusher`
     - [ ] `PhysicsRelinkChildren`
     - [x] `PhysicsRemoveGround`
@@ -16621,18 +16622,18 @@ Datadesc and methods that the entities above inherit.
     - [x] `PhysicsRunSpecificThink`
     - [x] `PhysicsRunThink`
     - [x] `PhysicsSimulate`
-    - [ ] `PhysicsSolidMaskForEntity`
+    - [x] `PhysicsSolidMaskForEntity`
     - [ ] `PhysicsSplash`
     - [x] `PhysicsStartGroundContact`
     - [x] `PhysicsStartTouch`
     - [x] `PhysicsStep`
-    - [ ] `PhysicsStepRecheckGround`
+    - [x] `PhysicsStepRecheckGround`
     - [x] `PhysicsStepRunTimestep`
     - [ ] `PhysicsTestEntityPosition`
     - [x] `PhysicsToss`
     - [x] `PhysicsTouch`
     - [x] `PhysicsTouchTriggers`
-    - [ ] `PhysicsTryMove`
+    - [x] `PhysicsTryMove`
     - [x] `PostClientActive`
     - [x] `Precache`
     - [x] `PrecacheModel`
@@ -16641,9 +16642,9 @@ Datadesc and methods that the entities above inherit.
     - [x] `PrecacheScriptSound`
     - [x] `PrecacheSound`
     - [ ] `PrecacheSoundHelper`
-    - [ ] `PrefetchScriptSound`
+    - [x] `PrefetchScriptSound`
     - [x] `PrefetchSound`
-    - [ ] `PushEntity`
+    - [x] `PushEntity`
     - [x] `ReadKeyField`
     - [x] `RecalcHasPlayerChildBit`
     - [x] `RegisterThinkContext`
@@ -16662,7 +16663,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `Restore`
     - [ ] `RestoreDataDescBlock`
     - [ ] `SUB_AllowedToFade`
-    - [ ] `SUB_CallUseToggle`
+    - [x] `SUB_CallUseToggle`
     - [ ] `SUB_PerformFadeOut`
     - [ ] `SUB_StartFadeOut`
     - [ ] `SUB_StartFadeOutInstant`
@@ -16676,17 +16677,17 @@ Datadesc and methods that the entities above inherit.
     - [x] `SetAbsOrigin`
     - [x] `SetAbsVelocity`
     - [x] `SetAllowPrecache`
-    - [ ] `SetBlocksLOS`
+    - [x] `SetBlocksLOS`
     - [x] `SetCheckUntouch`
     - [x] `SetClassname`
     - [x] `SetCollisionBounds`
     - [x] `SetCollisionBoundsFromModel`
-    - [ ] `SetCollisionGroup`
+    - [x] `SetCollisionGroup`
     - [ ] `SetDamage`
     - [ ] `SetEffectEntity`
     - [x] `SetEffects`
     - [ ] `SetEntity`
-    - [ ] `SetGroundChangeTime`
+    - [x] `SetGroundChangeTime`
     - [x] `SetGroundEntity`
     - [x] `SetLastThink`
     - [x] `SetLocalAngles`
@@ -16694,12 +16695,12 @@ Datadesc and methods that the entities above inherit.
     - [x] `SetLocalOrigin`
     - [ ] `SetLocalTransform`
     - [x] `SetLocalVelocity`
-    - [ ] `SetLuaTable`
+    - [x] `SetLuaTable`
     - [ ] `SetMaterialOverride`
     - [x] `SetModel`
     - [ ] `SetModelIndex`
     - [ ] `SetModelIndexOverride`
-    - [ ] `SetMoveDoneTime`
+    - [x] `SetMoveDoneTime`
     - [x] `SetMoveType`
     - [x] `SetNextThink`
     - [x] `SetOwnerEntity`
@@ -16730,9 +16731,9 @@ Datadesc and methods that the entities above inherit.
     - [ ] `ShouldDrawWaterImpacts`
     - [ ] `ShouldForceTransmitsForTeam`
     - [x] `ShouldSavePhysics`
-    - [ ] `ShouldToggle`
+    - [x] `ShouldToggle`
     - [x] `ShouldTransmit`
-    - [ ] `SimulateAngles`
+    - [x] `SimulateAngles`
     - [x] `Spawn`
     - [ ] `SpawnedViaLua`
     - [ ] `Splash`
@@ -16766,7 +16767,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `UpdateBaseVelocity`
     - [ ] `UpdateBeforeRemove`
     - [x] `UpdateOnRemove`
-    - [ ] `UpdatePhysicsShadowToCurrentPosition`
+    - [x] `UpdatePhysicsShadowToCurrentPosition`
     - [ ] `UpdateShotStatistics`
     - [x] `UpdateTransmitState`
     - [x] `UpdateWaterState`
@@ -16778,7 +16779,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `VPhysicsDestroyObject`
     - [ ] `VPhysicsFriction`
     - [ ] `VPhysicsGetElement`
-    - [ ] `VPhysicsGetObjectList`
+    - [x] `VPhysicsGetObjectList`
     - [x] `VPhysicsInitNormal`
     - [x] `VPhysicsInitSetup`
     - [x] `VPhysicsInitShadow`
@@ -16804,54 +16805,54 @@ Datadesc and methods that the entities above inherit.
 - [ ] **CBaseFlex** : `CBaseAnimatingOverlay` · `game/server/baseflex.cpp` · C# `BaseFlex` ([Game.Server/BaseFlex.cs](Game.Server/BaseFlex.cs))
   - [x] Networked (SendTable for `CBaseFlex`)
   - Methods
-    - [ ] `AddFlexAnimation`
-    - [ ] `AddFlexSetting`
-    - [ ] `AddSceneEvent`
-    - [ ] `CheckSceneEvent`
-    - [ ] `CheckSceneEventCompletion`
-    - [ ] `ClearSceneEvent`
-    - [ ] `ClearSceneEvents`
-    - [ ] `DoBodyLean`
-    - [ ] `EnsureTranslations`
-    - [ ] `EnterSceneSequence`
+    - [x] `AddFlexAnimation`
+    - [x] `AddFlexSetting`
+    - [x] `AddSceneEvent`
+    - [x] `CheckSceneEvent`
+    - [x] `CheckSceneEventCompletion`
+    - [x] `ClearSceneEvent`
+    - [x] `ClearSceneEvents`
+    - [x] `DoBodyLean`
+    - [x] `EnsureTranslations`
+    - [x] `EnterSceneSequence`
     - [ ] `ExitSceneSequence`
-    - [ ] `FindFlexController`
-    - [ ] `FindNamedSetting`
-    - [ ] `FindSceneFile`
-    - [ ] `FlexControllerLocalToGlobal`
+    - [x] `FindFlexController`
+    - [x] `FindNamedSetting`
+    - [x] `FindSceneFile`
+    - [x] `FlexControllerLocalToGlobal`
     - [ ] `FlexSettingLessFunc`
-    - [ ] `GetFlexWeight`
-    - [ ] `GetScenePriority`
-    - [ ] `GetSpecialDSP`
-    - [ ] `HandleStartGestureSceneEvent`
-    - [ ] `HandleStartSequenceSceneEvent`
-    - [ ] `IsRunningSceneMoveToEvent`
-    - [ ] `IsSuppressedFlexAnimation`
-    - [ ] `PermitResponse`
+    - [x] `GetFlexWeight`
+    - [x] `GetScenePriority`
+    - [x] `GetSpecialDSP`
+    - [x] `HandleStartGestureSceneEvent`
+    - [x] `HandleStartSequenceSceneEvent`
+    - [x] `IsRunningSceneMoveToEvent`
+    - [x] `IsSuppressedFlexAnimation`
+    - [x] `PermitResponse`
     - [ ] `PlayAutoGeneratedSoundScene`
     - [ ] `PlayScene`
-    - [ ] `ProcessFacingSceneEvent`
-    - [ ] `ProcessFlexAnimationSceneEvent`
-    - [ ] `ProcessFlexSettingSceneEvent`
-    - [ ] `ProcessGestureSceneEvent`
-    - [ ] `ProcessLookAtSceneEvent`
+    - [x] `ProcessFacingSceneEvent`
+    - [x] `ProcessFlexAnimationSceneEvent`
+    - [x] `ProcessFlexSettingSceneEvent`
+    - [x] `ProcessGestureSceneEvent`
+    - [x] `ProcessLookAtSceneEvent`
     - [ ] `ProcessMoveToSceneEvent`
-    - [ ] `ProcessSceneEvent`
-    - [ ] `ProcessSceneEvents`
-    - [ ] `ProcessSequenceSceneEvent`
-    - [ ] `RemoveChoreoScene`
-    - [ ] `RemoveSceneEvent`
-    - [ ] `RequestStartGestureSceneEvent`
-    - [ ] `RequestStartSequenceSceneEvent`
-    - [ ] `SetFlexWeight`
-    - [ ] `SetModel`
-    - [ ] `SetPermitResponse`
-    - [ ] `SetViewtarget`
-    - [ ] `StartChoreoScene`
-    - [ ] `StartFacingSceneEvent`
-    - [ ] `StartMoveToSceneEvent`
-    - [ ] `StartSceneEvent`
-    - [ ] `Teleport`
+    - [x] `ProcessSceneEvent`
+    - [x] `ProcessSceneEvents`
+    - [x] `ProcessSequenceSceneEvent`
+    - [x] `RemoveChoreoScene`
+    - [x] `RemoveSceneEvent`
+    - [x] `RequestStartGestureSceneEvent`
+    - [x] `RequestStartSequenceSceneEvent`
+    - [x] `SetFlexWeight`
+    - [x] `SetModel`
+    - [x] `SetPermitResponse`
+    - [x] `SetViewtarget`
+    - [x] `StartChoreoScene`
+    - [x] `StartFacingSceneEvent`
+    - [x] `StartMoveToSceneEvent`
+    - [x] `StartSceneEvent`
+    - [x] `Teleport`
 - [ ] **CBaseGrenade** : `CBaseAnimating` · `game/shared/basegrenade_shared.cpp` · C# `BaseGrenade` ([Game.Shared/BaseGrenade.cs](Game.Shared/BaseGrenade.cs))
   - [x] Networked (SendTable for `CBaseGrenade`)
   - Think/Touch/Use functions
@@ -17178,7 +17179,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `Classify`
     - [x] `ClearPlayerSimulationList`
     - [x] `ClearUseEntity`
-    - [ ] `ClearZoomOwner`
+    - [x] `ClearZoomOwner`
     - [ ] `ClientCommand`
     - [x] `CommitSuicide`
     - [ ] `CreateCorpse`
@@ -17198,7 +17199,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `Duck`
     - [ ] `DumpPerfToRecipient`
     - [ ] `EnableButtons`
-    - [ ] `EnableControl`
+    - [x] `EnableControl`
     - [x] `EntSelectSpawnPoint`
     - [x] `EquipSuit`
     - [x] `Event_Dying`
@@ -17231,7 +17232,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetExpresser`
     - [x] `GetFOV`
     - [x] `GetFOVDistanceAdjustFactor`
-    - [ ] `GetFOVDistanceAdjustFactorForNetworking`
+    - [x] `GetFOVDistanceAdjustFactorForNetworking`
     - [x] `GetFOVForNetworking`
     - [ ] `GetGroundVPhysics`
     - [x] `GetHeldObjectMass`
@@ -17253,7 +17254,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `GetPreviouslyPredictedOrigin`
     - [ ] `GetPunchAngle`
     - [ ] `GetReplayEntity`
-    - [ ] `GetSceneSoundToken`
+    - [x] `GetSceneSoundToken`
     - [x] `GetSlowWalkSpeed`
     - [x] `GetSmoothedVelocity`
     - [x] `GetSprintSpeed`
@@ -17383,7 +17384,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `SetMouseWheel`
     - [ ] `SetObserverMode`
     - [ ] `SetObserverTarget`
-    - [ ] `SetPhysicsFlag`
+    - [x] `SetPhysicsFlag`
     - [x] `SetPlayerName`
     - [x] `SetPlayerUnderwater`
     - [x] `SetPreviouslyPredictedOrigin`
@@ -17395,11 +17396,11 @@ Datadesc and methods that the entities above inherit.
     - [ ] `SetSwimSoundTime`
     - [ ] `SetUnDuckSpeed`
     - [ ] `SetVCollisionState`
-    - [ ] `SetViewEntity`
+    - [x] `SetViewEntity`
     - [ ] `SetWalkSpeed`
     - [ ] `SetWaterJumpTime`
     - [ ] `SetupVPhysicsShadow`
-    - [ ] `SetupVisibility`
+    - [x] `SetupVisibility`
     - [x] `SharedSpawn`
     - [ ] `ShouldAnnounceAchievement`
     - [ ] `ShouldFadeOnDeath`
@@ -17447,7 +17448,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `VelocityPunch`
     - [x] `ViewPunch`
     - [x] `ViewPunchReset`
-    - [ ] `WantsLagCompensationOnEntity`
+    - [x] `WantsLagCompensationOnEntity`
     - [x] `WaterMove`
     - [ ] `Weapon_CanUse`
     - [ ] `Weapon_Drop`
@@ -17703,12 +17704,12 @@ Datadesc and methods that the entities above inherit.
     - [ ] `Spawn`
     - [ ] `Think`
     - [ ] `Use`
-- [ ] **CFuncAreaPortalBase** : `CBaseEntity` · `game/server/func_areaportalbase.cpp` · C#: *none*
+- [x] **CFuncAreaPortalBase** : `CBaseEntity` · `game/server/func_areaportalbase.cpp` · C# `FuncAreaPortalBase` ([Game.Server/FuncAreaPortalBase.cs](Game.Server/FuncAreaPortalBase.cs))
   - KeyValues
-    - [ ] `PortalVersion`
+    - [x] `PortalVersion`
   - Methods
-    - [ ] `ObjectCaps`
-    - [ ] `UpdateVisibility`
+    - [x] `ObjectCaps`
+    - [x] `UpdateVisibility`
 - [ ] **CFuncTank** : `CBaseEntity` · `game/server/hl2/func_tank.cpp` · C#: *none*
   - KeyValues
     - [ ] `yawrate`
@@ -17916,7 +17917,7 @@ Datadesc and methods that the entities above inherit.
     - [ ] `State_Transition`
     - [x] `StopObserverMode`
     - [x] `UpdateOnRemove`
-    - [ ] `WantsLagCompensationOnEntity`
+    - [x] `WantsLagCompensationOnEntity`
     - [x] `Weapon_Drop`
     - [x] `Weapon_Switch`
 - [ ] **CHL2_Player** : `CBasePlayer` · `game/server/hl2/hl2_player.cpp` · C# `HL2_Player` ([Game.Server/HL2/HL2_Player.cs](Game.Server/HL2/HL2_Player.cs))
@@ -18672,14 +18673,20 @@ Datadesc and methods that the entities above inherit.
 
 ```
 [x] [L - K I - T M] AmbientGeneric (aka ambient_generic)
+[x] [L - - - - - M] SceneManager (aka scene_manager)
+[x] [L - K I - - M] AreaPortal (aka func_areaportal)
+[x] [L N K I - - M] FuncAreaPortalWindow (aka func_areaportalwindow)
+[x] [L - K I O - M] LogicRelay (aka logic_relay)
 [x] [L N - I - - M] EnvTonemapController (aka env_tonemap_controller)
 [x] [L - K I O - M] BaseFilter (aka filter_base)
+[x] [L - - I O - M] Credits (aka env_credits)
 [x] [L - K - O T M] TriggerProximity (aka trigger_proximity)
 [x] [L - K - - - M] TriggerSoundscape (aka trigger_soundscape)
 [x] [L - - - - - M] FrictionModifier (aka func_friction)
 [x] [L - - - O T M] TriggerMultiple (aka trigger_multiple)
 [x] [L - K - - - M] TriggerSave (aka trigger_autosave)
 [x] [L - K I - - M] TriggerToggleSave (aka trigger_togglesave)
+[x] [L - K - - - M] FlextalkActor (aka cycler_actor)
 [x] [L - K - - - M] EnvSoundscapeProxy (aka env_soundscape_proxy)
 [x] [L - - - - - M] EnvSoundscapeTriggerable (aka env_soundscape_triggerable)
 [x] [L - K - - - M] FilterDamageType (aka filter_damage_type)
@@ -18691,23 +18698,34 @@ Datadesc and methods that the entities above inherit.
 [x] [L - K - - - M] FilterMassGreater (aka filter_activator_mass_greater)
 [x] [L - K - - - M] FilterName (aka filter_activator_name)
 [x] [L - K - - - M] FilterTeam (aka filter_activator_team)
+[x] [- - K - - - M] FuncAreaPortalBase
 [x] [L - - - - - M] ReservePlayerSpot (aka reserved_spot)
 [x] [L - - - - T M] TriggerGravity (aka trigger_gravity)
 [x] [L N - - - - -] FuncReflectiveGlass (aka func_reflective_glass)
 [x] [L N - - - - -] GMODGameRulesProxy (aka gmod_gamerules)
 [x] [L N - - - - -] HL2MPGameRulesProxy (aka hl2mp_gamerules)
 [x] [L - - - - - M] TriggerOnce (aka trigger_once)
+[ ] [L - K I O - _] PathTrack (aka path_track)
+[ ] [L N K I - T _] ScriptIntro (aka script_intro)
 [ ] [L N K I O - _] BaseTrigger (aka trigger)
 [ ] [L - K I O T _] TriggerHurt (aka trigger_hurt)
+[ ] [L N K _ O - _] SceneEntity (aka logic_choreographed_scene, scripted_scene)
 [ ] [L - K - O - _] LogicAuto (aka logic_auto)
 [ ] [L - K I O T _] TriggerLook (aka trigger_look)
+[ ] [L N - - - - _] BaseFlex (aka funCBaseFlex)
 [ ] [L - - - - - _] PointEntity (aka info_landmark, info_player_combine, info_player_rebel, info_player_start, info_target_helicopter_crash, info_teleport_destination, logic_proximity)
 [ ] [L - - - - - _] SoundEnt (aka soundent)
+[ ] [L - - - - - _] NPC_GMan (aka npc_gman)
 [ ] [L N - - - - _] WeaponPhysGun (aka weapon_physgun)
+[ ] [L - K - - - _] GenericActor (aka generic_actor)
+[ ] [L N K _ _ T _] FuncRotating (aka func_rotating)
+[ ] [L - K I O - _] EnvFade (aka env_fade)
+[ ] [L - K I - - _] EnvZoom (aka env_zoom)
 [ ] [L N - - - - _] TriggerPlayerMovement (aka trigger_playermovement)
 [ ] [L - K I O _ _] TriggerImpact (aka trigger_impact)
-[ ] [L - - - - - _] NodeEnt (aka info_hint, info_node, info_node_air, info_node_air_hint, info_node_climb, info_node_hint)
 [ ] [- N - - - - _] BaseAnimatingOverlay
+[ ] [- - _ _ - - _] AI_BaseActor
+[ ] [L - - - - - _] NodeEnt (aka info_hint, info_node, info_node_air, info_node_air_hint, info_node_climb, info_node_hint)
 [ ] [L - _ - - - _] FuncNavObstruction (aka func_nav_avoidance_obstacle)
 [ ] [L - _ I O - _] EnvSoundscape (aka env_sound, env_soundscape)
 [ ] [L N - - - - _] AR2Explosion (aka ar2explosion)
@@ -18721,32 +18739,37 @@ Datadesc and methods that the entities above inherit.
 [ ] [- N - - - - _] HL2MP_Player
 [ ] [L - _ _ - - _] TriggerPush (aka trigger_push)
 [ ] [L N _ _ _ _ _] DynamicProp (aka asw_door, dod_control_point, dynamic_prop, env_portal_laser, npc_personality_core, npc_wheatley_boss, prop_button, prop_car_alarm, prop_car_glass, prop_dropper, prop_dynamic, prop_dynamic_glow, prop_dynamic_override, prop_floor_ball_button, prop_floor_button, prop_floor_cube_button, prop_health_cabinet, prop_indicator_panel, prop_laser_catcher, prop_laser_relay, prop_portal_stats_display, prop_testchamber_door, prop_tractor_beam, prop_under_button, prop_under_floor_button, prop_wall_projector, team_control_point)
+[ ] [L N _ _ O _ _] BaseEntity (aka func_proprrespawnzone)
 [ ] [- N - _ _ _ _] BaseCombatWeapon
 [ ] [- N - _ - - _] HL2_Player
+[ ] [L - _ _ O _ _] PointViewControl (aka point_viewcontrol)
 [ ] [L - _ - - - M] FilterMultiple (aka filter_multi)
+[ ] [L - - _ - - _] PointTeleport (aka point_teleport)
 [ ] [L N - - - - _] EnvDetailController (aka env_detail_controller)
 [ ] [L N _ - - - _] InfoOverlayAccessor (aka info_overlay_accessor)
+[ ] [_ - - - - - _] InfoTarget (aka info_particle_target, info_target)
 [ ] [L N - - - - _] Plasma (aka _plasma)
 [ ] [L N - - - - _] PrecipitationBlocker (aka func_precipitation_blocker)
 [ ] [L N - - - - _] SpotlightEnd (aka spotlight_end)
 [ ] [L N - - - - _] WeaponCitizenSuitcase (aka weapon_citizensuitcase)
 [ ] [L - - - - - _] FuncNavAvoid (aka func_nav_avoid)
 [ ] [L - - - - - _] FuncNavPrefer (aka func_nav_prefer)
-[ ] [L N _ _ O _ _] BaseEntity (aka func_proprrespawnzone)
+[ ] [L - _ _ - - _] FuncBrush (aka func_brush, func_simpleladder)
 [ ] [L N _ _ _ - _] FuncLadder (aka func_useableladder)
 [ ] [L N - _ - - _] PropScalable (aka prop_coreball, prop_scalable)
 [ ] [L N - - - - _] WeaponShotgun (aka weapon_shotgun)
 [ ] [L N - - - - _] BaseViewModel (aka viewmodel)
 [ ] [L N - - - - _] WeaponPhysCannon (aka weapon_physcannon)
+[ ] [- N - _ - - _] BasePlayer
 [ ] [L N - - - - _] FireTrail (aka env_fire_trail)
 [ ] [L N _ _ - - _] FleshEffectTarget (aka point_flesh_effect_target)
 [ ] [L N - - - - _] RocketTrail (aka env_rockettrail)
 [ ] [L N - - - - _] VortigauntEffectDispel (aka vort_effect_dispel)
 [ ] [L N - - - - _] WeaponCubemap (aka weapon_cubemap)
 [ ] [L N - - - - _] WeaponOldManHarpoon (aka weapon_oldmanharpoon)
-[ ] [- N - _ - - _] BasePlayer
 [ ] [L N - - - - _] WeaponHL2MPBase (aka weapon_hl2mp_base)
 [ ] [L N - - - - _] WeaponSMG1 (aka weapon_smg1)
+[ ] [- N _ _ _ _ _] AI_BaseNPC
 [ ] [L N - - - - _] BaseHL1MPCombatWeapon (aka basehl1mpcombatweapon)
 [ ] [L N _ _ - - _] EnvAmbientLight (aka env_ambient_light)
 [ ] [L N _ - - - _] InfoLightingRelative (aka info_lighting_relative)
@@ -18757,6 +18780,7 @@ Datadesc and methods that the entities above inherit.
 [ ] [L N - - - _ _] WaterBullet (aka waterbullet)
 [ ] [L N - - - - _] WeaponCitizenPackage (aka weapon_citizenpackage)
 [ ] [L - - - - - _] EnvLight (aka light_environment)
+[ ] [_ - _ _ _ - M] Message (aka env_message)
 [ ] [L N - - - - _] FireSmoke (aka _firesmoke)
 [ ] [L N - _ - - _] FuncMonitor (aka func_monitor)
 [ ] [L N - _ - - _] InfoTeleporterCountdown (aka info_teleporter_countdown)
@@ -18765,6 +18789,8 @@ Datadesc and methods that the entities above inherit.
 [ ] [L N _ - - - _] RotorWashEmitter (aka env_rotorwash_emitter)
 [ ] [L N - - - - _] WeaponCycler (aka cycler_weapon)
 [ ] [L N _ _ _ _ _] PhysicsProp (aka item_crate, physics_prop, prop_exploding_barrel, prop_flare, prop_physics, prop_physics_multiplayer, prop_physics_override, prop_weighted_cube)
+[ ] [- N _ _ _ - _] BaseAnimating
+[ ] [- N _ _ - - _] BaseCombatCharacter
 [ ] [L N - - - - _] WeaponPistol (aka weapon_pistol)
 [ ] [L N - - - - _] BaseHL1CombatWeapon (aka basehl1combatweapon)
 [ ] [L N _ - - _ _] Embers (aka env_embers)
@@ -18787,7 +18813,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [L N - - - - _] Weapon357 (aka weapon_357)
 [ ] [L - _ _ - _ _] Light (aka light, light_directional, light_glspot, light_spot)
 [ ] [L N _ _ - - _] SteamJet (aka env_steam, env_steamjet)
-[ ] [- N _ _ _ - _] BaseAnimating
 [ ] [L N - - - - _] BaseHL2MPCombatWeapon (aka basehl2mpcombatweapon)
 [ ] [L N - - - - _] FlexManipulate (aka manipulate_flex)
 [ ] [L N _ _ - - _] FuncConveyor (aka func_conveyor)
@@ -18802,9 +18827,7 @@ Datadesc and methods that the entities above inherit.
 [ ] [L N - - - - _] Fish (aka fish)
 [ ] [L N _ _ - - _] WaterLODControl (aka water_lod_control)
 [ ] [L N - - - - _] WeaponTripMine (aka weapon_tripmine)
-[ ] [L - _ _ - - _] EnvZoom (aka env_zoom)
 [ ] [L N _ _ - - _] CitadelEnergyCore (aka env_citadel_energy_core)
-[ ] [L N _ _ - - _] FuncAreaPortalWindow (aka func_areaportalwindow)
 [ ] [L N _ _ - - _] LightGlow (aka env_lightglow)
 [ ] [L N - - - - _] WeaponCrossbow_HL1 (aka weapon_crossbow_hl1)
 [ ] [L N - - - - _] WeaponCrowbar_HL1 (aka weapon_crowbar_hl1)
@@ -18816,11 +18839,11 @@ Datadesc and methods that the entities above inherit.
 [ ] [L N - - - - _] WeaponHgun (aka weapon_hornetgun)
 [ ] [L N _ _ - _ _] Sprite (aka env_glow, env_sprite, env_sprite_clientside)
 [ ] [L N _ _ - - _] VGuiScreen (aka vgui_screen, vgui_screen_team)
+[ ] [L - - - - _ _] AI_NetworkManager (aka ai_network)
 [ ] [L N - - - - _] BoneFollower (aka phys_bone_follower)
 [ ] [L N _ - - - _] DustTrail (aka env_dusttrail)
 [ ] [L N _ _ - - _] ShadowControl (aka shadow_control)
 [ ] [L N - - - - _] WeaponCrowbar (aka weapon_crowbar)
-[ ] [- N _ _ - - _] BaseCombatCharacter
 [ ] [L N - - - - _] BaseHLCombatWeapon (aka basehlcombatweapon)
 [ ] [L N _ _ - _ _] ColorCorrectionVolume (aka color_correction_volume)
 [ ] [L N - - - _ _] SENT_Point (aka sent_point)
@@ -18838,13 +18861,12 @@ Datadesc and methods that the entities above inherit.
 [ ] [- N - - - - _] HLMachineGun
 [ ] [L N - - - _ _] BaseGrenade (aka grenade)
 [ ] [L N _ _ _ - _] BeamSpotlight (aka beam_spotlight)
-[ ] [L - _ _ - - _] FuncBrush (aka func_brush, func_simpleladder)
 [ ] [L N _ - - - _] SpriteTrail (aka env_spritetrail)
 [ ] [L N - - - - _] WeaponFrag (aka weapon_frag)
 [ ] [L N - - - - _] WeaponGlock (aka weapon_glock_hl1)
 [ ] [L N - - - - _] WeaponMP5 (aka weapon_mp5_hl1)
+[ ] [L N - - - - _] GMOD_Player (aka player)
 [ ] [- - - - _ _ _] Item
-[ ] [L N _ _ - _ _] ScriptIntro (aka script_intro)
 [ ] [L N - - - - _] WeaponAlyxGun (aka weapon_alyxgun)
 [ ] [L - _ _ - - _] FuncNavPrerequisite (aka func_nav_prerequisite)
 [ ] [L N - - _ _ _] NPC_Barney (aka npc_barney)
@@ -18859,7 +18881,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [L N _ _ _ - _] PhysMagnet (aka phys_magnet)
 [ ] [L N _ _ - - _] PointWorldText (aka point_worldtext)
 [ ] [L N - - - - _] WeaponBugBait (aka weapon_bugbait)
-[ ] [L N - - - - _] GMOD_Player (aka player)
 [ ] [L N _ _ - _ _] Flare (aka env_flare)
 [ ] [L - _ _ - - _] FuncNavBlocker (aka func_nav_blocker)
 [ ] [L N _ _ - - _] RopeKeyframe (aka keyframe_rope, move_rope)
@@ -18872,11 +18893,9 @@ Datadesc and methods that the entities above inherit.
 [ ] [L N _ _ _ - _] PropJeepEpisodic (aka prop_vehicle_jeep, prop_vehicle_jeep_old)
 [ ] [L N _ _ - _ _] EnvProjectedTexture (aka env_projectedtexture)
 [ ] [L N _ _ - _ _] RagdollProp (aka physics_prop_ragdoll, prop_ragdoll)
-[ ] [L N - - - - _] BaseFlex (aka funCBaseFlex)
 [ ] [L - _ - - - _] SkyCamera (aka sky_camera)
 [ ] [L N - - - _ _] LuaNextBot (aka sent_nextbot)
 [ ] [L N - - - - _] WeaponCrossbow (aka weapon_crossbow)
-[ ] [L N _ _ _ _ _] FuncRotating (aka func_rotating)
 [ ] [L N _ _ - _ _] NPC_Portal_FloorTurret (aka npc_portal_turret_floor)
 [ ] [L N _ _ _ _ _] PhysBox (aka func_physbox)
 [ ] [L N _ _ _ - _] EnvHeadcrabCanister (aka env_headcrabcanister)
@@ -18897,7 +18916,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [L N - - - - _] WeaponSWEP (aka weapon_swep)
 [ ] [L N - - - _ _] SENT_AI (aka sent_ai)
 [ ] [L - _ _ _ - _] PointTemplate (aka point_template)
-[ ] [L N _ _ _ - _] SceneEntity (aka logic_choreographed_scene, scripted_scene)
 [ ] [- N _ _ _ - _] PropDoorRotating
 [ ] [L N _ _ _ _ _] FuncTrackTrain (aka func_tracktrain)
 [ ] [L N _ _ - - _] ParticleSystem (aka info_particle_system)
@@ -18911,9 +18929,9 @@ Datadesc and methods that the entities above inherit.
 [ ] [- N _ _ _ - _] BasePropDoor
 [ ] [L - _ _ _ _ _] Breakable (aka func_breakable)
 [ ] [- N _ _ - _ _] BaseHelicopter
+[ ] [_ - _ _ _ _ _] AI_ScriptedSequence (aka scripted_sequence)
 [ ] [L N _ _ - _ _] NPC_Strider (aka npc_strider)
 [ ] [- N _ _ _ _ _] BreakableProp
-[ ] [- N _ _ _ _ _] AI_BaseNPC
 [ ] [_ - _ _ _ - _] NPC_MetroPolice (aka npc_metropolice)
 [ ] [_ - _ _ - _ _] NPC_Hunter (aka npc_hunter)
 [ ] [_ - _ _ _ _ _] NPC_AttackHelicopter (aka npc_helicopter)
@@ -18927,7 +18945,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ _ _ - _] NPC_CombineDropship (aka npc_combinedropship)
 [ ] [_ - _ _ _ - _] NPC_CScanner (aka npc_cscanner)
 [ ] [_ - _ _ _ - _] ProtoSniper (aka npc_sniper, proto_sniper)
-[ ] [_ - _ _ _ _ _] AI_ScriptedSequence (aka scripted_sequence)
 [ ] [_ - - _ - _ _] FastZombie (aka npc_fastzombie, npc_fastzombie_torso)
 [ ] [- - _ _ - - _] AI_PlayerAlly
 [ ] [- - _ _ - _ _] BaseHeadcrab
@@ -18937,7 +18954,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [- - - _ - - _] AI_TrackPather
 [ ] [_ - - _ _ - -] FuncInstanceIoProxy (aka func_instance_io_proxy)
 [ ] [_ - _ _ _ _ _] AI_ScriptConditions (aka ai_script_conditions)
-[ ] [- - _ _ - - _] AI_BaseActor
 [ ] [- - - - - _ _] NPCSimpleTalker
 [ ] [_ - - _ _ - _] NPC_Dog (aka npc_dog)
 [ ] [_ - - - - - _] NextBotPlayer<CGMOD_Player> (aka gm_bot)
@@ -18955,7 +18971,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ _ _ _ _] BounceBomb (aka bounce_bomb, combine_bouncemine, combine_mine)
 [ ] [_ - - - - - _] NPC_Controller (aka monster_alien_controller)
 [ ] [_ - _ _ _ _ _] NPC_Launcher (aka npc_launcher)
-[ ] [_ - _ _ _ - _] PathTrack (aka path_track)
 [ ] [_ - _ _ _ - _] LogicCase (aka logic_case)
 [ ] [_ - _ _ - _ _] NPC_CombineCamera (aka npc_combine_camera)
 [ ] [_ - - - - _ _] NPC_Scientist (aka monster_scientist)
@@ -18998,7 +19013,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - - _ _ _ _] AntlionGrub (aka npc_antlion_grub)
 [ ] [_ - _ _ - _ _] Item_DynamicResupply (aka item_dynamic_resupply)
 [ ] [_ - _ _ - _ _] PhysHinge (aka phys_hinge)
-[ ] [_ - _ _ _ _ _] TriggerCamera (aka point_viewcontrol)
 [ ] [_ - _ _ _ - _] EnvMicrophone (aka env_microphone)
 [ ] [_ - _ _ - - _] GameText (aka game_text, game_text_tf)
 [ ] [_ - _ _ _ - _] PointSpotlight (aka point_spotlight)
@@ -19038,7 +19052,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ _ - _ _] LogicMeasureMovement (aka logic_measure_movement)
 [ ] [_ - - _ - - _] NPC_APCDriver (aka npc_apcdriver)
 [ ] [_ - - - - _ _] NihilanthHVR (aka nihilanth_energy_ball)
-[ ] [_ - - - - - _] SceneManager (aka scene_manager)
 [ ] [_ - - _ _ - _] LogicPlayerProxy (aka logic_playerproxy)
 [ ] [_ - - - - _ _] NPC_Leech (aka monster_leech)
 [ ] [_ - _ _ - - _] PhysicsSpring (aka phys_spring)
@@ -19068,7 +19081,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - - - - _ _] SENT_filter (aka sent_filter)
 [ ] [_ - _ _ - _ _] TriggerWind (aka trigger_wind)
 [ ] [_ - - - _ _ _] WallHealth (aka func_healthcharger)
-[ ] [_ - - - - _ _] AI_NetworkManager (aka ai_network)
 [ ] [_ - _ _ - - _] AI_SpeechFilter (aka ai_speechfilter)
 [ ] [_ - _ _ - _ _] EnvLaser (aka env_laser)
 [ ] [_ - _ _ - - _] EnvShake (aka env_shake)
@@ -19081,7 +19093,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ _ - - _] TankTrainAI (aka tanktrain_ai)
 [ ] [- - - - - - _] AI_BasePhysicsFlyingBot
 [ ] [_ - _ _ - _ _] AI_ScriptedSchedule (aka aiscripted_schedule)
-[ ] [_ - _ _ - - _] AreaPortal (aka func_areaportal)
 [ ] [_ - _ _ - - _] AreaPortalOneWay (aka func_areaportal_oneway)
 [ ] [_ - _ _ - _ _] EnvEffectsScript (aka env_effectscript)
 [ ] [_ - _ _ _ - _] EnvGlobal (aka env_global)
@@ -19110,7 +19121,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - - - - _ _] GrenadeBeam (aka grenade_beam)
 [ ] [_ - - - - _ _] GrenadePathfollower (aka grenade_pathfollower)
 [ ] [_ - - - - - _] Headcrab (aka npc_headcrab)
-[ ] [_ - _ _ _ - _] LogicRelay (aka logic_relay)
 [ ] [_ - _ _ - _ _] Pendulum (aka func_pendulum)
 [ ] [_ - _ _ _ - _] PhysExplosion (aka env_physexplosion)
 [ ] [_ - - - - - _] PhysicsNPCSolver (aka physics_npc_solver)
@@ -19134,7 +19144,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ _ - - _] KeepUpright (aka phys_keepupright)
 [ ] [_ - _ _ _ - _] LogicEventListenerItemEquip (aka logic_eventlistener_itemequip)
 [ ] [_ - _ _ _ - _] MathRemap (aka math_remap)
-[ ] [_ - _ _ _ - _] Message (aka env_message)
 [ ] [_ - _ _ _ _ _] MultiManager (aka multi_manager)
 [ ] [_ - - - - - _] NewNPC (aka npc_newnpc)
 [ ] [_ - - - - - _] PlayerPickupController (aka player_pickup)
@@ -19148,7 +19157,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ _ - - _] AI_ChangeHintGroup (aka ai_changehintgroup)
 [ ] [_ - - - - - _] BarnacleTongueTip (aka npc_barnacle_tongue_tip)
 [ ] [_ - - - - - _] CombineDropshipContainer (aka prop_dropship_container)
-[ ] [_ - - _ _ - _] Credits (aka env_credits)
 [ ] [- - - _ - - _] Cycler
 [ ] [_ - _ _ _ - _] EnergyBallLauncher (aka point_energy_ball_launcher)
 [ ] [_ - _ _ - _ _] EnvExplosion (aka env_explosion)
@@ -19162,7 +19170,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ - - - _] NPCMaker (aka npc_maker)
 [ ] [_ - - - - - _] NPC_BabyCrab (aka monster_babycrab)
 [ ] [_ - _ _ - - _] NPC_EnemyFinderCombineCannon (aka npc_enemyfinder_combinecannon)
-[ ] [_ - - - - - _] NPC_GMan (aka npc_gman)
 [ ] [_ - - - - _ _] NPC_Sentry (aka monster_sentry)
 [ ] [_ - _ _ _ - _] PathCorner (aka path_corner)
 [ ] [_ - _ _ - _ _] PointPush (aka point_push)
@@ -19179,7 +19186,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ _ - _ _] Decal (aka infodecal)
 [ ] [_ - - - - - _] FuncPlatRot (aka func_platrot)
 [ ] [_ - _ _ - _ _] GameWeaponManager (aka game_weapon_manager)
-[ ] [_ - _ - - - _] GenericActor (aka generic_actor)
 [ ] [_ - - - - - _] GenericNPC (aka monster_generic)
 [ ] [_ - - - - _ _] HelicopterChunk (aka helicopter_chunk)
 [ ] [_ - _ _ - _ _] InfoDarknessLightSource (aka info_darknessmode_lightsource)
@@ -19191,7 +19197,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ _ - _ _] PhysImpact (aka env_physimpact)
 [ ] [_ - _ - - - _] PhysPulley (aka phys_pulleyconstraint)
 [ ] [_ - _ - - - _] PointDevShotCamera (aka point_devshot_camera)
-[ ] [_ - - _ - - _] PointTeleport (aka point_teleport)
 [ ] [_ - - _ - - _] PropVehicleViewController (aka vehicle_viewcontroller)
 [ ] [_ - - - - - _] Pushable (aka func_pushable)
 [ ] [_ - _ - - _ _] Speaker_HL1 (aka speaker)
@@ -19204,7 +19209,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - - _ - - _] BombDropSensor (aka npc_helicoptersensor)
 [ ] [_ - _ _ _ - -] BugBaitSensor (aka point_bugbait)
 [ ] [_ - - - - _ _] CrossbowBolt_HL1 (aka crossbow_bolt_hl1)
-[ ] [_ - _ _ _ - _] EnvFade (aka env_fade)
 [ ] [_ - _ - - - _] EnvShooter (aka env_shooter)
 [ ] [_ - - _ - - _] FuncWallToggle (aka func_wall_toggle)
 [ ] [_ - - - - _ _] GrenadeAR2 (aka grenade_ar2)
@@ -19263,7 +19267,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ _ - - _] EnvMuzzleFlash (aka env_muzzleflash)
 [ ] [_ - _ - - _ _] EnvTracer (aka env_tracer)
 [ ] [_ - - - - _ _] FishPool (aka func_fish_pool)
-[ ] [_ - _ - - - _] FlextalkActor (aka cycler_actor)
 [ ] [_ - _ - - - _] FuncTankRocket (aka func_tankrocket)
 [ ] [_ - - _ - - _] FuncVehicleClip (aka func_vehicleclip)
 [ ] [_ - - _ - - _] GameScore (aka game_score)
@@ -19310,7 +19313,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - - - - _ _] GrenadeBeamChaser (aka grenade_beam_chaser)
 [ ] [_ - - - - - _] HealthKit (aka item_healthkit)
 [ ] [_ - - - - - _] HealthVial (aka item_healthvial)
-[ ] [_ - - - - - _] InfoTarget (aka info_particle_target, info_target)
 [ ] [_ - _ _ - - -] InfoTargetVehicleTransition (aka info_target_vehicle_transition)
 [ ] [_ - - - - - _] ItemBattery (aka item_battery)
 [ ] [_ - - - - - _] ItemLongJump (aka item_longjump)
@@ -19356,7 +19358,6 @@ Datadesc and methods that the entities above inherit.
 [ ] [_ - _ - - - _] FilterCombineBall (aka filter_combineball_type)
 [ ] [_ - _ - - - _] FilterContext (aka filter_activator_context)
 [ ] [_ - _ - - - _] FilterModel (aka filter_activator_model)
-[ ] [- - _ - - - _] FuncAreaPortalBase
 [ ] [_ - - - - - _] FuncLadderEndPoint (aka func_ladderendpoint)
 [ ] [_ - _ - - - _] FuncTankPhysCannister (aka func_tankphyscannister)
 [ ] [_ - - - - _ _] FuncTrainControls (aka func_traincontrols)

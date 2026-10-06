@@ -82,7 +82,7 @@ public class AI_Path
 	float GoalTolerance;
 	Activity ActivityValue;
 	int Sequence;
-	readonly EHANDLE Target = new();
+	EHANDLE Target = new();
 	Vector3 TargetOffset;
 	float WaypointTolerance;
 
@@ -102,10 +102,10 @@ public class AI_Path
 	float RouteStartTime;
 
 	Vector3 GoalDirection;
-	readonly EHANDLE GoalDirectionTarget = new();
+	EHANDLE GoalDirectionTarget = new();
 
 	float GoalSpeed;
-	readonly EHANDLE GoalSpeedTarget = new();
+	EHANDLE GoalSpeedTarget = new();
 
 	float GoalStoppingDistance;
 

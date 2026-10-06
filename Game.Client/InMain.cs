@@ -22,6 +22,7 @@ public enum KeyButtonStateFlags
 	ImpulseDown = 2,
 	ImpulseUp = 4
 }
+
 public struct KeyButtonState
 {
 	public Source.InlineArray2<int> Down;
@@ -38,21 +39,21 @@ public enum MouseParams
 
 public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManager ThirdPersonManager) : IInput
 {
-	ConVar cl_anglespeedkey = new("0.67", 0);
-	ConVar cl_yawspeed = new("210", FCvar.None, "Client yaw speed.", -100000, 100000);
-	ConVar cl_pitchspeed = new("225", FCvar.None, "Client pitch speed.", -100000, 100000);
-	ConVar cl_pitchdown = new("89", FCvar.Cheat);
-	ConVar cl_pitchup = new("89", FCvar.Cheat);
-	ConVar cl_sidespeed = new("450", FCvar.Replicated | FCvar.Cheat);
-	ConVar cl_upspeed = new("320", FCvar.Replicated | FCvar.Cheat);
-	ConVar cl_forwardspeed = new("450", FCvar.Replicated | FCvar.Cheat);
-	ConVar cl_backspeed = new("450", FCvar.Replicated | FCvar.Cheat);
-	ConVar lookspring = new("0", FCvar.Archive);
-	ConVar lookstrafe = new("0", FCvar.Archive);
-	ConVar in_joystick = new("0", FCvar.Archive);
-	ConVar thirdperson_platformer = new("0", 0, "Player will aim in the direction they are moving.");
-	ConVar thirdperson_screenspace = new("0", 0, "Movement will be relative to the camera, eg: left means screen-left");
-	ConVar sv_noclipduringpause = new("0", FCvar.Replicated | FCvar.Cheat, "If cheats are enabled, then you can noclip with the game paused (for doing screenshots, etc.).");
+	readonly ConVar cl_anglespeedkey = new("0.67", 0);
+	readonly ConVar cl_yawspeed = new("210", FCvar.None, "Client yaw speed.", -100000, 100000);
+	readonly ConVar cl_pitchspeed = new("225", FCvar.None, "Client pitch speed.", -100000, 100000);
+	readonly ConVar cl_pitchdown = new("89", FCvar.Cheat);
+	readonly ConVar cl_pitchup = new("89", FCvar.Cheat);
+	readonly ConVar cl_sidespeed = new("450", FCvar.Replicated | FCvar.Cheat);
+	readonly ConVar cl_upspeed = new("320", FCvar.Replicated | FCvar.Cheat);
+	readonly ConVar cl_forwardspeed = new("450", FCvar.Replicated | FCvar.Cheat);
+	readonly ConVar cl_backspeed = new("450", FCvar.Replicated | FCvar.Cheat);
+	readonly ConVar lookspring = new("0", FCvar.Archive);
+	readonly ConVar lookstrafe = new("0", FCvar.Archive);
+	readonly ConVar in_joystick = new("0", FCvar.Archive);
+	readonly ConVar thirdperson_platformer = new("0", 0, "Player will aim in the direction they are moving.");
+	readonly ConVar thirdperson_screenspace = new("0", 0, "Movement will be relative to the camera, eg: left means screen-left");
+	readonly ConVar sv_noclipduringpause = new("0", FCvar.Replicated | FCvar.Cheat, "If cheats are enabled, then you can noclip with the game paused (for doing screenshots, etc.).");
 
 	int in_impulse;
 	int in_cancel;
@@ -620,7 +621,7 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 		AccumulatedMouseYMovement = 0;
 	}
 
-	private void AccumulateMouse() {
+	public void AccumulateMouse() {
 		if (!cl_mouseenable.GetBool())
 			return;
 

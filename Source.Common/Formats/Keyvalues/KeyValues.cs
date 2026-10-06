@@ -102,8 +102,26 @@ public class KeyValues : IEnumerable<KeyValues>
 		// Clear();
 		if (stream == null) return false;
 
-		using StreamReader reader = new StreamReader(stream);
+		using KeyValuesReader reader = new KeyValuesReader(stream);
 		return LoadFromBuffer(reader);
+	}
+
+	public sealed class KeyValuesReader(Stream stream) : StreamReader(stream)
+	{
+		int Pushback = -1;
+
+		public void Unread(char c) => Pushback = c;
+
+		public override int Peek() => Pushback != -1 ? Pushback : base.Peek();
+
+		public override int Read() {
+			if (Pushback != -1) {
+				int c = Pushback;
+				Pushback = -1;
+				return c;
+			}
+			return base.Read();
+		}
 	}
 
 	public bool WriteToStream(Stream? stream) {
@@ -164,7 +182,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 
-	private bool LoadFromBuffer(StreamReader reader) {
+	private bool LoadFromBuffer(KeyValuesReader reader) {
 		LinkedList<KeyValues> peers = [];
 		KeyValues? current = this;
 		while (SkipUntilParseableTextOrEOF(reader)) {
@@ -180,7 +198,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Returns true if we did anything at all to skip whitespace.
-	public static bool SkipWhitespace(StreamReader reader) {
+	public static bool SkipWhitespace(KeyValuesReader reader) {
 		bool didAnything = false;
 		while (true) {
 			int c = reader.Peek();
@@ -200,7 +218,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Returns true if we can read something. False if we can't.
-	private bool SkipUntilParseableTextOrEOF(StreamReader reader) {
+	private bool SkipUntilParseableTextOrEOF(KeyValuesReader reader) {
 		// We read either
 		//    1. A quote mark, in which case we need to read up to a quote
 		//    2. Anything else, we read until whitespace
@@ -262,7 +280,7 @@ public class KeyValues : IEnumerable<KeyValues>
 
 		return false;
 	}
-	public static bool ReadConditional(StreamReader reader, Span<char> condition, out bool match) {
+	public static bool ReadConditional(KeyValuesReader reader, Span<char> condition, out bool match) {
 		// Zero out if it's existing memory
 		for (int si = 0; si < condition.Length; si++)
 			condition[si] = '\0';
@@ -338,7 +356,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return notSupported;
 	}
 
-	private bool ReadKV(StreamReader reader) {
+	private bool ReadKV(KeyValuesReader reader) {
 		SkipUntilParseableTextOrEOF(reader);
 
 		bool quoteTerminated = (char)reader.Peek() == '"';
@@ -390,7 +408,7 @@ public class KeyValues : IEnumerable<KeyValues>
 
 	void AddToTail(KeyValues kv) => children.AddLast(kv.node);
 
-	private void ReadKVPairs(StreamReader reader, bool matches) {
+	private void ReadKVPairs(KeyValuesReader reader, bool matches) {
 		int rd = reader.Read();
 
 		while (reader.Peek() != -1) {
@@ -414,7 +432,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Returns true if we did anything at all to skip comments.
-	public static bool SkipComments(StreamReader reader) {
+	public static bool SkipComments(KeyValuesReader reader) {
 		bool didAnything = false;
 		if (reader.Peek() == '/') {
 			// We need to check the stream for another /
@@ -429,10 +447,8 @@ public class KeyValues : IEnumerable<KeyValues>
 						break;
 				}
 			}
-			else {
-				// What...
-				throw new InvalidOperationException("Expected comment");
-			}
+			else
+				reader.Unread('/');
 		}
 
 		return didAnything;
@@ -463,7 +479,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		Type = Types.String;
 	}
 
-	public static string ReadWhitespaceTerminatedString(StreamReader reader) {
+	public static string ReadWhitespaceTerminatedString(KeyValuesReader reader) {
 		Span<char> work = stackalloc char[1024];
 		int i, len;
 		for (i = 0, len = work.Length; i < len; i++) {
@@ -483,7 +499,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return new(work[..i]);
 	}
 
-	public static string ReadQuoteTerminatedString(StreamReader reader, bool useEscapeSequences) {
+	public static string ReadQuoteTerminatedString(KeyValuesReader reader, bool useEscapeSequences) {
 		int rd = reader.Read();
 		Debug.Assert(rd == '"', "invalid quote-terminated string");
 		Span<char> work = stackalloc char[1024];
@@ -632,7 +648,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return keyob.Value is int i
 			? i
 			: keyob.Value is string str
-				? int.TryParse(str, out int r)
+				? int.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out int r)
 					? r
 					: defaultValue
 				: defaultValue;
@@ -644,9 +660,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		if (keyob == null)
 			return defaultValue;
 
-		return keyob.Value is Color c
-			? c
-			: default;
+		return keyob.GetColor();
 	}
 
 	public float GetFloat(ReadOnlySpan<char> key, float defaultValue = default) {
@@ -658,7 +672,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return Convert.ToSingle(keyob.Value is double i
 			? i
 			: keyob.Value is string str
-				? double.TryParse(str, out double r)
+				? double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double r)
 					? r
 					: defaultValue
 				: defaultValue);
@@ -673,7 +687,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return keyob.Value is double i
 			? i
 			: keyob.Value is string str
-				? double.TryParse(str, out double r)
+				? double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double r)
 					? r
 					: defaultValue
 				: defaultValue;
@@ -708,7 +722,7 @@ public class KeyValues : IEnumerable<KeyValues>
 		return dat.Value is ulong u
 			? u
 			: dat.Value is string str
-				? ulong.TryParse(str, out ulong r)
+				? ulong.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong r)
 					? r
 					: defaultValue
 				: Convert.ToUInt64(dat.Value);
@@ -765,7 +779,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	// TODO: We should cache these!!!!
 	public int GetInt() {
 		if (Value is string str)
-			return int.TryParse(str, out int i) ? i : float.TryParse(str, out float f) ? (int)f : 0;
+			return int.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out int i) ? i : float.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? (int)f : 0;
 		else if (Value is int i)
 			return i;
 		else
@@ -773,7 +787,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 	public float GetFloat() {
 		if (Value is string str)
-			return float.TryParse(str, out float f) ? f : 0;
+			return float.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? f : 0;
 		else if (Value is float f)
 			return f;
 		else
@@ -781,7 +795,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 	public double GetDouble() {
 		if (Value is string str)
-			return double.TryParse(str, out double d) ? d : 0;
+			return double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) ? d : 0;
 		else if (Value is double d)
 			return d;
 		else
@@ -828,12 +842,9 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	// Untested...
-	public unsafe bool LoadFromBuffer(ReadOnlySpan<char> resourceName, ReadOnlySpan<char> buffer) {
-		fixed (char* bytes = buffer) {
-			byte* input = (byte*)bytes;
-			using UnmanagedMemoryStream stream = new(input, buffer.Length * sizeof(char));
-			return LoadFromStream(stream);
-		}
+	public bool LoadFromBuffer(ReadOnlySpan<char> resourceName, ReadOnlySpan<char> buffer) {
+		using MemoryStream stream = new(System.Text.Encoding.UTF8.GetBytes(buffer.ToArray()));
+		return LoadFromStream(stream);
 	}
 
 	public KeyValues AddSubKey(KeyValues subkey) {
@@ -879,10 +890,23 @@ public class KeyValues : IEnumerable<KeyValues>
 	}
 
 	public Color GetColor() {
-		if (Value is Color c) {
-			return c;
+		switch (Value) {
+			case Color c: return c;
+			case int i: return new(i, 0, 0, 0);
+			case double d: return new((int)d, 0, 0, 0);
+			case string str: {
+					// parse the colors out of the string
+					Span<float> rgba = stackalloc float[4];
+					int n = 0;
+					foreach (string part in str.Split(' ', StringSplitOptions.RemoveEmptyEntries)) {
+						if (n >= 4) break;
+						if (!float.TryParse(part, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out rgba[n])) break;
+						n++;
+					}
+					return new((byte)rgba[0], (byte)rgba[1], (byte)rgba[2], (byte)rgba[3]);
+				}
+			default: return new(0, 0, 0, 0);
 		}
-		return new(); // todo: proper implementation of this
 	}
 
 	public void SetName(ReadOnlySpan<char> name) => Name = name.SliceNullTerminatedString().ToString();

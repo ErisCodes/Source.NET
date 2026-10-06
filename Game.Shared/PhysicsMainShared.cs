@@ -820,17 +820,17 @@ namespace Game.Shared
 			//TouchLink
 			new EntityDataInstantiator<TouchLink>(),
 			//StepSimulation
-			null!,
+			new EntityDataInstantiator<StepSimulationData>(),
 			//ModelScale
 			null!,
 			//PositionWatcher
-			null!,
+			new EntityDataInstantiator<WatcherList>(),
 			//PhysicsPushList
 			null!,
 			//VPhysicsUpdateAI
 			null!,
 			//VPhysicsWatcher
-			null!,
+			new EntityDataInstantiator<WatcherList>(),
 		];
 		// Blank for now
 		const int MAX_ACCESSORS = 32;

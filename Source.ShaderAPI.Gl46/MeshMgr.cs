@@ -1,6 +1,8 @@
 using Source.Common.MaterialSystem;
 using Source.Common.ShaderAPI;
 
+using System.Runtime.InteropServices;
+
 namespace Source.ShaderAPI.Gl46;
 
 public enum DeviceState
@@ -28,6 +30,9 @@ public class MeshMgr : IMeshMgr
 	public IMesh GetDynamicMesh(IMaterial? material, VertexFormat vertexFormat, int hwSkinBoneCount, bool buffered, IMesh? vertexOverride, IMesh? indexOverride) {
 		Assert(material == null || ((IMaterialInternal)material).IsRealTimeVersion());
 
+		if (vertexOverride != null || indexOverride != null)
+			buffered = false;
+
 		if (BufferedMode != buffered && BufferedMode) {
 			BufferedMesh.SetMesh(null);
 		}
@@ -44,7 +49,20 @@ public class MeshMgr : IMeshMgr
 		}
 
 		if (vertexOverride == null) {
-			VertexFormat fmt = matInternal.GetVertexFormat();
+			VertexFormat materialFormat = matInternal.GetVertexFormat();
+			VertexFormat fmt = (vertexFormat != 0) ? vertexFormat : materialFormat;
+			if (vertexFormat != 0) {
+				int vertexFormatBoneWeights = vertexFormat.GetBoneWeightsSize();
+				if (hwSkinBoneCount < vertexFormatBoneWeights)
+					hwSkinBoneCount = vertexFormatBoneWeights;
+			}
+
+			fmt &= ~(VertexFormat.BoneWeights1 | VertexFormat.BoneWeights2 | VertexFormat.BoneWeights3 | VertexFormat.BoneWeights4);
+			if (hwSkinBoneCount > 0) {
+				fmt |= VertexExts.GetBoneWeight(2);
+				fmt |= VertexFormat.BoneIndex;
+			}
+
 			mesh.SetVertexFormat(fmt);
 		}
 		else {
@@ -97,11 +115,15 @@ public class MeshMgr : IMeshMgr
 
 	BufferedMeshGl46 BufferedMesh;
 	DynamicMeshGl46 DynamicMesh;
+	DynamicMeshGl46 DynamicFlexMesh;
+	uint ZeroVertexBuffer;
 
 	internal void Init() {
 		BufferedMesh = InitMesh<BufferedMeshGl46>();
 		DynamicMesh = InitMesh<DynamicMeshGl46>();
 		DynamicMesh.Init(0);
+		DynamicFlexMesh = InitMesh<DynamicMeshGl46>();
+		DynamicFlexMesh.Init(1);
 		CreateDynamicIndexBuffer();
 		CreateZeroVertexBuffer();
 		BufferedMode = true;
@@ -116,8 +138,22 @@ public class MeshMgr : IMeshMgr
 		DynamicIndexBuffer = null;
 	}
 
-	private void CreateZeroVertexBuffer() {
-		// Todo...
+	private unsafe void CreateZeroVertexBuffer() {
+		if (ZeroVertexBuffer == 0) {
+			int bufSize = 65536 * 2 * 4;
+			ZeroVertexBuffer = glCreateBuffer();
+			glObjectLabel(GL_BUFFER, ZeroVertexBuffer, "MeshMgr Zero Vertex Buffer");
+			byte* zeroData = (byte*)NativeMemory.AllocZeroed((nuint)bufSize);
+			glNamedBufferData(ZeroVertexBuffer, bufSize, zeroData, GL_STATIC_DRAW);
+			NativeMemory.Free(zeroData);
+		}
+	}
+
+	internal uint GetZeroVertexBuffer() => ZeroVertexBuffer;
+
+	public IMesh GetFlexMesh() {
+		DynamicFlexMesh.SetVertexFormat(VertexFormat.Position | VertexFormat.Normal | VertexFormat.Wrinkle);
+		return DynamicFlexMesh;
 	}
 
 

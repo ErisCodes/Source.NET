@@ -5,12 +5,17 @@ using CommunityToolkit.HighPerformance;
 
 using Game.Client;
 
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace Game.Client
 {
 	public static class CDLL_Util
 	{
+
+		public static float XRES(float x) => ((x) * ((float)ScreenWidth() / 640.0f));
+		public static float YRES(float y) => ((y) * ((float)ScreenHeight() / 480.0f));
+
 		public static int ScreenWidth() {
 			GetHudSize(out int w, out _);
 			return w;

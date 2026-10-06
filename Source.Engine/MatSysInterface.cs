@@ -287,7 +287,7 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 #if !SWDS
 		materials.BeginRenderTargetAllocation();
 		FullFrameFBTexture0.Init(CreateFullFrameFBTexture(0));
-		FullFrameFBTexture0.Init(CreateFullFrameFBTexture(1));
+		FullFrameFBTexture1.Init(CreateFullFrameFBTexture(1));
 		materials.EndRenderTargetAllocation();
 #endif
 	}
@@ -309,32 +309,12 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 			rtFlags)!;
 	}
 
-	internal enum ToolTexture
-	{
-		/// <summary> Not a tool texture </summary>
-		None = 0,
-		/// <summary> A tool texture by means of starting with tools/, but otherwise an unimportant use case beyond not renderable </summary>
-		Unknown = 1,
-		/// <summary> The 2D skybox texture. </summary>
-		Skybox2D = 2,
-		/// <summary> The 3D skybox texture. </summary>
-		Skybox3D = 3
-	}
-	static ToolTexture TryGetToolTexture(ReadOnlySpan<char> texture) => texture switch {
-		"tools/toolsskybox2d" => ToolTexture.Skybox2D,
-		"tools/toolsskybox" => ToolTexture.Skybox3D,
-		_ => texture.StartsWith("tools/", StringComparison.InvariantCultureIgnoreCase) ? ToolTexture.Unknown : ToolTexture.None
-	};
 	internal struct MeshList
 	{
 		public IMesh Mesh;
 		public IMaterial Material;
 		public int VertCount;
-		public int IndexCount;
-		public int LightmapPageID;
 		public VertexFormat VertexFormat;
-		// TODO: Is there a better way to handle this? I can't figure out how Source does...
-		public ToolTexture ToolTexture;
 	}
 
 	internal readonly List<MeshList> Meshes = [];
@@ -407,23 +387,15 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 
 			ref BSPMSurface2 surfID = ref matSortArray.GetSurfaceAtHead(in group);
 			WorldStaticMeshes[i] = null;
-			sortIndex[i] = !Unsafe.IsNullRef(ref surfID) ? FindOrAddMesh(ModelLoader.MSurf_TexInfo(ref surfID).Material, i, vertexCount, indexCount) : -1;
+			sortIndex[i] = !Unsafe.IsNullRef(ref surfID) ? FindOrAddMesh(ModelLoader.MSurf_TexInfo(ref surfID).Material!, vertexCount) : -1;
 		}
 
 		using MatRenderContextPtr renderContext = new(materials);
 		var meshes = Meshes.AsSpan();
 		for (int i = 0; i < Meshes.Count; i++) {
-			VertexFormat format = meshes[i].Material.GetVertexFormat();
+			VertexFormat format = ComputeWorldStaticMeshVertexFormat(meshes[i].Material);
 			meshes[i].Mesh = renderContext.CreateStaticMesh(format, MaterialDefines.TEXTURE_GROUP_STATIC_VERTEX_BUFFER_WORLD, meshes[i].Material);
 			int vertBufferIndex = 0;
-
-			// We precalculate the tool texture type as an enumeration and then
-			// store indices into Meshes into lists where needed (mostly for skybox rendering).
-			meshes[i].ToolTexture = TryGetToolTexture(meshes[i].Material.GetName());
-			switch (meshes[i].ToolTexture) {
-				case ToolTexture.Skybox2D: SkyboxMeshesIndices.Add(i); Skybox2DMeshesIndices.Add(i); break;
-				case ToolTexture.Skybox3D: SkyboxMeshesIndices.Add(i); Skybox3DMeshesIndices.Add(i); break;
-			}
 
 			MeshBuilder meshBuilder = new();
 			meshBuilder.Begin(meshes[i].Mesh, MaterialPrimitiveType.Triangles, meshes[i].VertCount, 0);
@@ -449,8 +421,18 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 			meshBuilder.Dispose();
 		}
 
-		// Msg($"Total {Meshes.Count} meshes, {WorldStaticMeshes.Count} before\n");
+		Msg($"Total {Meshes.Count} meshes, {WorldStaticMeshes.Count} before\n");
 	}
+
+	private VertexFormat ComputeWorldStaticMeshVertexFormat(IMaterial material) {
+		VertexFormat fmt = GetUncompressedFormat(material);
+		// S-FIXME: set VERTEX_FORMAT_COMPRESSED if there are no artifacts and if it saves enough memory (use 'mem_dumpvballocs')
+		// vertexFormat |= VERTEX_FORMAT_COMPRESSED;
+		// S-FIXME: check for and strip unused vertex elements (TANGENT_S/T?)
+		return fmt;
+	}
+
+	private VertexFormat GetUncompressedFormat(IMaterial material) => material.GetVertexFormat();// & ~VertexFormat.Compressed; FIXME (?)
 
 	internal void BuildMSurfacePrimVerts(BSPPrimType type, WorldBrushData brushData, ref BSPMPrimitive prim, ref MeshBuilder builder, ref BSPMSurface2 surfID) {
 		bool negate = false;
@@ -792,14 +774,12 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 
 		materials.EndLightmapAllocation();
 	}
-	private int FindOrAddMesh(IMaterial? material, int sortID, int vertexCount, int indexCount) {
-		VertexFormat format = material.GetVertexFormat();
+	private int FindOrAddMesh(IMaterial material, int vertexCount) {
+		VertexFormat format = GetUncompressedFormat(material);
 
 		using MatRenderContextPtr renderContext = new(materials);
 
 		int maxVertices = renderContext.GetMaxVerticesToRender(material);
-		int maxIndices = renderContext.GetMaxIndicesToRender();
-
 		int worldLimit = mat_max_worldmesh_vertices.GetInt();
 		worldLimit = Math.Max(worldLimit, 1024);
 		if (maxVertices > worldLimit)
@@ -807,33 +787,21 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 
 		Span<MeshList> meshes = Meshes.AsSpan();
 
-		int lightmapID = SortInfoToLightmapPage(sortID);
-
 		for (int i = 0; i < meshes.Length; i++) {
-			if (meshes[i].Material != material)
-				continue;
-
-			if (meshes[i].LightmapPageID != lightmapID)
+			if (meshes[i].VertexFormat != format)
 				continue;
 
 			if (meshes[i].VertCount + vertexCount > maxVertices)
 				continue;
 
-			if (meshes[i].IndexCount + indexCount > maxIndices)
-				continue;
-
-
 			meshes[i].VertCount += vertexCount;
-			meshes[i].IndexCount += indexCount;
 			return i;
 		}
 
 		Meshes.Add(new() {
 			VertCount = vertexCount,
-			IndexCount = indexCount,
 			VertexFormat = format,
-			Material = material,
-			LightmapPageID = lightmapID
+			Material = material
 		});
 
 		return Meshes.Count - 1;

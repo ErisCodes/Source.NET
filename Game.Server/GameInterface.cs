@@ -1,4 +1,5 @@
 ﻿global using static Game.Server.EngineCallbacks;
+global using static Game.Server.GameInterfaceGlobals;
 
 using Game.Server.GarrysMod;
 using Game.Shared;
@@ -21,9 +22,20 @@ using System.Numerics;
 
 namespace Game.Server;
 
+public static class GameInterfaceGlobals {
+	public static readonly ConVar sv_unlockedchapters = new( "sv_unlockedchapters", "1", FCvar.Archive | FCvar.ArchiveXbox);
+}
+
 [EngineComponent]
 public static class GameInterface
 {
+	public const int MAX_CHOREO_SCENES_STRING_BITS = 12;
+	public const int MAX_CHOREO_SCENES_STRINGS = 1 << MAX_CHOREO_SCENES_STRING_BITS;
+	public const int CHOREO_SCENES_INVALID_STRING = MAX_CHOREO_SCENES_STRINGS - 1;
+
+	public static INetworkStringTable? g_pStringTableEffectDispatch;
+	public static INetworkStringTable? g_pStringTableClientSideChoreoScenes;
+
 	public static bf_write? g_pMsgBuffer;
 	public static void UserMessageBegin(in IRecipientFilter filter, ReadOnlySpan<char> messagename) {
 		Assert(g_pMsgBuffer == null);
@@ -214,6 +226,9 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 	public void CreateNetworkStringTables() {
 		// throw new NotImplementedException();
 
+		g_pStringTableEffectDispatch = networkstringtable.CreateStringTable("EffectDispatch", EffectData.MAX_EFFECT_DISPATCH_STRINGS);
+		g_pStringTableClientSideChoreoScenes = networkstringtable.CreateStringTable("Scenes", MAX_CHOREO_SCENES_STRINGS);
+
 		GameRulesRegister.CreateNetworkStringTables_GameRules();
 
 #if GMOD_DLL
@@ -234,6 +249,9 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 
 		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(SoundscapeSystemGlobals).TypeHandle);
 		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(CheckClient).TypeHandle);
+		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(AI_SystemHook).TypeHandle);
+		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(FlexSceneFileManager).TypeHandle);
+		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(LagCompensationGlobals).TypeHandle);
 
 #if GMOD_DLL
 		if (CommandLine.FindParm("-noaddons") == 0)
@@ -618,12 +636,118 @@ public class ServerGameClients : IServerGameClients
 		GMODClient.ClientPutInServer(entity, playerName);
 	}
 
+	static ConVar? MinUpdateRate;
+	static ConVar? MaxUpdateRate;
+	static ConVar? MinInterpRatio;
+	static ConVar? MaxInterpRatio;
+
 	public void ClientSettingsChanged(Edict edict) {
-		// throw new NotImplementedException();
+		if (edict.GetUnknown() == null)
+			return;
+
+		if (BaseEntity.Instance(edict) is not BasePlayer player)
+			return;
+
+		int index = player.EntIndex();
+
+		player.UpdateRate = atoi(engine.GetClientConVarValue(index, "cl_updaterate"));
+		MinUpdateRate ??= cvar.FindVar("sv_minupdaterate");
+		MaxUpdateRate ??= cvar.FindVar("sv_maxupdaterate");
+		if (MinUpdateRate != null && MaxUpdateRate != null)
+			player.UpdateRate = Math.Clamp(player.UpdateRate, (int)MinUpdateRate.GetFloat(), (int)MaxUpdateRate.GetFloat());
+
+		bool useInterpolation = atoi(engine.GetClientConVarValue(index, "cl_interpolate")) != 0;
+		if (useInterpolation) {
+			double lerpRatio = atof(engine.GetClientConVarValue(index, "cl_interp_ratio"));
+			if (lerpRatio == 0)
+				lerpRatio = 1.0;
+			double lerpAmount = atof(engine.GetClientConVarValue(index, "cl_interp"));
+
+			MinInterpRatio ??= cvar.FindVar("sv_client_min_interp_ratio");
+			MaxInterpRatio ??= cvar.FindVar("sv_client_max_interp_ratio");
+			if (MinInterpRatio != null && MaxInterpRatio != null && MinInterpRatio.GetFloat() != -1)
+				lerpRatio = Math.Clamp(lerpRatio, MinInterpRatio.GetFloat(), MaxInterpRatio.GetFloat());
+			else if (lerpRatio == 0)
+				lerpRatio = 1.0;
+
+			player.LerpTime = Math.Max(lerpAmount, lerpRatio / player.UpdateRate);
+		}
+		else
+			player.LerpTime = 0.0;
+
+		bool usePrediction = atoi(engine.GetClientConVarValue(index, "cl_predict")) != 0;
+		if (usePrediction) {
+			player.PredictWeapons = atoi(engine.GetClientConVarValue(index, "cl_predictweapons")) != 0;
+			player.LagCompensation = atoi(engine.GetClientConVarValue(index, "cl_lagcompensation")) != 0;
+		}
+		else {
+			player.PredictWeapons = false;
+			player.LagCompensation = false;
+		}
+
+		g_pGameRules.ClientSettingsChanged(player);
 	}
 
-	public void ClientSetupVisibility(Edict viewEntity, Edict client, Span<byte> pvs) {
-		throw new NotImplementedException();
+	public void ClientSetupVisibility(Edict? viewEntity, Edict client, byte[] pvs, int pvssize) {
+		Vector3 org = default;
+
+		engine.ResetPVS(pvs, pvssize);
+
+		BaseEntity? ve = null;
+		if (viewEntity != null) {
+			ve = BaseEntity.GetContainingEntity(viewEntity);
+			if (ve != null) {
+				org = ve.EyePosition();
+				engine.AddOriginToPVS(org);
+			}
+		}
+
+		float fovDistanceAdjustFactor = 1;
+
+		BasePlayer? player = BaseEntity.GetContainingEntity(client) as BasePlayer;
+		if (player != null) {
+			org = player.EyePosition();
+			player.SetupVisibility(ve, pvs, pvssize);
+			Util.SetClientVisibilityPVS(client, pvs.AsSpan(0, pvssize));
+			fovDistanceAdjustFactor = player.GetFOVDistanceAdjustFactorForNetworking();
+		}
+
+		Span<byte> portalBits = stackalloc byte[Constants.MAX_AREA_PORTAL_STATE_BYTES];
+		portalBits.Clear();
+
+		Span<int> portalNums = stackalloc int[512];
+		Span<int> isOpen = stackalloc int[512];
+		int outPortal = 0;
+
+		foreach (FuncAreaPortalBase cur in FuncAreaPortalBase.g_AreaPortals) {
+			bool isOpenOnClient = true;
+
+			portalNums[outPortal] = cur.PortalNumber;
+			isOpen[outPortal] = cur.UpdateVisibility(org, fovDistanceAdjustFactor, ref isOpenOnClient) ? 1 : 0;
+
+			++outPortal;
+			if (outPortal >= portalNums.Length) {
+				engine.SetAreaPortalStates(portalNums, isOpen);
+				outPortal = 0;
+			}
+
+			if (cur.PortalVersion == 0)
+				isOpenOnClient = true;
+
+			if (isOpenOnClient) {
+				if (cur.PortalNumber < 0)
+					continue;
+				else if (cur.PortalNumber >= portalBits.Length * 8)
+					Error($"ClientSetupVisibility: portal number ({cur.PortalNumber}) too large");
+				else
+					portalBits[cur.PortalNumber >> 3] |= (byte)(1 << (cur.PortalNumber & 7));
+			}
+		}
+
+		engine.SetAreaPortalStates(portalNums[..outPortal], isOpen[..outPortal]);
+
+		if (player != null)
+			player.Local.UpdateAreaBits(player, portalBits);
 	}
 
 	public void ClientSpawned(Edict player) => g_pGameRules?.ClientSpawned(player);
@@ -763,9 +887,7 @@ public class ServerGameClients : IServerGameClients
 
 public class ServerGameEnts : IServerGameEnts
 {
-	public void FreeContainingEntity(Edict e) {
-		throw new NotImplementedException();
-	}
+	public void FreeContainingEntity(Edict e) => MapEntities.FreeContainingEntity(e);
 
 	public void MarkEntitiesAsTouching(Edict e1, Edict e2) {
 		BaseEntity? entity = BaseEntity.GetContainingEntity(e1);

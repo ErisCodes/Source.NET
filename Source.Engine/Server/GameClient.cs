@@ -202,7 +202,7 @@ public class GameClient : BaseClient
 		Edict = sv.Edicts![EntityIndex];
 
 		PackInfo.ClientEnt = Edict;
-		PackInfo.PVSSize = Marshal.SizeOf(PackInfo.PVS);
+		PackInfo.PVSSize = PackInfo.PVS.Length;
 
 		IGameEvent? evnt = gameEventManager.CreateEvent("player_connect");
 		if (evnt != null) {
@@ -227,16 +227,43 @@ public class GameClient : BaseClient
 	}
 
 	public void SetupPackInfo(FrameSnapshot snapshot) {
+		PackInfo.PVSSize = (GetCollisionBSPData().NumClusters + 7) / 8;
+		SV.ServerGameClients!.ClientSetupVisibility(ViewEntity, PackInfo.ClientEnt!, PackInfo.PVS, PackInfo.PVSSize);
 
 		CurrentFrame = FrameManager.AllocateFrame();
 		CurrentFrame.Init(snapshot);
 
+		PackInfo.TransmitEdict.ClearAll();
+		PackInfo.TransmitAlways.ClearAll();
+
 		int maxFrames = MAX_CLIENT_FRAMES;
 		if (maxFrames < FrameManager.AddClientFrame(CurrentFrame))
 			FrameManager.RemoveOldestFrame();
+
+		PackInfo.AreasNetworked = 0;
+		int areaCount = SV.g_AreasNetworked.Count;
+		for (int j = 0; j < areaCount; j++) {
+			PackInfo.Areas[PackInfo.AreasNetworked] = SV.g_AreasNetworked[j];
+			PackInfo.AreasNetworked++;
+
+			Assert(PackInfo.AreasNetworked < CheckTransmitInfo.MAX_WORLD_AREAS);
+		}
+
+		CM.SetupAreaFloodNums(PackInfo.AreaFloodNums, out PackInfo.MapAreas);
 	}
 
-	public void SetupPrevPackInfo() { }
+	public void SetupPrevPackInfo() {
+		PrevTransmitEdict = PackInfo.TransmitEdict;
+
+		PrevPackInfo.AreasNetworked = PackInfo.AreasNetworked;
+		((ReadOnlySpan<int>)PackInfo.Areas)[..PackInfo.AreasNetworked].CopyTo(PrevPackInfo.Areas);
+
+		PrevPackInfo.PVSSize = PackInfo.PVSSize;
+		PackInfo.PVS.AsSpan(0, PackInfo.PVSSize).CopyTo(PrevPackInfo.PVS);
+
+		PrevPackInfo.MapAreas = PackInfo.MapAreas;
+		((ReadOnlySpan<byte>)PackInfo.AreaFloodNums)[..PackInfo.MapAreas].CopyTo(PrevPackInfo.AreaFloodNums);
+	}
 
 	// void SetRate(int nRate, bool force) { }
 
@@ -380,7 +407,7 @@ public class GameClient : BaseClient
 
 	// void SendSound(SoundInfo sound, bool isReliable) { }
 
-	void WriteGameSounds(bf_write buf) {
+	protected override void WriteGameSounds(bf_write buf) {
 		if (Sounds.Count == 0)
 			return;
 
@@ -698,7 +725,12 @@ public class GameClient : BaseClient
 		return PrevPackInfo;
 	}
 
-	public override bool IgnoreTempEntity(EventInfo evnt) { return false; } // todo
+	public override bool IgnoreTempEntity(EventInfo evnt) {
+		if (IsInReplayMode)
+			return false;
+
+		return base.IgnoreTempEntity(evnt);
+	}
 
 	internal void SendSound(SoundInfo sound, bool isReliable) {
 		if (IsFakeClient() && !IsHLTV())

@@ -84,7 +84,7 @@ public class Scheme : IScheme
 	}
 
 	private IFont? FindFontInAliasList(ReadOnlySpan<char> name) {
-		if (FontAliases.TryGetValue(name, out FontAlias alias))
+		if (FontAliases.TryGetValue(name.SliceNullTerminatedString(), out FontAlias alias))
 			return alias.Font;
 
 		return null;
@@ -105,10 +105,12 @@ public class Scheme : IScheme
 	}
 
 	public ReadOnlySpan<char> GetResourceString(ReadOnlySpan<char> stringName) {
-		return BaseSettings.GetString(stringName);
+		return BaseSettings.GetString(stringName.SliceNullTerminatedString());
 	}
 
 	internal void LoadFromFile(IPanel? sizingPanel, ReadOnlySpan<char> fileName, ReadOnlySpan<char> inTag, KeyValues inKeys) {
+		inTag = inTag.SliceNullTerminatedString();
+
 		Data = inKeys;
 		BaseSettings = Data.FindKey("BaseSettings", true)!;
 		Colors = Data.FindKey("Colors", true)!;
@@ -250,6 +252,9 @@ public class Scheme : IScheme
 
 	static char[] mungeBuffer = new char[64];
 	private ReadOnlySpan<char> GetMungedFontName(ReadOnlySpan<char> fontName, ReadOnlySpan<char> scheme, bool proportional) {
+		fontName = fontName.SliceNullTerminatedString();
+		scheme = scheme.SliceNullTerminatedString();
+
 		memset(mungeBuffer.AsSpan(), '\0');
 		if (!scheme.IsEmpty)
 			sprintf(mungeBuffer, "%s%s-%s").S(fontName).S(scheme).S(proportional ? "p" : "no");

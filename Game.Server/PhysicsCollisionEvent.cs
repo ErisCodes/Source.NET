@@ -51,7 +51,7 @@ public class CollisionEvent : IPhysicsCollisionEvent, IPhysicsCollisionSolver, I
 	readonly Friction[] Current = new Friction[4];
 	readonly GameVCollisionEvent gameEvent = default;
 	readonly List<TriggerEvent> triggerEvents = [];
-	readonly TriggerEvent currentTriggerEvent = default;
+	TriggerEvent currentTriggerEvent = default;
 	readonly List<TouchEvent> touchEvents = [];
 	readonly List<DamageEvent> damageEvents = [];
 	readonly List<InflictorState> damageInflictors = [];
@@ -107,6 +107,63 @@ public class CollisionEvent : IPhysicsCollisionEvent, IPhysicsCollisionSolver, I
 		while (g_PostSimulationQueue.TryDequeue(out Action? a))
 			a.Invoke();
 		UpdateRemoveObjects();
+	}
+
+	public void FlushQueuedOperations() {
+		int loopCount = 0;
+		while (loopCount < 20) {
+			int count = triggerEvents.Count + touchEvents.Count + damageEvents.Count + removeObjects.Count + g_PostSimulationQueue.Count;
+			if (count == 0)
+				break;
+
+			Assert(0);
+			Warning("Physics queue not empty, error!\n");
+			loopCount++;
+			UpdateTouchEvents();
+			UpdateDamageEvents();
+			while (g_PostSimulationQueue.TryDequeue(out Action? a))
+				a.Invoke();
+			UpdateRemoveObjects();
+		}
+	}
+
+	void DispatchStartTouch(BaseEntity entity0, BaseEntity entity1, in Vector3 point, in Vector3 normal) {
+		Trace trace = default;
+		trace.EndPos = point;
+		trace.Plane.Dist = Vector3.Dot(point, normal);
+		trace.Plane.Normal = normal;
+
+		entity0.PhysicsMarkEntitiesAsTouchingEventDriven(entity1, trace);
+	}
+
+	void DispatchEndTouch(BaseEntity entity0, BaseEntity entity1) {
+		BaseEntity.PhysicsNotifyOtherOfUntouch(entity0, entity1);
+		BaseEntity.PhysicsNotifyOtherOfUntouch(entity1, entity0);
+	}
+
+	void UpdateTouchEvents() {
+		int i;
+		bool oldTouchEvents = bufferTouchEvents;
+		bufferTouchEvents = true;
+		for (i = 0; i < touchEvents.Count; i++) {
+			TouchEvent ev = touchEvents[i];
+			if (ev.TouchType == TouchType.Start)
+				DispatchStartTouch(ev.Entity0!, ev.Entity1!, ev.EndPoint, ev.Normal);
+			else
+				DispatchEndTouch(ev.Entity0!, ev.Entity1!);
+		}
+		touchEvents.Clear();
+
+		for (i = 0; i < triggerEvents.Count; i++) {
+			currentTriggerEvent = triggerEvents[i];
+			if (currentTriggerEvent.Start)
+				currentTriggerEvent.TriggerEntity!.StartTouch(currentTriggerEvent.Entity);
+			else
+				currentTriggerEvent.TriggerEntity!.EndTouch(currentTriggerEvent.Entity);
+		}
+		triggerEvents.Clear();
+		currentTriggerEvent.Clear();
+		bufferTouchEvents = oldTouchEvents;
 	}
 
 	private void UpdateRemoveObjects() {

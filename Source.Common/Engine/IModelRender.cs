@@ -58,6 +58,7 @@ public interface IModelRender
 	int DrawModel(StudioFlags flags, IClientRenderable? renderable, ModelInstanceHandle_t instance, int entityIndex, Model? model, in Vector3 origin, in QAngle angles, int skin, int body, int hitboxset, Matrix3x4? modelToWorld = null, Matrix3x4? lightingOffset = null);
 	int DrawModelEx(ref ModelRenderInfo info);
 	void SetStaticLighting(ModelInstanceHandle_t handle, LightCacheHandle_t? cache);
+	void SetViewTarget(StudioHdr studioHdr, int bodyIndex, in Vector3 target);
 	void DrawModelExecute(ref DrawModelState state, ref ModelRenderInfo info, Span<Matrix3x4> boneToWorldArray);
 	bool DrawModelSetup(ref ModelRenderInfo info, ref DrawModelState state, Span<Matrix3x4> customBoneToWorld, out Span<Matrix3x4> boneToWorldArray);
 	ref Matrix4x4 SetupModelState(IClientRenderable renderable);

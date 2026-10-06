@@ -1,5 +1,7 @@
 global using static Game.Server.AI_DefaultGlobals;
 
+using Game.Shared;
+
 namespace Game.Server;
 
 public static class AI_DefaultGlobals
@@ -1521,4 +1523,20 @@ public static class AI_DefaultGlobals
 		"	Interrupts" +
 		"" +
 		"\n";
+}
+
+public class AI_SystemHook(ReadOnlySpan<char> name) : AutoGameSystem(name)
+{
+	public static readonly AI_SystemHook g_AISystemHook = new("CAI_SystemHook");
+
+	public override void LevelInitPreEntity() {
+		g_AI_SchedulesManager.CreateStringRegistries();
+
+		AI_BaseNPC.NextThinkRebalanceTick = 0;
+	}
+
+	public override void LevelShutdownPostEntity() {
+		g_AI_SchedulesManager.DeleteAllSchedules();
+		g_AI_SchedulesManager.DestroyStringRegistries();
+	}
 }

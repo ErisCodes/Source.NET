@@ -219,8 +219,18 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 		throw new NotImplementedException();
 	}
 
+	public Sentence? GetSentence(AudioSource? audioSource) {
+		if (audioSource != null)
+			return audioSource.GetSentence();
+		return null;
+	}
+
 	public float GetSentenceLength(AudioSource? audioSource) {
-		throw new NotImplementedException();
+		if (audioSource != null && audioSource.SampleRate() > 0) {
+			float length = (float)audioSource.SampleCount() / (float)audioSource.SampleRate();
+			return length;
+		}
+		return 0.0f;
 	}
 
 	public bool IsStreaming(AudioSource? audioSource) {

@@ -204,6 +204,23 @@ public ref struct FlaggedEntitiesEnum : IPartitionEnumerator
 
 public static partial class Util
 {
+	public static float AngleMod(float a) => MathLib.AngleMod(a);
+
+	public static float AngleDiff(float destAngle, float srcAngle) {
+		float delta;
+
+		delta = (destAngle - srcAngle) % 360.0f;
+		if (destAngle > srcAngle) {
+			if (delta >= 180)
+				delta -= 360;
+		}
+		else {
+			if (delta <= -180)
+				delta += 360;
+		}
+		return delta;
+	}
+
 	public static void ClearTrace(ref Trace trace) {
 		trace = default;
 		trace.Fraction = 1.0f;
@@ -294,6 +311,23 @@ public static partial class Util
 		partition.EnumerateElementsInSphere((int)PartitionListMask.EngineNonStaticEdicts, center, radius, false, ref enumerator);
 		return enumerator.GetCount();
 	}
+	public static void ShowMessage(ReadOnlySpan<char> str, BasePlayer? player) {
+		RecipientFilter filter = new();
+
+		if (player != null) 
+			filter.AddRecipient(player);
+		else 
+			filter.AddAllPlayers();
+
+		filter.MakeReliable();
+
+		UserMessageBegin(filter, "HudText");
+		WRITE_STRING(str);
+		MessageEnd();
+	}
+	public static void ShowMessageAll(ReadOnlySpan<char> str) {
+		ShowMessage(str, null);
+	}
 
 	public static void SayTextFilter<T>(scoped in T filter, ReadOnlySpan<char> pText, BasePlayer? player, bool chat) where T : IRecipientFilter {
 		UserMessageBegin(filter, "SayText");
@@ -325,6 +359,19 @@ public static partial class Util
 
 		Util.ScreenFadeBuild(ref fade, color, fadeTime, fadeHold, flags);
 		Util.ScreenFadeWrite(in fade, entity);
+	}
+
+	public static void ScreenFadeAll(in Color color, TimeUnit_t fadeTime, TimeUnit_t fadeHold, FadeFlags flags) {
+		int i;
+		ScreenFade fade = default;
+
+		Util.ScreenFadeBuild(ref fade, color, fadeTime, fadeHold, flags);
+
+		for (i = 1; i <= gpGlobals.MaxClients; i++) {
+			BaseEntity? player = Util.PlayerByIndex(i);
+
+			Util.ScreenFadeWrite(in fade, player);
+		}
 	}
 
 	public static ushort FixedUnsigned16(TimeUnit_t value, float scale) {

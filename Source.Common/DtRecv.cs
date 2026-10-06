@@ -188,11 +188,14 @@ public static class RecvPropHelpers
 	}
 
 	public static RecvProp RecvPropList<T>(DynamicArrayAccessor field, ResizeVectorFn fn,RecvProp arrayProp) where T : new() {
-		return RecvPropList(field, fn, (_, list, capacity) => {
-			var realList = (IList<T>)list;
-			while (realList.Count < capacity)
-				realList.Add(new T());
-		}, field.Info.MaxLength, arrayProp);
+		EnsureCapacityFn ensureFn = arrayProp.RecvType == SendPropType.DataTable
+			? (_, list, capacity) => {
+				var realList = (IList<T>)list;
+				while (realList.Count < capacity)
+					realList.Add(new T());
+			}
+			: (_, list, capacity) => ((List<T>)list).EnsureCapacity(capacity);
+		return RecvPropList(field, fn, ensureFn, field.Info.MaxLength, arrayProp);
 	}
 	public static RecvProp RecvPropList(IFieldAccessor field, ResizeVectorFn fn, EnsureCapacityFn ensureFn, int maxElements, RecvProp arrayProp) {
 		RecvProp ret = new();
@@ -257,7 +260,18 @@ public static class RecvPropHelpers
 	}
 
 	private static void RecvProxy_UtlVectorElement(ref readonly RecvProxyData data, object instance, IFieldAccessor field) {
-		throw new NotImplementedException();
+		RecvPropExtra_UtlVector extra = (RecvPropExtra_UtlVector)data.RecvProp.GetExtraData()!;
+
+		int iElement = extra.Index;
+
+		System.Collections.ICollection utlVec = extra.FieldInfo.GetValue<System.Collections.ICollection>(instance);
+		if (iElement >= utlVec.Count)
+			return;
+
+		// Call through to the proxy they passed in, making pStruct=the CUtlVector.
+		// Note: there should be space here as long as the element is < the max # elements
+		// that we ensured capacity for in DataTableRecvProxy_LengthProxy.
+		extra.ProxyFn(in data, instance, ((IFieldAccessorIndexable)extra.FieldInfo).AtIndex(iElement));
 	}
 
 	private static void RecvProxy_UtlVectorElement_DataTable(RecvProp prop, out object? outInstance, object? instance, IFieldAccessor fieldInfo, int objectID) {

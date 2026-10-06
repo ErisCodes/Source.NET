@@ -166,7 +166,7 @@ public interface IEngineClient
 
 	// Given a CAudioSource (opaque pointer), retrieve the underlying CSentence object ( stores the words, phonemes, and close
 	//  captioning data )
-	// Sentence? GetSentence(AudioSource? audioSource);
+	Sentence? GetSentence(AudioSource? audioSource);
 	// Given a CAudioSource, determines the length of the underlying audio file (.wav, .mp3, etc.)
 	float GetSentenceLength(AudioSource? audioSource);
 	// Returns true if the sound is streaming off of the hard disk (instead of being memory resident)

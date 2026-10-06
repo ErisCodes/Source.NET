@@ -10,6 +10,7 @@ public class SendPropExtra_UtlVector
 	public int MaxElements;
 
 	public int Index;
+	public IFieldAccessor ElementFieldInfo;
 
 	public SendPropExtra_UtlVector Clone() => (SendPropExtra_UtlVector)MemberwiseClone();
 }

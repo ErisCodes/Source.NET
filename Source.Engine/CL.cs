@@ -693,6 +693,8 @@ public partial class CL(IServiceProvider services, Net Net,
 		SoundMessages.Clear();
 	}
 
+	ConVar? snd_show;
+
 	private void DispatchSound(in SoundInfo sound) {
 		int nSoundNum = sound.SoundNum;
 
@@ -717,7 +719,10 @@ public partial class CL(IServiceProvider services, Net Net,
 			pSfx = cl.GetSound(nSoundNum);
 		}
 
-		// snd_show
+		snd_show ??= cvar.FindVar("snd_show");
+		if (snd_show != null && snd_show.GetInt() >= 2) {
+			DevMsg($"{Host.FrameCount} (seq {sound.SequenceNumber}) {((ReadOnlySpan<char>)name).SliceNullTerminatedString()} : src {sound.EntityIndex} : ch {(int)sound.Channel} : {(int)sound.Soundlevel} dB : vol {sound.Volume:F2} : time {cl.GetTime():F3} ({sound.Delay:F4} delay) @{sound.Origin.X:F1} {sound.Origin.Y:F1} {sound.Origin.Z:F1}\n");
+		}
 
 		StartSoundParams parms = new();
 		parms.StaticSound = (sound.Channel == SoundEntityChannel.Static) ? true : false;

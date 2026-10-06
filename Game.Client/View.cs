@@ -155,8 +155,14 @@ public class ViewRender : IViewRender
 		return r_nearz.GetFloat();
 	}
 
+	readonly MaterialReference TranslucentSingleColor = new();
+	readonly MaterialReference ModulateSingleColor = new();
+
 	public void Init() {
 		render = services.GetRequiredService<IRenderView>();
+
+		TranslucentSingleColor.Init("debug/debugtranslucentsinglecolor", MaterialDefines.TEXTURE_GROUP_OTHER);
+		ModulateSingleColor.Init("engine/modulatesinglecolor", MaterialDefines.TEXTURE_GROUP_OTHER);
 	}
 
 	public void LevelInit() {
@@ -393,12 +399,23 @@ public class ViewRender : IViewRender
 			}
 		}
 
-		ViewDrawScene(drew3dSkybox, skyboxVisible, in viewRender, clearFlags, ViewID.Main, (whatToDraw & RenderViewInfo.DrawViewmodel) != 0);
+		if (IntroData.g_pIntroData == null)
+			ViewDrawScene(drew3dSkybox, skyboxVisible, in viewRender, clearFlags, ViewID.Main, (whatToDraw & RenderViewInfo.DrawViewmodel) != 0);
+		else
+			ViewDrawScene_Intro(in viewRender, clearFlags, IntroData.g_pIntroData);
 		render.SceneEnd();
 
 		RenderPlayerSprites();
 
 		DrawViewModels(in viewRender, (whatToDraw & RenderViewInfo.DrawViewmodel) != 0);
+
+		// Draw fade over entire screen if needed
+		Span<byte> color = stackalloc byte[4];
+		vieweffects.GetFadeParams(out color[0], out color[1], out color[2], out color[3], out bool blend);
+
+		// Overlay screen fade on entire screen
+		IMaterial? material = blend ? ModulateSingleColor.Get() : TranslucentSingleColor.Get();
+		render.ViewDrawFade(color, material);
 
 		CleanupMain3DView(in viewRender);
 
@@ -485,6 +502,97 @@ public class ViewRender : IViewRender
 		// if (r_flashlightdepthtexture.GetBool())
 		// 	g_ClientShadowMgr.UnlockAllShadowDepthTextures();
 	}
+
+	private void ViewDrawScene_Intro(in ViewSetup view, ClearFlags clearFlags, IntroData introData) {
+		using MatRenderContextPtr renderContext = new(materials);
+
+		renderContext.ClearColor4ub(0, 0, 0, 255);
+
+		if (introData.DrawPrimary) {
+			ViewSetup playerView = view;
+			playerView.Origin = introData.CameraView;
+			playerView.Angles = introData.CameraViewAngles;
+			if (introData.PlayerViewFOV != 0)
+				playerView.FOV = ScaleFOVByWidthRatio(introData.PlayerViewFOV, engine.GetScreenAspectRatio() / (4.0f / 3.0f));
+
+			g_ClientShadowMgr.PreRender();
+
+			SetupCurrentView(in playerView.Origin, in playerView.Angles, ViewID.IntroPlayer);
+
+			IGameSystem.PreRenderAllSystems();
+
+			SetupVis(in playerView, out uint visFlags);
+
+			render.Push3DView(in playerView, ClearFlags.ClearColor | ClearFlags.ClearDepth, null, GetFrustum(), null);
+			DrawWorldAndEntities(true, in playerView, ClearFlags.ClearColor | ClearFlags.ClearDepth);
+			render.PopView(GetFrustum());
+		}
+		else
+			renderContext.ClearBuffers(true, true);
+
+		UpdateScreenEffectTexture(0, view.X, view.Y, view.Width, view.Height, false, out System.Drawing.Rectangle actualRect);
+
+		g_ClientShadowMgr.PreRender();
+
+		SetupCurrentView(in view.Origin, in view.Angles, ViewID.IntroCamera);
+
+		IGameSystem.PreRenderAllSystems();
+
+		SetupVis(in view, out _);
+
+		renderContext.ClearColor4ub(0, 0, 0, 255);
+
+		DrawWorldAndEntities(true, in view, ClearFlags.ClearColor | ClearFlags.ClearDepth);
+
+		UpdateScreenEffectTexture(1, view.X, view.Y, view.Width, view.Height, false, out _);
+
+		IMaterial overlayMaterial = materials.FindMaterial("scripted/intro_screenspaceeffect", MaterialDefines.TEXTURE_GROUP_OTHER)!;
+		IMaterialVar modeVar = overlayMaterial.FindVar("$mode", out _)!;
+		IMaterialVar alphaVar = overlayMaterial.FindVar("$alpha", out _)!;
+
+		renderContext.ClearBuffers(true, true);
+
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		for (int passID = 0; passID < introData.Passes.Count; passID++) {
+			IntroDataBlendPass pass = introData.Passes[passID];
+			if (pass.Alpha == 0)
+				continue;
+
+			if (pass.BlendMode >= 0 && pass.BlendMode <= 9)
+				modeVar.SetIntValue(pass.BlendMode);
+			else
+				Assert(false);
+
+			alphaVar.SetFloatValue(pass.Alpha);
+
+			ITexture texture = RenderTexture.GetFullFrameFrameBufferTexture(0)!;
+			renderUtils.DrawScreenSpaceRectangle(overlayMaterial, 0, 0, view.Width, view.Height,
+				actualRect.X, actualRect.Y, actualRect.X + actualRect.Width - 1, actualRect.Y + actualRect.Height - 1,
+				texture.GetActualWidth(), texture.GetActualHeight(), null, 1, 1, 0);
+		}
+
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PopMatrix();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+		renderContext.PopMatrix();
+
+		// Make sure sound doesn't stutter
+		engine.Sound_ExtraUpdate();
+
+		// Debugging info goes over the top
+		DebugViewRender.Draw3DDebuggingInfo(in view);
+	}
+
+	static RenderUtils? _renderUtils;
+	static RenderUtils renderUtils => _renderUtils ??= Singleton<RenderUtils>();
 
 	private void DrawWorldAndEntities(bool drawSkybox, in ViewSetup viewRender, ClearFlags clearFlags) {
 		SimpleWorldView noWaterView = new SimpleWorldView(this);

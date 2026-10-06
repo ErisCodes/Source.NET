@@ -246,7 +246,7 @@ public partial class C_BaseAnimating : C_BaseEntity, IModelLoadCallback
 	long MostRecentModelBoneCounter;
 	long MostRecentBoneSetupRequest;
 	int PrevBoneMask;
-	int AccumulatedBoneMask;
+	protected int AccumulatedBoneMask;
 	readonly BoneAccessor BoneAccessor = new();
 	// Note that Handle is not a pointer in this case so we need to initialize
 	// each member in the bone attachments (when we get to this part).
@@ -594,7 +594,7 @@ public partial class C_BaseAnimating : C_BaseEntity, IModelLoadCallback
 
 		}
 	}
-	private void StandardBlendingRules(StudioHdr hdr, Span<Vector3> pos, Span<Quaternion> q, TimeUnit_t currentTime, int boneMask) {
+	public virtual void StandardBlendingRules(StudioHdr hdr, Span<Vector3> pos, Span<Quaternion> q, TimeUnit_t currentTime, int boneMask) {
 		Span<float> poseparam = stackalloc float[Studio.MAXSTUDIOPOSEPARAM];
 
 		if (!hdr.SequencesAvailable())
@@ -912,6 +912,8 @@ public partial class C_BaseAnimating : C_BaseEntity, IModelLoadCallback
 			MStudioPoseParamDesc Pose = hdr.PoseParameter(i);
 			iv_flPoseParameter.SetLooping(Pose.Loop != 0.0f, i);
 		}
+
+		EyeAttachment = LookupAttachment("eyes");
 
 		if (ShouldInterpolate())
 			AddToInterpolationList();
@@ -1617,9 +1619,43 @@ public partial class C_BaseAnimating : C_BaseEntity, IModelLoadCallback
 	}
 
 	readonly List<AttachmentData> Attachments = [];
+	protected int EyeAttachment;
 
 	public bool CalcAttachments() {
 		return SetupBones(null, -1, Studio.BONE_USED_BY_ATTACHMENT, gpGlobals.CurTime);
+	}
+
+	public override bool GetAttachment(int number, out Matrix3x4 matrix) {
+		if (number < 1 || number > Attachments.Count) {
+			matrix = default;
+			return false;
+		}
+
+		if (!CalcAttachments()) {
+			matrix = default;
+			return false;
+		}
+
+		matrix = Attachments[number - 1].AttachmentToWorld;
+		return true;
+	}
+
+	public LocalFlexController GetNumFlexControllers() {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return 0;
+
+		return studioHdr.NumFlexControllers();
+	}
+
+	public string? GetFlexControllerName(LocalFlexController flexController) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return null;
+
+		MStudioFlexController flexcontroller = studioHdr.FlexController(flexController);
+
+		return flexcontroller.Name();
 	}
 
 	public override bool GetAttachment(int number, out Vector3 origin, out QAngle angles) {

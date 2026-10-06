@@ -2147,7 +2147,26 @@ public class MatSystemSurface : IMatSystemSurface
 
 		DisableClipping(false);
 	}
+	public void PrecacheFontCharacters(IFont font, ReadOnlySpan<char> characterString){
+		const string pCommonChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.!:-/%";
 
+		if (characterString.IsStringEmpty) 
+			// use the common chars, alternate languages are not handled
+			characterString = pCommonChars;
+
+		StartDrawing();
+		DrawSetTextFont(font);
+
+		int numChars = 0;
+		while (!characterString[numChars..].IsStringEmpty) 
+			numChars++;
+
+		Span<TextureID> pTextureIDs_ignored = stackalloc TextureID[numChars];
+		Span<CharTexCoord> pTexCoords_ignored = stackalloc CharTexCoord[numChars];
+		FontTextureCache.GetTextureForChars(CurrentFont, FontDrawType.Default, characterString[..numChars], pTextureIDs_ignored, pTexCoords_ignored);
+
+		FinishDrawing();
+	}
 	public ReadOnlySpan<char> GetFontName(IFont font) => FontManager.GetFontName(font);
 	public ReadOnlySpan<char> GetFontFamilyName(IFont font) => FontManager.GetFontFamilyName(font);
 }

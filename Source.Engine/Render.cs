@@ -388,7 +388,7 @@ public partial class Render(
 		RebuildLightmaps();
 	}
 	private void Surface_LevelInit() { }
-	private void Areaportal_LevelInit() { }
+	private void Areaportal_LevelInit() => R_Areaportal_LevelInit();
 
 
 	public void Init() {
@@ -413,37 +413,21 @@ public partial class Render(
 		ModVis.Map_VisSetup(host_state.WorldModel, origins, novis, out returnFlags);
 	}
 
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal void RenderOneMesh(MatRenderContextPtr renderContext, in MatSysInterface.MeshList meshList) {
-		renderContext.Bind(meshList.Material);
-		renderContext.BindLightmapPage(meshList.LightmapPageID);
-		meshList.Mesh.Draw();
-	}
-
 	static ConVar r_drawskybox = new("1", FCvar.Cheat);
 
 	static readonly int[] SkyTexOrder = [0, 2, 1, 3, 4, 5];
 	static readonly int[] FakePlaneType = [1, -1, 2, -2, 3, -3];
+	ConVar fov_desired { get => field ??= cvar.FindVar("fov_desired")!; }
 	public void DrawSkybox(float zFar, int drawFlags = 0x3F) {
 		if (!r_drawskybox.GetBool())
 			return;
 
 		MatRenderContextPtr renderContext = new(materials);
 
-		// Before drawing the skybox, draw any meshes in the skybox lists only to the depth texture.
-		// This deviates from Source rendering but is necessary since we aren't using the PVS to calculate
-		// visible surfaces at runtime, and we need other sky-rooms to not be visible
-
-		Span<int> skyboxMeshesIndices = MaterialSystem.SkyboxMeshesIndices.AsSpan();
-		Span<MeshList> meshes = MaterialSystem.Meshes.AsSpan();
-		renderContext.Bind(SkyboxOcclude!); // If Init() ran, this isn't null
-		for (int i = 0; i < skyboxMeshesIndices.Length; i++) {
-			ref MeshList meshList = ref meshes[skyboxMeshesIndices[i]];
-			meshList.Mesh.Draw();
-		}
-
 		Vector3 normal;
+		Span<Vector3> positionArray = stackalloc Vector3[4];
+		Span<Vector2> texCoordArray = stackalloc Vector2[4];
+
 		for (int i = 0; i < 6; i++, drawFlags >>= 1) {
 			// Don't draw this panel of the skybox if the flag isn't set:
 			if ((drawFlags & 1) == 0)
@@ -476,11 +460,9 @@ public partial class Render(
 					break;
 			}
 
-			if (Vector3.Dot(CurrentViewForward, normal) < -0.29289f)
+			if (Vector3.Dot(CurrentViewForward, normal) < MathF.Cos(MathLib.DEG2RAD(MathF.Min(180.0f, fov_desired.GetFloat() + 26.0f))))
 				continue;
 
-			Span<Vector3> positionArray = stackalloc Vector3[4];
-			Span<Vector2> texCoordArray = stackalloc Vector2[4];
 			if (skyboxMaterials[SkyTexOrder[i]] != null) {
 				renderContext.Bind(skyboxMaterials[SkyTexOrder[i]]!);
 
@@ -523,7 +505,7 @@ public partial class Render(
 	};
 	private void MakeSkyVec(float s, float t, int axis, float zFar, out Vector3 position, out Vector2 texCoord) {
 		Vector3 v = default, b = default;
-		int j = default, k = default;
+		int j, k;
 		float width = zFar * SQRT3INV;
 
 		if (s < -1)
@@ -1434,11 +1416,86 @@ public partial class Render(
 	}
 
 	public void LevelShutdown() {
-
+		R_Areaportal_LevelShutdown();
 	}
 
 	public void ViewDrawFade(Span<byte> color, IMaterial? fadeMaterial) {
-		throw new NotImplementedException();
+		if (color.IsEmpty || color[3] == 0)
+			return;
+
+		if (fadeMaterial == null)
+			return;
+
+		ref ViewSetup view = ref CurrentView();
+
+		using MatRenderContextPtr renderContext = new(materials);
+
+		renderContext.Bind(fadeMaterial);
+		fadeMaterial.AlphaModulate(color[3] * (1.0f / 255.0f));
+		fadeMaterial.ColorModulate(color[0] * (1.0f / 255.0f),
+			color[1] * (1.0f / 255.0f),
+			color[2] * (1.0f / 255.0f));
+
+		bool oldIgnoreZ = fadeMaterial.GetMaterialVarFlag(MaterialVarFlags.IgnoreZ);
+		fadeMaterial.SetMaterialVarFlag(MaterialVarFlags.IgnoreZ, true);
+
+		float texWidth = fadeMaterial.GetMappingWidth();
+		float texHeight = fadeMaterial.GetMappingHeight();
+		float uOffset = 0.5f / texWidth;
+		float vOffset = 0.5f / texHeight;
+
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		renderContext.Scale(1, -1, 1);
+		renderContext.Ortho(0, 0, view.Width, view.Height, -99999, 99999);
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PushMatrix();
+		renderContext.LoadIdentity();
+
+		IMesh mesh = renderContext.GetDynamicMesh();
+		MeshBuilder meshBuilder = new();
+		meshBuilder.Begin(mesh, MaterialPrimitiveType.Quads, 1);
+
+		float offset = 0.5f;
+
+		// Note - the viewport has already adjusted the origin
+		float x1 = 0.0f - offset;
+		float x2 = view.Width - offset;
+		float y1 = 0.0f - offset;
+		float y2 = view.Height - offset;
+
+		// adjust nominal uvs to reflect adjusted xys
+		float u1 = MathLib.Lerp(uOffset, 1 - uOffset, view.X, view.X + view.Width, x1);
+		float u2 = MathLib.Lerp(uOffset, 1 - uOffset, view.X, view.X + view.Width, x2);
+		float v1 = MathLib.Lerp(vOffset, 1 - vOffset, view.Y, view.Y + view.Height, y1);
+		float v2 = MathLib.Lerp(vOffset, 1 - vOffset, view.Y, view.Y + view.Height, y2);
+
+		for (int corner = 0; corner < 4; corner++) {
+			bool left = (corner == 0) || (corner == 3);
+			meshBuilder.Position3f(left ? x1 : x2, (corner & 2) != 0 ? y2 : y1, 0.0f);
+			meshBuilder.TexCoord2f(0, left ? u1 : u2, (corner & 2) != 0 ? v2 : v1);
+			meshBuilder.AdvanceVertex();
+		}
+		meshBuilder.End();
+		mesh.Draw();
+		meshBuilder.Dispose();
+
+		renderContext.MatrixMode(MaterialMatrixMode.Model);
+		renderContext.PopMatrix();
+		renderContext.MatrixMode(MaterialMatrixMode.View);
+		renderContext.PopMatrix();
+		renderContext.MatrixMode(MaterialMatrixMode.Projection);
+		renderContext.PopMatrix();
+
+		fadeMaterial.SetMaterialVarFlag(MaterialVarFlags.IgnoreZ, oldIgnoreZ);
 	}
 
 	public IWorldRenderList? CreateWorldList() => AllocWorldRenderList();

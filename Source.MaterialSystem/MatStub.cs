@@ -178,6 +178,8 @@ public class DummyMesh : IMesh
 	}
 	public void ModifyEnd(ref MeshDesc desc) { }
 	public void SetColorMesh(IMesh colorMesh, int vertexOffset) { }
+	public void SetFlexMesh(IMesh? mesh, int vertexOffset) { }
+	public void DisableFlexMesh() { }
 	public void SetPrimitiveType(MaterialPrimitiveType type) { }
 	public bool Unlock(int vertexCount, ref VertexDesc desc) => false;
 	public bool Unlock(int writtenIndexCount, ref IndexDesc desc) => false;
@@ -392,6 +394,8 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public bool EnableClipping(bool enable) => true;
 	public int GetDisplayAdapterCount() => 0;
 	public IMesh GetDynamicMesh(bool buffered, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => GetDummyMesh();
+	public IMesh GetDynamicMeshEx(VertexFormat vertexFormat, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => GetDummyMesh();
+	public IMesh GetFlexMesh() => GetDummyMesh();
 	public void BeginBatch(IMesh indices) { }
 	public void BindBatch(IMesh vertices, IMaterial? autoBind = null) { }
 	public void DrawBatch(int firstIndex, int numIndices) { }
@@ -449,6 +453,9 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public void PopRenderTargetAndViewport() { }
 	public void PushMatrix() { }
 	public void PushRenderTargetAndViewport(ITexture? thisTexture) { }
+	public void CopyRenderTargetToTexture(ITexture texture) { }
+	public void SetFrameBufferCopyTexture(ITexture? texture, int textureIndex = 0) { }
+	public void CopyRenderTargetToTextureEx(ITexture texture, int renderTargetID, System.Drawing.Rectangle? srcRect, System.Drawing.Rectangle? dstRect = null) { }
 	public void PushRenderTargetAndViewport(ITexture? renderTarget, int x, int y, int width, int height) { }
 	public void PushRenderTargetAndViewport(ITexture? renderTarget, ITexture? depthTarget, int x, int y, int width, int height) { }
 	public void RestoreShaderObjects(IServiceProvider services, int changeFlags) { }

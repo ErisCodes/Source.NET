@@ -228,6 +228,20 @@ public abstract class BaseShader : IShader
 
 	}
 
+	public ShaderUsingFlags ComputeModulationFlags(IMaterialVar[] shaderParams, IShaderDynamicAPI shaderAPI) {
+		ShaderUsingFlags mod = 0;
+		if (GetAlpha(shaderParams) < 1.0f)
+			mod |= ShaderUsingFlags.AlphaModulation;
+
+		Span<float> color = stackalloc float[3];
+		GetColorParameter(shaderParams, color);
+
+		if ((color[0] != 1.0f) || (color[1] != 1.0f) || (color[2] != 1.0f))
+			mod |= ShaderUsingFlags.ColorModulation;
+
+		return mod;
+	}
+
 	private float GetAlpha(Span<IMaterialVar> parms) {
 		if (parms.IsEmpty)
 			parms = Params;

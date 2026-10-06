@@ -583,6 +583,12 @@ public partial class BaseEntity : IServerEntity
 	public virtual bool IsPlayer() => false;
 	public virtual bool IsBaseCombatCharacter() => false;
 	public virtual bool IsNPC() => false;
+	public AI_BaseNPC? MyNPCPointer() {
+		if (IsNPC())
+			return (AI_BaseNPC)this;
+
+		return null;
+	}
 	public bool IsTransparent() => RenderMode != (byte)Source.RenderMode.Normal;
 	public virtual bool IsNextBot() => false;
 	public virtual bool IsBaseCombatWeapon() => false;
@@ -661,7 +667,7 @@ public partial class BaseEntity : IServerEntity
 		outData.Int = addt;
 	}
 
-	private static void SendProxy_SimulationTime(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
+	internal static void SendProxy_SimulationTime(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
 		BaseEntity entity = (BaseEntity)instance;
 
 		int tickNumber = TIME_TO_TICKS(entity.SimulationTime);
@@ -693,8 +699,8 @@ public partial class BaseEntity : IServerEntity
 		BaseEntity entity = (BaseEntity)instance;
 		BaseAnimating? animating = entity.GetBaseAnimating();
 
-		if (animating != null /*&& !animating.IsUsingClientSideAnimation()*/)
-			return data;
+		if (animating != null && !animating.IsUsingClientSideAnimation())
+			return instance;
 		else
 			return null;
 	}
@@ -808,7 +814,7 @@ public partial class BaseEntity : IServerEntity
 		if (serverOnly)
 			AddEFlags(EFL.ServerOnly);
 
-		// NetworkProp().MarkPVSInformationDirty();
+		NetworkProp().MarkPVSInformationDirty();
 
 		AddEFlags(EFL.UsePartitionWhenNotSolid);
 	}
@@ -863,6 +869,10 @@ public partial class BaseEntity : IServerEntity
 	public virtual DamageType GetDamageType() => DamageType.Generic;
 
 	public virtual Mask PhysicsSolidMaskForEntity() => Mask.Solid;
+
+	public BaseEntity? Link;
+
+	public virtual bool CanBeSeenBy(AI_BaseNPC npc) => true;
 
 	public bool IsViewable() {
 		if (IsEffectActive(EntityEffects.NoDraw))
@@ -962,26 +972,168 @@ public partial class BaseEntity : IServerEntity
 		BaseEntity entity = (BaseEntity)instance;
 		Assert(entity != null);
 
-		QAngle angles;
-		if (true /*entity.UseStepSimulationNetworkAngles*/)
-			angles = entity.GetLocalAngles();
+
+		ref readonly QAngle angles = ref entity.UseStepSimulationNetworkAngles(out bool ok);
+		if (!ok)
+			angles = ref entity.GetLocalAngles();
 
 		outData.Vector[0] = MathLib.AngleMod(angles.X);
 		outData.Vector[1] = MathLib.AngleMod(angles.Y);
 		outData.Vector[2] = MathLib.AngleMod(angles.Z);
 	}
-	private static void SendProxy_Origin(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
+
+	private ref QAngle UseStepSimulationNetworkAngles(out bool ok) {
+		if (Physics.g_bTestMoveTypeStepSimulation && GetMoveType() == Source.MoveType.Step && HasDataObjectType(DataObjectType.StepSimulation)) {
+			ref StepSimulationData step = ref GetDataObject<StepSimulationData>(DataObjectType.StepSimulation);
+			ComputeStepSimulationNetwork(ref step);
+			
+			ok = step.AnglesActive;
+			return ref step.NetworkAngles;
+		}
+
+		ok = false;
+		return ref Unsafe.NullRef<QAngle>();
+	}
+
+	internal static void SendProxy_Origin(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
 		BaseEntity entity = (BaseEntity)instance;
 		Assert(entity != null);
 
-		Vector3 vector3;
-		if (true /*entity.UseStepSimulationNetworkAngles*/)
-			vector3 = entity.GetLocalOrigin();
+		ref readonly Vector3 vector3 = ref entity.UseStepSimulationNetworkOrigin(out bool ok);
+		if (!ok)
+			vector3 = ref entity.GetLocalOrigin();
 
 		outData.Vector[0] = vector3.X;
 		outData.Vector[1] = vector3.Y;
 		outData.Vector[2] = vector3.Z;
 	}
+
+	private ref Vector3 UseStepSimulationNetworkOrigin(out bool ok) {
+		if (Physics.g_bTestMoveTypeStepSimulation && GetMoveType() == Source.MoveType.Step && HasDataObjectType(DataObjectType.StepSimulation)) {
+			ref StepSimulationData step = ref GetDataObject<StepSimulationData>(DataObjectType.StepSimulation);
+			ComputeStepSimulationNetwork(ref step);
+			ok = step.OriginActive;
+			return ref step.NetworkOrigin;
+		}
+
+		ok = false;
+		return ref Unsafe.NullRef<Vector3>();
+	}
+
+	private void ComputeStepSimulationNetwork(ref StepSimulationData step) {
+		if (Unsafe.IsNullRef(ref step)) {
+			AssertMsg(false, "ComputeStepSimulationNetworkOriginAndAngles with NULL step\n");
+			return;
+		}
+
+		// Don't run again if we've already calculated this tick
+		if (step.LastProcessTickCount == gpGlobals.TickCount) {
+			return;
+		}
+
+		step.LastProcessTickCount = (int)gpGlobals.TickCount;
+
+		// Origin
+		// It's inactive
+		if (step.OriginActive) {
+			// First see if any external code moved the entity
+			if (GetStepOrigin() != step.Next.Origin) {
+				step.OriginActive = false;
+			}
+			else {
+				// Compute interpolated info based on tick interval
+				float frac = 1.0f;
+				long tickdelta = step.Next.TickCount - step.Previous.TickCount;
+				if (tickdelta > 0) {
+					frac = (float)((int)gpGlobals.TickCount - step.Previous.TickCount) / (float)tickdelta;
+					frac = Math.Clamp(frac, 0.0f, 1.0f);
+				}
+
+				if (step.Previous2.TickCount == 0 || step.Previous2.TickCount >= step.Previous.TickCount) {
+					Vector3 delta = step.Next.Origin - step.Previous.Origin;
+					MathLib.VectorMA(step.Previous.Origin, frac, delta, out step.NetworkOrigin);
+				}
+				else if (!step_spline.GetBool()) {
+					ref StepSimulationStep pOlder = ref step.Previous;
+					ref StepSimulationStep pNewer = ref step.Next;
+
+					if (step.Discontinuity.TickCount > step.Previous.TickCount) {
+						if (gpGlobals.TickCount > step.Discontinuity.TickCount)
+							pOlder = ref step.Discontinuity;
+						else
+							pNewer = ref step.Discontinuity;
+
+						tickdelta = pNewer.TickCount - pOlder.TickCount;
+						if (tickdelta > 0) {
+							frac = (float)(gpGlobals.TickCount - pOlder.TickCount) / (float)tickdelta;
+							frac = Math.Clamp(frac, 0.0f, 1.0f);
+						}
+					}
+
+					Vector3 delta = pNewer.Origin - pOlder.Origin;
+					MathLib.VectorMA(pOlder.Origin, frac, delta, out step.NetworkOrigin);
+				}
+				else {
+					MathLib.Hermite_Spline(step.Previous2.Origin, step.Previous.Origin, step.Next.Origin, frac, out step.NetworkOrigin);
+				}
+			}
+		}
+
+		// Angles
+		if (step.AnglesActive) {
+			// See if external code changed the orientation of the entity
+			if (GetStepAngles() != step.NextRotation) {
+				step.AnglesActive = false;
+			}
+			else {
+				// Compute interpolated info based on tick interval
+				float frac = 1.0f;
+				long tickdelta = step.Next.TickCount - step.Previous.TickCount;
+				if (tickdelta > 0) {
+					frac = (float)(gpGlobals.TickCount - step.Previous.TickCount) / (float)tickdelta;
+					frac = Math.Clamp(frac, 0.0f, 1.0f);
+				}
+
+				if (step.Previous2.TickCount == 0 || step.Previous2.TickCount >= step.Previous.TickCount) {
+					// Pure blend between start/end orientations
+					Quaternion outangles;
+					MathLib.QuaternionBlend(step.Previous.Rotation, step.Next.Rotation, frac, out outangles);
+					MathLib.QuaternionAngles(outangles, out step.NetworkAngles);
+				}
+				else if (!step_spline.GetBool()) {
+					ref StepSimulationStep pOlder = ref step.Previous;
+					ref StepSimulationStep pNewer = ref step.Next;
+
+					if (step.Discontinuity.TickCount > step.Previous.TickCount) {
+						if (gpGlobals.TickCount > step.Discontinuity.TickCount)
+							pOlder = ref step.Discontinuity;
+						else
+							pNewer = ref step.Discontinuity;
+
+						tickdelta = pNewer.TickCount - pOlder.TickCount;
+						if (tickdelta > 0) {
+							frac = (float)(gpGlobals.TickCount - pOlder.TickCount) / (float)tickdelta;
+							frac = Math.Clamp(frac, 0.0f, 1.0f);
+						}
+					}
+
+					// Pure blend between start/end orientations
+					Quaternion outangles;
+					MathLib.QuaternionBlend(pOlder.Rotation, pNewer.Rotation, frac, out outangles);
+					MathLib.QuaternionAngles(outangles, out step.NetworkAngles);
+				}
+				else {
+					// FIXME: enable spline interpolation when turning is debounced.
+					Quaternion outangles;
+					MathLib.Hermite_Spline(step.Previous2.Rotation, step.Previous.Rotation, step.Next.Rotation, frac, out outangles);
+					MathLib.QuaternionAngles(outangles, out step.NetworkAngles);
+				}
+			}
+		}
+	}
+	static readonly ConVar step_spline = new("step_spline", "0");
+
+
 	protected static object? SendProxy_SendPredictableId(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {
 		BaseEntity entity = (BaseEntity)instance;
 		if (entity == null || !entity.PredictableId.IsActive())
@@ -1264,7 +1416,36 @@ public partial class BaseEntity : IServerEntity
 
 		return physicsObject;
 	}
-	public int VPhysicsGetObjectList(Span<IPhysicsObject> list) => throw new NotImplementedException();
+	public int VPhysicsGetObjectList(Span<IPhysicsObject> list) {
+		IPhysicsObject? phys = VPhysicsGetObject();
+		if (phys != null) {
+			Assert((phys.GetGameFlags() & PhysicsFlags.MultiObjectEntity) == 0);
+			if (list.Length > 0) {
+				list[0] = phys;
+				return 1;
+			}
+		}
+		return 0;
+	}
+
+	public class TimedOverlay
+	{
+		public string Msg = "";
+		public TimeUnit_t MsgEndTime;
+		public TimeUnit_t MsgStartTime;
+		public TimedOverlay? NextTimedOverlay;
+	}
+
+	public TimedOverlay? TimedOverlayList;
+
+	public void AddTimedOverlay(string msg, int endTime) {
+		TimedOverlay newTO = new();
+		newTO.Msg = msg;
+		newTO.MsgEndTime = gpGlobals.CurTime + endTime;
+		newTO.MsgStartTime = gpGlobals.CurTime;
+		newTO.NextTimedOverlay = TimedOverlayList;
+		TimedOverlayList = newTO;
+	}
 
 	public bool IsFloating() {
 		if (!IsEFlagSet(EFL.TouchingFluid))
@@ -1622,6 +1803,37 @@ public partial class BaseEntity : IServerEntity
 
 	public ref readonly QAngle GetLocalAngularVelocity() => ref AngVelocity;
 
+	public EHANDLE Blocker = new();
+	public TimeUnit_t LocalTime;
+	public TimeUnit_t VPhysicsUpdateLocalTime;
+	public TimeUnit_t MoveDoneTime;
+	public int PushEnumCount;
+	public BASEPTR? FnMoveDone;
+
+	public TimeUnit_t GetLocalTime() => LocalTime;
+	public void IncrementLocalTime(TimeUnit_t timeDelta) => LocalTime += timeDelta;
+	public TimeUnit_t GetMoveDoneTime() => (MoveDoneTime >= 0) ? MoveDoneTime - GetLocalTime() : -1;
+
+	public void SetMoveDoneTime(TimeUnit_t delay) {
+		if (delay >= 0)
+			MoveDoneTime = GetLocalTime() + delay;
+		else
+			MoveDoneTime = -1;
+		CheckHasGamePhysicsSimulation();
+	}
+
+	public void SetMoveDone(Action? a) => FnMoveDone = a == null ? null : _ => a();
+	public virtual void MoveDone() => FnMoveDone?.Invoke(this);
+
+	public void SUB_CallUseToggle() => Use(this, this, UseType.Toggle, 0);
+
+	public void UpdatePhysicsShadowToCurrentPosition(TimeUnit_t deltaTime) {
+		if (GetMoveType() != Source.MoveType.VPhysics) {
+			IPhysicsObject? phys = VPhysicsGetObject();
+			phys?.UpdateShadow(GetAbsOrigin(), GetAbsAngles(), false, (float)deltaTime);
+		}
+	}
+
 	public void ComputeAbsPosition(in Vector3 localPosition, out Vector3 absPosition) {
 		BaseEntity? moveParent = GetMoveParent();
 		if (moveParent == null)
@@ -1950,8 +2162,12 @@ public partial class BaseEntity : IServerEntity
 			AddEFlags(EFL.DontBlockLOS);
 	}
 
+	public bool BlocksLOS() => !IsEFlagSet(EFL.DontBlockLOS);
+
 	public Vector3 AbsVelocity;
 	public QAngle AngVelocity;
+
+	public ref readonly Vector3 GetLocalVelocity() => ref Velocity;
 
 	public ref readonly Vector3 GetAbsVelocity() {
 		return ref AbsVelocity;
@@ -2011,7 +2227,7 @@ public partial class BaseEntity : IServerEntity
 	public static readonly DataMap DataDesc = new(typeof(BaseEntity), [
 		DEFINE.KEYFIELD(nameof(Classname), FieldType.String, "classname"),
 		DEFINE.GLOBAL_KEYFIELD(nameof(GlobalName), FieldType.String, "globalname"),
-		DEFINE.KEYFIELD(nameof(Parent), FieldType.String, "parentname"),
+		DEFINE.KEYFIELD(nameof(ParentName), FieldType.String, "parentname"),
 		DEFINE.KEYFIELD(nameof(HammerID), FieldType.Integer, "hammerid"),
 		DEFINE.KEYFIELD(nameof(Speed), FieldType.Float, "speed"),
 		DEFINE.KEYFIELD(nameof(RenderFX), FieldType.Character, "renderfx"),
@@ -2069,12 +2285,12 @@ public partial class BaseEntity : IServerEntity
 		// DEFINE.ARRAY(nameof(CoordinateFrame), FieldType.Float, 12),
 		DEFINE.KEYFIELD(nameof(WaterLevel), FieldType.Character, "waterlevel"),
 		DEFINE.FIELD(nameof(WaterType), FieldType.Character),
-		// DEFINE.FIELD(nameof(Blocker), FieldType.EHandle),
+		DEFINE.FIELD(nameof(Blocker), FieldType.EHandle),
 		DEFINE.KEYFIELD(nameof(Gravity), FieldType.Float, "gravity"),
 		DEFINE.KEYFIELD(nameof(Friction), FieldType.Float, "friction"),
-		// DEFINE.KEYFIELD(nameof(LocalTime), FieldType.Float, "ltime"),
-		// DEFINE.FIELD(nameof(VPhysicsUpdateLocalTime), FieldType.Float),
-		// DEFINE.FIELD(nameof(MoveDoneTime), FieldType.Float),
+		DEFINE.KEYFIELD(nameof(LocalTime), FieldType.Float, "ltime"),
+		DEFINE.FIELD(nameof(VPhysicsUpdateLocalTime), FieldType.Float),
+		DEFINE.FIELD(nameof(MoveDoneTime), FieldType.Float),
 		DEFINE.FIELD(nameof(AbsOrigin), FieldType.PositionVector),
 		DEFINE.KEYFIELD(nameof(Velocity), FieldType.Vector, "velocity"),
 		DEFINE.KEYFIELD(nameof(TextureFrameIndex), FieldType.Character, "texframeindex"),
@@ -2232,7 +2448,7 @@ public partial class BaseEntity : IServerEntity
 			}
 		}
 
-		DevMsg(2, $"unhandled input: ({inputName}) -> ({GetClassname()},{GetDebugName()})\n");
+		DevMsg(2, $"unhandled input: ({inputName}) . ({GetClassname()},{GetDebugName()})\n");
 		return false;
 	}
 	public virtual void Spawn() { }
@@ -2353,6 +2569,8 @@ public partial class BaseEntity : IServerEntity
 		LuaCalcAbsolutePosition.UnReference();
 
 		CollisionProp().DestroyPartitionHandle();
+
+		NetworkProp().Term();
 	}
 
 	public ReadOnlySpan<char> GetModelName() => ModelName;
@@ -2699,7 +2917,7 @@ public partial class BaseEntity : IServerEntity
 			otherProp.GetCollisionOrigin(), otherProp.GetCollisionAngles(), otherProp.OBBMins(), otherProp.OBBMaxs());
 	}
 
-	public bool IsMoving() {
+	public virtual bool IsMoving() {
 		GetVelocity(out Vector3 velocity, out _);
 		return velocity != vec3_origin;
 	}
@@ -2847,6 +3065,17 @@ public partial class BaseEntity : IServerEntity
 
 	public virtual bool FVisible(BaseEntity entity) => throw new NotImplementedException();
 
+	public virtual void GetVectors(out Vector3 forward, out Vector3 right, out Vector3 up) {
+		ref readonly Matrix3x4 entityToWorld = ref EntityToWorldTransform();
+
+		MathLib.MatrixGetColumn(entityToWorld, 0, out forward);
+
+		MathLib.MatrixGetColumn(entityToWorld, 1, out right);
+		right *= -1.0f;
+
+		MathLib.MatrixGetColumn(entityToWorld, 2, out up);
+	}
+
 	public TimeUnit_t NavIgnoreUntilTime;
 
 	public bool IsNavIgnored() => gpGlobals.CurTime <= NavIgnoreUntilTime;
@@ -2930,7 +3159,9 @@ public partial class BaseEntity : IServerEntity
 	public virtual void EndBlocked() { }
 
 	private void ReportPositionChanged(BaseEntity baseEntity) {
-		throw new NotImplementedException();
+		ref WatcherList list = ref baseEntity.GetDataObject<WatcherList>(DataObjectType.PositionWatcher);
+		if (!Unsafe.IsNullRef(ref list))
+			list.NotifyPositionChanged(baseEntity);
 	}
 
 	readonly ServerNetworkProperty Network = new();

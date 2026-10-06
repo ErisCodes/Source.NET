@@ -30,6 +30,7 @@ public interface IInput
 	void CAM_ToFirstPerson();
 	bool CAM_IsThirdPerson();
 	void CAM_SetCameraThirdData(CameraThirdData? value, QAngle vec3_angle);
+	void AccumulateMouse();
 }
 
 public enum CamCommand

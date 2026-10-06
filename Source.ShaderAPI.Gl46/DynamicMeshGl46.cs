@@ -26,6 +26,10 @@ public unsafe class DynamicMeshGl46 : MeshGl46
 		}
 	}
 
+	public override void MarkAsDrawn() {
+		HasDrawn = true;
+	}
+
 	internal void OverrideVertexBuffer(VertexBufferGl46 vertexBuffer) {
 		UseVertexBuffer(vertexBuffer);
 		VertexOverride = true;
@@ -45,6 +49,8 @@ public unsafe class DynamicMeshGl46 : MeshGl46
 		return VertexBuffer.HasEnoughRoom(vertexCount) && IndexBuffer.HasEnoughRoom(indexCount);
 	}
 	public override void LockMesh(int vertexCount, int indexCount, ref MeshDesc desc) {
+		ShaderUtil.SyncMatrices();
+
 		PreLock();
 
 		if (VertexOverride) {

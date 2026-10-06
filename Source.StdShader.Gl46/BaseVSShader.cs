@@ -136,7 +136,10 @@ public partial class BaseVSShader : BaseShader
 				numTexCoords = 2;
 
 			ShaderShadow.SetVertexShader(shaderName);
-			ShaderShadow.SetPixelShader(shaderName);
+
+			StaticShaderIndex pshIndex = new(ShaderShadow, ShaderType.Pixel, shaderName);
+			pshIndex.Set("BASETEXTURE", bBaseTexture);
+			ShaderShadow.SetPixelShader(shaderName, pshIndex.GetIndex());
 
 			ShaderShadow.VertexShaderVertexFormat(
 				VertexFormat.Position | VertexFormat.Normal | VertexFormat.TexCoord2D_0

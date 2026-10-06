@@ -75,6 +75,8 @@ public class EffectData
 	[NetworkName("m_bAllowOverride")]
 	public bool AllowOverride;
 
+	public EffectData Copy() => (EffectData)MemberwiseClone();
+
 #if CLIENT_DLL
 	public static readonly RecvTable DT_EffectData = new(nameof(DT_EffectData), [
 		RecvPropFloat(FIELD.OF($"{nameof(Origin)}[0]")),

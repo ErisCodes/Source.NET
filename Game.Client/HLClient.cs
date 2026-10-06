@@ -75,6 +75,8 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 			return;
 		g_bLevelInitialized = true;
 
+		vieweffects.LevelInit();
+
 		modemanager.LevelInit(mapname);
 		IGameSystem.LevelInitPreEntityAllSystems(mapname);
 #if GMOD_DLL
@@ -511,11 +513,13 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 	}
 
 	public void IN_Accumulate() {
-		throw new NotImplementedException();
+		input.AccumulateMouse();
 	}
 
 	public bool IN_IsKeyDown(ReadOnlySpan<char> name, out bool isDown) {
-		throw new NotImplementedException();
+		isDown = false;
+		return false; // Requires some more input work, probably an overall rework of the input implementation tbh
+					  // since I missed a few details
 	}
 
 	public void GMOD_RequestLuaFiles() => Game.Client.GarrysMod.GModDataPack.DataPack().RequestFiles();

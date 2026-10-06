@@ -380,8 +380,8 @@ public partial class HL2MP_Player : HL2_Player
 
 	void NoteWeaponFired() { }
 
-	bool WantsLagCompensationOnEntity(BasePlayer pPlayer, UserCmd pCmd, MaxEdictsBitVec entityTransmitBits) {
-		throw new NotImplementedException();
+	public override bool WantsLagCompensationOnEntity(BaseEntity entity, in UserCmd cmd, ref readonly MaxEdictsBitVec entityTransmitBits) {
+		return base.WantsLagCompensationOnEntity(entity, in cmd, in entityTransmitBits);
 	}
 
 	static Activity TranslateTeamActivity(Activity actToTranslate) {

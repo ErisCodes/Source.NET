@@ -10,7 +10,7 @@ using System.Text;
 namespace Source.CodeAnalysis.NetworkVars
 {
 	[Generator(Microsoft.CodeAnalysis.LanguageNames.CSharp)]
-	public sealed class NetworkVarGenerator : IIncrementalGenerator
+	public sealed partial class NetworkVarGenerator : IIncrementalGenerator
 	{
 		private const string AttributeMetadataName = "Source.Common.NetworkVarAttribute";
 
@@ -52,6 +52,8 @@ namespace Source.CodeAnalysis.NetworkVars
 			IncrementalValueProvider<ImmutableArray<PropertyModel?>> collected = properties.Collect();
 
 			context.RegisterSourceOutput(collected, static (spc, models) => Emit(spc, models));
+
+			InitializeFieldAccessors(context, collected);
 		}
 
 		private static PropertyModel? GetModel(GeneratorAttributeSyntaxContext ctx) {
@@ -70,8 +72,14 @@ namespace Source.CodeAnalysis.NetworkVars
 
 			bool unsupported = containingType.ContainingType != null || containingType.IsGenericType;
 
+			List<string> conversions = new List<string>();
+			AddConversions(ctx.SemanticModel.Compilation, prop.Type, conversions);
+
 			return new PropertyModel(
 				propertyName: prop.Name,
+				networkName: GetNetworkNameAttribute(prop) ?? prop.Name,
+				accessorBase: ScalarAccessorBase(ctx.SemanticModel.Compilation, prop.Type),
+				conversions: string.Join("\n", conversions),
 				typeDisplay: prop.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
 				@namespace: containingType.ContainingNamespace.IsGlobalNamespace
 					? null
@@ -162,7 +170,15 @@ namespace Source.CodeAnalysis.NetworkVars
 			sb.Append(indent).AppendLine("{");
 			foreach (PropertyModel p in props) {
 				sb.Append(indent).Append("\tpublic static readonly global::Source.Common.IFieldAccessor ").Append(p.PropertyName)
-					.Append(" = new global::Source.Common.DynamicAccessor(typeof(").Append(type.TypeFullyQualified).Append("), \"__nv_").Append(p.PropertyName).Append("\", \"").Append(p.PropertyName).AppendLine("\");");
+					.Append(" = new __").Append(p.PropertyName).AppendLine("();");
+			}
+			foreach (PropertyModel p in props) {
+				sb.Append(indent).Append("\tprivate sealed class __").Append(p.PropertyName).Append(" : ").AppendLine(p.AccessorBase);
+				sb.Append(indent).AppendLine("\t{");
+				sb.Append(indent).Append("\t\tpublic __").Append(p.PropertyName).Append("() : base(typeof(").Append(type.TypeFullyQualified).Append("), ")
+					.Append(Literal(p.PropertyName)).Append(", ").Append(Literal(p.NetworkName)).AppendLine(") { }");
+				sb.Append(indent).Append("\t\tpublic override ref ").Append(p.TypeDisplay).Append(" Ref(object o) => ref ((").Append(type.TypeFullyQualified).Append(")o).__nv_").Append(p.PropertyName).AppendLine(";");
+				sb.Append(indent).AppendLine("\t}");
 			}
 			sb.Append(indent).AppendLine("}");
 
@@ -192,9 +208,12 @@ namespace Source.Common
 
 		private sealed class PropertyModel
 		{
-			public PropertyModel(string propertyName, string typeDisplay, string? @namespace, string typeName,
+			public PropertyModel(string propertyName, string networkName, string accessorBase, string conversions, string typeDisplay, string? @namespace, string typeName,
 				string typeFullyQualified, bool propertyIsPartial, bool typeIsPartial, bool unsupported, Location location) {
 				PropertyName = propertyName;
+				NetworkName = networkName;
+				AccessorBase = accessorBase;
+				Conversions = conversions;
 				TypeDisplay = typeDisplay;
 				Namespace = @namespace;
 				TypeName = typeName;
@@ -206,6 +225,9 @@ namespace Source.Common
 			}
 
 			public string PropertyName { get; }
+			public string NetworkName { get; }
+			public string AccessorBase { get; }
+			public string Conversions { get; }
 			public string TypeDisplay { get; }
 			public string? Namespace { get; }
 			public string TypeName { get; }

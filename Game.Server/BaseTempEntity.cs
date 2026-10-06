@@ -20,6 +20,16 @@ public class BaseTempEntity
 		s_pTempEntities = this;
 	}
 
+	ServerClass? ServerClassCache;
+	public ServerClass GetServerClass() => ServerClassCache ??= ServerClassRetriever.GetOrError(GetType());
+
+	public void Create<IRF>(scoped ref IRF filter, float delay) where IRF : IRecipientFilter {
+		Assert(!filter.IsInitMessage());
+		Assert(delay >= -1 && delay <= 1);
+
+		engine.PlaybackTempEntity(filter, delay, this, GetServerClass().Table, GetServerClass().ClassID);
+	}
+
 	public static BaseTempEntity? GetList() => s_pTempEntities;
 	public BaseTempEntity? GetNext() => Next;
 

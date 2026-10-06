@@ -14,8 +14,8 @@ namespace Game.Server;
 public class ServerNetworkProperty : IServerNetworkable, IEventRegisterCallback
 {
 	public int AreaNum() {
-		// throw new NotImplementedException(); TODO
-		return 0;
+		RecomputePVSInformation();
+		return PVSInfo.AreaNum;
 	}
 
 	public void MarkForDeletion() => Outer!.AddEFlags(EFL.KillMe);
@@ -45,7 +45,20 @@ public class ServerNetworkProperty : IServerNetworkable, IEventRegisterCallback
 	}
 
 	public void Release() {
-		throw new NotImplementedException();
+		Outer!.Term();
+	}
+
+	public void Term() {
+		engine.CleanUpEntityClusterList(ref PVSInfo);
+		DetachEdict();
+	}
+
+	public void DetachEdict() {
+		if (Pev != null) {
+			Pev.SetEdict(null, false);
+			engine.RemoveEdict(Pev);
+			Pev = null!;
+		}
 	}
 
 	object? IServerNetworkable.GetBaseEntity() => Outer;
@@ -81,6 +94,10 @@ public class ServerNetworkProperty : IServerNetworkable, IEventRegisterCallback
 		// timerevent todo
 	}
 
+	internal void NetworkStateForceUpdate() {
+		Pev?.StateChanged();
+	}
+
 	internal void NetworkStateChanged() {
 		Pev?.StateChanged();
 	}
@@ -89,8 +106,72 @@ public class ServerNetworkProperty : IServerNetworkable, IEventRegisterCallback
 		Pev?.StateChanged(field);
 	}
 
+	public void MarkPVSInformationDirty() {
+		if (Pev != null)
+			Pev.StateFlags |= EdictFlags.DirtyPVSInformation;
+	}
+
+	public bool IsInPVS(Edict recipient, ReadOnlySpan<byte> pvs) {
+		RecomputePVSInformation();
+
+		Assert(!pvs.IsEmpty && (Pev != recipient));
+
+		if (PVSInfo.ClusterCount < 0)
+			return engine.CheckHeadnodeVisible(PVSInfo.HeadNode, pvs) != 0;
+
+		ReadOnlySpan<ushort> clusters = PVSInfo.GetClusters();
+		for (int i = clusters.Length; --i >= 0;) {
+			if ((pvs[clusters[i] >> 3] & (1 << (clusters[i] & 7))) != 0)
+				return true;
+		}
+
+		return false;
+	}
+
 	internal bool IsInPVS(CheckTransmitInfo info) {
-		return true; // TODO!
+		Assert(Pev == null || ((Pev.StateFlags & EdictFlags.DirtyPVSInformation) == 0));
+
+		int i;
+
+		if (PVSInfo.AreaNum2 == 0) {
+			for (i = 0; i < info.AreasNetworked; i++) {
+				int clientArea = info.Areas[i];
+				if (clientArea == PVSInfo.AreaNum || engine.CheckAreasConnected(clientArea, PVSInfo.AreaNum) != 0)
+					break;
+			}
+		}
+		else {
+			for (i = 0; i < info.AreasNetworked; i++) {
+				int clientArea = info.Areas[i];
+				if (clientArea == PVSInfo.AreaNum || clientArea == PVSInfo.AreaNum2)
+					break;
+
+				if (engine.CheckAreasConnected(clientArea, PVSInfo.AreaNum) != 0)
+					break;
+
+				if (engine.CheckAreasConnected(clientArea, PVSInfo.AreaNum2) != 0)
+					break;
+			}
+		}
+
+		if (i == info.AreasNetworked)
+			return false;
+
+		Assert(Pev != info.ClientEnt);
+
+		byte[] pvs = info.PVS;
+
+		if (PVSInfo.ClusterCount < 0)
+			return engine.CheckHeadnodeVisible(PVSInfo.HeadNode, pvs.AsSpan(0, info.PVSSize)) != 0;
+
+		ReadOnlySpan<ushort> clusters = PVSInfo.GetClusters();
+		for (i = clusters.Length; --i >= 0;) {
+			int cluster = clusters[i];
+			if ((pvs[cluster >> 3] & (1 << (cluster & 7))) != 0)
+				return true;
+		}
+
+		return false;
 	}
 
 	internal ServerNetworkProperty? GetNetworkParent() {
@@ -99,6 +180,9 @@ public class ServerNetworkProperty : IServerNetworkable, IEventRegisterCallback
 	}
 
 	internal void RecomputePVSInformation() {
-		// throw new NotImplementedException(); // TODO!
+		if (Pev != null && ((Pev.StateFlags & EdictFlags.DirtyPVSInformation) != 0)) {
+			Pev.StateFlags &= ~EdictFlags.DirtyPVSInformation;
+			engine.BuildEntityClusterList(Pev, ref PVSInfo);
+		}
 	}
 }

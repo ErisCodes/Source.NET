@@ -55,7 +55,11 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 		channel.RegisterMessage<CLC_GMod_ClientToServer>();
 	}
 
-	public virtual bool IgnoreTempEntity(EventInfo evnt) { return false; }
+	public virtual bool IgnoreTempEntity(EventInfo evnt) {
+		int playerIndex = GetPlayerSlot() + 1;
+
+		return !evnt.Filter.IncludesPlayer(playerIndex);
+	}
 	public virtual void ConnectionClosing(ReadOnlySpan<char> reason) { }
 	public virtual void ConnectionCrashed(ReadOnlySpan<char> reason) { }
 	public virtual void PacketStart(int incomingSequence, int outgoingAcknowledged) { }
@@ -517,6 +521,8 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 		return true;
 	}
 
+	protected virtual void WriteGameSounds(bf_write buf) { }
+
 	protected virtual ClientFrame? GetDeltaFrame(int tick) {
 		Assert(false);
 		return null;
@@ -566,7 +572,7 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 		int maxTempEnts = Server.IsMultiplayer() ? 64 : 255;
 		Server.WriteTempEntities(this, frame.GetSnapshot(), LastSnapshot, msg, maxTempEnts);
 
-		// WriteGameSounds();
+		WriteGameSounds(msg);
 
 		if (msg.Overflowed) {
 			bool wasTracing = Tracing != 0;

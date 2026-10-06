@@ -811,9 +811,20 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		if (existingMaterial != null)
 			return existingMaterial;
 
-		Span<char> vmtName = stackalloc char["materials/".Length + tempNameBuffer.Length];
-		"materials/".CopyTo(vmtName);
-		tempNameBuffer.CopyTo(vmtName["materials/".Length..]);
+		Span<char> vmtNameBuffer = stackalloc char["materials/".Length + tempNameBuffer.Length + 1];
+		vmtNameBuffer.Clear();
+
+		bool isUNC = tempNameBuffer.Length > 2 && tempNameBuffer[0] == '/' && tempNameBuffer[1] == '/' && tempNameBuffer[2] != '/';
+		if (!isUNC) {
+			"materials/".CopyTo(vmtNameBuffer);
+			tempNameBuffer.CopyTo(vmtNameBuffer["materials/".Length..]);
+
+			StrTools.FixDoubleSlashes(vmtNameBuffer);
+		}
+		else
+			tempNameBuffer.CopyTo(vmtNameBuffer);
+
+		ReadOnlySpan<char> vmtName = vmtNameBuffer.SliceNullTerminatedString();
 
 		List<FileNameHandle_t>? includes = null;
 		KeyValues keyValues = new("vmt");

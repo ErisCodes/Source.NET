@@ -76,7 +76,7 @@ public class SoundEmitterSystem : BaseGameSystem
 			(int)parms.Channel,
 			parms.SoundName,
 			parms.Volume,
-			(float)parms.SoundLevel,
+			parms.SoundLevel,
 			ep.Flags,
 			parms.Pitch,
 			ep.SpecialDSP,
@@ -133,8 +133,10 @@ public class SoundEmitterSystem : BaseGameSystem
 		if (ep.SoundScriptHandle == SOUNDEMITTER_INVALID_HANDLE)
 			ep.SoundScriptHandle = (HSOUNDSCRIPTHANDLE)soundemitterbase.GetSoundIndex(ep.SoundName);
 
-		if (ep.SoundScriptHandle == -1)
+		if (ep.SoundScriptHandle == -1) {
+			DevMsg($"CSoundEmitterSystem::EmitSound:  No such sound {ep.SoundName}\n");
 			return;
+		}
 
 		EmitSoundByHandle(filter, entindex, ep, ref ep.SoundScriptHandle);
 	}
@@ -197,6 +199,21 @@ public class SoundEmitterSystem : BaseGameSystem
 		}
 	}
 
+	internal void InternalPrefetchWaves(int soundIndex) {
+		ref SoundParametersInternal internalParms = ref soundemitterbase.InternalGetParametersForSound(soundIndex);
+		if (Unsafe.IsNullRef(ref internalParms))
+			return;
+
+		int waveCount = internalParms.NumSoundNames();
+		if (waveCount == 0) {
+			DevMsg($"CSoundEmitterSystem:  sounds.txt entry '{soundemitterbase.GetSoundName(soundIndex)}' has no waves listed under 'wave' or 'rndwave' key!!!\n");
+		}
+		else {
+			for (int wave = 0; wave < waveCount; wave++)
+				BaseEntity.PrefetchSound(soundemitterbase.GetWaveName(internalParms.GetSoundNames()[wave].Symbol));
+		}
+	}
+
 	public HSOUNDSCRIPTHANDLE PrecacheScriptSound(ReadOnlySpan<char> soundname) {
 		int soundIndex = soundemitterbase.GetSoundIndex(soundname);
 		if (!soundemitterbase.IsValidIndex(soundIndex)) {
@@ -216,6 +233,17 @@ public class SoundEmitterSystem : BaseGameSystem
 
 		InternalPrecacheWaves(soundIndex);
 		return (HSOUNDSCRIPTHANDLE)soundIndex;
+	}
+
+	public void PrefetchScriptSound(ReadOnlySpan<char> soundname) {
+		int soundIndex = soundemitterbase.GetSoundIndex(soundname);
+		if (!soundemitterbase.IsValidIndex(soundIndex)) {
+			if (!stristr(soundname, ".wav").IsEmpty || !strstr(soundname, ".mp3").IsEmpty)
+				BaseEntity.PrefetchSound(soundname);
+			return;
+		}
+
+		InternalPrefetchWaves(soundIndex);
 	}
 
 #if !CLIENT_DLL
@@ -290,6 +318,10 @@ BaseEntity
 #endif
 {
 	public static void StopSound(int entIndex, int channel, ReadOnlySpan<char> sample) => g_SoundEmitterSystem.StopSound(entIndex, channel, sample);
+	public static void StopSound(int entIndex, ReadOnlySpan<char> soundname) => g_SoundEmitterSystem.StopSound(entIndex, soundname);
+#if GAME_DLL
+	public void StopSound(ReadOnlySpan<char> soundname) => StopSound(EntIndex(), soundname);
+#endif
 
 	public static SoundLevel LookupSoundLevel(ReadOnlySpan<char> soundname) {
 		return soundemitterbase.LookupSoundLevel(soundname);
@@ -357,9 +389,14 @@ BaseEntity
 		g_SoundEmitterSystem.EmitSoundByHandle(filter, entIndex, parms, ref handle);
 	}
 
-	public bool GetParametersForSound(ReadOnlySpan<char> soundName, ref SoundParameters parms, ReadOnlySpan<char> actorModel) {
+	public static bool GetParametersForSound(ReadOnlySpan<char> soundName, ref SoundParameters parms, ReadOnlySpan<char> actorModel) {
 		Gender gender = soundemitterbase.GetActorGender(actorModel);
 		return soundemitterbase.GetParametersForSound(soundName, ref parms, gender);
+	}
+
+	public static bool GetParametersForSound(ReadOnlySpan<char> soundName, ref HSOUNDSCRIPTHANDLE handle, ref SoundParameters parms, ReadOnlySpan<char> actorModel) {
+		Gender gender = soundemitterbase.GetActorGender(actorModel);
+		return soundemitterbase.GetParametersForSoundEx(soundName, ref handle, ref parms, gender);
 	}
 }
 #endif

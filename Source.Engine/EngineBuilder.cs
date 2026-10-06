@@ -8,6 +8,7 @@ using Source.Common.Engine;
 using Source.Common.GameUI;
 using Source.Common.MaterialSystem;
 using Source.Common.Networking;
+using Source.Common.SceneFileCache;
 using Source.Common.Server;
 using Source.Common.ToolFramework;
 using Source.Engine.Client;
@@ -188,6 +189,7 @@ public class EngineBuilder(ICommandLine cmdLine) : ServiceCollection
 		this.AddSingleton<IGame, Game>();
 		this.AddSingleton<IVDebugOverlay, DebugOverlay>();
 		this.AddSingleton<IGameEventManager2, GameEventManager>();
+		this.AddSingleton<ISceneFileCache, SceneFileCache>();
 		this.AddSingleton<ModInfo>(); // This may not be valid for a while! At least until gameinfo is readable!
 									  // Client state and server state singletons
 		this.AddSingleton<ClientState>();

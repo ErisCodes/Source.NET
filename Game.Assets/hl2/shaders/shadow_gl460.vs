@@ -19,11 +19,11 @@ layout(std140, binding = 5) uniform source_vs_constants {
 #define cTextureJitter0 vs_const[50]
 #define cTextureJitter1 vs_const[51]
 
-out vec2 vs_TexCoord0;
-out vec2 vs_TexCoord1;
-out vec2 vs_TexCoord2;
-out vec2 vs_TexCoord3;
-out vec2 vs_TexCoord4;
+centroid out vec2 vs_TexCoord0;
+centroid out vec2 vs_TexCoord1;
+centroid out vec2 vs_TexCoord2;
+centroid out vec2 vs_TexCoord3;
+centroid out vec2 vs_TexCoord4;
 out vec4 vs_ShadowColor;
 
 void main()

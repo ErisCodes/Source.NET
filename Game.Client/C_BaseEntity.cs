@@ -450,16 +450,11 @@ public partial class C_BaseEntity : IClientEntity
 	public bool Teleported() => OldMoveParent != NetworkMoveParent || OldParentAttachment != ParentAttachment;
 
 	public static void ProcessInterpolatedList() {
-		LinkedListNode<C_BaseEntity>? curr = InterpolationList.First;
-		LinkedListNode<C_BaseEntity>? next = curr?.Next;
-		while (curr != null) {
+		LinkedListNode<C_BaseEntity>? next;
+		for (LinkedListNode<C_BaseEntity>? curr = InterpolationList.First; curr != null; curr = next) {
+			next = curr.Next;
 			C_BaseEntity entity = curr.Value;
 			entity.ReadyToDraw = entity.Interpolate(gpGlobals.CurTime);
-			if (curr.List == null) // We got removed!!
-				curr = next;
-
-			curr = curr?.Next;
-			next = curr?.Next;
 		}
 	}
 
@@ -560,7 +555,7 @@ public partial class C_BaseEntity : IClientEntity
 		RecvPropFloat(FIELD.OF(nameof(ShadowCastDistance))),
 		RecvPropEHandle(FIELD.OF(nameof(OwnerEntity))),
 		RecvPropEHandle(FIELD.OF(nameof(EffectEntity))),
-		RecvPropInt(FIELD.OF(nameof(MoveParent)), 0, RecvProxy_IntToMoveParent),
+		RecvPropInt(FIELD.OF(nameof(NetworkMoveParent)), 0, RecvProxy_IntToMoveParent),
 		RecvPropInt(FIELD.OF(nameof(ParentAttachment))),
 
 		RecvPropInt(FIELD.OF(nameof(MoveType)), 0, RecvProxy_MoveType),
@@ -821,6 +816,7 @@ public partial class C_BaseEntity : IClientEntity
 	public EHANDLE EffectEntity = new();
 	[NetworkName("m_hGroundEntity")]
 	public EHANDLE GroundEntity = new();
+	[NetworkName("moveparent")]
 	public EHANDLE NetworkMoveParent = new();
 	public EHANDLE OldMoveParent = new();
 	public string? ModelName;
@@ -1122,7 +1118,7 @@ public partial class C_BaseEntity : IClientEntity
 		ClientLeafSystem.DefaultRenderBoundsWorldspace(this, out mins, out maxs);
 	}
 
-	public bool IsTransparent() {
+	public virtual bool IsTransparent() {
 		return modelinfo.IsTranslucent(Model) || RenderMode != (int)Source.RenderMode.Normal;
 	}
 
@@ -1134,7 +1130,6 @@ public partial class C_BaseEntity : IClientEntity
 		SetGroundEntity(null);
 	}
 
-	[NetworkName("moveparent")]
 	public EHANDLE MoveParent = new();
 	public EHANDLE MoveChild = new();
 	public EHANDLE MovePeer = new();
@@ -1143,6 +1138,21 @@ public partial class C_BaseEntity : IClientEntity
 	public void UnlinkFromHierarchy() {
 		if (MoveParent.IsValid())
 			UnlinkChild(MoveParent.Get(), this);
+	}
+
+	public void HierarchySetParent(C_BaseEntity? newParent) {
+		EHANDLE newParentHandle = default;
+		newParentHandle.Set(newParent);
+		if (newParentHandle.Index == MoveParent.Index)
+			return;
+
+		if (MoveParent.IsValid())
+			UnlinkChild(MoveParent.Get(), this);
+
+		if (newParent != null)
+			LinkChild(newParent, this);
+
+		InvalidatePhysicsRecursive(InvalidatePhysicsBits.PositionChanged | InvalidatePhysicsBits.AnglesChanged | InvalidatePhysicsBits.VelocityChanged);
 	}
 
 	public void LinkChild(C_BaseEntity parent, C_BaseEntity child) {
@@ -1456,7 +1466,8 @@ public partial class C_BaseEntity : IClientEntity
 		else if (predictable)
 			OnStoreLastNetworkedValue();
 
-		// HierarchySetParent(NetworkMoveParent);
+		Assert(NetworkMoveParent.Get() != null || !NetworkMoveParent.IsValid());
+		HierarchySetParent(NetworkMoveParent.Get());
 
 		MarkMessageReceived();
 
@@ -2368,7 +2379,8 @@ public partial class C_BaseEntity : IClientEntity
 
 
 	public void OnDataUnchangedInPVS() {
-		// HierarchySetParent(NetworkMoveParent);
+		Assert(NetworkMoveParent.Get() != null || !NetworkMoveParent.IsValid());
+		HierarchySetParent(NetworkMoveParent.Get());
 		MarkMessageReceived();
 	}
 
@@ -2376,7 +2388,7 @@ public partial class C_BaseEntity : IClientEntity
 		return null;
 	}
 
-	public void ComputeFxBlend() {
+	public virtual void ComputeFxBlend() {
 		// todo
 	}
 
@@ -3159,7 +3171,7 @@ public partial class C_BaseEntity : IClientEntity
 	public Color GetRenderColor() => ColorRender;
 	public RenderMode GetRenderMode() => (RenderMode)RenderMode;
 
-	public bool ShouldReceiveProjectedTextures(ShadowFlags flags) {
+	public virtual bool ShouldReceiveProjectedTextures(ShadowFlags flags) {
 		if (IsEffectActive(EntityEffects.NoDraw))
 			return false;
 
