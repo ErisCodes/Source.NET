@@ -174,6 +174,94 @@ public static class PhysicsSharedGlobals
 		return flags;
 	}
 
+	public static void PhysRecheckObjectPair(IPhysicsObject obj0, IPhysicsObject obj1) {
+		if (!obj0.IsStatic())
+			obj0.RecheckCollisionFilter();
+		if (!obj1.IsStatic())
+			obj1.RecheckCollisionFilter();
+	}
+
+	public static void PhysEnableEntityCollisions(IPhysicsObject? obj0, IPhysicsObject? obj1) {
+		if (obj0 == null || obj1 == null)
+			return;
+
+		g_EntityCollisionHash.RemoveObjectPair(obj0.GetGameData()!, obj1.GetGameData()!);
+		PhysRecheckObjectPair(obj0, obj1);
+	}
+
+	public static void PhysDisableEntityCollisions(IPhysicsObject? obj0, IPhysicsObject? obj1) {
+		if (obj0 == null || obj1 == null)
+			return;
+
+		g_EntityCollisionHash.AddObjectPair(obj0.GetGameData()!, obj1.GetGameData()!);
+		PhysRecheckObjectPair(obj0, obj1);
+	}
+
+	public static void PhysDisableEntityCollisions(BaseEntity? entity0, BaseEntity? entity1) {
+		if (entity0 == null || entity1 == null)
+			return;
+
+		g_EntityCollisionHash.AddObjectPair(entity0, entity1);
+#if !CLIENT_DLL
+		entity0.CollisionRulesChanged();
+		entity1.CollisionRulesChanged();
+#endif
+	}
+
+	public static void PhysEnableEntityCollisions(BaseEntity? entity0, BaseEntity? entity1) {
+		if (entity0 == null || entity1 == null)
+			return;
+
+		g_EntityCollisionHash.RemoveObjectPair(entity0, entity1);
+#if !CLIENT_DLL
+		entity0.CollisionRulesChanged();
+		entity1.CollisionRulesChanged();
+#endif
+	}
+
+	public static bool PhysEntityCollisionsAreDisabled(BaseEntity entity0, BaseEntity entity1) => g_EntityCollisionHash.IsObjectPairInHash(entity0, entity1);
+
+	public static void PhysEnableObjectCollisions(IPhysicsObject? obj0, IPhysicsObject? obj1) {
+		if (obj0 == null || obj1 == null)
+			return;
+
+		g_EntityCollisionHash.RemoveObjectPair(obj0, obj1);
+		PhysRecheckObjectPair(obj0, obj1);
+	}
+
+	public static void PhysDisableObjectCollisions(IPhysicsObject? obj0, IPhysicsObject? obj1) {
+		if (obj0 == null || obj1 == null)
+			return;
+
+		g_EntityCollisionHash.AddObjectPair(obj0, obj1);
+		PhysRecheckObjectPair(obj0, obj1);
+	}
+
+	public static void PhysComputeSlideDirection(IPhysicsObject physics, in Vector3 inputVelocity, in Vector3 inputAngularVelocity, out Vector3 outputVelocity, out Vector3 outputAngularVelocity, bool computeAngular, float minMass) {
+		Vector3 velocity = inputVelocity;
+		Vector3 angVel = inputAngularVelocity;
+
+		IPhysicsFrictionSnapshot snapshot = physics.CreateFrictionSnapshot();
+		while (snapshot.IsValid()) {
+			IPhysicsObject other = snapshot.GetObject(1)!;
+			if (!other.IsMoveable() || other.GetMass() > minMass) {
+				snapshot.GetSurfaceNormal(out Vector3 normal);
+
+				if (computeAngular)
+					angVel = normal * Vector3.Dot(angVel, normal);
+
+				float proj = Vector3.Dot(velocity, normal);
+				if (proj > 0.0f)
+					velocity -= normal * proj;
+			}
+			snapshot.NextFrictionData();
+		}
+		physics.DestroyFrictionSnapshot(snapshot);
+
+		outputVelocity = velocity;
+		outputAngularVelocity = angVel;
+	}
+
 	public static void PhysForceClearVelocity(IPhysicsObject phys) {
 		IPhysicsFrictionSnapshot snapshot = phys.CreateFrictionSnapshot();
 		Vector3 vel = default;
