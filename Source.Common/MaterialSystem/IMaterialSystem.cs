@@ -717,7 +717,7 @@ public interface IMaterialSystem
 	// fixme: could just be an array of ints for lightmapPageIDs since the material
 	// for a surface is already known.
 	int GetNumSortIDs();
-	void GetSortInfo(out MaterialSystem_SortInfo sortInfoArray);
+	void GetSortInfo(Span<MaterialSystem_SortInfo> sortInfoArray);
 
 	// Read the page size of an existing lightmap by sort id (returned from AllocateLightmap())
 	void GetLightmapPageSize(int lightmap, out int width, out int height);

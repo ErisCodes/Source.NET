@@ -11,6 +11,7 @@ using Source.Engine;
 using System.Drawing.Drawing2D;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 namespace Game.Client;
 
 [EngineComponent]
@@ -33,7 +34,7 @@ public static class ViewScene
 		if (IsPC() || forceUpdate || g_bAllowMultipleRefractUpdatesPerScenePerFrame || (gpGlobals.FrameCount != g_viewscene_refractUpdateFrame)) {
 			// forced or only once per frame 
 			System.Drawing.Rectangle rect = new(x, y, w, h);
-			renderContext.CopyRenderTargetToTextureEx(texture!, 0, rect, null);
+			renderContext.CopyRenderTargetToTextureEx(texture!, 0, ref rect, ref Unsafe.NullRef<System.Drawing.Rectangle>());
 
 			g_viewscene_refractUpdateFrame = gpGlobals.FrameCount;
 		}
@@ -77,7 +78,7 @@ public static class ViewScene
 			destRect.Height = Math.Clamp(destRect.Height, 0, destHeight - destRect.Y);
 		}
 
-		renderContext.CopyRenderTargetToTextureEx(texture, 0, srcRect, destFullScreen ? null : destRect);
+		renderContext.CopyRenderTargetToTextureEx(texture, 0, ref srcRect, ref destFullScreen ? ref Unsafe.NullRef<System.Drawing.Rectangle>() : ref destRect);
 		renderContext.SetFrameBufferCopyTexture(texture, textureIndex);
 
 		actualRect = destRect;

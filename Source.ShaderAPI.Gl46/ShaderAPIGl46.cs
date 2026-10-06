@@ -92,7 +92,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	public static void DLLInit(IServiceCollection services) {
 		services.AddSingleton(x => (IDebugTextureInfo)(ShaderAPIGl46)x.GetRequiredService<IShaderAPI>());
-		services.AddSingleton(x => x.GetRequiredService<IShaderAPI>().GetShaderDevice());
+		services.AddSingleton(x => ((ShaderAPIGl46)x.GetRequiredService<IShaderAPI>()).GetShaderDevice());
 		services.AddSingleton<IMeshMgr, MeshMgr>();
 		services.AddSingleton<IMaterialSystemHardwareConfig, HardwareConfig>();
 		services.AddSingleton<IShaderSystem, ShaderSystem>();
@@ -184,12 +184,12 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	public int GetDynamicComboScale(ShaderType type, ReadOnlySpan<char> name) => currentShadow?.GetDynamicComboScale(type, name) ?? 0;
 
-	public void BindVertexShader(in VertexShaderHandle vertexShader) {
+	public void BindVertexShader(VertexShaderHandle vertexShader) {
 		activeVertexShader = vertexShader;
 		pipelineChanged = true;
 	}
 
-	public void BindPixelShader(in PixelShaderHandle pixelShader) {
+	public void BindPixelShader(PixelShaderHandle pixelShader) {
 		activePixelShader = pixelShader;
 		pipelineChanged = true;
 	}
@@ -262,7 +262,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		PresentParameters = info;
 	}
 
-	private void ResetRenderState(bool fullReset = true) {
+	public void ResetRenderState(bool fullReset = true) {
 		if (fullReset) {
 			InitVertexAndPixelShaders();
 		}
@@ -304,7 +304,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	private InlineArray6<Vector4> AmbientLightCube;
 	private int CachedAmbientLightCube = (int)TransformDirtyBits.StateChanged;
-	public void SetAmbientLightCube(ReadOnlySpan<Vector4> cube) {
+	public void SetAmbientLightCube(Span<Vector4> cube) {
 		Span<Vector4> dst = AmbientLightCube;
 		if (!memcmpb(dst, cube)) {
 			memcpy(dst, cube);
@@ -648,7 +648,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			}
 		}
 
-		SetPixelShaderConstant(pshReg, MemoryMarshal.Cast<Vector4, float>(lightState));
+		SetPixelShaderConstant(pshReg, MemoryMarshal.Cast<Vector4, float>(lightState), 6);
 	}
 
 	private bool VertexShaderLightingChanged(int i) => (LightChanged[i] & TransformDirtyBits.StateChangedVertexShader) != 0;
@@ -697,7 +697,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 			lightState[4] = new Vector4(light.Attenuation0, light.Attenuation1, light.Attenuation2, 0.0f);
 
-			SetVertexShaderConstant(VertexShaderConst.Lights + i * 5, MemoryMarshal.Cast<Vector4, float>(lightState));
+			SetVertexShaderConstant(VertexShaderConst.Lights + i * 5, MemoryMarshal.Cast<Vector4, float>(lightState), 5);
 		}
 
 		vertexShared.LightCount = NumLights;
@@ -710,7 +710,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		vertexShared.LightEnabled = new(lightEnable[0], lightEnable[1], lightEnable[2], lightEnable[3]);
 	}
 
-	public void GetLightState(out LightState state) {
+	public void GetDX9LightState(out LightState state) {
 		state = default;
 
 		Span<Vector4> cube = AmbientLightCube;
@@ -739,7 +739,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	public void SetVertexShaderStateAmbientLightCube() {
 		if ((CachedAmbientLightCube & (int)TransformDirtyBits.StateChangedVertexShader) != 0) {
 			Span<Vector4> cube = AmbientLightCube;
-			SetVertexShaderConstant(VertexShaderConst.AmbientLight, MemoryMarshal.Cast<Vector4, float>(cube));
+			SetVertexShaderConstant(VertexShaderConst.AmbientLight, MemoryMarshal.Cast<Vector4, float>(cube), 6);
 			CachedAmbientLightCube &= ~(int)TransformDirtyBits.StateChangedVertexShader;
 		}
 	}
@@ -1182,15 +1182,15 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	public ref readonly Vector3 GetToneMappingScaleLinear() => ref Unsafe.As<Vector4, Vector3>(ref ToneMappingScale);
 
-	public void SetVertexShaderConstant(int var, Span<float> vec) {
-		SetVertexShaderConstantInternal(var, vec);
+	public void SetVertexShaderConstant(int var, ReadOnlySpan<float> vec, int numConst = 1, bool force = false) {
+		SetVertexShaderConstantInternal(var, vec[..Math.Min(vec.Length, numConst * 4)]);
 	}
 
-	public void SetPixelShaderConstant(int var, Span<float> vec) {
-		SetPixelShaderConstantInternal(var, vec);
+	public void SetPixelShaderConstant(int var, ReadOnlySpan<float> vec, int numConst = 1, bool force = false) {
+		SetPixelShaderConstantInternal(var, vec[..Math.Min(vec.Length, numConst * 4)]);
 	}
 
-	private unsafe void SetPixelShaderConstantInternal(int var, Span<float> vec) {
+	private unsafe void SetPixelShaderConstantInternal(int var, ReadOnlySpan<float> vec) {
 		int numVecs = vec.Length / 4;
 		Assert(var + numVecs <= NUM_PIXEL_SHADER_CONSTANTS);
 
@@ -1199,7 +1199,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			return;
 
 		var += skip;
-		Span<float> src = vec.Slice(skip * 4, numVecs * 4);
+		ReadOnlySpan<float> src = vec.Slice(skip * 4, numVecs * 4);
 
 		src.CopyTo(desiredPixelShaderConstants.AsSpan(var * 4));
 		src.CopyTo(dynamicPixelShaderConstants.AsSpan(var * 4));
@@ -1228,7 +1228,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		return numVecs;
 	}
 
-	private unsafe void SetVertexShaderConstantInternal(int var, Span<float> vec) {
+	private unsafe void SetVertexShaderConstantInternal(int var, ReadOnlySpan<float> vec) {
 		int numVecs = vec.Length / 4;
 		Assert(var + numVecs <= NUM_VERTEX_SHADER_CONSTANTS);
 
@@ -1237,7 +1237,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			return;
 
 		var += skip;
-		Span<float> src = vec.Slice(skip * 4, numVecs * 4);
+		ReadOnlySpan<float> src = vec.Slice(skip * 4, numVecs * 4);
 
 		src.CopyTo(desiredVertexShaderConstants.AsSpan(var * 4));
 		src.CopyTo(dynamicVertexShaderConstants.AsSpan(var * 4));
@@ -1298,7 +1298,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 	int frame;
 
-	public void GetViewports(Span<ShaderViewport> viewports) {
+	public int GetViewports(Span<ShaderViewport> viewports) {
 		throw new NotImplementedException();
 	}
 
@@ -1457,7 +1457,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		}
 	}
 
-	public bool SetMode(IWindow window, in ShaderDeviceInfo info) {
+	public bool SetMode(IWindow window, uint adapter, in ShaderDeviceInfo info) {
 		bool restoreNeeded = false;
 
 		if (IsActive()) {
@@ -1479,7 +1479,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		return true;
 	}
 
-	public bool ChangeVideoMode(in ShaderDeviceInfo info) {
+	public void ChangeVideoMode(in ShaderDeviceInfo info) {
 		if (!info.Windowed) {
 			LauncherManager.SetWindowFullScreen(true, info.DisplayMode.Width, info.DisplayMode.Height);
 		}
@@ -1494,7 +1494,6 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		SetPresentParameters(in info);
 		InvokeModeChangeCallbacks();
-		return true;
 	}
 
 	internal IServiceProvider services;
@@ -1534,14 +1533,14 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	public int GetModeCount(int adapter) => LauncherManager.GetDisplayModeCount(adapter);
 	public void GetModeInfo(int adapter, int mode, out ShaderDisplayMode info) => LauncherManager.GetDisplayMode(adapter, mode, out info);
 
-	private List<Action> ModeChangeCallbacks = [];
-	public void AddModeChangeCallBack(Action func) {
+	private List<ModeChangeCallbackFunc> ModeChangeCallbacks = [];
+	public void AddModeChangeCallBack(ModeChangeCallbackFunc func) {
 		if (!ModeChangeCallbacks.Contains(func))
 			ModeChangeCallbacks.Add(func);
 	}
 
 	public void InvokeModeChangeCallbacks() {
-		foreach (Action func in ModeChangeCallbacks)
+		foreach (ModeChangeCallbackFunc func in ModeChangeCallbacks)
 			func();
 	}
 
@@ -1855,7 +1854,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		}
 		else {
 			Span<byte> data = vtf.ImageData(vtfFrame, 0, info.Level);
-			TexSubImage2D(info.Level, 0, 0, 0, 0, vtf.Width(), vtf.Height(), info.SrcFormat, 0, data);
+			TexSubImage2D(info.Level, 0, 0, 0, 0, vtf.Width(), vtf.Height(), info.SrcFormat, 0, false, data);
 		}
 	}
 
@@ -1866,27 +1865,28 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		int height,
 		int depth,
 		ImageFormat imageFormat,
-		ushort mipCount,
+		int mipCount,
 		int copies,
-		CreateTextureFlags creationFlags,
+		int flags,
 		ReadOnlySpan<char> debugName,
 		ReadOnlySpan<char> textureGroup) {
 		ShaderAPITextureHandle_t handle = default;
-		CreateTextures(new Span<int>(ref handle), 1, width, height, depth, imageFormat, mipCount, copies, creationFlags, debugName, textureGroup);
+		CreateTextures(new Span<int>(ref handle), width, height, depth, imageFormat, mipCount, copies, flags, debugName, textureGroup);
 		return handle;
 	}
 	public unsafe void CreateTextures(
 		Span<ShaderAPITextureHandle_t> textureHandles,
-		int count,
 		int width,
 		int height,
 		int depth,
 		ImageFormat imageFormat,
-		ushort mipCount,
+		int mipCount,
 		int copies,
-		CreateTextureFlags creationFlags,
+		int flags,
 		ReadOnlySpan<char> debugName,
 		ReadOnlySpan<char> textureGroup) {
+		int count = textureHandles.Length;
+		CreateTextureFlags creationFlags = (CreateTextureFlags)flags;
 		if (depth == 0)
 			depth = 1;
 
@@ -2108,11 +2108,11 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		}
 	}
 
-	public ShaderAPITextureHandle_t CreateDepthTexture(ImageFormat imageFormat, ushort width, ushort height, Span<char> debugName, bool texture) {
+	public ShaderAPITextureHandle_t CreateDepthTexture(ImageFormat imageFormat, int width, int height, ReadOnlySpan<char> debugName, bool texture) {
 		ShaderAPITextureHandle_t handle = CreateTextureHandle();
 		InternalTextureInfo tex = GetTexture(handle);
 		tex.Flags = InternalTextureFlags.IsAllocated;
-		tex.DebugName = (ReadOnlySpan<char>)debugName;
+		tex.DebugName = debugName;
 		tex.Width = width;
 		tex.Height = height;
 		tex.Depth = 1;
@@ -2243,7 +2243,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			tex.SetTexture(tex.CurrentCopy, textureID);
 	}
 
-	public unsafe void TexSubImage2D(int mip, int face, int x, int y, int z, int width, int height, ImageFormat srcFormat, int srcStride, Span<byte> imageData) {
+	public unsafe void TexSubImage2D(int mip, int face, int x, int y, int z, int width, int height, ImageFormat srcFormat, int srcStride, bool srcIsTiled, Span<byte> imageData) {
 		glGetError();
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, srcStride / srcFormat.SizeInBytes());
 		ConvertDataToAcceptableGLFormat(srcFormat, imageData, out srcFormat, out Span<byte> convertedData);
@@ -2478,7 +2478,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		// glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 
-	public void CopyRenderTargetToTextureEx(ShaderAPITextureHandle_t textureHandle, int renderTargetID, System.Drawing.Rectangle? srcRect = null, System.Drawing.Rectangle? dstRect = null) {
+	public void CopyRenderTargetToTextureEx(ShaderAPITextureHandle_t textureHandle, int renderTargetID, ref System.Drawing.Rectangle srcRect, ref System.Drawing.Rectangle dstRect) {
 		if (!TextureIsAllocated(textureHandle))
 			return;
 
@@ -2494,8 +2494,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		else
 			GetBackBufferDimensions(out srcWidth, out srcHeight);
 
-		System.Drawing.Rectangle src = srcRect ?? new(0, 0, srcWidth, srcHeight);
-		System.Drawing.Rectangle dst = dstRect ?? new(0, 0, tex.Width, tex.Height);
+		System.Drawing.Rectangle src = Unsafe.IsNullRef(ref srcRect) ? new(0, 0, srcWidth, srcHeight) : srcRect;
+		System.Drawing.Rectangle dst = Unsafe.IsNullRef(ref dstRect) ? new(0, 0, tex.Width, tex.Height) : dstRect;
 
 		int srcY0 = srcHeight - (src.Y + src.Height);
 		int dstY0 = tex.Height - (dst.Y + dst.Height);
@@ -2715,22 +2715,22 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		ShaderUtil.BindStandardTexture(sampler, id);
 	}
 
-	public FlashlightState GetFlashlightState(out Matrix4x4 worldToTexture) {
+	public ref readonly FlashlightState GetFlashlightState(out Matrix4x4 worldToTexture) {
 		worldToTexture = FlashlightWorldToTexture;
-		return FlashlightState;
+		return ref FlashlightState;
 	}
 
-	public FlashlightState GetFlashlightStateEx(out Matrix4x4 worldToTexture, out ITexture? flashlightDepthTexture) {
+	public ref readonly FlashlightState GetFlashlightStateEx(out Matrix4x4 worldToTexture, out ITexture? flashlightDepthTexture) {
 		worldToTexture = FlashlightWorldToTexture;
 		flashlightDepthTexture = FlashlightDepthTexture;
-		return FlashlightState;
+		return ref FlashlightState;
 	}
 
 	public bool IsHWMorphingEnabled() {
 		throw new NotImplementedException();
 	}
 
-	public void GetWorldSpaceCameraPosition(ref Span<float> eyePos) {
+	public void GetWorldSpaceCameraPosition(Span<float> eyePos) {
 		eyePos[0] = WorldSpaceCameraPosition.X;
 		eyePos[1] = WorldSpaceCameraPosition.Y;
 		eyePos[2] = WorldSpaceCameraPosition.Z;
@@ -2747,7 +2747,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		(SceneFogMode != MaterialFogMode.LinearBelowFogZ) &&
 		(GetIntRenderingParameter(RenderParamInt.WriteDepthToDestAlpha) != 0);
 
-	public void MarkUnusedVertexFields(int v, Span<bool> unusedTexCoords) {
+	public void MarkUnusedVertexFields(uint flags, Span<bool> unusedTexCoords) {
 		throw new NotImplementedException();
 	}
 
@@ -2891,7 +2891,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		}
 	}
 
-	private void SetDepthFeatheringPixelShaderConstant(int reg, float scale) {
+	public void SetDepthFeatheringPixelShaderConstant(int reg, float scale) {
 		// TODO!
 		// Span<float> consts = [0, 0, 0, 0];
 
@@ -2901,7 +2901,9 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		// SetPixelShaderConstant(reg, consts);
 	}
 
-	public int GetIntRenderingParameter(RenderParamInt parm) {
+	public int GetIntRenderingParameter(RenderParamInt parm) => GetIntRenderingParameter((int)parm);
+
+	public int GetIntRenderingParameter(int parmNumber) {
 		// throw new NotImplementedException();
 		return 0;// todo
 	}
@@ -2909,10 +2911,10 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	public void SetPixelShaderStateAmbientLightCube(int reg, bool forceToBlack) {
 		if (forceToBlack) {
 			Span<Vector4> tempCube = stackalloc Vector4[6];
-			SetPixelShaderConstant(reg, MemoryMarshal.Cast<Vector4, float>(tempCube));
+			SetPixelShaderConstant(reg, MemoryMarshal.Cast<Vector4, float>(tempCube), 6);
 		}
 		else
-			SetPixelShaderConstant(reg, MemoryMarshal.Cast<Vector4, float>(MemoryMarshal.CreateSpan(ref AmbientLightCube[0], 6)));
+			SetPixelShaderConstant(reg, MemoryMarshal.Cast<Vector4, float>(MemoryMarshal.CreateSpan(ref AmbientLightCube[0], 6)), 6);
 	}
 
 	float IShaderDynamicAPI.GetLightMapScaleFactor() {
@@ -2932,5 +2934,557 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			fLuminance += Vector4.Dot(luminance, cube[i]);
 
 		return fLuminance / 6.0f;
+	}
+
+	public void AcquireThreadOwnership() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void BeginOcclusionQueryDrawing(ShaderAPIOcclusionQuery_t query) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void BeginPIXEvent(Color color, ReadOnlySpan<char> name) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void BindGeometryShader(GeometryShaderHandle geometryShader) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void BindVertexTexture(VertexTextureSampler sampler, ShaderAPITextureHandle_t textureHandle) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ClearBuffersObeyStencil(bool clearColor, bool clearDepth) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ClearBuffersObeyStencilEx(bool clearColor, bool clearAlpha, bool clearDepth) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ClearSelectionNames() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ClearSnapshots() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ClearVertexAndPixelShaderRefCounts() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ComputeVertexDescription(Span<byte> buffer, VertexFormat vertexFormat, ref MeshDesc desc) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void CopyRenderTargetToTexture(ShaderAPITextureHandle_t textureHandle) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void CopyTextureToRenderTargetEx(int renderTargetID, ShaderAPITextureHandle_t textureHandle, ref System.Drawing.Rectangle srcRect, ref System.Drawing.Rectangle dstRect) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public ShaderAPIOcclusionQuery_t CreateOcclusionQueryObject() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void CullMode(MaterialCullMode cullMode) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void DXSupportLevelChanged() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void DestroyOcclusionQueryObject(ShaderAPIOcclusionQuery_t query) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void DestroyVertexBuffers(bool exitingLevel = false) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void DisableAlphaToCoverage() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void EnableAlphaToCoverage() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void EnableClipPlane(int index, bool bEnable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void EnableFastClip(bool enable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void EnableHWMorphing(bool enable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void EnableShaderShaderMutex(bool enable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void EnableUserClipTransformOverride(bool enable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void EndOcclusionQueryDrawing(ShaderAPIOcclusionQuery_t query) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void EndPIXEvent() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void EvictManagedResources() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void FlushHardware() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void FogEnd(float end) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void FogMaxDensity(float maxDensity) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void FogStart(float start) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ForceDepthFuncEquals(bool bEnable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ForceHardwareSync() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void GMOD_ForceFilterMode(bool forceFilter, int filterType) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public float GammaToLinear_HardwareSpecific(float gamma) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void GetFogDistances(out float start, out float end, out float fogZ) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void GetMaxToRender(IMesh mesh, bool maxUntilFlush, out int maxVerts, out int maxIndices) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public ImageFormat GetNearestRenderTargetFormat(ImageFormat fmt) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void GetSceneFogColor(out Color rgb) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void HandleDeviceLost() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public bool IsTextureResident(ShaderAPITextureHandle_t textureHandle) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public float Knob(Span<char> knobname, Span<float> setvalue = default) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void LoadSelectionName(int name) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public int OcclusionQuery_GetNumPixelsRendered(ShaderAPIOcclusionQuery_t query, bool flush = false) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void OverrideAlphaWriteEnable(bool enable, bool alphaWriteEnable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void OverrideBlend(bool overrideEnable, bool useSeparateAlpha, int srcBlend, int destBlend, int blendFunc) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void OverrideBlendSeparateAlpha(bool overrideEnable, bool useSeparateAlpha, int srcBlend, int destBlend, int blendFunc) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void OverrideColorWriteEnable(bool overrideEnable, bool colorWriteEnable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void OverrideDepthEnable(bool bEnable, bool bDepthEnable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public bool OwnGPUResources(bool bEnable) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void PerformFullScreenStencilOperation() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void PopSelectionName() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void PurgeUnusedVertexAndPixelShaders() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void PushSelectionName(int name) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ReadPixels(int x, int y, int width, int height, Span<byte> data, ImageFormat dstFormat) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ReadPixels(ref System.Drawing.Rectangle srcRect, ref System.Drawing.Rectangle dstRect, Span<byte> data, ImageFormat dstFormat, int dstStride) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ReleaseThreadOwnership() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SceneFogColor3ub(byte r, byte g, byte b) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	void IShaderAPI.SceneFogMode(MaterialFogMode fogMode) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SelectionBuffer(Span<uint> buffer) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public int SelectionMode(bool selectionMode) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetAnisotropicLevel(int anisotropyLevel) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetClipPlane(int index, ReadOnlySpan<float> plane) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetDisallowAccess(bool access) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetFastClipPlane(ReadOnlySpan<float> plane) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetFlashlightState(in FlashlightState state, in Matrix4x4 worldToTexture) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetFlexWeights(int firstWeight, ReadOnlySpan<MorphWeight> weights) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetFogZ(float fogZ) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetFullScreenTextureHandle(ShaderAPITextureHandle_t h) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetHeightClipMode(MaterialHeightClipMode heightClipMode) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetHeightClipZ(float z) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetPIXMarker(Color color, ReadOnlySpan<char> name) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetRasterState(in RasterState state) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetRenderTarget(ShaderAPITextureHandle_t colorTextureHandle = (ShaderAPITextureHandle_t)ShaderRenderTarget.Backbuffer, ShaderAPITextureHandle_t depthTextureHandle = (ShaderAPITextureHandle_t)ShaderRenderTarget.Depthbuffer) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetShadowDepthBiasFactors(float shadowSlopeScaleDepthBias, float shadowDepthBias) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SetStandardVertexShaderConstants(float fOverbright) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ShaderLock() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void ShaderUnlock() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public bool SupportsCSAAMode(int numSamples, int qualityLevel) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public bool SupportsFetch4() {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public bool SupportsMSAAMode(int nMSAAMode) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void SyncToken(ReadOnlySpan<char> pToken) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void TexSetPriority(int priority) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void UserClipTransform(in Matrix4x4 worldToView) {
+		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	}
+
+	public void BindStandardVertexTexture(VertexTextureSampler sampler, StandardTextureId id) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void ClearStencilBufferRectangle(int xmin, int ymin, int xmax, int ymax, int value) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Color3f(float r, float g, float b) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Color3fv(ReadOnlySpan<float> color) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Color3ub(byte r, byte g, byte b) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Color3ubv(ReadOnlySpan<byte> color) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Color4f(float r, float g, float b, float a) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Color4fv(ReadOnlySpan<float> color) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Color4ub(byte r, byte g, byte b, byte a) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Color4ubv(ReadOnlySpan<byte> color) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public double CurrentTime() {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void DisableTextureTransform(TextureStage textureStage) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void ExecuteCommandBuffer(Span<byte> cmdBuffer) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void GMOD_SamplerBorderClamp(Sampler sampler) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public MorphFormatFlags GetBoundMorphFormat() {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void GetCurrentColorCorrection(out ShaderColorCorrectionInfo info) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public MaterialFogMode GetCurrentFogType() {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public int GetCurrentLightCombo() {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void GetDXLevelDefaults(out GraphicsDriver max, out GraphicsDriver recommended) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public float GetFloatRenderingParameter(int parmNumber) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public ref readonly LightDesc GetLight(int lightNum) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void GetLightmapDimensions(out int w, out int h) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public int GetNumActiveDeformations() {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public int GetPackedDeformationInformation(int maskOfUnderstoodDeformations, Span<float> constantValuesOut, int bufferSize, int maximumDeformations, out int numDefsOut) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public ITexture? GetRenderTargetEx(int renderTargetID) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void GetSceneFogColor(Span<byte> rgb) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void GetStandardTextureDimensions(out int width, out int height, StandardTextureId id) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public Vector3 GetVectorRenderingParameter(int parmNumber) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public ref MeshBuilder GetVertexModifyBuilder() {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void LoadCameraToWorld() {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void MultMatrix(in Matrix4x4 m) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void MultMatrixLocal(in Matrix4x4 m) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Ortho(double left, double right, double bottom, double top, double zNear, double zFar) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void PerspectiveOffCenterX(double fovx, double aspect, double zNear, double zFar, double bottom, double top, double left, double right) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void PerspectiveX(double fovx, double aspect, double zNear, double zFar) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void PickMatrix(int x, int y, int width, int height) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void PopDeformation() {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void PushDeformation(in DeformationBase deformation ) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Rotate(float angle, float x, float y, float z) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Scale(float x, float y, float z) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void ScaleXY(float x, float y) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetBooleanPixelShaderConstant(int var, ReadOnlySpan<bool> vec, bool force = false ) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetBooleanVertexShaderConstant(int var, ReadOnlySpan<bool> vec, bool force = false ) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetBumpEnvMatrix(TextureStage textureStage, float m00, float m01, float m10, float m11) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetFloatRenderingParameter(int parmNumber, float value) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetIntRenderingParameter(int parmNumber, int value) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetIntegerPixelShaderConstant(int var, ReadOnlySpan<int> vec, bool force = false ) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetIntegerVertexShaderConstant(int var, ReadOnlySpan<int> vec, bool force = false ) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetPSNearAndFarZ(int reg) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetPixelShaderFogParams(int reg) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetTextureTransformDimension(TextureStage textureStage, int dimension, bool projected) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void SetVectorRenderingParameter(int parmNumber, in Vector3 value) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+	}
+
+	public void Translate(float x, float y, float z) {
+		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
 	}
 }

@@ -116,6 +116,12 @@ public interface IShaderAPI : IShaderDynamicAPI
 	// Flushes any primitives that are buffered
 	void FlushBufferedPrimitives();
 
+	// Gets the dynamic mesh; note that you've got to render the mesh
+	// before calling this function a second time. Clients should *not*
+	// call DestroyStaticMesh on the mesh returned by this call.
+	IMesh GetDynamicMesh(IMaterial material, int hwSkinBoneCount, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null);
+	IMesh GetDynamicMeshEx(IMaterial material, VertexFormat vertexFormat, int hwSkinBoneCount, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null);
+
 	// Renders a single pass of a material
 	void RenderPass();
 
@@ -364,6 +370,8 @@ public interface IShaderAPI : IShaderDynamicAPI
 	// disables all local lights
 	void DisableAllLocalLights();
 
+	IMesh GetFlexMesh();
+
 	void SetFlashlightStateEx(in FlashlightState state, in Matrix4x4 worldToTexture, ITexture? flashlightDepthTexture);
 
 	bool SupportsMSAAMode(int nMSAAMode);
@@ -460,4 +468,9 @@ public interface IShaderAPI : IShaderDynamicAPI
 #else
 #error Reimplement these!!
 #endif
+
+	bool TexLock(int level, int cubeFaceID, int xOffset, int yOffset, int width, int height, ref PixelWriterMem writer);
+	IShaderShadow NewShaderShadow(ReadOnlySpan<char> materialName);
+	bool IsTranslucent(IShaderShadow renderState);
+	bool IsAlphaTested(IShaderShadow renderState);
 }

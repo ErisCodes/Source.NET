@@ -75,6 +75,9 @@ public interface IShaderDevice
 	void ReleaseResources();
 	int GetModeCount(int adapter);
 	void GetModeInfo(int adapter, int mode, out ShaderDisplayMode info);
+	ImageFormat GetBackBufferFormat();
+	void AddModeChangeCallBack(ModeChangeCallbackFunc func);
+	void PreInit(IShaderUtil shaderUtil, IServiceProvider services);
 }
 public struct ShaderDisplayMode
 {

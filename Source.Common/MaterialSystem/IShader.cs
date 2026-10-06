@@ -127,10 +127,10 @@ public interface IShaderDynamicAPI
 	void MatrixMode(MaterialMatrixMode matrixMode);
 	void PushMatrix();
 	void PopMatrix();
-	void LoadMatrix(Span<float> m);
-	void MultMatrix(Span<float> m);
-	void MultMatrixLocal(Span<float> m);
-	void GetMatrix(MaterialMatrixMode matrixMode, Span<float> dst);
+	void LoadMatrix(in Matrix4x4 m);
+	void MultMatrix(in Matrix4x4 m);
+	void MultMatrixLocal(in Matrix4x4 m);
+	void GetMatrix(MaterialMatrixMode matrixMode, out Matrix4x4 dst);
 	void LoadIdentity();
 	void LoadCameraToWorld();
 	void Ortho(double left, double right, double bottom, double top, double zNear, double zFar);
@@ -208,7 +208,7 @@ public interface IShaderDynamicAPI
 	 ref readonly Vector3 GetToneMappingScaleLinear();
 	float GetLightMapScaleFactor();
 
-	void LoadBoneMatrix(int boneIndex, ReadOnlySpan<float> m );
+	void LoadBoneMatrix(int boneIndex, in Matrix3x4 m);
 
 	void PerspectiveOffCenterX(double fovx, double aspect, double zNear, double zFar, double bottom, double top, double left, double right);
 
@@ -236,7 +236,7 @@ public interface IShaderDynamicAPI
 
 	void GetDXLevelDefaults(out GraphicsDriver max, out GraphicsDriver recommended);
 
-	ref readonly FlashlightState GetFlashlightStateEx(Matrix4x4 worldToTexture, Span<ITexture> flashlightDepthTexture);
+	ref readonly FlashlightState GetFlashlightStateEx(out Matrix4x4 worldToTexture, out ITexture? flashlightDepthTexture);
 
 	float GetAmbientLightCubeLuminance();
 
@@ -294,6 +294,16 @@ public interface IShaderDynamicAPI
 #if GMOD_DLL
 	void GMOD_SamplerBorderClamp(Sampler sampler);
 #endif
+
+	int GetDynamicComboScale(ShaderType type, ReadOnlySpan<char> name);
+	int LocateShaderUniform(ReadOnlySpan<char> name);
+	void SetShaderUniform(int uniform, int integer);
+	void SetShaderUniform(int uniform, float fl);
+	void SetShaderUniform(int uniform, ReadOnlySpan<float> flConsts);
+	void SetShaderUniform(IMaterialVar variable);
+	nint GetCurrentProgram();
+	GraphicsDriver GetDriver();
+	void ExecuteCommandBuffer(ICommandStorageBuffer storage);
 }
 
 public struct LightState

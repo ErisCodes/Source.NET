@@ -119,7 +119,12 @@ public class DummyMesh : IMesh
 	static unsafe ushort* g_DummyIndices;
 	static unsafe float* dummyFloat;
 	static unsafe byte* dummyChar;
-	static unsafe void allocCheckDummyBuffers() { }
+	static unsafe void allocCheckDummyBuffers() {
+		if (g_DummyIndices == null) g_DummyIndices = (ushort*)Marshal.AllocHGlobal(6 * sizeof(ushort));
+		if (dummyFloat == null) dummyFloat = (float*)Marshal.AllocHGlobal(32 * sizeof(float));
+		if (dummyChar == null) dummyChar = (byte*)Marshal.AllocHGlobal(32);
+	}
+
 	public void BeginCastBuffer(VertexFormat format) { }
 	public void BeginCastBuffer(MaterialIndexFormat format) { }
 	public void Draw(int firstIndex = -1, int indexCount = 0) { }
@@ -130,12 +135,49 @@ public class DummyMesh : IMesh
 	public int IndexCount() => 0;
 	public MaterialIndexFormat IndexFormat() => MaterialIndexFormat.x16;
 	public bool IsDynamic() => false;
-	public unsafe bool Lock(int vertexCount, bool append, ref VertexDesc desc) => false;
+	public unsafe bool Lock(int vertexCount, bool append, ref VertexDesc desc) {
+		allocCheckDummyBuffers();
+		memreset(ref desc);
+		desc.Position = dummyFloat;
+		desc.BoneWeight = dummyFloat;
+		desc.BoneMatrixIndex = dummyChar;
+		desc.Normal = dummyFloat;
+		desc.Color = dummyChar;
+		desc.Specular = dummyChar;
+		for (int i = 0; i < IMesh.VERTEX_MAX_TEXTURE_COORDINATES; i++)
+			desc.SetTexCoord(i, dummyFloat);
+		desc.TangentS = dummyFloat;
+		desc.TangentT = dummyFloat;
+		desc.Wrinkle = dummyFloat;
+
+		// user data
+		desc.UserData = dummyFloat;
+		desc.FirstVertex = 0;
+		desc.OffsetVertex = 0;
+		return true;
+	}
 	public int Lock(bool readOnly, int firstIndex, int indexCount, ref IndexDesc desc) => 0;
-	public void LockMesh(int vertexCount, int indexCount, ref MeshDesc desc) { }    // FIXME: Make this work! Unsupported methods of IIndexBuffer
-	unsafe bool Lock(int maxIndexCount, bool append, ref IndexDesc desc) => false;
+	public void LockMesh(int vertexCount, int indexCount, ref MeshDesc desc) {
+		Lock(vertexCount, false, ref desc.Vertex);
+		Lock(indexCount, false, ref desc.Index);
+	}
+	// FIXME: Make this work! Unsupported methods of IIndexBuffer
+	unsafe bool Lock(int maxIndexCount, bool append, ref IndexDesc desc) {
+		allocCheckDummyBuffers();
+		desc.Indices = g_DummyIndices;
+		desc.IndexSize = 0;
+		desc.FirstIndex = 0;
+		desc.OffsetIndex = 0;
+		return true;
+	}
 	public void MarkAsDrawn() { }
-	public unsafe void ModifyBegin(int firstVertex, int vertexCount, int firstIndex, int indexCount, ref MeshDesc desc) { }
+	public unsafe void ModifyBegin(int firstVertex, int vertexCount, int firstIndex, int indexCount, ref MeshDesc desc) {
+		allocCheckDummyBuffers();
+		desc.Index.Indices = g_DummyIndices;
+		desc.Index.IndexSize = 0;
+		desc.Index.FirstIndex = 0;
+		desc.Index.OffsetIndex = 0;
+	}
 	public void ModifyEnd(ref MeshDesc desc) { }
 	public void SetColorMesh(IMesh colorMesh, int vertexOffset) { }
 	public void SetFlexMesh(IMesh? mesh, int vertexOffset) { }
@@ -194,7 +236,10 @@ public class DummyMaterialVar : IMaterialVar
 	public override IMaterial GetOwningMaterial() => DummyMaterialSystem.g_DummyMaterial;
 	public override string GetStringValue() => "";
 	public override ITexture? GetTextureValue() => DummyMaterialSystem.g_DummyTexture;
-	public override void GetVecValue(Span<float> color) { }
+	public override void GetVecValue(Span<float> color) {
+		for (int i = 0; i < color.Length; i++)
+			color[i] = 1;
+	}
 	public override bool IsDefined() => true;
 	public override bool MatrixIsIdentity() => false;
 	public override void SetFloatValue(float val) { }
@@ -216,7 +261,10 @@ public class DummyMaterialVar : IMaterialVar
 	static readonly float[] vecvalX3 = [1, 1, 1];
 	static readonly float[] vecvalX4 = [1, 1, 1, 1];
 	protected override Span<float> GetVecValueInternal() => vecvalX4;
-	protected override void GetVecValueInternal(Span<float> val) { }
+	protected override void GetVecValueInternal(Span<float> val) {
+		for (int i = 0; i < val.Length; i++)
+			val[i] = 1;
+	}
 	protected override int VectorSizeInternal() => 3;
 
 	public override Span<float> GetVecValue() => vecvalX4;
@@ -227,7 +275,10 @@ public class DummyMaterial : IMaterial
 	public void CallBindProxy(object? clientEntity) { }
 	public void DecrementReferenceCount() { }
 	public void DeleteIfUnreferenced() { }
-	public IMaterialVar FindVar(ReadOnlySpan<char> varName, out bool found, bool complain = true) { found = false; return null!; }
+	public IMaterialVar FindVar(ReadOnlySpan<char> varName, out bool found, bool complain = true) {
+		found = true;
+		return DummyMaterialSystem.g_DummyMaterialVar;
+	}
 	public IMaterialVar? FindVarFast(ReadOnlySpan<char> name, ref TokenCache lightmapVarCache) => null;
 	public int GetEnumerationID() => 0;
 	public float GetMappingHeight() => 512;
@@ -243,8 +294,14 @@ public class DummyMaterial : IMaterial
 	public bool HasProxy() => false;
 	public void IncrementReferenceCount() { }
 	public bool InMaterialPage() => false;
-	public void GetMaterialOffset(Span<float> offset) { }
-	public void GetMaterialScale(Span<float> scale) { }
+	public void GetMaterialOffset(Span<float> offset) {
+		offset[0] = 0.0f;
+		offset[1] = 0.0f;
+	}
+	public void GetMaterialScale(Span<float> scale) {
+		scale[0] = 1.0f;
+		scale[1] = 1.0f;
+	}
 	public bool IsErrorMaterialInternal() => false;
 	public bool IsRealTimeVersion() => false;
 	public bool IsTranslucent() => false;
@@ -256,7 +313,7 @@ public class DummyMaterial : IMaterial
 	public void ColorModulate(float r, float g, float b) { }
 	public void AlphaModulate(float alpha) { }
 	public float GetAlphaModulation() => 1.0f;
-	public void GetColorModulation(out float r, out float g, out float b) => r = g = b = 0; 
+	public void GetColorModulation(out float r, out float g, out float b) => r = g = b = 1; 
 	public void SetMaterialVarFlag(MaterialVarFlags flag, bool on) { }
 	public bool GetMaterialVarFlag(MaterialVarFlags flag) => false;
 	public bool IsTwoSided() => false;
@@ -379,7 +436,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public void BeginRenderTargetAllocation() { }
 	public void EndRenderTargetAllocation() { }
 	public ITexture? CreateRenderTargetTexture(int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared) => null;
-	public ITexture? CreateNamedRenderTargetTextureEx(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared, TextureFlags textureFlags = TextureFlags.ClampS | TextureFlags.ClampT, CreateRenderTargetFlags renderTargetFlags = 0) => null;
+	public ITexture? CreateNamedRenderTargetTextureEx(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared, TextureFlags textureFlags = TextureFlags.ClampS | TextureFlags.ClampT, CreateRenderTargetFlags renderTargetFlags = 0) => g_DummyTexture;
 	public ITexture? CreateNamedRenderTargetTexture(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared, bool clampTexCoords = true, bool autoMipMap = false) => null;
 	public ITexture? CreateNamedRenderTargetTextureEx2(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared, TextureFlags textureFlags = TextureFlags.ClampS | TextureFlags.ClampT, CreateRenderTargetFlags renderTargetFlags = 0) => null;
 	public void BeginLightmapAllocation() { }
@@ -387,8 +444,8 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public int AllocateLightmap(int width, int height, Span<int> offsetIntoLightmapPage, IMaterial? material) => 0;
 	public int AllocateWhiteLightmap(IMaterial? material) => 0;
 	public void UpdateLightmap(int lightmapPageID, Span<int> lightmapSize, Span<int> offsetIntoLightmapPage, Span<float> pFloatImage, Span<float> pFloatImageBump1, Span<float> pFloatImageBump2, Span<float> pFloatImageBump3) { }
-	public int GetNumSortIDs() => 0;
-	public void GetSortInfo(out MaterialSystem_SortInfo sortInfoArray) => sortInfoArray = default;
+	public int GetNumSortIDs() => 10;
+	public void GetSortInfo(Span<MaterialSystem_SortInfo> sortInfoArray) { }
 	public void GetLightmapPageSize(int lightmap, out int width, out int height) {
 		if (RealMaterialSystem != null)
 			RealMaterialSystem.GetLightmapPageSize(lightmap, out width, out height);
@@ -408,7 +465,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public bool SupportsCSAAMode(int nNumSamples, int nQualityLevel) => false;
 	public void RemoveModeChangeCallBack(ModeChangeCallbackFunc func) { }
 	public IMaterial? FindProceduralMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, KeyValues vmtKeyValues) =>
-		RealMaterialSystem != null ? RealMaterialSystem.FindProceduralMaterial(materialName, textureGroupName, vmtKeyValues) : null;
+		RealMaterialSystem != null ? RealMaterialSystem.FindProceduralMaterial(materialName, textureGroupName, vmtKeyValues) : g_DummyMaterial;
 	public ImageFormat GetNullTextureFormat() => ImageFormat.Unknown;
 	public void AddTextureAlias(ReadOnlySpan<char> alias, ReadOnlySpan<char> realName) { }
 	public void RemoveTextureAlias(ReadOnlySpan<char> alias) { }
@@ -420,7 +477,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public void ReloadFilesInList(IFileList filesToReload) { }
 	public bool AllowThreading(bool aAllow, int serviceThread) => false;
 	public IMaterial? FindMaterialEx(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroupName, int context, bool complain = true, ReadOnlySpan<char> complainPrefix = default) =>
-		RealMaterialSystem != null ? RealMaterialSystem.FindMaterialEx(materialName, textureGroupName, context, complain, complainPrefix) : null;
+		RealMaterialSystem != null ? RealMaterialSystem.FindMaterialEx(materialName, textureGroupName, context, complain, complainPrefix) : g_DummyMaterial;
 	public void DoStartupShaderPreloading() { }
 	public ReadOnlySpan<char> GetDisplayDeviceName() => "";
 	public void GMOD_FlushQueue() { }
@@ -607,7 +664,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 		texCoord = default;
 		return false;
 	}
-	public IMesh? GetDynamicMeshEx(VertexFormat vertexFormat, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => default;
+	public IMesh? GetDynamicMeshEx(VertexFormat vertexFormat, bool buffered = true, IMesh? vertexOverride = null, IMesh? indexOverride = null, IMaterial? autoBind = null) => GetDummyMesh();
 	public void FogMaxDensity(float maxDensity) { }
 	public IMaterial? GetCurrentMaterial() => default;
 	public int GetCurrentNumBones() => 0;

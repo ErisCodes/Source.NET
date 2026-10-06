@@ -203,7 +203,7 @@ public partial class BaseVSShader : BaseShader
 					consts[11] = shaderParams[nOutlineStartVar].GetFloatValue();
 			}
 
-			ShaderAPI.SetPixelShaderConstant(0, consts);
+			ShaderAPI.SetPixelShaderConstant(0, consts, 3);
 
 			// todo waterfog/skinning
 		}
@@ -300,7 +300,7 @@ public partial class BaseVSShader : BaseShader
 
 		Matrix4x4 t = Matrix4x4.Transpose(mat);
 		Span<float> rows = [t.M11, t.M12, t.M13, t.M14, t.M21, t.M22, t.M23, t.M24, t.M31, t.M32, t.M33, t.M34,];
-		ShaderAPI!.SetVertexShaderConstant(vertexReg, rows);
+		ShaderAPI!.SetVertexShaderConstant(vertexReg, rows, 3);
 	}
 
 	public void SetVertexShaderTextureTransform(int vertexReg, int transformVar) {
@@ -317,7 +317,7 @@ public partial class BaseVSShader : BaseShader
 			transformation[4] = 0.0f; transformation[5] = 1.0f; transformation[6] = 0.0f; transformation[7] = 0.0f;
 		}
 
-		ShaderAPI!.SetVertexShaderConstant(vertexReg, transformation);
+		ShaderAPI!.SetVertexShaderConstant(vertexReg, transformation, 2);
 	}
 
 	public void SetVertexShaderTextureScaledTransform(int vertexReg, int transformVar, int scaleVar) {
@@ -348,7 +348,7 @@ public partial class BaseVSShader : BaseShader
 		transformation[3] *= scaleX;
 		transformation[7] *= scaleY;
 
-		ShaderAPI!.SetVertexShaderConstant(vertexReg, transformation);
+		ShaderAPI!.SetVertexShaderConstant(vertexReg, transformation, 2);
 	}
 
 	public void SetVertexShaderMatrix3x4(int vertexReg, int matrixVar) {
@@ -356,12 +356,12 @@ public partial class BaseVSShader : BaseShader
 		if (translationVar != null) {
 			Matrix4x4 mat = translationVar.GetMatrixValue();
 			Span<float> rows = [mat.M11, mat.M12, mat.M13, mat.M14, mat.M21, mat.M22, mat.M23, mat.M24, mat.M31, mat.M32, mat.M33, mat.M34];
-			ShaderAPI!.SetVertexShaderConstant(vertexReg, rows);
+			ShaderAPI!.SetVertexShaderConstant(vertexReg, rows, 3);
 		}
 		else {
 			Matrix4x4 matrix = Matrix4x4.Identity;
 			Span<float> rows = [matrix.M11, matrix.M12, matrix.M13, matrix.M14, matrix.M21, matrix.M22, matrix.M23, matrix.M24, matrix.M31, matrix.M32, matrix.M33, matrix.M34];
-			ShaderAPI!.SetVertexShaderConstant(vertexReg, rows);
+			ShaderAPI!.SetVertexShaderConstant(vertexReg, rows, 3);
 		}
 	}
 

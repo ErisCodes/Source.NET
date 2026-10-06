@@ -6,13 +6,6 @@ using System.Numerics;
 
 namespace Source.MaterialSystem;
 
-public class MatCallQueue : ICallQueue
-{
-	public void QueueFunctorInternal(ref Functor functor) {
-		throw new NotImplementedException();
-	}
-}
-
 public interface IMatRenderContextInternal : IMatRenderContext
 {
 	float GetFloatRenderingParameter(int parmNumber);
