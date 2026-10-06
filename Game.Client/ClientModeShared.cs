@@ -4,6 +4,7 @@ using Game.Shared;
 using Source;
 using Source.Common;
 using Source.Common.Bitbuffers;
+using Source.Common.Commands;
 using Source.Common.Formats.Keyvalues;
 using Source.Common.GUI;
 using Source.Common.Input;
@@ -27,6 +28,8 @@ public enum GameActionSet
 
 public class ClientModeShared : GameEventListener, IClientMode
 {
+	static readonly ConVar cl_drawhud = new("cl_drawhud", "1", 0, "Enable the rendering of the hud");
+
 #if GMOD_DLL
 	static void SetupVGuiMatrices(bool push, IMatRenderContext renderContext) {
 		if (!push) {

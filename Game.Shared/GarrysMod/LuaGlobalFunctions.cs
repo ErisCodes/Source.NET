@@ -17,6 +17,116 @@ namespace Game.Server.GarrysMod;
 
 public static partial class LuaGlobalFunctions
 {
+	public static Color HSVToColor(float hue, float saturation, float value) {
+		float h = (float)(hue % 360.0);
+		float v = value * 255.0f;
+		double chroma = (double)(255.0f * saturation) * v / 255.0;
+		double m = v - chroma;
+		double hd = h;
+		float r, g, b;
+
+		if (h > 300.0f) {
+			r = (int)v;
+			g = (int)m;
+			b = (int)-(((hd - 360.0) / 60.0) * chroma - m);
+		}
+		else if (h > 60.0f) {
+			if (h >= 180.0f) {
+				b = (int)v;
+				if (h < 240.0f) {
+					r = (int)m;
+					g = (int)(m - (hd / 60.0 - 4.0) * chroma);
+				}
+				else {
+					g = (int)m;
+					r = (int)((hd / 60.0 - 4.0) * chroma + m);
+				}
+			}
+			else {
+				g = (int)v;
+				if (h >= 120.0f) {
+					r = (int)m;
+					b = (int)((hd / 60.0 - 2.0) * chroma + m);
+				}
+				else {
+					b = (int)m;
+					r = (int)(m - (hd / 60.0 - 2.0) * chroma);
+				}
+			}
+		}
+		else {
+			r = (int)v;
+			b = (int)m;
+			g = (int)((hd / 60.0) * chroma + m);
+		}
+
+		return new Color((byte)(int)r, (byte)(int)g, (byte)(int)b, 255);
+	}
+
+	public static void RGBtoHSV(int r, int g, int b, out float h, out float s, out float v) {
+		int min = Math.Min(r, Math.Min(g, b));
+		double max;
+		if (Math.Max(g, b) < r)
+			max = r;
+		else if (b < g)
+			max = g;
+		else
+			max = b;
+
+		int maxInt = (int)max;
+		double delta = max - min;
+
+		if (delta == 0.0) {
+			h = 0.0f;
+			s = 0.0f;
+		}
+		else {
+			double sat = 255.0 * (delta / max);
+			double hh;
+			if (r == maxInt)
+				hh = (g - b) / delta;
+			else if (g == maxInt)
+				hh = (b - r) / delta + 2.0;
+			else
+				hh = (r - g) / delta + 4.0;
+			hh *= 60.0;
+			if (hh < 0.0)
+				hh += 360.0;
+			h = hh != 360.0 ? (float)hh : 0.0f;
+			s = (int)sat / 255.0f;
+		}
+		v = maxInt / 255.0f;
+	}
+
+	[LuaGlobal]
+	static int HSVToColor(ILuaInterface lua) {
+		float value = (float)lua.CheckNumber(3);
+		float saturation = (float)lua.CheckNumber(2);
+		float hue = (float)lua.CheckNumber(1);
+		lua.PushColor(HSVToColor(hue, saturation, value));
+		return 1;
+	}
+
+	[LuaGlobal]
+	static int ColorToHSV(ILuaInterface lua) {
+		LuaTable color = new(null, 0);
+		color.SetFromStack(1);
+		if (!color.isTable()) {
+			lua.TypeError("table", 1);
+			color.UnReference();
+			return 0;
+		}
+		int b = (int)color.GetMemberFloat("b", 255.0f);
+		int g = (int)color.GetMemberFloat("g", 255.0f);
+		int r = (int)color.GetMemberFloat("r", 255.0f);
+		RGBtoHSV(r, g, b, out float h, out float s, out float v);
+		lua.PushNumber(h);
+		lua.PushNumber(s);
+		lua.PushNumber(v);
+		color.UnReference();
+		return 3;
+	}
+
 	[LuaGlobal]
 	static int include(ILuaInterface lua) {
 		string file = g_Lua!.CheckString(1).ToString();

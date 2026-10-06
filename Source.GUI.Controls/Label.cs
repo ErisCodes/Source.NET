@@ -572,7 +572,7 @@ public class Label : Panel
 		ty1 = ty0 + tTall;
 	}
 
-	internal TextImage? GetTextImage() {
+	public TextImage? GetTextImage() {
 		return TextImage;
 	}
 

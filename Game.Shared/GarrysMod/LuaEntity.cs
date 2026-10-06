@@ -173,6 +173,21 @@ public static partial class LuaEntity
 	static int Entity____index(ILuaInterface lua) => EntityBaseIndex();
 
 	[LuaMethod]
+	static int Entity__IsValid(ILuaInterface lua) {
+		BaseEntity? ent = Get_Entity(1, true);
+		if (ent != null) {
+#if CLIENT_DLL
+			lua.PushBool(ent != C_World.GetClientWorldEntity());
+#else
+			lua.PushBool(ent != GetWorldEntity());
+#endif
+			return 1;
+		}
+		lua.PushBool(false);
+		return 1;
+	}
+
+	[LuaMethod]
 	static int Entity__EyePos(ILuaInterface lua) {
 		BaseEntity ent = Get_Entity(1, false)!;
 		LuaVector.Push_Vector(ent.EyePosition());

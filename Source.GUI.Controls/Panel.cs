@@ -3019,14 +3019,16 @@ public class Panel : IPanel
 		}
 
 #if GMOD_DLL
-		// todo Hovered = true
+		if (Lua != null && LuaTable != null)
+			LuaTable.SetMember("Hovered", true);
 #endif
 		OnCursorEntered();
 	}
 
 	private void InternalCursorExited() {
 #if GMOD_DLL
-		// todo Hovered = false
+		if (Lua != null && LuaTable != null)
+			LuaTable.SetMember("Hovered", false);
 #endif
 		if (IsCursorNone() || !IsMouseInputEnabled())
 			return;

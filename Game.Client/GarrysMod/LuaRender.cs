@@ -196,6 +196,18 @@ public static partial class LuaRender
 	}
 
 	[LuaFunction]
+	static int SetScissorRect(ILuaInterface lua) {
+		int left = (int)lua.CheckNumber(1);
+		int top = (int)lua.CheckNumber(2);
+		int right = (int)lua.CheckNumber(3);
+		int bottom = (int)lua.CheckNumber(4);
+		bool enable = lua.GetBool(5);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetScissorRect(left, top, right, bottom, enable);
+		return 0;
+	}
+
+	[LuaFunction]
 	static int PopFilterMag(ILuaInterface lua) {
 		RenderTextureReference.Shutdown();
 		if (FilterMagStack.Count <= 1) {

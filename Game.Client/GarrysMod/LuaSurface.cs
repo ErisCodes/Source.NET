@@ -2,6 +2,7 @@ using Source;
 using Source.Common.GarrysMod.Lua;
 using Source.Common.GUI;
 using Source.Common.MaterialSystem;
+using Source.Common.SoundEmitterSystem;
 
 using System.Runtime.CompilerServices;
 
@@ -177,8 +178,57 @@ public static partial class LuaSurface
 		return tall;
 	}
 
-	// todo: GetTextSize
-	// todo: SetFont
+	static IFont? CurrentFont;
+
+	[LuaFunction]
+	static int GetTextSize(ILuaInterface lua) {
+		if (CurrentFont == null)
+			return 0;
+
+		string? text = lua.CheckString(1);
+		if (text == null) {
+			lua.PushNumber(0);
+			lua.PushNumber(0);
+			return 2;
+		}
+
+		int wide, tall;
+		if (text.Length > 0 && text[0] == '#' && !filesystem.Language().GetString(text.AsSpan(1), DrawTextBuffer)) {
+			ReadOnlySpan<char> localized = LocalizeFind(text);
+			if (!localized.IsEmpty) {
+				surface.GetTextSize(CurrentFont, localized, out wide, out tall);
+				lua.PushNumber(wide);
+				lua.PushNumber(tall);
+				return 2;
+			}
+			text.AsSpan().ClampedCopyTo(DrawTextBuffer);
+			((Span<char>)DrawTextBuffer)[Math.Min(text.Length, 2047)] = '\0';
+		}
+		else if (text.Length == 0 || text[0] != '#') {
+			text.AsSpan().ClampedCopyTo(DrawTextBuffer);
+			((Span<char>)DrawTextBuffer)[Math.Min(text.Length, 2047)] = '\0';
+		}
+
+		surface.GetTextSize(CurrentFont, ((ReadOnlySpan<char>)DrawTextBuffer).SliceNullTerminatedString(), out wide, out tall);
+		lua.PushNumber(wide);
+		lua.PushNumber(tall);
+		return 2;
+	}
+
+	[LuaFunction]
+	static int SetFont(ILuaInterface lua) {
+		string name = lua.CheckString(1);
+		CurrentFont = LuaFonts.GetFont(name);
+		if (CurrentFont == null) {
+			CurrentFont = GModBase.GetGModBasePanel(true)!.GetScheme()!.GetFont(name, false);
+			if (CurrentFont == null) {
+				lua.ErrorFromLua($"'{name}' isn't a valid font\n");
+				return 0;
+			}
+		}
+		surface.DrawSetTextFont(CurrentFont);
+		return 0;
+	}
 
 	[LuaFunction]
 	static int GetTextureID([LuaGet] string? name) {
@@ -230,7 +280,19 @@ public static partial class LuaSurface
 	}
 
 	// todo: DrawTexturedRectRotated
-	// todo: PlaySound
+	[LuaFunction]
+	static int PlaySound(ILuaInterface lua) {
+		ReadOnlySpan<char> sound = lua.CheckString(1);
+		int index = soundemitterbase.GetSoundIndex(sound);
+		if (soundemitterbase.IsValidIndex(index)) {
+			ref SoundParametersInternal internalParams = ref soundemitterbase.InternalGetParametersForSound(index);
+			Span<SoundFile> soundNames = internalParams.GetSoundNames();
+			int pick = RandomInt(0, soundNames.Length - 1);
+			sound = soundemitterbase.GetWaveName(soundNames[pick].Symbol);
+		}
+		surface.PlaySound(sound);
+		return 0;
+	}
 	[InlineArray(4096)] struct InlineArrayPolyVerts { SurfaceVertex first; }
 	static InlineArrayPolyVerts PolyVerts;
 

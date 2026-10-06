@@ -121,8 +121,10 @@ public class LocalizedStringTable(ISystem system, IFileSystem fileSystem) : ILoc
 	public ulong FindIndex(ReadOnlySpan<char> value) {
 		value = value.SliceNullTerminatedString();
 
-		return HashToSymbol.TryGetValue(value.Hash(), out ulong index) ? index : 0;
+		return HashToSymbol.TryGetValue(value.Hash(), out ulong index) ? index : INVALID_LOCALIZE_STRING_INDEX;
 	}
+
+	public const ulong INVALID_LOCALIZE_STRING_INDEX = ulong.MaxValue;
 
 	public ReadOnlySpan<char> GetValueByIndex(ulong hash) {
 		return Lookup.TryGetValue(hash, out string? value) ? value : null;
@@ -134,7 +136,7 @@ public class LocalizedStringTable(ISystem system, IFileSystem fileSystem) : ILoc
 		if (text.Length > 0 && text[0] == '#')
 			text = text[1..];
 		ulong index = FindIndex(text);
-		if (index == 0)
+		if (index == INVALID_LOCALIZE_STRING_INDEX)
 			return null;
 		return GetValueByIndex(index);
 	}
@@ -144,7 +146,7 @@ public class LocalizedStringTable(ISystem system, IFileSystem fileSystem) : ILoc
 		if (text.Length > 0 && text[0] == '#')
 			text = text[1..];
 		ulong index = FindIndex(text);
-		if (index == 0)
+		if (index == INVALID_LOCALIZE_STRING_INDEX)
 			return text;
 		return GetValueByIndex(index);
 	}

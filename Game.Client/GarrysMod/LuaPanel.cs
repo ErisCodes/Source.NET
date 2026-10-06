@@ -438,6 +438,145 @@ public static partial class LuaVGUI
 	}
 
 	[LuaMethod]
+	static int Panel__GetTextSize(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		if (panel is Label label) {
+			TextImage? textImage = label.GetTextImage();
+			if (textImage != null) {
+				textImage.GetContentSize(out int wide, out int tall);
+				lua.PushNumber(wide);
+				lua.PushNumber(tall);
+				return 2;
+			}
+		}
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__DrawFilledRect(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		panel.GetSize(out int wide, out int tall);
+		surface.DrawFilledRect(0, 0, wide, tall);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__DrawOutlinedRect(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		panel.GetSize(out int wide, out int tall);
+		surface.DrawOutlinedRect(0, 0, wide, tall);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GetValue(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is TextEntry textEntry) {
+			int size = textEntry.GetTextLength() * 4 + 1;
+			if (size > 1024) {
+				Span<char> large = new char[size];
+				textEntry.GetText(large);
+				lua.PushString(new string(((ReadOnlySpan<char>)large).SliceNullTerminatedString()));
+				return 1;
+			}
+		}
+
+		if (panel is RichText richText) {
+			Span<char> rich = new char[richText.TextStream.Count * 4 + 1];
+			richText.GetText(0, rich);
+			lua.PushString(new string(((ReadOnlySpan<char>)rich).SliceNullTerminatedString()));
+			return 1;
+		}
+
+		Span<char> buffer = stackalloc char[1024];
+		buffer[0] = '\0';
+		if (panel is TextEntry entry)
+			entry.GetText(buffer);
+		else if (panel is Label label)
+			label.GetText(buffer);
+		lua.PushString(new string(((ReadOnlySpan<char>)buffer).SliceNullTerminatedString()));
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__GetCaretPos(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		lua.PushNumber(panel.GetCaretPos());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__SetCaretPos(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		panel.SetCaretPos((int)lua.GetNumber(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__MouseCapture(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		if (!lua.GetBool(2)) {
+			vguiInput.SetMouseCapture(null);
+			return 0;
+		}
+		vguiInput.SetMouseCapture(panel);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetWrap(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		if (panel is Label label)
+			label.SetWrap(lua.GetBool(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetModel(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		if (panel is SpawnIcon spawnIcon)
+			spawnIcon.SetModel(lua.CheckString(2), (int)lua.CheckNumberOpt(3, 0), lua.CheckStringOpt(4, ""));
+		return 0;
+	}
+
+	[LuaMethod]
 	static int Panel__SetAllowNonAsciiCharacters(ILuaInterface lua) {
 		Panel? panel = (Panel?)PanelClass.Get(1);
 		if (panel == null) {

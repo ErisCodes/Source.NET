@@ -11,7 +11,21 @@ namespace Source.Filesystem.GarrysMod;
 
 internal class Language2 : Language
 {
-	static readonly ConVar gmod_language = new("gmod_language", "", FCvar.Archive);
+	static readonly ConVar gmod_language = new("gmod_language", "", FCvar.Archive | FCvar.UserInfo, "Changes language of Garry's mod", callback: GModLanguageChanged);
+
+	static void GModLanguageChanged(IConVar var, in ConVarChangeContext ctx) {
+		if (g_FullFileSystem == null)
+			return;
+
+		ConVarRef cvar = new(var);
+		ReadOnlySpan<char> value = cvar.GetString();
+		if (value.Length < 2) {
+			g_FullFileSystem.Language().ReloadLanguage();
+			return;
+		}
+
+		g_FullFileSystem.Language().ChangeLanguage(cvar.GetString(), false);
+	}
 
 	readonly SortedDictionary<string, string> Strings = new(StringComparer.Ordinal);
 	string CurrentLanguage = "";

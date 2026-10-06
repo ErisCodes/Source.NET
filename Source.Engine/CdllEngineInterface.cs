@@ -509,7 +509,7 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 	}
 
 	public void GetUILanguage(Span<char> dest) {
-		throw new NotImplementedException();
+		strcpy(dest, Source.Engine.CL.cl_language.GetString());
 	}
 
 	public ReadOnlySpan<char> GetMapEntitiesString() {

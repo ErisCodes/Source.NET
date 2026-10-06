@@ -1,4 +1,5 @@
 using Source.Common.GarrysMod.Lua;
+using Source.Common.GUI;
 using Source.GUI.Controls;
 
 namespace Game.Client.GarrysMod;
@@ -16,8 +17,24 @@ public static partial class LuaVGUI
 	// todo: IsHoveringWorld
 	// todo: GetWorldPanel
 	// todo: FocusedHasParent
-	// todo: GetKeyboardFocus
-	// todo: GetHoveredPanel
+	[LuaFunction]
+	static int GetKeyboardFocus(ILuaInterface lua) {
+		IPanel? focus = vguiInput.GetFocus();
+		if (focus is Panel panel) {
+			Push_Panel(panel);
+			return 1;
+		}
+		return 0;
+	}
+	[LuaFunction]
+	static int GetHoveredPanel(ILuaInterface lua) {
+		IPanel? hovered = vguiInput.GetMouseOver();
+		if (hovered is Panel panel) {
+			Push_Panel(panel);
+			return 1;
+		}
+		return 0;
+	}
 
 	public static ILuaObject? GetLuaTable(Panel panel) {
 		ILuaObject? table = panel.LuaTable;
@@ -98,7 +115,7 @@ public static partial class LuaVGUI
 			return null; // AchievementIcon
 
 		if (stricmp(className, "ModelImage") == 0)
-			return null; // ModelImage
+			return new SpawnIcon(null, "ModelImage");
 
 		if (stricmp(className, "AvatarImage") == 0)
 			return null; // AvatarImage

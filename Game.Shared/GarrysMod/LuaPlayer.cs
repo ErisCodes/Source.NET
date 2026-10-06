@@ -28,6 +28,128 @@ public static partial class LuaPlayer
 		return null;
 	}
 
+#if CLIENT_DLL
+	static void RequestConnectToServer(string address) {
+		if (address.Contains('\n') || address.Contains('\r'))
+			return;
+
+		ILuaInterface? menu = get.LuaShared()!.GetLuaInterface(2);
+		if (menu == null)
+			return;
+
+		menu.PushSpecial(Special.Glob);
+		menu.GetField(-1, "RequestConnectToServer");
+		menu.PushString(address);
+		menu.CallFunctionProtected(1, 0, true);
+		menu.Pop(1);
+	}
+
+	static void ConnectToServer(string address) {
+		address = address.Trim(" \t".ToCharArray());
+		if (!address.Contains(':'))
+			address += ":27015";
+		RequestConnectToServer(address);
+	}
+#endif
+
+	[LuaMethod]
+	static int Player__ConCommand(ILuaInterface lua) {
+#if CLIENT_DLL
+		string command = lua.CheckString(2);
+		string? blocked = LuaConCommands.ConCommand_ParseAndCheckBlocked(command);
+		if (blocked == null) {
+			engine.ClientCmd(command);
+			return 0;
+		}
+
+		if (strcmp(blocked, "connect") != 0) {
+			lua.ErrorFromLua($"ConCommand is blocked! ({blocked})");
+			return 0;
+		}
+
+		string address = command[(command.IndexOf(blocked, StringComparison.Ordinal) + 8)..];
+		int semicolon = address.IndexOf(';');
+		if (semicolon != -1)
+			address = address[..semicolon];
+		ConnectToServer(address);
+		return 0;
+#else
+		string command = lua.CheckString(2);
+		string? blocked = LuaConCommands.ConCommand_ParseAndCheckBlocked(command);
+		if (blocked != null) {
+			lua.ErrorFromLua($"ConCommand is blocked! ({blocked})");
+			return 0;
+		}
+		BasePlayer player = Get_Player(1, false)!;
+		engine.ClientCommand(player.Edict(), command);
+		return 0;
+#endif
+	}
+
+	[LuaMethod]
+	static int Player__KeyDown(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+		lua.PushBool(((int)lua.CheckNumber(2) & (int)player.Buttons) != 0);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Player__GetActiveWeapon(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+		LuaEntity.Push_Entity(player.GetActiveWeapon());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Player__HasWeapon(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+		string? className = lua.CheckString(2);
+		if (className != null) {
+			for (int i = 0; i < MAX_WEAPONS; i++) {
+				BaseEntity? weapon = player.GetWeapon(i);
+				if (weapon == null)
+					continue;
+#if CLIENT_DLL
+				ReadOnlySpan<char> weaponClass = weapon.GetClassname();
+#else
+				ReadOnlySpan<char> weaponClass = weapon.Classname ?? "";
+#endif
+				if (stricmp(className, weaponClass) == 0) {
+					lua.PushBool(true);
+					return 1;
+				}
+			}
+		}
+		lua.PushBool(false);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Player__GetWeapon(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+		string? className = lua.CheckString(2);
+		if (className != null) {
+			for (int i = 0; i < MAX_WEAPONS; i++) {
+				BaseEntity? weapon = player.GetWeapon(i);
+				if (weapon == null)
+					continue;
+#if CLIENT_DLL
+				ReadOnlySpan<char> weaponClass = weapon.GetClassname();
+				if (weaponClass.IsEmpty)
+					continue;
+#else
+				ReadOnlySpan<char> weaponClass = weapon.Classname ?? "";
+#endif
+				if (stricmp(className, weaponClass) == 0) {
+					LuaEntity.Push_Entity(weapon);
+					return 1;
+				}
+			}
+		}
+		LuaEntity.Push_Entity(null);
+		return 1;
+	}
+
 	[LuaMethod]
 	static int Player__GetAimVector(ILuaInterface lua) {
 		BasePlayer player = Get_Player(1, false)!;

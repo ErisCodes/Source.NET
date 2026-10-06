@@ -46,7 +46,8 @@ public partial class CL(IServiceProvider services, Net Net,
 
 	}
 
-	static readonly ConVar cl_LocalNetworkBackdoor = new("cl_localnetworkbackdoor", "1", 0, "Enable network optimizations for single player games.");
+	public static readonly ConVar cl_language = new("cl_language", "english", FCvar.UserInfo, "Language (from HKCU\\Software\\Valve\\Steam\\Language)");
+	static readonly ConVar cl_LocalNetworkBackdoor =new("cl_localnetworkbackdoor", "1", 0, "Enable network optimizations for single player games.");
 	static readonly ConVar cl_ignorepackets = new("cl_ignorepackets", "0", FCvar.Cheat, "Force client to ignore packets (for debugging).");
 
 	public void CheckClientState() {

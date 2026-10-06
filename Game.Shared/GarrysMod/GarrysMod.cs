@@ -10,6 +10,7 @@ using Source.Common;
 using Source.Common.Bitbuffers;
 using Source.Common.Commands;
 using Source.Common.Filesystem;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.GarrysMod;
 using Source.Common.MaterialSystem;
 using Source.Common.Networking;
@@ -55,12 +56,50 @@ public class GarrysMod : IGarrysMod
 
 
 
+#if CLIENT_DLL
+	void AddLanguageFiles(ReadOnlySpan<char> language) {
+		ReadOnlySpan<char> fileName = filesystem.FindFirstEx($"resource/language/*{language}.txt", null, out ulong handle);
+		while (!fileName.IsEmpty) {
+			string path = $"resource/language/{fileName}";
+			if (!localize.AddFile(path, null, false)) {
+				Warning($"Failed to add language file '{path}', trying different method...\n");
+				KeyValues kv = new("");
+				bool loaded = kv.LoadFromFile(filesystem, path, null);
+				KeyValues? tokens = kv.FindKey("Tokens", false);
+				if (tokens == null)
+					Warning($"Failed to load language file '{path}' - {(loaded ? 1 : 0)}\n");
+				else {
+					for (KeyValues? token = tokens.GetFirstSubKey(); token != null; token = token.GetNextKey())
+						localize.AddString(token.Name, token.GetString(), path);
+				}
+			}
+			fileName = filesystem.FindNext(handle);
+		}
+		filesystem.FindClose(handle);
+	}
+#endif
+
 	public void InitializeMod(IServiceProvider services) {
 #if !SWDS
 		get.IntroScreen()?.Update("Adding Custom Fonts", true);
 		// todo: AddCustomFonts
+#if CLIENT_DLL
+		if (filesystem == null)
+			Error("g_pFullFileSystem is NULL!?");
+		if (filesystem!.Language() == null)
+			Error("->Language() is NULL!?");
+
+		Span<char> uiLanguage = stackalloc char[64];
+		uiLanguage.Clear();
+		engine.GetUILanguage(uiLanguage);
+		filesystem.Language().ChangeLanguage_Steam(uiLanguage.SliceNullTerminatedString());
+#endif
 		get.IntroScreen()!.Update("Adding Language Files", true);
-		// todo: AddLanguageFiles
+#if CLIENT_DLL
+		AddLanguageFiles("english");
+		if (uiLanguage[0] != '\0' && stricmp(uiLanguage.SliceNullTerminatedString(), "english") != 0)
+			AddLanguageFiles(uiLanguage.SliceNullTerminatedString());
+#endif
 		get.IntroScreen()!.Update("Setup Menu System", true);
 		// todo: menu system init
 		get.IntroScreen()!.Update("Setting Convar Defaults", true);

@@ -351,6 +351,30 @@ public static partial class LuaConCommands
 
 	static readonly string[] s_BannedArguments = ["con_logfile", "quitnoconfirm"];
 
+	public static string? ConCommand_ParseAndCheckBlocked(ReadOnlySpan<char> command) {
+		Source.Engine.CommandBuffer buffer = new();
+		buffer.AddText(command);
+		buffer.BeginProcessingCommands(1);
+
+		string? blocked = null;
+		while (buffer.DequeueNextCommand()) {
+			ref TokenizedCommand args = ref buffer.GetCommand();
+			blocked = ConCommand_IsBlocked(args.ArgC() > 0 ? args.Arg(0) : "");
+			for (int i = 1; i < args.ArgC(); i++) {
+				if (blocked == null && ConCommand_IsBlockedArg(args.Arg(i)) != null)
+					blocked = args.ArgC() > 0 ? args.Arg(0).ToString() : "";
+			}
+
+			if (blocked != null) {
+				while (buffer.DequeueNextCommand()) ;
+				break;
+			}
+		}
+
+		buffer.EndProcessingCommands();
+		return blocked;
+	}
+
 	public static string? ConCommand_IsBlockedArg(ReadOnlySpan<char> argument) {
 		foreach (string banned in s_BannedArguments)
 			if (stricmp(banned, argument) == 0)
