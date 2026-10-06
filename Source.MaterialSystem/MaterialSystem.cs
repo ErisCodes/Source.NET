@@ -330,6 +330,9 @@ public class MaterialSystem : IMaterialSystem, IShaderUtil
 		if (videoModeChange) {
 			ConvertModeStruct(config, out ShaderDeviceInfo info);
 			ShaderAPI.ChangeVideoMode(info);
+
+			if (ShaderAPI.CanDownloadTextures())
+				TextureSystem.RestoreRenderTargets();
 		}
 
 		// if (videoModeChange)

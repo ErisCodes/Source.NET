@@ -1142,7 +1142,61 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 	ITextureRegenerator? TextureRegenerator;
 
 	public void OnRestore() {
+		// May have to change whether or not we have a depth buffer.
+		// Are we a render target?
+		if ((Flags & (uint)TextureFlags.RenderTarget) != 0) {
+			int newWidth = 0, newHeight = 0;
 
+			// Did they not ask for a depth buffer?
+			if (OriginalRenderTargetType == RenderTargetType.RenderTarget) {
+				// But, did we force them to have one, or should we force them to have one this time around?
+				bool shouldForce = ShaderAPI.DoRenderTargetsNeedSeparateDepthBuffer();
+				bool didForce = (Flags & (uint)TextureFlags.DepthRenderTarget) != 0;
+				if (shouldForce != didForce) {
+					uint flags = Flags;
+					int frameCount = FrameCount;
+					if (shouldForce) {
+						Assert((flags & (uint)TextureFlags.DepthRenderTarget) == 0);
+						frameCount = 2;
+						flags |= (uint)TextureFlags.DepthRenderTarget;
+					}
+					else {
+						Assert((flags & (uint)TextureFlags.DepthRenderTarget) != 0);
+						frameCount = 1;
+						flags &= ~(uint)TextureFlags.DepthRenderTarget;
+					}
+
+					Shutdown();
+
+					ApplyRenderTargetSizeMode(ref newWidth, ref newHeight, ImageFormat);
+
+					Init(newWidth, newHeight, 1, ImageFormat, (int)flags, frameCount);
+					return;
+				}
+			}
+
+			// If we didn't recreate it up above, then we may need to resize it anyway if the framebuffer
+			// got smaller than we are.
+			ApplyRenderTargetSizeMode(ref newWidth, ref newHeight, ImageFormat);
+			if (newWidth != DimsMapping.Width || newHeight != DimsMapping.Height) {
+				Shutdown();
+				Init(newWidth, newHeight, 1, ImageFormat, (int)Flags, FrameCount);
+				return;
+			}
+		}
+	}
+
+	private void Shutdown() {
+		// Frees the texture regen class
+		TextureRegenerator = null;
+
+		ResidenceTarget = ResidencyType.None;
+		ResidenceCurrent = ResidencyType.None;
+
+		// This deletes the textures
+		FreeShaderAPITextures();
+		ReleaseTextureHandles();
+		NotifyUnloadedFile();
 	}
 
 	readonly IMaterialSystemHardwareConfig HardwareConfig = Singleton<IMaterialSystemHardwareConfig>();

@@ -702,6 +702,14 @@ public class MatRenderContext : IMatRenderContextInternal
 		CurrentFrameBufferCopyTexture[textureIndex] = texture;
 	}
 
+	public ITexture? GetFrameBufferCopyTexture(int textureIndex) {
+		if (textureIndex < 0 || textureIndex >= MAX_FB_TEXTURES) {
+			Assert(false);
+			return null; // FIXME!  This should return the error texture.
+		}
+		return CurrentFrameBufferCopyTexture[textureIndex];
+	}
+
 	ITexture? LocalCubemapTexture;
 
 	public void BindLocalCubemap(ITexture? texture) {
