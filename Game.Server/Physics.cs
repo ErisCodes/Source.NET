@@ -66,6 +66,20 @@ public static class PhysicsHookGlobals {
 		PhysicsSound.AddBreakSound(g_PhysicsHook.BreakSounds, origin, (ushort)physObject.GetMaterialIndex());
 	}
 
+	public static void PhysForceEntityToSleep(BaseEntity entity, IPhysicsObject? obj) {
+		if (obj == null || !obj.IsMoveable())
+			return;
+
+		DevMsg(2, $"Putting entity to sleep: {entity.GetClassname()}\n");
+		IPhysicsObject[] list = System.Buffers.ArrayPool<IPhysicsObject>.Shared.Rent(VPHYSICS_MAX_OBJECT_LIST_COUNT);
+		int physCount = entity.VPhysicsGetObjectList(list.AsSpan(0, VPHYSICS_MAX_OBJECT_LIST_COUNT));
+		for (int i = 0; i < physCount; i++) {
+			PhysForceClearVelocity(list[i]);
+			list[i].Sleep();
+		}
+		System.Buffers.ArrayPool<IPhysicsObject>.Shared.Return(list);
+	}
+
 	public static bool PhysIsInCallback(){
 		return (physenv != null && physenv.IsInSimulation()) || g_Collisions.IsInCallback();
 	}

@@ -94,6 +94,12 @@ public static class PhysicsSharedGlobals
 #endif
 	public static IPhysicsObjectPairHash g_EntityCollisionHash = null!;
 
+	public static float MASS_SPEED2ENERGY(float mass, float speed) => speed * speed * mass;
+	public static float MASS10_SPEED2ENERGY(float speed) => MASS_SPEED2ENERGY(10, speed);
+	public static float MASS_ENERGY2SPEED(float mass, float energy) => MathF.Sqrt(energy / mass);
+	public const float ENERGY_VOLUME_SCALE = 1.0f / 15500.0f;
+	public const float FLUID_TIME_MAX = 2.0f;
+
 	const string SURFACEPROP_MANIFEST_FILE = "scripts/surfaceproperties_manifest.txt";
 
 	public static readonly ObjectParams g_PhysDefaultObjectParams = new() {
@@ -150,6 +156,35 @@ public static class PhysicsSharedGlobals
 			g_EntityCollisionHash.RemoveAllPairsForObject(entity);
 
 		physenv?.DestroyObject(obj);
+	}
+
+	public static PhysicsFlags PhysSetGameFlags(IPhysicsObject phys, PhysicsFlags gameFlags) {
+		PhysicsFlags flags = phys.GetGameFlags();
+		flags |= gameFlags;
+		phys.SetGameFlags(flags);
+
+		return flags;
+	}
+
+	public static PhysicsFlags PhysClearGameFlags(IPhysicsObject phys, PhysicsFlags gameFlags) {
+		PhysicsFlags flags = phys.GetGameFlags();
+		flags &= ~gameFlags;
+		phys.SetGameFlags(flags);
+
+		return flags;
+	}
+
+	public static void PhysForceClearVelocity(IPhysicsObject phys) {
+		IPhysicsFrictionSnapshot snapshot = phys.CreateFrictionSnapshot();
+		Vector3 vel = default;
+		Vector3 angVel = default;
+		phys.SetVelocity(vel, angVel);
+		while (snapshot.IsValid()) {
+			snapshot.ClearFrictionForce();
+			snapshot.RecomputeFriction();
+			snapshot.NextFrictionData();
+		}
+		phys.DestroyFrictionSnapshot(snapshot);
 	}
 
 	public static bool PhysModelParseSolidByIndex(ref Solid solid, BaseEntity entity, VCollide? collide, int solidIndex) {
