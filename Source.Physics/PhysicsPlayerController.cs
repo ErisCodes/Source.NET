@@ -173,7 +173,7 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 		b3ContactData* contacts = stackalloc b3ContactData[32];
 		int count = b3Body_GetContactData(Object.BodyId, contacts, 32);
 		for (int i = 0; i < count; i++) {
-			b3Manifold* manifolds = (b3Manifold*)&contacts[i].manifolds;
+			b3Manifold* manifolds = (b3Manifold*)contacts[i].manifolds;
 			bool touching = false;
 			for (int j = 0; j < contacts[i].manifoldCount; j++)
 				touching |= manifolds[j].pointCount > 0;
@@ -320,7 +320,7 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 		for (int i = 0; i < count; i++) {
 			PhysicsObject? other = ContactOther(contacts[i], Object, out bool selfIsA);
 
-			b3Manifold* manifolds = (b3Manifold*)&contacts[i].manifolds;
+			b3Manifold* manifolds = (b3Manifold*)contacts[i].manifolds;
 			for (int j = 0; j < contacts[i].manifoldCount; j++) {
 				b3Manifold* manifold = &manifolds[j];
 				if (manifold->pointCount <= 0)

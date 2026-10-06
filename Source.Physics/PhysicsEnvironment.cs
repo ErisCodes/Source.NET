@@ -619,7 +619,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 			int count = b3Body_GetContactData(a.BodyId, contacts, 16);
 			for (int c = 0; c < count; c++) {
 				float separation = 0.0f;
-				b3Manifold* manifolds = (b3Manifold*)&contacts[c].manifolds;
+				b3Manifold* manifolds = (b3Manifold*)contacts[c].manifolds;
 				for (int m = 0; m < contacts[c].manifoldCount; m++) {
 					b3ManifoldPoint* points = (b3ManifoldPoint*)&manifolds[m].points;
 					for (int p = 0; p < manifolds[m].pointCount; p++)

@@ -48,7 +48,7 @@ internal unsafe class PhysicsFrictionSnapshot : IPhysicsFrictionSnapshot
 			Vector3 comA = BoxToSource.Unitless(b3Body_GetWorldCenter(bodyA));
 
 			fixed (b3ContactData* pContact = &contact) {
-				b3Manifold* manifolds = (b3Manifold*)&pContact->manifolds;
+				b3Manifold* manifolds = (b3Manifold*)pContact->manifolds;
 				for (int m = 0; m < contact.manifoldCount; m++) {
 					b3Manifold* manifold = &manifolds[m];
 

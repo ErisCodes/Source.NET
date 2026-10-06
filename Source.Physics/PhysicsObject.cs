@@ -607,7 +607,7 @@ internal unsafe class PhysicsObject : IPhysicsObject
 				continue;
 
 			for (int j = 0; j < contacts[i].manifoldCount; j++) {
-				b3Manifold* manifold = &((b3Manifold*)&contacts[i].manifolds)[j];
+				b3Manifold* manifold = &((b3Manifold*)contacts[i].manifolds)[j];
 				if (manifold->pointCount <= 0)
 					continue;
 
