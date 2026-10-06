@@ -4,23 +4,42 @@
     <BuildType Name="Debug (Dedicated)" />
     <BuildType Name="Release" />
     <BuildType Name="Release (Dedicated)" />
+    <Platform Name="x64" />
   </Configurations>
   <Folder Name="/0. Files, Dependencies, &amp; Code Analysis/">
     <File Path="DATATABLES_COMPLETED.md" />
     <File Path="README.md" />
   </Folder>
   <Folder Name="/0. Files, Dependencies, &amp; Code Analysis/External Dependencies/">
-    <Project Path="Dependencies/OpenGL/OpenGL46.csproj" />
-    <Project Path="Dependencies/Steamworks/Steamworks.csproj" />
+    <Project Path="Dependencies/OpenGL/OpenGL46.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Dependencies/Steamworks/Steamworks.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/0. Files, Dependencies, &amp; Code Analysis/Roslyn Code Analysis/">
-    <Project Path="Source.CodeAnalysis.Lua/Source.CodeAnalysis.Lua.csproj" />
-    <Project Path="Source.CodeAnalysis.NetworkVars/Source.CodeAnalysis.NetworkVars.csproj" />
-    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.CodeFixes/Source.CodeAnalysis.CodeFixes.csproj" />
-    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.Package/Source.CodeAnalysis.Package.csproj" />
-    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.Test/Source.CodeAnalysis.Test.csproj" />
-    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.Vsix/Source.CodeAnalysis.Vsix.csproj" />
-    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis/Source.CodeAnalysis.csproj" />
+    <Project Path="Source.CodeAnalysis.Lua/Source.CodeAnalysis.Lua.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.CodeAnalysis.NetworkVars/Source.CodeAnalysis.NetworkVars.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.CodeFixes/Source.CodeAnalysis.CodeFixes.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.Package/Source.CodeAnalysis.Package.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.Test/Source.CodeAnalysis.Test.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.Vsix/Source.CodeAnalysis.Vsix.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis/Source.CodeAnalysis.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/0. Files, Dependencies, &amp; Code Analysis/Usings/">
     <File Path="Directory.Build.props" />
@@ -31,49 +50,106 @@
   </Folder>
   <Folder Name="/1. Engine Common/">
     <File Path="Source.Engine/GarrysMod/GModMessageType.cs" />
-    <Project Path="Source.Bitmap/Source.Bitmap.csproj" />
-    <Project Path="Source.Common/Source.Common.csproj" />
-    <Project Path="Source.VPK/Source.VPK.csproj" />
-    <Project Path="Source.VTF/Source.VTF.csproj" />
+    <Project Path="Source.Bitmap/Source.Bitmap.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.Common/Source.Common.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.VPK/Source.VPK.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.VTF/Source.VTF.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/2. Pre-Engine Components/">
-    <Project Path="Source.GUI.Controls/Source.GUI.Controls.csproj" />
-    <Project Path="Source.GUI/Source.GUI.csproj" />
+    <Project Path="Source.GUI.Controls/Source.GUI.Controls.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.GUI/Source.GUI.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/3. Engine Main/">
-    <Project Path="Source.Engine/Source.Engine.csproj" />
+    <Project Path="Source.Engine/Source.Engine.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/4. Post-Engine Components/">
-    <Project Path="Source.AudioSystem/Source.AudioSystem.csproj" />
-    <Project Path="Source.DataCache/Source.DataCache.csproj" />
-    <Project Path="Source.Filesystem/Source.Filesystem.csproj" />
-    <Project Path="Source.MaterialSystem/Source.MaterialSystem.csproj" />
-    <Project Path="Source.Physics/Source.Physics.csproj" />
-    <Project Path="Source.SDLInputSystem/Source.SDLInputSystem.csproj" />
-    <Project Path="Source.SDLManager/Source.SDLManager.csproj" />
-    <Project Path="Source.SDLSystem/Source.SDLSystem.csproj" />
-    <Project Path="Source.ShaderAPI.Gl46/Source.ShaderAPI.Gl46.csproj" />
-    <Project Path="Source.SoundEmitterSystem/Source.SoundEmitterSystem.csproj" />
-    <Project Path="Source.StdShader.Gl46/Source.StdShader.Gl46.csproj" />
-    <Project Path="Source.StudioRender/Source.StudioRender.csproj" />
+    <Project Path="Source.AudioSystem/Source.AudioSystem.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.DataCache/Source.DataCache.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.Filesystem/Source.Filesystem.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.MaterialSystem/Source.MaterialSystem.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.Physics/Source.Physics.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.SDLInputSystem/Source.SDLInputSystem.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.SDLManager/Source.SDLManager.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.SDLSystem/Source.SDLSystem.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.ShaderAPI.Gl46/Source.ShaderAPI.Gl46.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.SoundEmitterSystem/Source.SoundEmitterSystem.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.StdShader.Gl46/Source.StdShader.Gl46.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.StudioRender/Source.StudioRender.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/5. Game Libraries/">
-    <Project Path="Game.Client/Game.Client.csproj" />
-    <Project Path="Game.Lua/Game.Lua.csproj" />
-    <Project Path="Game.MenuSystem/Game.MenuSystem.csproj" />
-    <Project Path="Game.Server/Game.Server.csproj" />
-    <Project Path="Game.ServerBrowser/Game.ServerBrowser.csproj" />
+    <Project Path="Game.Client/Game.Client.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Game.Lua/Game.Lua.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Game.MenuSystem/Game.MenuSystem.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Game.Server/Game.Server.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Game.ServerBrowser/Game.ServerBrowser.csproj">
+      <Platform Project="x64" />
+    </Project>
     <Project Path="Game.Shared/Game.Shared.csproj">
       <Build Project="false" />
+      <Platform Project="x64" />
     </Project>
-    <Project Path="Game.UI/Game.UI.csproj" />
+    <Project Path="Game.UI/Game.UI.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/6. Executables/">
-    <Project Path="Source.Dedicated/Source.Dedicated.csproj" />
-    <Project Path="Source.Launcher/Source.Launcher.csproj" />
+    <Project Path="Source.Dedicated/Source.Dedicated.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Source.Launcher/Source.Launcher.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/7. Tools/" />
   <Folder Name="/8. Assets/">
-    <Project Path="Game.Assets/Game.Assets.csproj" />
+    <Project Path="Game.Assets/Game.Assets.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
 </Solution>
