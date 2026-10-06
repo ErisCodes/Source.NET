@@ -276,6 +276,26 @@ public class GlobalEntityList : BaseEntityList
 		return null;
 	}
 
+	public BaseEntity? FindEntityByTarget(BaseEntity? startEntity, ReadOnlySpan<char> name) {
+		EntInfo? info = startEntity != null ? GetEntInfoPtr(startEntity.GetRefEHandle()).Next : FirstEntInfo();
+
+		for (; info != null; info = info.Next) {
+			BaseEntity? ent = (BaseEntity?)info.Entity;
+			if (ent == null) {
+				DevWarning("NULL entity in global entity list!");
+				continue;
+			}
+
+			if (ent.Target == null)
+				continue;
+
+			if (FStrEq(ent.Target, name))
+				return ent;
+		}
+
+		return null;
+	}
+
 	public BaseEntity? FindEntityClassNearestFacing(in Vector3 origin, in Vector3 facing, float threshold, ReadOnlySpan<char> classname) {
 		float bestDot = threshold;
 		BaseEntity? bestEnt = null;

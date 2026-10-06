@@ -40,6 +40,7 @@ public struct GlobalEntity
 	public static void SetMap(ReadOnlySpan<char> globalName, string mapname) => GlobalState.globalState.SetMap(GetIndex(globalName), mapname);
 	public static int Add(ReadOnlySpan<char> globalname, ReadOnlySpan<char> mapname, GlobalEState state) => (int)GlobalState.globalState.AddEntity(globalname, mapname, state);
 	public static int GetIndex(ReadOnlySpan<char> globalname) => GlobalState.globalState.GetIndex(globalname);
+	public static bool IsInTable(ReadOnlySpan<char> globalname) => GetIndex(globalname) >= 0;
 	public static GlobalEState GetState(int globalIndex) => GlobalState.globalState.GetState(globalIndex);
 	public static GlobalEState GetState(ReadOnlySpan<char> globalName) => GlobalState.globalState.GetState(GetIndex(globalName));
 	public static int GetCounter(int globalIndex) => GlobalState.globalState.GetCounter(globalIndex);

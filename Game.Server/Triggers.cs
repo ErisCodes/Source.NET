@@ -1328,6 +1328,7 @@ public class TriggerSave : BaseTrigger
 	int MinHitPoints;
 
 	public static TimeUnit_t AutoSaveDangerousTime;
+	public static float AutoSaveDangerousMinHealthToCommit;
 
 	public static readonly new DataMap DataDesc = new(typeof(TriggerSave), BaseTrigger.DataDesc, [
 		DEFINE<TriggerSave>.KEYFIELD(nameof(ForceNewLevelUnit), FieldType.Boolean, "NewLevelUnit"),

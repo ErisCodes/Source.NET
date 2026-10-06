@@ -279,7 +279,30 @@ public class MultiInputVar
 	public InputItem? InputList;
 	public int UpdatedThisFrame;
 
-	public void AddValue(Variant_t newVal, int outputID) => throw new NotImplementedException();
+	public void AddValue(Variant_t newVal, int outputID) {
+		// see if it's already in the list
+		InputItem? inp;
+		for (inp = InputList; inp != null; inp = inp.Next) {
+			// already in list, so just update this link
+			if (inp.OutputID == outputID) {
+				inp.Value = newVal;
+				return;
+			}
+		}
+
+		// add to start of list
+		inp = new InputItem();
+		inp.Value = newVal;
+		inp.OutputID = outputID;
+		if (InputList == null) {
+			InputList = inp;
+			inp.Next = null;
+		}
+		else {
+			inp.Next = InputList;
+			InputList = inp;
+		}
+	}
 }
 
 public class EventQueuePrioritizedEvent

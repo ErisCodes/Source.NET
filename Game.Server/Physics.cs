@@ -159,6 +159,31 @@ public class PhysicsHook : BaseGameSystemPerFrame
 
 		Paused = true;
 	}
+	public static IPhysicsObject? FindPhysicsObjectByName(ReadOnlySpan<char> name, BaseEntity? errorEntity) {
+		if (name.IsEmpty)
+			return null;
+
+		BaseEntity? entity = null;
+		IPhysicsObject? bestObject = null;
+		while (true) {
+			entity = gEntList.FindEntityByName(entity, name);
+			if (entity == null)
+				break;
+			if (entity.VPhysicsGetObject() != null) {
+				if (bestObject != null) {
+					ReadOnlySpan<char> errorName = errorEntity != null ? errorEntity.GetClassname() : "Unknown";
+					Vector3 origin = errorEntity != null ? errorEntity.GetAbsOrigin() : vec3_origin;
+					DevWarning($"entity {errorName} at {origin.X:F2} {origin.Y:F2} {origin.Z:F2} has physics attachment to more than one entity with the name {name}!!!");
+					while ((entity = gEntList.FindEntityByName(entity, name)) != null)
+						DevWarning($"Found {entity.GetClassname()}");
+					break;
+				}
+				bestObject = entity.VPhysicsGetObject();
+			}
+		}
+		return bestObject;
+	}
+
 	public static IPhysicsObject? PhysCreateWorld(BaseEntity world){
 		// todo staticpropmgr
 		VCollide? worldCollide = modelinfo.GetVCollide(1);
