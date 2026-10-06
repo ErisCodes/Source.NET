@@ -33,6 +33,7 @@ public static class GameInterface
 	public const int MAX_CHOREO_SCENES_STRINGS = 1 << MAX_CHOREO_SCENES_STRING_BITS;
 	public const int CHOREO_SCENES_INVALID_STRING = MAX_CHOREO_SCENES_STRINGS - 1;
 
+	public static INetworkStringTable? g_pStringTableEffectDispatch;
 	public static INetworkStringTable? g_pStringTableClientSideChoreoScenes;
 
 	public static bf_write? g_pMsgBuffer;
@@ -225,6 +226,7 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 	public void CreateNetworkStringTables() {
 		// throw new NotImplementedException();
 
+		g_pStringTableEffectDispatch = networkstringtable.CreateStringTable("EffectDispatch", EffectData.MAX_EFFECT_DISPATCH_STRINGS);
 		g_pStringTableClientSideChoreoScenes = networkstringtable.CreateStringTable("Scenes", MAX_CHOREO_SCENES_STRINGS);
 
 		GameRulesRegister.CreateNetworkStringTables_GameRules();
