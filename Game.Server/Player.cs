@@ -257,6 +257,7 @@ public partial class BasePlayer : BaseCombatCharacter
 	public virtual bool IsFakeClient() => (GetFlags() & EntityFlags.FakeClient) != 0;
 	public virtual bool IsBotOfType(int botType) => (GetBotType() != 0) && (GetBotType() == botType);
 	public virtual int GetBotType() => 0;
+	public bool IsHLTV() => pl.HLTV;
 
 	public int GetLockViewanglesTickNumber() => LockViewanglesTickNumber;
 	public QAngle GetLockViewanglesData() => LockedViewangles;
