@@ -55,7 +55,11 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 		channel.RegisterMessage<CLC_GMod_ClientToServer>();
 	}
 
-	public virtual bool IgnoreTempEntity(EventInfo evnt) { return false; }
+	public virtual bool IgnoreTempEntity(EventInfo evnt) {
+		int playerIndex = GetPlayerSlot() + 1;
+
+		return !evnt.Filter.IncludesPlayer(playerIndex);
+	}
 	public virtual void ConnectionClosing(ReadOnlySpan<char> reason) { }
 	public virtual void ConnectionCrashed(ReadOnlySpan<char> reason) { }
 	public virtual void PacketStart(int incomingSequence, int outgoingAcknowledged) { }
