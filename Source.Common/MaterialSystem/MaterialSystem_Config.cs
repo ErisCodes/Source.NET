@@ -25,7 +25,13 @@ public enum MaterialSystem_Config_Flags
 	DisablePhong = (1 << 16),
 	VRMode = (1 << 17),
 	NoWindowBorder = (1 << 18)
-};
+}
+
+public struct MaterialSystemHardwareIdentifier{
+	public string CardName;
+	public uint VendorID;
+	public uint DeviceID;
+}
 
 public class MaterialSystem_Config
 {

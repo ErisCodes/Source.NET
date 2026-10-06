@@ -98,6 +98,13 @@ public ref struct StaticShaderIndex(IShaderShadow shaderShadow, ShaderType type,
 	public readonly int GetIndex() => index;
 }
 
+public struct ShaderColorCorrectionInfo {
+	public bool IsEnabled;
+	public int LookupCount;
+	public float DefaultWeight;
+	public InlineArray4<float> LookupWeights;
+}
+
 public interface IShaderDynamicAPI
 {
 	MaterialFogMode GetSceneFogMode();
