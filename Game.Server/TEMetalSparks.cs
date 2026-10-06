@@ -18,3 +18,17 @@ public class TEMetalSparks(ReadOnlySpan<char> name) : BaseTempEntity(name)
 	[NetworkName("m_vecDir")]
 	public Vector3 Dir;
 }
+
+public static partial class TempEnts
+{
+	static readonly TEMetalSparks g_TEMetalSparks = new("Metal Sparks");
+
+	public static void TE_MetalSparks<IRF>(scoped ref IRF filter, float delay, in Vector3 pos, in Vector3 dir) where IRF : IRecipientFilter {
+		g_TEMetalSparks.Pos = pos;
+		g_TEMetalSparks.Dir = dir;
+
+		Assert(dir.Length() < 1.01);
+
+		g_TEMetalSparks.Create(ref filter, delay);
+	}
+}

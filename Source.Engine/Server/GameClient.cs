@@ -725,7 +725,12 @@ public class GameClient : BaseClient
 		return PrevPackInfo;
 	}
 
-	public override bool IgnoreTempEntity(EventInfo evnt) { return false; } // todo
+	public override bool IgnoreTempEntity(EventInfo evnt) {
+		if (IsInReplayMode)
+			return false;
+
+		return base.IgnoreTempEntity(evnt);
+	}
 
 	internal void SendSound(SoundInfo sound, bool isReliable) {
 		if (IsFakeClient() && !IsHLTV())

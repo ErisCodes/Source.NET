@@ -33,6 +33,7 @@ public class EventInfo
 		Bits = src.Bits;
 		Flags = src.Flags;
 		SendTable = src.SendTable;
+		Filter.AddPlayersFromFilter(src.Filter);
 		ClientClass = src.ClientClass;
 		if (src.Data != null) {
 			int size = Net.Bits2Bytes(src.Bits);
@@ -51,5 +52,5 @@ public class EventInfo
 	public int Bits;
 	public byte[]? Data;
 	public EventFlags Flags;
-	// TODO: EngineRecipientFilter
+	public EngineRecipientFilter Filter = new();
 }

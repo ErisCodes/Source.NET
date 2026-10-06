@@ -784,7 +784,33 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 
 	public void PlaybackTempEntity(IRecipientFilter filter, float delay, object sender, SendTable st, int classID) {
-		throw new NotImplementedException();
+		if (sv.TempEntities.Count >= ((1 << EventInfo.EVENT_INDEX_BITS) - 1))
+			sv.TempEntities.RemoveAt(0);
+
+		classID = classID + 1;
+
+		byte[] data = new byte[EventInfo.MAX_EVENT_DATA];
+		bf_write buffer = new(data, data.Length);
+
+		if (!EngineSendTable.Encode(st, sender, buffer, classID, null, false)) {
+			Host.Error($"PlaybackTempEntity: SendTable_Encode returned false (ent {classID}), overflow? {(buffer.Overflowed ? 1 : 0)}\n");
+			return;
+		}
+
+		EventInfo newEvent = new();
+
+		newEvent.Filter.AddPlayersFromFilter(filter);
+
+		newEvent.ClassID = (short)classID;
+		newEvent.SendTable = st;
+		newEvent.FireDelay = delay;
+
+		newEvent.Bits = buffer.BitsWritten;
+		int size = Net.Bits2Bytes(buffer.BitsWritten);
+		newEvent.Data = new byte[size];
+		data.AsSpan(0, size).CopyTo(newEvent.Data);
+
+		sv.TempEntities.Add(newEvent);
 	}
 
 	public int PrecacheDecal(ReadOnlySpan<char> name, bool preload = false) {
