@@ -56,7 +56,7 @@ public struct TouchEvent
 public struct FluidEvent
 {
 	public EHANDLE Entity;
-	public Vector3 ImpactTime;
+	public TimeUnit_t ImpactTime;
 }
 
 public struct TriggerEvent
