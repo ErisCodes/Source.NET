@@ -47,6 +47,20 @@ public class GameServer : BaseServer
 	public bool IsInPureServerMode() => PureServerWhitelist != null;
 
 	public override void Shutdown() {
+		LevelMainMenuBackground = false;
+		base.Shutdown();
+		framesnapshotmanager.LevelChanged();
+		IGameEvent? ev = g_GameEventManager.CreateEvent("server_shutdown");
+
+		if (ev != null) {
+			ev.SetString("reason", "quit");
+			g_GameEventManager.FireEvent(ev);
+		}
+
+		Steam3Server().Shutdown();
+		if (serverGameDLL != null) 
+			serverGameDLL.GameServerSteamAPIShutdown();
+
 		g_DownloadListGenerator.OnLevelLoadEnd();
 	}
 
