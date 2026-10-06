@@ -1781,6 +1781,8 @@ public partial class C_BaseAnimating : C_BaseEntity, IModelLoadCallback
 	public int Body;
 	[NetworkName("m_nHitboxSet")]
 	public int HitboxSet;
+
+	public int GetHitboxSet() => HitboxSet;
 	[NetworkName("m_flModelScale")]
 	public float ModelScale = 1.0f;
 	[NetworkName("m_flPlaybackRate")]

@@ -1,8 +1,16 @@
+using Source;
 #if CLIENT_DLL || GAME_DLL
+using Game.Shared;
+
 using Source.Common;
 using Source.Common.DataCache;
 using Source.Common.Engine;
+using Source.Common.Formats.BSP;
 using Source.Common.GarrysMod.Lua;
+using Source.Common.Mathematics;
+using Source.Common.Physics;
+
+using System.Numerics;
 
 #if CLIENT_DLL
 namespace Game.Client.GarrysMod;
@@ -80,5 +88,142 @@ public static partial class LuaUtil
 	[LuaFunction]
 	static int AddNetworkString(string name) => NetworkString.Add(name);
 #endif
+
+	public static void SetTableFromTrace(ref Trace tr, ILuaObject table) {
+		table.SetMember("Hit", tr.DidHit());
+		table.SetMember("HitWorld", tr.DidHitWorld());
+		table.SetMember("HitNonWorld", tr.DidHitNonWorldEntity());
+		table.SetMember("Fraction", tr.Fraction);
+		table.SetMemberEntity("Entity", tr.Ent);
+		table.SetMember("HitGroup", (float)tr.HitGroup);
+		table.SetMember("HitBox", (float)tr.HitBox);
+		table.SetMemberVector("HitPos", tr.EndPos);
+		table.SetMemberVector("StartPos", tr.StartPos);
+		table.SetMemberVector("HitNormal", tr.Plane.Normal);
+		table.SetMember("StartSolid", tr.StartSolid);
+		table.SetMember("FractionLeftSolid", tr.FractionLeftSolid);
+		table.SetMember("PhysicsBone", (float)tr.PhysicsBone);
+		table.SetMember("HitSky", (tr.Surface.Flags & (ushort)Surf.Sky) != 0);
+		table.SetMember("HitNoDraw", (tr.Surface.Flags & (ushort)Surf.NoDraw) != 0);
+		table.SetMember("SurfaceProps", (float)(short)tr.Surface.SurfaceProps);
+		table.SetMember("SurfaceFlags", (float)tr.Surface.Flags);
+		table.SetMember("DispFlags", (float)(ushort)tr.DispFlags);
+		table.SetMember("AllSolid", tr.AllSolid);
+		table.SetMemberDouble("Contents", (int)tr.Contents);
+		if (tr.Surface.Name != null)
+			table.SetMember("HitTexture", tr.Surface.Name);
+
+		if (tr.DidHit()) {
+			SurfaceData_ptr? surfaceData = physprops.GetSurfaceData((short)tr.Surface.SurfaceProps);
+			if (surfaceData != null)
+				table.SetMember("MatType", (float)surfaceData.Game.Material);
+		}
+
+		if (tr.DidHitNonWorldEntity() && tr.HitBox != -1 && tr.Ent?.GetBaseAnimating() != null && tr.Ent.GetBaseAnimating()!.GetModelPtr() != null) {
+			BaseAnimating animating = tr.Ent.GetBaseAnimating()!;
+			int hitboxSet = animating.GetHitboxSet();
+			int hitbox = tr.HitBox;
+			StudioHdr studioHdr = animating.GetModelPtr()!;
+			MStudioHitboxSet? set = hitboxSet >= 0 && hitboxSet < studioHdr.NumHitboxSets() ? studioHdr.HitboxSet(hitboxSet) : null;
+			if (set != null) {
+				int numHitboxes = set.NumHitboxes;
+				if (numHitboxes != 0) {
+					if (hitbox < 0 || hitbox >= numHitboxes)
+						Warning($"[UH-OH!] Invalid pHitbox {hitbox} of {numHitboxes} (Sorry model name not available).\n");
+					else
+						table.SetMember("HitBoxBone", (float)set.Hitbox(hitbox).Bone);
+				}
+			}
+			else
+				Warning($"[UH-OH!] Invalid HitboxSet {hitboxSet} of {studioHdr.NumHitboxSets()} on model {studioHdr.Name()}.\n");
+		}
+
+		Vector3 normal = tr.EndPos - tr.StartPos;
+		MathLib.VectorNormalize(ref normal);
+		if (normal.Length() == 0.0f) {
+			normal = -tr.Plane.Normal;
+			if (normal.Length() == 0.0f)
+				normal = new(0, 0, 1);
+		}
+		table.SetMemberVector("Normal", normal);
+	}
+
+	public static void PushTableFromTrace(ref Trace tr, ILuaObject? table) {
+		if (table != null && table.isTable()) {
+			SetTableFromTrace(ref tr, table);
+			table.Push();
+			return;
+		}
+
+		LuaTable newTable = new();
+		SetTableFromTrace(ref tr, newTable);
+		newTable.Push();
+		newTable.UnReference();
+	}
+
+	[LuaFunction]
+	static int TraceLine(ILuaInterface lua) {
+		if (g_PhysWorldObject == null)
+			return 0;
+
+		LuaObject data = new(1, LuaType.None);
+		if (!data.isTable()) {
+			g_Lua!.TypeError("table", 1);
+			data.UnReference();
+			return 0;
+		}
+
+		Vector3 start = data.GetMemberVector("start", vec3_origin);
+		Vector3 end = data.GetMemberVector("endpos", vec3_origin);
+		Mask mask = (Mask)data.GetMemberUInt("mask", (uint)Mask.Solid);
+
+		TraceFilterLua filter = new((CollisionGroup)data.GetMemberInt("collisiongroup", 0));
+		filter.SetIgnoreWorld(data.GetMemberBool("ignoreworld", false));
+		filter.SetIsWhitelist(data.GetMemberBool("whitelist", false));
+#if CLIENT_DLL
+		filter.SetHitClientOnly(data.GetMemberBool("hitclientonly", false));
+#endif
+
+		LuaObject filterObj = new();
+		data.GetMember("filter", filterObj);
+		if (filterObj.isFunction())
+			filter.SetFunction(filterObj);
+		else if (filterObj.isTable()) {
+			LuaObject entry = new();
+			for (int i = 1; ; i++) {
+				filterObj.GetMember(i, entry);
+				if (entry.isString())
+					filter.AddEntityClassToIgnore(entry.GetString()!);
+				else if (entry.isEntity())
+					filter.AddEntityToIgnore(entry.GetEntity());
+				else
+					break;
+			}
+			entry.UnReference();
+		}
+		else if (filterObj.GetType() == LuaType.Entity)
+			filter.AddEntityToIgnore(filterObj.GetEntity());
+		filterObj.UnReference();
+
+		Ray ray = default;
+		ray.Init(start, end);
+
+		enginetrace.TraceRay(ray, mask | (Mask)Contents.HitBox, ref filter, out Trace tr);
+
+		if (r_visualizetraces.GetBool())
+			Game.Shared.DebugOverlay.DebugDrawLine(tr.StartPos, tr.EndPos, 255, 0, 0, true, -1.0f);
+
+		if (!tr.StartSolid)
+			Util.ClipTraceToPlayers(start, end, mask | (Mask)Contents.HitBox, ref filter, ref tr);
+
+		LuaObject output = new();
+		data.GetMember("output", output);
+		PushTableFromTrace(ref tr, output);
+		output.UnReference();
+
+		filter.Function.UnReference();
+		data.UnReference();
+		return 1;
+	}
 }
 #endif

@@ -2465,6 +2465,12 @@ public class StudioHdr
 		return GroupStudioHdr(vModel.Anim[sequence].Group);
 	}
 
+	public int NumHitboxSets() => studioHdr!.NumHitboxSets;
+	public MStudioHitboxSet HitboxSet(int i) => studioHdr!.HitboxSet(i);
+
+	public MStudioBBox Hitbox(int i, int set) => studioHdr!.Hitbox(i, set);
+	public int HitboxCount(int set) => studioHdr!.HitboxCount(set);
+
 	public int NumBodyParts() => studioHdr!.NumBodyParts;
 
 	public MStudioBodyParts Bodypart(int i) => studioHdr!.BodyPart(i);
@@ -2563,6 +2569,60 @@ public class MStudioLinearBone
 	public Quaternion Alignment(int i) => Data.Span[QAlignmentIndex..].Cast<byte, Quaternion>()[i];
 }
 
+public class MStudioBBox
+{
+	public const int SIZEOF = 68;
+
+	Memory<byte> Data;
+	public int Bone;
+	public int Group;
+	public Vector3 BBMin;
+	public Vector3 BBMax;
+	public int HitboxNameIndex;
+	public InlineArray8<int> Unused;
+
+	string? hitboxNameCache;
+	public string HitboxName() {
+		if (HitboxNameIndex == 0)
+			return "";
+		return Studio.ProduceASCIIString(ref hitboxNameCache, Data.Span[HitboxNameIndex..]);
+	}
+
+	public MStudioBBox(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(data.Span);
+		br.Read(out Bone);
+		br.Read(out Group);
+		br.Read(out BBMin);
+		br.Read(out BBMax);
+		br.Read(out HitboxNameIndex);
+		br.ReadInto<int>(Unused);
+	}
+}
+
+public class MStudioHitboxSet
+{
+	public const int SIZEOF = 12;
+
+	Memory<byte> Data;
+	public int NameIndex;
+	public int NumHitboxes;
+	public int HitboxIndex;
+
+	string? nameCache;
+	public string Name() => Studio.ProduceASCIIString(ref nameCache, Data.Span[NameIndex..]);
+
+	public MStudioHitboxSet(Memory<byte> data) {
+		Data = data;
+		SpanBinaryReader br = new(data.Span);
+		br.Read(out NameIndex);
+		br.Read(out NumHitboxes);
+		br.Read(out HitboxIndex);
+	}
+
+	public MStudioBBox Hitbox(int i) => new(Data[(HitboxIndex + i * MStudioBBox.SIZEOF)..]);
+}
+
 /// <summary>
 /// Analog of studiohdr_t
 /// </summary>
@@ -2630,6 +2690,21 @@ public class StudioHeader
 
 	public int NumHitboxSets;
 	public int HitboxSetIndex;
+
+	public MStudioHitboxSet HitboxSet(int i) {
+		Assert(i >= 0 && i < NumHitboxSets);
+		return new(Data[(HitboxSetIndex + i * MStudioHitboxSet.SIZEOF)..]);
+	}
+
+	public MStudioBBox Hitbox(int i, int set) {
+		MStudioHitboxSet s = HitboxSet(set);
+		return s.Hitbox(i);
+	}
+
+	public int HitboxCount(int set) {
+		MStudioHitboxSet s = HitboxSet(set);
+		return s.NumHitboxes;
+	}
 
 	public int NumLocalAnim;
 	public int LocalAnimIndex;

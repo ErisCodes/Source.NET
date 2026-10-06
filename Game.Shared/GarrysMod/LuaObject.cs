@@ -677,8 +677,21 @@ public class LuaObject : ILuaObject
 	public IHandleEntity? GetMemberEntity(ReadOnlySpan<char> name, IHandleEntity? def) => throw new NotImplementedException();
 	public IHandleEntity? GetMemberEntity(int key, IHandleEntity? def) => throw new NotImplementedException();
 	public void SetMemberEntity(float key, IHandleEntity? ent) => throw new NotImplementedException();
-	public void SetMemberEntity(ReadOnlySpan<char> name, IHandleEntity? ent) => throw new NotImplementedException();
-	public IHandleEntity? GetEntity() => throw new NotImplementedException();
+	public void SetMemberEntity(ReadOnlySpan<char> name, IHandleEntity? ent) {
+		if (!isTable())
+			return;
+		LuaEntity.Push_Entity(EntityFromEntityHandle(ent));
+		SetMember(name);
+	}
+
+	public IHandleEntity? GetEntity() {
+		if (!isEntity())
+			return null;
+		Push();
+		BaseEntity? ent = LuaEntity.UserGet(-1);
+		g_Lua!.Pop(1);
+		return ent;
+	}
 	public void SetEntity(IHandleEntity? ent) => throw new NotImplementedException();
 	public void SetMemberPhysObject(ReadOnlySpan<char> name, IPhysicsObject? obj) => throw new NotImplementedException();
 }

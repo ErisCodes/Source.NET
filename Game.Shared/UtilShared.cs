@@ -298,6 +298,70 @@ public static partial class Util
 		enginetrace.SweepCollideable(collision, absStart, absEnd, collision.GetCollisionAngles(), mask, ref filter, ref ptr);
 	}
 
+	public static void ClipTraceToPlayers<IF>(in Vector3 absStart, in Vector3 absEnd, Mask mask, scoped ref IF filter, ref Trace tr) where IF : struct, ITraceFilter {
+		Trace playerTrace = default;
+		Ray ray = default;
+		float smallestFraction = tr.Fraction;
+		const float maxRange = 60.0f;
+
+		ray.Init(absStart, absEnd);
+
+		for (int k = 1; k <= gpGlobals.MaxClients; ++k) {
+			BasePlayer? player = PlayerByIndex(k);
+
+			if (player == null || !player.IsAlive() || !player.IsSolid())
+				continue;
+
+#if CLIENT_DLL
+			if (player.IsDormant())
+				continue;
+#endif
+
+			float range = DistanceToRay(player.WorldSpaceCenter(), absStart, absEnd);
+			if (range < 0.0f || range > maxRange)
+				continue;
+
+			if (!filter.ShouldHitEntity(player, (Contents)mask))
+				continue;
+
+			enginetrace.ClipRayToEntity(ray, mask | (Mask)Contents.HitBox, player, ref playerTrace);
+			if (playerTrace.Fraction < smallestFraction) {
+				tr = playerTrace;
+				smallestFraction = playerTrace.Fraction;
+			}
+		}
+	}
+
+	public static float DistanceToRay(in Vector3 pos, in Vector3 rayStart, in Vector3 rayEnd) => DistanceToRay(pos, rayStart, rayEnd, out _, out _);
+	public static float DistanceToRay(in Vector3 pos, in Vector3 rayStart, in Vector3 rayEnd, out float along, out Vector3 pointOnRay) {
+		Vector3 to = pos - rayStart;
+		Vector3 dir = rayEnd - rayStart;
+		float length = MathLib.VectorNormalize(ref dir);
+
+		float rangeAlong = Vector3.Dot(dir, to);
+		along = rangeAlong;
+
+		float range;
+
+		if (rangeAlong < 0.0f) {
+			// off start point
+			range = -(pos - rayStart).Length();
+			pointOnRay = rayStart;
+		}
+		else if (rangeAlong > length) {
+			// off end point
+			range = -(pos - rayEnd).Length();
+			pointOnRay = rayEnd;
+		}
+		else { // within ray bounds
+			Vector3 onRay = rayStart + rangeAlong * dir;
+			range = (pos - onRay).Length();
+			pointOnRay = onRay;
+		}
+
+		return range;
+	}
+
 	public static void TraceRay(in Ray ray, Mask mask, IHandleEntity? ignore, CollisionGroup collisionGroup, out Trace ptr) {
 		TraceFilterSimple traceFilter = new(ignore, collisionGroup);
 
@@ -392,6 +456,20 @@ public struct TraceFilterSimple(IHandleEntity? passentity, CollisionGroup collis
 
 		return true;
 	}
+}
+
+public struct TraceFilterSimpleList(CollisionGroup collisionGroup) : ITraceFilter
+{
+	public TraceFilterSimple Simple = new(null, collisionGroup);
+	public List<IHandleEntity> PassEntities = [];
+
+	public bool ShouldHitEntity(IHandleEntity handleEntity, Contents contentsMask) {
+		if (PassEntities.Contains(handleEntity))
+			return false;
+		return Simple.ShouldHitEntity(handleEntity, contentsMask);
+	}
+
+	public void AddEntityToIgnore(IHandleEntity? entity) => PassEntities.Add(entity!);
 }
 
 public struct TraceFilterEntity(BaseEntity entity, CollisionGroup collisionGroup) : ITraceFilter
