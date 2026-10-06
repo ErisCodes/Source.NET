@@ -663,7 +663,7 @@ public interface IMaterialSystem
 		ImageFormat format,
 		MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared,
 		TextureFlags textureFlags = TextureFlags.ClampS | TextureFlags.ClampT,
-		uint renderTargetFlags = 0);
+		CreateRenderTargetFlags renderTargetFlags = 0);
 
 	ITexture? CreateNamedRenderTargetTexture(ReadOnlySpan<char> rtName,
 		int w,
@@ -671,8 +671,8 @@ public interface IMaterialSystem
 		RenderTargetSizeMode sizeMode,  // Controls how size is generated (and regenerated on video mode change).
 		ImageFormat format,
 		MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared,
-		bool bClampTexCoords = true,
-		bool bAutoMipMap = false);
+		bool clampTexCoords = true,
+		bool autoMipMap = false);
 
 	// Must be called between the above Begin-End calls!
 	ITexture? CreateNamedRenderTargetTextureEx2(ReadOnlySpan<char> rtName,               // Pass in nullptr here for an unnamed render target.
@@ -682,7 +682,7 @@ public interface IMaterialSystem
 		ImageFormat format,
 		MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared,
 		TextureFlags textureFlags = TextureFlags.ClampS | TextureFlags.ClampT,
-		uint renderTargetFlags = 0);
+		CreateRenderTargetFlags renderTargetFlags = 0);
 
 	// -----------------------------------------------------------
 	// Lightmaps
