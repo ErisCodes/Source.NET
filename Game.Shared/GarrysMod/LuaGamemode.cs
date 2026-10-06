@@ -45,7 +45,11 @@ public class LuaGamemode : LuaObject, IDisposable
 			Error("Tried to LoadGamemode with NULL g_Lua->Global");
 
 		string folder = "gamemodes/" + name;
+#if CLIENT_DLL
+		string init = name + "/gamemode/" + "cl_init.lua";
+#else
 		string init = name + "/gamemode/" + "init.lua";
+#endif
 
 		if (!reload) {
 #if GAME_DLL

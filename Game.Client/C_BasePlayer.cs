@@ -89,6 +89,8 @@ public partial class C_BasePlayer : C_BaseCombatCharacter, IGameEventListener2
 	public override bool IsPlayer() => true;
 	public TimeUnit_t GetFinalPredictedTime() => FinalPredictedTick * TICK_INTERVAL;
 	public bool IsLocalPlayer() => GetLocalPlayer() == this;
+	public bool IsHLTV() => IsLocalPlayer() && engine.IsHLTV();
+	public bool IsBot() => false; // TODO, gmod
 	public static bool ShouldDrawLocalPlayer() {
 		return input.CAM_IsThirdPerson(); // todo
 	}

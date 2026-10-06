@@ -167,7 +167,11 @@ public class GarrysMod : IGarrysMod
 				g_LuaManager = null;
 			}
 			gGM?.Dispose();
-			// GarrysMod.Lua.Libraries.Timer.Shutdown();
+#if CLIENT_DLL
+			LuaTimer.Shutdown();
+#else
+			Game.Server.GarrysMod.LuaTimer.Shutdown();
+#endif
 			return true;
 		}
 
@@ -399,10 +403,11 @@ public class GarrysMod : IGarrysMod
 			g_Lua.Cycle();
 			// if (g_LuaNetworkedVars != null)
 			// 	g_LuaNetworkedVars.Cycle();
-			// Timer.Cycle();
 #if CLIENT_DLL
+			LuaTimer.Cycle();
 			LuaFileLibrary.AsyncCycle();
 #else
+			Game.Server.GarrysMod.LuaTimer.Cycle();
 			Game.Server.GarrysMod.LuaFileLibrary.AsyncCycle();
 #endif
 			// HTTP.Cycle();
