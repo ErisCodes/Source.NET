@@ -3159,7 +3159,9 @@ public partial class BaseEntity : IServerEntity
 	public virtual void EndBlocked() { }
 
 	private void ReportPositionChanged(BaseEntity baseEntity) {
-		throw new NotImplementedException();
+		ref WatcherList list = ref baseEntity.GetDataObject<WatcherList>(DataObjectType.PositionWatcher);
+		if (!Unsafe.IsNullRef(ref list))
+			list.NotifyPositionChanged(baseEntity);
 	}
 
 	readonly ServerNetworkProperty Network = new();
