@@ -9,6 +9,8 @@ using System.Runtime.InteropServices;
 
 using static Box3D.Box3D;
 
+[assembly: DisableRuntimeMarshalling]
+
 namespace Source.Physics;
 
 
