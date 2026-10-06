@@ -199,6 +199,23 @@ public enum CreateRenderTargetFlags
 	HDR = 0x00000001,
 	AutoMipmap = 0x00000002,
 	UnfilterableOk = 0x00000004,
+	/// <summary>
+	/// inhibit allocation in 360 EDRAM
+	/// </summary>
+	NoEDRAM = 0x00000008,
+	/// <summary>
+	/// only allocates memory upon first resolve, destroyed at level end
+	/// </summary>
+	Temp = 0x00000010,
+}
+
+public enum MaterialNonInteractiveMode
+{
+	None = -1,
+	Startup = 0,
+	LevelLoad,
+
+	Count,
 }
 
 public enum RenderTargetSizeMode
@@ -274,8 +291,13 @@ public interface IMaterialSystem
 	void RestoreShaderObjects(IServiceProvider services, int changeFlags);
 	ITexture CreateProceduralTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroup, int wide, int tall, ImageFormat format, TextureFlags flags);
 	ITexture? CreateNamedRenderTargetTextureEx(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depthMode, TextureFlags textureFlags, CreateRenderTargetFlags renderTargetFlags);
+	ITexture? CreateNamedRenderTargetTextureEx2(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared, TextureFlags textureFlags = TextureFlags.ClampS | TextureFlags.ClampT, CreateRenderTargetFlags renderTargetFlags = 0);
 	void BeginRenderTargetAllocation();
 	void EndRenderTargetAllocation();
+	void SetRenderTargetFrameBufferSizeOverrides(int width, int height);
+	void AddTextureAlias(ReadOnlySpan<char> alias, ReadOnlySpan<char> realName);
+	void RemoveTextureAlias(ReadOnlySpan<char> alias);
+	ImageFormat GetBackBufferFormat();
 	int GetNumSortIDs();
 	void EndLightmapAllocation();
 	void BeginLightmapAllocation();
@@ -391,6 +413,7 @@ public interface IMatRenderContext
 	void SetStencilTestMask(uint msk);
 	void SetStencilWriteMask(uint msk);
 	void SetScissorRect(int left, int top, int right, int bottom, bool enableScissor);
+	void SetNonInteractiveTempFullscreenBuffer(ITexture? texture, MaterialNonInteractiveMode mode);
 }
 
 public readonly struct MatRenderContextPtr : IDisposable, IMatRenderContext
@@ -462,6 +485,8 @@ public readonly struct MatRenderContextPtr : IDisposable, IMatRenderContext
 	public void GetWindowSize(out int w, out int h) => ctx.GetWindowSize(out w, out h);
 
 	public ITexture? GetRenderTarget() => ctx.GetRenderTarget();
+
+	public void SetNonInteractiveTempFullscreenBuffer(ITexture? texture, MaterialNonInteractiveMode mode) => ctx.SetNonInteractiveTempFullscreenBuffer(texture, mode);
 
 	public IMesh CreateStaticMesh(VertexFormat format, ReadOnlySpan<char> textureGroup, IMaterial? material = null) => ctx.CreateStaticMesh(format, textureGroup, material);
 

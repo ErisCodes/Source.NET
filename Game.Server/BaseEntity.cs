@@ -1826,6 +1826,58 @@ public partial class BaseEntity : IServerEntity
 	public virtual void MoveDone() => FnMoveDone?.Invoke(this);
 
 	public void SUB_CallUseToggle() => Use(this, this, UseType.Toggle, 0);
+	public void SUB_DoNothing() { }
+
+	public bool HasTarget(ReadOnlySpan<char> targetname) {
+		if (!targetname.IsEmpty && Target != null)
+			return FStrEq(targetname, Target);
+		else
+			return false;
+	}
+
+	public void EntityText(int text_offset, ReadOnlySpan<char> text, float duration, int r = 255, int g = 255, int b = 255, int a = 255) {
+		Vector3 origin;
+		Vector3 vecLocalCenter = (CollisionProp().OBBMins() + CollisionProp().OBBMaxs()) * 0.5f;
+
+		if ((CollisionProp().GetCollisionAngles() == vec3_angle) || (vecLocalCenter == vec3_origin))
+			origin = vecLocalCenter + CollisionProp().GetCollisionOrigin();
+		else
+			MathLib.VectorTransform(vecLocalCenter, CollisionProp().CollisionToWorldTransform(), out origin);
+
+		DebugOverlay.EntityTextAtPosition(origin, text_offset, text, duration, r, g, b, a);
+	}
+
+	public virtual int DrawDebugTextOverlays() {
+		int offset = 1;
+		if ((DebugOverlays & DebugOverlayBits.Text) != 0) {
+			EntityText(offset, $"({EntIndex()}) Name: {GetDebugName()} ({GetClassname()})", 0);
+			offset++;
+
+			if (GlobalName != null) {
+				EntityText(offset, $"GLOBALNAME: {GlobalName}", 0);
+				offset++;
+			}
+
+			Vector3 vecOrigin = GetAbsOrigin();
+			EntityText(offset, $"Position: {vecOrigin.X:F1}, {vecOrigin.Y:F1}, {vecOrigin.Z:F1}", 0);
+			offset++;
+
+			if (ModelName != null || GetBaseAnimating() != null) {
+				EntityText(offset, $"Model:{ModelName}", 0);
+				offset++;
+			}
+
+			if (DamageFilter.Get() != null) {
+				EntityText(offset, $"DAMAGE FILTER:{DamageFilter.Get()!.GetDebugName()}", 0);
+				offset++;
+			}
+		}
+
+		if ((DebugOverlays & DebugOverlayBits.ViewOffset) != 0)
+			DebugOverlay.Cross3D(EyePosition(), 16, 255, 0, 0, true, 0.05f);
+
+		return offset;
+	}
 
 	public void UpdatePhysicsShadowToCurrentPosition(TimeUnit_t deltaTime) {
 		if (GetMoveType() != Source.MoveType.VPhysics) {

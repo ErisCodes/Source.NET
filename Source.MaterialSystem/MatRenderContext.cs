@@ -743,6 +743,13 @@ public class MatRenderContext : IMatRenderContextInternal
 	public void SetStencilWriteMask(uint msk) => shaderAPI.SetStencilWriteMask(msk);
 	public void SetScissorRect(int left, int top, int right, int bottom, bool enableScissor) => shaderAPI.SetScissorRect(left, top, right, bottom, enableScissor);
 
+	readonly TextureReference[] NonInteractiveTempFullscreenBuffer = [new(), new()];
+
+	public void SetNonInteractiveTempFullscreenBuffer(ITexture? texture, MaterialNonInteractiveMode mode) {
+		if (mode != MaterialNonInteractiveMode.None)
+			NonInteractiveTempFullscreenBuffer[(int)mode].Init(texture);
+	}
+
 	public MatLightmaps GetLightmaps() => materials.MatLightmaps;
 
 	public void BindLightmap(Sampler sampler) {

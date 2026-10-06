@@ -368,6 +368,12 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public IMaterial CreateMaterial(ReadOnlySpan<char> name, ReadOnlySpan<char> textureGroupName, KeyValues keyValues) => g_DummyMaterial;
 	public IMaterial CreateMaterial(ReadOnlySpan<char> name, KeyValues keyValues) => g_DummyMaterial;
 	public ITexture? CreateNamedRenderTargetTextureEx(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depthMode, TextureFlags textureFlags, CreateRenderTargetFlags renderTargetFlags) => g_DummyTexture;
+	public ITexture? CreateNamedRenderTargetTextureEx2(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared, TextureFlags textureFlags = TextureFlags.ClampS | TextureFlags.ClampT, CreateRenderTargetFlags renderTargetFlags = 0) => g_DummyTexture;
+	public void SetRenderTargetFrameBufferSizeOverrides(int width, int height) { }
+	public void AddTextureAlias(ReadOnlySpan<char> alias, ReadOnlySpan<char> realName) { }
+	public void RemoveTextureAlias(ReadOnlySpan<char> alias) { }
+	public ImageFormat GetBackBufferFormat() => ImageFormat.RGBA8888;
+	public void SetNonInteractiveTempFullscreenBuffer(ITexture? texture, MaterialNonInteractiveMode mode) { }
 	public ITexture CreateProceduralTexture(ReadOnlySpan<char> textureName, ReadOnlySpan<char> textureGroup, int wide, int tall, ImageFormat format, TextureFlags flags) => g_DummyTexture;
 	public IMesh CreateStaticMesh(VertexFormat format, ReadOnlySpan<char> textureGroup, IMaterial? material) => GetDummyMesh();
 	public void DestroyStaticMesh(IMesh mesh) { }
