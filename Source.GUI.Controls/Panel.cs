@@ -2440,10 +2440,12 @@ public class Panel : IPanel
 					// Swap with lower
 					Parent.Children[i] = prevChild;
 					Parent.Children[i - 1] = this;
+					i--;
 				}
 				else if (i < (childCount - 1) && nextChild != null && nextChild.ZPos < ZPos) {
 					Parent.Children[i] = nextChild;
 					Parent.Children[i + 1] = this;
+					i++;
 				}
 				else
 					break;
