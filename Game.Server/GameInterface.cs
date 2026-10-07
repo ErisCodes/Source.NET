@@ -33,8 +33,16 @@ public static class GameInterface
 	public const int MAX_CHOREO_SCENES_STRINGS = 1 << MAX_CHOREO_SCENES_STRING_BITS;
 	public const int CHOREO_SCENES_INVALID_STRING = MAX_CHOREO_SCENES_STRINGS - 1;
 
+	public const int MAX_MATERIAL_STRING_BITS = 10;
+	public const int MAX_MATERIAL_STRINGS = 1 << MAX_MATERIAL_STRING_BITS;
+
 	public static INetworkStringTable? g_pStringTableEffectDispatch;
 	public static INetworkStringTable? g_pStringTableClientSideChoreoScenes;
+	public static INetworkStringTable? g_pStringTableMaterials;
+
+	public static void PrecacheMaterial(ReadOnlySpan<char> materialName){
+		g_pStringTableMaterials!.AddString(true, materialName);
+	}
 
 	public static bf_write? g_pMsgBuffer;
 	public static void UserMessageBegin(in IRecipientFilter filter, ReadOnlySpan<char> messagename) {
@@ -232,6 +240,7 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 
 		g_pStringTableEffectDispatch = networkstringtable.CreateStringTable("EffectDispatch", EffectData.MAX_EFFECT_DISPATCH_STRINGS);
 		g_pStringTableClientSideChoreoScenes = networkstringtable.CreateStringTable("Scenes", MAX_CHOREO_SCENES_STRINGS);
+		g_pStringTableMaterials = networkstringtable.CreateStringTable("Materials", MAX_MATERIAL_STRINGS);
 
 		GameRulesRegister.CreateNetworkStringTables_GameRules();
 

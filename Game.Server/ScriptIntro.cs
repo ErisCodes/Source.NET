@@ -128,6 +128,11 @@ public class ScriptIntro : BaseEntity
 		StartFOV = 0;
 	}
 
+	public override void Precache() {
+		PrecacheMaterial("scripted/intro_screenspaceeffect");
+		base.Precache();
+	}
+
 	public override void Activate() {
 		if (Active)
 			g_hIntroScript.Set(this);
