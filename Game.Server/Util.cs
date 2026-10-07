@@ -329,6 +329,8 @@ public static partial class Util
 		ShowMessage(str, null);
 	}
 
+	public static void ScreenShake(in Vector3 center, float amplitude, float frequency, float duration, float radius, ShakeCommand command, bool airShake = false) { }
+
 	public static void SayTextFilter<T>(scoped in T filter, ReadOnlySpan<char> pText, BasePlayer? player, bool chat) where T : IRecipientFilter {
 		UserMessageBegin(filter, "SayText");
 		WRITE_BYTE((byte)(player?.EntIndex() ?? 0));

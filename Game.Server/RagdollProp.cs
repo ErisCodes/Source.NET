@@ -33,4 +33,11 @@ public class RagdollProp : BaseAnimating
 	public float BlendWeight;
 	[NetworkName("m_nOverlaySequence")]
 	public int OverlaySequence;
+
+	readonly Ragdoll ragdoll = new();
+	public Ragdoll GetRagdoll() => ragdoll;
+
+	public static bool Ragdoll_IsPropRagdoll(BaseEntity entity) => entity is RagdollProp;
+
+	public static Ragdoll? Ragdoll_GetRagdoll(BaseEntity entity) => (entity as RagdollProp)?.GetRagdoll();
 }
