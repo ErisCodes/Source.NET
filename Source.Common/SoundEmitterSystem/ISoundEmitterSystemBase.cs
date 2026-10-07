@@ -212,7 +212,7 @@ public struct SoundParametersInternal : IEquatable<SoundParametersInternal>
 
 	static readonly FrozenDictionary<ulong, SoundEntityChannel> g_pChannelNamesRev =
 		g_pChannelNames
-		.Select(x => new KeyValuePair<ulong, SoundEntityChannel>(x.Value.Hash(invariant: false), x.Key))
+		.Select(x => new KeyValuePair<ulong, SoundEntityChannel>(x.Value.Hash(invariant: true), x.Key))
 		.ToFrozenDictionary();
 
 	static readonly FrozenDictionary<float, string> g_pVolumeLevels = (new Dictionary<float, string> {
@@ -312,10 +312,10 @@ public struct SoundParametersInternal : IEquatable<SoundParametersInternal>
 			return SoundEntityChannel.Auto;
 		}
 
-		if (strcmp(name[..Math.Max(name.Length, "chan_".Length - 1)], "chan_") != 0)
-			return (SoundEntityChannel)(int.TryParse(name, out int i) ? i : 0);
+		if (strnicmp(name, "chan_", "chan_".Length) != 0)
+			return (SoundEntityChannel)atoi(name);
 
-		if (g_pChannelNamesRev.TryGetValue(name.Hash(invariant: false), out SoundEntityChannel chan))
+		if (g_pChannelNamesRev.TryGetValue(name.Hash(invariant: true), out SoundEntityChannel chan))
 			return chan;
 
 		// At this point, it starts with chan_ but is not recognized
