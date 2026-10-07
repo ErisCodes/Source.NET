@@ -79,7 +79,7 @@ public struct PropTypeFns
 			uint val;
 			int bits = prop.Bits;
 			if ((flags & PropFlags.NoScale) != 0) {
-				val = MemoryMarshal.Cast<float, byte>(new ReadOnlySpan<float>(ref incoming))[0];
+				val = BitConverter.SingleToUInt32Bits(incoming);
 				bits = 32;
 			}
 			else if (incoming < prop.LowValue) {
