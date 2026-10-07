@@ -2589,15 +2589,8 @@ public static class MathLib
 		}
 	}
 
-	public const float VALVE_RAND_MAX = 0x7fff;
-	public static vec_t rand(vec_t minVal, vec_t maxVal) {
-		return vec_t.Lerp(System.Random.Shared.Next(), minVal, maxVal);
-	}
-	public static vec_t rand() {
-		return System.Random.Shared.Next();
-	}
 	public static void Random(ref this Vector3 v, vec_t minVal, vec_t maxVal) {
-		fltx4 rn = Vector128.Create(rand() / VALVE_RAND_MAX, rand() / VALVE_RAND_MAX, rand() / VALVE_RAND_MAX, 0);
+		fltx4 rn = Vector128.Create(System.Random.Shared.NextSingle(), System.Random.Shared.NextSingle(), System.Random.Shared.NextSingle(), 0);
 		fltx4 mn = Vector128.Create(minVal);
 
 		StoreFloat3(ref v, Vector128.FusedMultiplyAdd(rn, Vector128.Subtract(Vector128.Create(maxVal), mn), mn));
