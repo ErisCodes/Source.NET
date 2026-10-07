@@ -714,210 +714,157 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 		return separation;
 	}
 
-	static void TraceBoxVsCollide(in Ray ray, PhysCollide? collide, in Vector3 collideOrigin, in QAngle collideAngles, out Trace trace) {
+	struct BestHit
+	{
+		public float TraceLength;
+		public float TotalTraceLength;
+		public Vector3 Normal;
+		public uint Contents;
+		public bool Hit;
+		public bool StartSolid;
+		public bool AllSolid;
+	}
+
+	static void AcceptHit(ref BestHit best, float traceLength, in Vector3 normal, uint contents, bool startSolid) {
+		if (traceLength < best.TotalTraceLength) {
+			best.TotalTraceLength = traceLength;
+			best.TraceLength = traceLength;
+			best.Normal = normal;
+			best.Contents = contents;
+			best.StartSolid = startSolid;
+			best.AllSolid = startSolid;
+			best.Hit = true;
+		}
+	}
+
+	static float PullBack(float hitLength, in Vector3 rayDir, in Vector3 normal, float epsilon) {
+		float dot = Vector3.Dot(rayDir, normal);
+		if (dot < 0)
+			hitLength += epsilon / dot;
+		return hitLength < 0.0f ? 0.0f : hitLength;
+	}
+
+	static void AcceptCast(ref BestHit best, in b3CastOutput output, uint contents, in b3Transform surfaceXf, float baseLength, in Vector3 rayDir) {
+		if (!output.hit)
+			return;
+
+		if (output.fraction == 0.0f && b3Dot(output.normal, output.normal) == 0.0f) {
+			AcceptHit(ref best, 0.0f, default, contents, true);
+			return;
+		}
+
+		Vector3 worldNormal = BoxToSource.Unitless(b3RotateVector(surfaceXf.q, output.normal));
+		MathLib.VectorNormalize(ref worldNormal);
+		float len = PullBack(output.fraction * baseLength, rayDir, worldNormal, DIST_EPSILON);
+		AcceptHit(ref best, len, worldNormal, contents, false);
+	}
+
+	static void TraceBoxVsCollide(in Ray ray, uint contentsMask, IConvexInfo? convexInfo, PhysCollide? collide, in Vector3 collideOrigin, in QAngle collideAngles, out Trace trace) {
 		ClearTrace(out trace);
 
-		Vector3 center = ray.Start;
-		Vector3 start = ray.Start + ray.StartOffset;
-		trace.StartPos = start;
-		trace.EndPos = start + ray.Delta;
-
-		BoxPhysCollide? box = Box(collide);
-		if (box == null || (box.Convexes.Count == 0 && box.Mesh == null))
+		BoxPhysCollide? surface = Box(collide);
+		if (surface == null) {
+			Assert(surface != null);
 			return;
+		}
 
-		b3Transform xf = SourceToBox.Transform(collideOrigin, collideAngles);
-		b3Vec3 localOrigin = b3InvTransformPoint(xf, SourceToBox.Distance(center));
-		b3Vec3 localTranslation = b3InvRotateVector(xf.q, SourceToBox.Distance(ray.Delta));
+		b3Transform surfaceXf = SourceToBox.Transform(collideOrigin, collideAngles);
+
+		Vector3 delta = ray.Delta;
+		float baseLength = MathF.Sqrt(Vector3.Dot(delta, delta));
+		Vector3 rayDir = delta;
+		if (baseLength > 0)
+			rayDir /= baseLength;
+
+		b3Vec3 localStart = b3InvTransformPoint(surfaceXf, SourceToBox.Distance(ray.Start));
+		b3Vec3 localDelta = b3InvRotateVector(surfaceXf.q, SourceToBox.Distance(delta));
+
+		BestHit best = default;
+		best.TotalTraceLength = MathF.Max(baseLength, 1e-8f);
+
+		uint defaultContents = (uint)Contents.Solid;
 		b3Vec3 unitScale = new() { x = 1.0f, y = 1.0f, z = 1.0f };
 
-		bool isPoint = ray.Extents.LengthSquared() < 1e-6f;
+		if (ray.IsRay) {
+			b3RayCastInput input = new() { origin = localStart, translation = localDelta, maxFraction = 1.0f };
 
-		if (isPoint) {
-			b3CastOutput best = default;
-			best.fraction = 1.0f;
-			bool hit = false;
-			b3RayCastInput input = new() { origin = localOrigin, translation = localTranslation, maxFraction = 1.0f };
-
-			foreach (BoxPhysConvex convex in box.Convexes) {
+			if (surface.Mesh != null) {
+				uint contents = convexInfo?.GetContents(0) ?? defaultContents;
+				if ((contentsMask & contents) != 0) {
+					b3Mesh mesh = new() { data = surface.Mesh, scale = unitScale };
+					AcceptCast(ref best, b3RayCastMesh(&mesh, &input), contents, surfaceXf, baseLength, rayDir);
+				}
+			}
+			foreach (BoxPhysConvex convex in surface.Convexes) {
 				if (convex.Hull == null)
 					continue;
-
-				b3CastOutput output = b3RayCastHull(convex.Hull, &input);
-				if (output.hit && (!hit || output.fraction < best.fraction)) {
-					best = output;
-					hit = true;
-				}
+				uint contents = convexInfo?.GetContents((int)convex.GameData) ?? defaultContents;
+				if ((contentsMask & contents) == 0)
+					continue;
+				AcceptCast(ref best, b3RayCastHull(convex.Hull, &input), contents, surfaceXf, baseLength, rayDir);
 			}
-
-			if (box.Mesh != null) {
-				b3Mesh mesh = new() { data = box.Mesh, scale = unitScale };
-				b3CastOutput output = b3RayCastMesh(&mesh, &input);
-				if (output.hit && (!hit || output.fraction < best.fraction)) {
-					best = output;
-					hit = true;
-				}
-			}
-
-			if (!hit)
-				return;
-
-			Vector3 normal = BoxToSource.Unitless(b3RotateVector(xf.q, best.normal));
-			if (normal.LengthSquared() < 1e-6f)
-				normal = ray.Delta.LengthSquared() > 1e-6f ? -ray.Delta : new Vector3(0.0f, 0.0f, 1.0f);
-			normal = Vector3.Normalize(normal);
-
-			trace.Fraction = best.fraction;
-			trace.EndPos = start + ray.Delta * best.fraction;
-			trace.Plane.Normal = normal;
-			trace.Plane.Dist = Vector3.Dot(trace.EndPos, normal);
-			trace.Contents = Contents.Solid;
-			trace.AllSolid = best.fraction == 0.0f;
-			trace.StartSolid = best.fraction == 0.0f;
-			return;
 		}
+		else {
+			b3Vec3* corners = stackalloc b3Vec3[8];
+			Vector3 e = ray.Extents;
+			for (int i = 0; i < 8; i++) {
+				Vector3 corner = new(
+					ray.Start.X + ((i & 1) != 0 ? e.X : -e.X), ray.Start.Y + ((i & 2) != 0 ? e.Y : -e.Y),
+					ray.Start.Z + ((i & 4) != 0 ? e.Z : -e.Z));
+				corners[i] = b3InvTransformPoint(surfaceXf, SourceToBox.Distance(corner));
+			}
 
-		b3Vec3* boxPoints = stackalloc b3Vec3[8];
-		int k = 0;
-		for (int sx = -1; sx <= 1; sx += 2)
-			for (int sy = -1; sy <= 1; sy += 2)
-				for (int sz = -1; sz <= 1; sz += 2) {
-					Vector3 corner = center + new Vector3(sx * ray.Extents.X, sy * ray.Extents.Y, sz * ray.Extents.Z);
-					boxPoints[k++] = b3InvTransformPoint(xf, SourceToBox.Distance(corner));
+			b3ShapeCastInput input = default;
+			input.proxy.points = corners;
+			input.proxy.count = 8;
+			input.proxy.radius = 0.0f;
+			input.translation = localDelta;
+			input.maxFraction = 1.0f;
+			input.canEncroach = true;
+
+			if (surface.Mesh != null) {
+				uint contents = convexInfo?.GetContents(0) ?? defaultContents;
+				if ((contentsMask & contents) != 0) {
+					b3Mesh mesh = new() { data = surface.Mesh, scale = unitScale };
+					AcceptCast(ref best, b3ShapeCastMesh(&mesh, &input), contents, surfaceXf, baseLength, rayDir);
 				}
-
-		b3Transform boxWorldXf = SourceToBox.Transform(center, default);
-		b3Transform boxToHull = b3InvMulTransforms(xf, boxWorldXf);
-		b3BoxHull boxHull = b3MakeBoxHull(SourceToBox.Distance(ray.Extents.X), SourceToBox.Distance(ray.Extents.Y), SourceToBox.Distance(ray.Extents.Z));
-		b3LocalManifoldPoint* manifoldPoints = stackalloc b3LocalManifoldPoint[8];
-
-		bool isSwept = ray.Delta.LengthSquared() != 0.0f;
-		if (!isSwept) {
-			foreach (BoxPhysConvex convex in box.Convexes) {
+			}
+			foreach (BoxPhysConvex convex in surface.Convexes) {
 				if (convex.Hull == null)
 					continue;
-
-				b3LocalManifold manifold = default;
-				manifold.points = manifoldPoints;
-				b3SATCache cache = default;
-				b3CollideHulls(&manifold, 8, convex.Hull, &boxHull.@base, boxToHull, &cache);
-
-				float separation = MinSeparation(manifold.points, manifold.pointCount, float.MaxValue);
-				if (manifold.pointCount > 0 && separation < -SourceToBox.Distance(0.02f)) {
-					Vector3 normal = Vector3.Normalize(BoxToSource.Unitless(b3RotateVector(xf.q, manifold.normal)));
-					SetSolid(ref trace, start, normal);
-					return;
-				}
-			}
-
-			if (box.Mesh != null) {
-				b3Mesh mesh = new() { data = box.Mesh, scale = unitScale };
-				b3ShapeProxy proxy = new() { points = boxPoints, count = 8, radius = 0.0f };
-				if (b3OverlapMesh(&mesh, b3Transform_identity, &proxy)) {
-					SetSolid(ref trace, start, new Vector3(0.0f, 0.0f, 1.0f));
-					return;
-				}
-			}
-			return;
-		}
-
-		float deepPenetration = SourceToBox.Distance(0.5f);
-
-		bool hitAny = false, startSolid = false, endSolid = false;
-		float bestFraction = 1.0f;
-		Vector3 bestNormal = default;
-
-		foreach (BoxPhysConvex convex in box.Convexes) {
-			if (convex.Hull == null)
-				continue;
-
-			b3ShapeCastInput input = default;
-			input.proxy.points = boxPoints;
-			input.proxy.count = 8;
-			input.proxy.radius = 0.0f;
-			input.translation = localTranslation;
-			input.maxFraction = 1.0f;
-			input.canEncroach = true;
-			b3CastOutput output = b3ShapeCastHull(convex.Hull, &input);
-
-			if (output.hit && output.fraction > 0.0f && BoxToSource.Unitless(output.normal).LengthSquared() > 1e-8f) {
-				Vector3 normal = Vector3.Normalize(BoxToSource.Unitless(b3RotateVector(xf.q, output.normal)));
-				if (Vector3.Dot(ray.Delta, normal) < 0.0f && (!hitAny || output.fraction < bestFraction)) {
-					bestFraction = output.fraction;
-					bestNormal = normal;
-					hitAny = true;
-				}
-			}
-			else if (output.hit) {
-				b3LocalManifold manifold = default;
-				manifold.points = manifoldPoints;
-				b3SATCache cache = default;
-				b3CollideHulls(&manifold, 8, convex.Hull, &boxHull.@base, boxToHull, &cache);
-				if (manifold.pointCount <= 0)
+				uint contents = convexInfo?.GetContents((int)convex.GameData) ?? defaultContents;
+				if ((contentsMask & contents) == 0)
 					continue;
-
-				float separation = MinSeparation(manifold.points, manifold.pointCount, 0.0f);
-				bool deep = separation < -deepPenetration;
-				if (deep)
-					startSolid = true;
-
-				Vector3 normal = Vector3.Normalize(BoxToSource.Unitless(b3RotateVector(xf.q, manifold.normal)));
-				if (Vector3.Dot(ray.Delta, normal) < -0.01f && (!hitAny || bestFraction > 0.0f)) {
-					bestFraction = 0.0f;
-					bestNormal = normal;
-					hitAny = true;
-					if (deep)
-						endSolid = true;
-				}
+				AcceptCast(ref best, b3ShapeCastHull(convex.Hull, &input), contents, surfaceXf, baseLength, rayDir);
 			}
 		}
 
-		if (box.Mesh != null) {
-			b3Mesh mesh = new() { data = box.Mesh, scale = unitScale };
-			b3ShapeCastInput input = default;
-			input.proxy.points = boxPoints;
-			input.proxy.count = 8;
-			input.proxy.radius = 0.0f;
-			input.translation = localTranslation;
-			input.maxFraction = 1.0f;
-			input.canEncroach = true;
-			b3CastOutput output = b3ShapeCastMesh(&mesh, &input);
-			if (output.hit && output.fraction > 0.0f && BoxToSource.Unitless(output.normal).LengthSquared() > 1e-8f) {
-				Vector3 normal = Vector3.Normalize(BoxToSource.Unitless(b3RotateVector(xf.q, output.normal)));
-				if (Vector3.Dot(ray.Delta, normal) < 0.0f && (!hitAny || output.fraction < bestFraction)) {
-					bestFraction = output.fraction;
-					bestNormal = normal;
-					hitAny = true;
-				}
-			}
+		if (best.Hit) {
+			float ooBaseLength = baseLength > 0.0f ? 1.0f / baseLength : 0.0f;
+			trace.Fraction = Math.Clamp(best.TraceLength * ooBaseLength, 0.0f, 1.0f);
+			trace.Plane.Normal = best.Normal;
+			trace.StartSolid = best.StartSolid;
+			trace.AllSolid = best.AllSolid;
+			trace.Contents = (Contents)best.Contents;
 		}
 
-		if (!hitAny) {
-			trace.Fraction = 1.0f;
-			trace.EndPos = start + ray.Delta;
-			return;
-		}
-
-		trace.Plane.Normal = bestNormal;
-		trace.Fraction = CalculateSourceFraction(ray.Delta, bestFraction, bestNormal);
-		trace.EndPos = start + ray.Delta * trace.Fraction;
-		trace.Plane.Dist = Vector3.Dot(trace.EndPos, bestNormal);
-		trace.Contents = Contents.Solid;
-		trace.AllSolid = startSolid && endSolid;
-		trace.StartSolid = startSolid;
+		trace.StartPos = ray.Start + ray.StartOffset;
+		trace.EndPos = trace.StartPos + trace.Fraction * ray.Delta;
+		if (trace.DidHit())
+			trace.Plane.Dist = Vector3.Dot(trace.EndPos, trace.Plane.Normal);
 	}
 
 	public void TraceBox(in Vector3 start, in Vector3 end, in Vector3 mins, in Vector3 maxs, PhysCollide collide, in Vector3 collideOrigin, in QAngle collideAngles, out Trace trace) {
 		Ray ray = default;
 		ray.Init(start, end, mins, maxs);
-		TraceBoxVsCollide(ray, collide, collideOrigin, collideAngles, out trace);
+		TraceBoxVsCollide(ray, (uint)Mask.All, null, collide, collideOrigin, collideAngles, out trace);
 	}
 
 	public void TraceBox(in Ray ray, PhysCollide collide, in Vector3 collideOrigin, in QAngle collideAngles, out Trace trace)
-		=> TraceBoxVsCollide(ray, collide, collideOrigin, collideAngles, out trace);
+		=> TraceBoxVsCollide(ray, (uint)Mask.All, null, collide, collideOrigin, collideAngles, out trace);
 
 	public void TraceBox(in Ray ray, Contents contentsMask, IConvexInfo? convexInfo, PhysCollide collide, in Vector3 collideOrigin, in QAngle collideAngles, out Trace trace)
-		=> TraceBoxVsCollide(ray, collide, collideOrigin, collideAngles, out trace);
+		=> TraceBoxVsCollide(ray, (uint)contentsMask, convexInfo, collide, collideOrigin, collideAngles, out trace);
 
 	public void TraceCollide(in Vector3 start, in Vector3 end, PhysCollide pSweepCollide, in QAngle sweepAngles, PhysCollide collide, in Vector3 collideOrigin, in QAngle collideAngles, out Trace trace) {
 		ClearTrace(out trace);
