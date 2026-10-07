@@ -129,6 +129,6 @@ public partial class
 		return false;
 	}
 
-	public void SetBloodColor(BloodColor color) => BloodColor = (int)color;
+	public void SetBloodColor(BloodColor color) => BloodColor = color;
 }
 #endif
