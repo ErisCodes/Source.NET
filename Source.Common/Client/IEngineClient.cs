@@ -18,8 +18,6 @@ using System.Text;
 
 namespace Source.Common.Client;
 
-public delegate void GMOD_CreateDataTableFn(int idx, ref GMODVariant variant);
-
 /// <summary>
 /// Engine player info. (replica of player_info_s)
 /// </summary>
@@ -478,7 +476,7 @@ public interface IEngineClient
 	void GMOD_BrushMaterialOverride(IMaterial? matOverride);
 	void GMOD_R_RedownloadAllLightmaps(bool unk);
 	void GMOD_RawClientCmd_Unrestricted( ReadOnlySpan<char> command );
-	IGMODDataTable GMOD_CreateDataTable(GMOD_CreateDataTableFn fnCallback);
+	IGMODDataTable GMOD_CreateDataTable(GMODDataTableCallbackFn fnCallback);
 	void GMOD_DestroyDataTable(IGMODDataTable dataTable);
 	MDLHandle_t GMOD_LoadModel( ReadOnlySpan<char> path );
 	void GMOD_DecalRemoveEntity(int index);

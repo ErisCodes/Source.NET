@@ -1090,13 +1090,9 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 		throw new NotImplementedException();
 	}
 
-	public IGMODDataTable GMOD_CreateDataTable() {
-		throw new NotImplementedException();
-	}
+	public IGMODDataTable GMOD_CreateDataTable() => new GMODDataTable(null);
 
-	public void GMOD_DestroyDataTable(IGMODDataTable dataTable) {
-		throw new NotImplementedException();
-	}
+	public void GMOD_DestroyDataTable(IGMODDataTable dataTable) { }
 
 	public ReadOnlySpan<char> GMOD_GetServerAddress() {
 		throw new NotImplementedException();

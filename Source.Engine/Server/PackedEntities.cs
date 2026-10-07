@@ -2,6 +2,7 @@ using Source.Common;
 using Source.Common.Bitbuffers;
 using Source.Common.Commands;
 using Source.Common.Engine;
+using Source.Common.GarrysMod;
 using Source.Common.Networking;
 
 using System.Buffers;
@@ -89,6 +90,9 @@ static class PackedEntities
 
 		int flatProps = EngineSendTable.GetNumFlatProps(sendTable);
 		IChangeFrameList? changeFrame;
+#if GMOD_DLL
+		GMODDataTable? gmodDataTable = sendTable.Precalc!.GMODTableProp?.FieldInfo.GetValue<IGMODDataTable>(edict.GetUnknown()!) as GMODDataTable;
+#endif
 
 		// If this entity was previously in there, then it should have a valid IChangeFrameList
 		// which we can delta against to figure out which properties have changed.
@@ -101,7 +105,15 @@ static class PackedEntities
 
 			int[] deltaProps = new int[Constants.MAX_DATATABLE_PROPS];
 
+#if GMOD_DLL
+			GMODDataTable.s_CurrentTable = gmodDataTable;
+			GMODDataTable.s_TargetTick = (int)snapshot.TickCount;
+#endif
 			int changes = EngineSendTable.CalcDelta(sendTable, prevFrame.GetData(), prevFrame.GetNumBits(), packedData, writeBuf.BitsWritten, deltaProps, Constants.MAX_DATATABLE_PROPS, edictId);
+#if GMOD_DLL
+			GMODDataTable.s_CurrentTable = null;
+			GMODDataTable.s_TargetTick = 0;
+#endif
 
 			// If it's non-manual-mode, but we detect that there are no changes here, then just
 			// use the previous snapshot if it's available (as though the entity were manual mode).
@@ -157,6 +169,9 @@ static class PackedEntities
 		// Now make a PackedEntity and store the new packed data in there.
 		PackedEntity packedEntity = frameSnapshotManager.CreatePackedEntity(snapshot, edictId);
 		packedEntity.SetChangeFrameList(changeFrame);
+#if GMOD_DLL
+		packedEntity.GMODDataTable = gmodDataTable;
+#endif
 		packedEntity.SetServerAndClientClass(serverClass, null);
 		packedEntity.AllocAndCopyPadded(packedData);
 		packedEntity.SetRecipients(recip);

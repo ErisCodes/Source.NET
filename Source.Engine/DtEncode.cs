@@ -1,5 +1,6 @@
 ﻿using Source.Common;
 using Source.Common.Bitbuffers;
+using Source.Common.GarrysMod;
 using Source.Common.Mathematics;
 
 using System.Numerics;
@@ -211,7 +212,7 @@ public struct PropTypeFns
 		new(Array_Encode, Array_Decode, Array_CompareDeltas, Array_FastCopy, Array_GetTypeNameString, Array_IsZero, Array_DecodeZero, Array_IsEncodedZero, Array_SkipProp),
 		new(DataTable_Encode, DataTable_Decode, DataTable_CompareDeltas, Generic_FastCopy, DataTable_GetTypeNameString, DataTable_IsZero, DataTable_DecodeZero, DataTable_IsEncodedZero, DataTable_SkipProp),
 #if GMOD_DLL
-		new(GModTable_Encode, GModTable_Decode, GModTable_CompareDeltas, Generic_FastCopy, GModTable_GetTypeNameString, GModTable_IsZero, GModTable_DecodeZero, GModTable_IsEncodedZero, GModTable_SkipProp),
+		new(GModTable_Encode, GModTable_Decode, GModTable_CompareDeltas, GModTable_FastCopy, GModTable_GetTypeNameString, GModTable_IsZero, GModTable_DecodeZero, GModTable_IsEncodedZero, GModTable_SkipProp),
 #endif
 	];
 
@@ -680,75 +681,35 @@ public struct PropTypeFns
 	#region SendPropType.GModTable
 #if GMOD_DLL
 	public static int GModTable_CompareDeltas(SendProp prop, bf_read p1, bf_read p2) {
-		int start1 = p1.BitsRead;
-		GModTable_Skip(p1);
-		int bits1 = p1.BitsRead - start1;
-
-		int start2 = p2.BitsRead;
-		GModTable_Skip(p2);
-		int bits2 = p2.BitsRead - start2;
-
-		if (bits1 != bits2)
-			return 1;
-
-		int end1 = p1.BitsRead, end2 = p2.BitsRead;
-		p1.Seek(start1);
-		p2.Seek(start2);
-
-		int different = 0;
-		for (int remaining = bits1; remaining > 0 && different == 0; remaining -= 32)
-			different = p1.CompareBits(p2, Math.Min(32, remaining)) ? 1 : 0;
-
-		p1.Seek(end1);
-		p2.Seek(end2);
-		return different;
+		GMODDataTable? dt = GMODDataTable.s_CurrentTable;
+		int tick = GMODDataTable.s_TargetTick;
+		if (dt == null)
+			Error("GMODTable_CompareDeltas: dt is null!");
+		return GMODDataTable.Compare(p1, p2, dt, tick) ? 1 : 0;
 	}
 	public static void GModTable_Decode(ref DecodeInfo decodeInfo) {
-		var gmodtable = decodeInfo.FieldInfo.GetValue<GModTable>(decodeInfo.Object);
-
-		int len = (int)decodeInfo.In.ReadUBitLong(GModTable.ENTRIES_BITS);
-		bool clear = decodeInfo.In.ReadBool();
-
-		if (clear)
-			gmodtable.Clear();
-
-		for (int i = 0; i < len; i++) {
-			int key = (int)decodeInfo.In.ReadUBitLong(GModTable.ENTRY_KEY_BITS);
-			int valueType = (int)decodeInfo.In.ReadUBitLong(GModTable.ENTRY_VALUE_TYPE_BITS);
-			if (valueType != 0)
-				GmodTableTypeFns.Get(valueType).Read(decodeInfo.In, ref gmodtable[key]);
-		}
+		GMODDataTable? dt = decodeInfo.FieldInfo?.GetValue<IGMODDataTable>(decodeInfo.Object) as GMODDataTable;
+		if (dt != null)
+			dt.Decode(decodeInfo.Object, decodeInfo.In);
+		else
+			GMODDataTable.Skip(decodeInfo.In);
 	}
-
-	private static bool GModTable_Skip(bf_read p) {
-		int len = (int)p.ReadUBitLong(GModTable.ENTRIES_BITS);
-		bool clear = p.ReadBool();
-
-		for (int i = 0; i < len; i++) {
-			int key = (int)p.ReadUBitLong(GModTable.ENTRY_KEY_BITS);
-			int valueType = (int)p.ReadUBitLong(GModTable.ENTRY_VALUE_TYPE_BITS);
-
-			if (valueType != 0)
-				GmodTableTypeFns.Get(valueType).Skip(p);
-		}
-
-		return len == 0;
-	}
-
 	public static void GModTable_DecodeZero(ref DecodeInfo info) { }
 	public static void GModTable_Encode(object instance, ref DVariant var, SendProp prop, bf_write writeOut, int objectID) {
-		GModTable? gmodtable = (GModTable?)var.Data;
-
-		writeOut.WriteUBitLong(0, GModTable.ENTRIES_BITS);
-		writeOut.WriteOneBit(0);
+		GMODDataTable? dt = var.Data as GMODDataTable;
+		if (dt == null)
+			Error("GMODTable_Encode: dt is null!");
+		dt!.Encode(instance, writeOut);
+	}
+	public static void GModTable_FastCopy(SendProp sendProp, RecvProp recvProp, object sendData, IFieldAccessor sendFieldInfo, object recvData, IFieldAccessor recvFieldInfo, int objectID) {
+		GMODDataTable src = (GMODDataTable)sendFieldInfo.GetValue<IGMODDataTable>(sendData)!;
+		GMODDataTable dest = (GMODDataTable)recvFieldInfo.GetValue<IGMODDataTable>(recvData)!;
+		dest.CopyFrom(recvData, sendData, src);
 	}
 	public static ReadOnlySpan<char> GModTable_GetTypeNameString() => "DPT_GMODTable";
-	public static bool GModTable_IsEncodedZero(SendProp prop, bf_read p) => GModTable_Skip(p);
-	public static bool GModTable_IsZero(object instance, ref DVariant var, SendProp prop) {
-		GModTable? dt = (GModTable?)var.Data;
-		return dt!.IsEmpty();
-	}
-	public static void GModTable_SkipProp(SendProp prop, bf_read p) => GModTable_Skip(p);
+	public static bool GModTable_IsEncodedZero(SendProp prop, bf_read p) => GMODDataTable.Skip(p);
+	public static bool GModTable_IsZero(object instance, ref DVariant var, SendProp prop) => ((GMODDataTable)var.Data!).IsEmpty();
+	public static void GModTable_SkipProp(SendProp prop, bf_read p) => GMODDataTable.Skip(p);
 #endif
 	#endregion
 }
