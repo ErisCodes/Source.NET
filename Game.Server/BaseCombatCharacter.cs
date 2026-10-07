@@ -146,7 +146,7 @@ public partial class BaseCombatCharacter : BaseFlex
 	[NetworkName("m_iAmmo")]
 	[NetworkArraySize(MAX_AMMO_TYPES)] public readonly NetworkArray<int> Ammo = new(MAX_AMMO_TYPES);
 	[NetworkName("m_bloodColor")]
-	public Color BloodColor;
+	public BloodColor BloodColor;
 
 	private static object? SendProxy_SendBaseCombatCharacterLocalDataTable(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {
 		recipients.ClearAllRecipients();
