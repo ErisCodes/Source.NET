@@ -341,7 +341,7 @@ public struct SoundParametersInternal : IEquatable<SoundParametersInternal>
 
 		if (0 == stricmp(key[..Math.Min((int)strlen(SNDLVL_PREFIX), key.Length)], SNDLVL_PREFIX)) {
 			ReadOnlySpan<char> val = key[(int)strlen(SNDLVL_PREFIX)..];
-			int.TryParse(val, out int sndlvl);
+			int sndlvl = atoi(val);
 			if (sndlvl > 0 && sndlvl <= 180)
 				return (SoundLevel)sndlvl;
 		}
