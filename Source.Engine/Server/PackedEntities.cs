@@ -80,7 +80,9 @@ static class PackedEntities
 
 		SendTable sendTable = serverClass.Table;
 
-		SendProxyRecipients[] recip = new SendProxyRecipients[SendProxyRecipients.MAX_DATATABLE_PROXIES];
+		SendProxyRecipients[] recip = new SendProxyRecipients[sendTable.Precalc!.GetNumDataTableProxies()];
+		for (int i = 0; i < recip.Length; i++)
+			recip[i] = new();
 
 		if (!EngineSendTable.Encode(sendTable, edict.GetUnknown(), writeBuf, edictId, recip, false))
 			Host.Error($"SV_PackEntity: SendTable_Encode returned false (ent {edictId}).\n");
