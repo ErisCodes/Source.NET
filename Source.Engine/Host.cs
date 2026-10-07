@@ -562,6 +562,9 @@ public partial class Host
 		HostState = engineAPI.GetRequiredService<IHostState>();
 		MatSysInterface = engineAPI.InitSubsystem<MatSysInterface>()!;
 #endif
+#if GMOD_DLL
+		g_pFileSystem.Gamemodes().Refresh();
+#endif
 
 #if !SWDS
 		ReadConfiguration();
