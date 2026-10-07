@@ -353,7 +353,7 @@ public static class SendPropHelpers
 		SendProp ret = new();
 		sizeOfVar = sizeOfVar == -1
 						? field == null
-							? -1 : DataTableHelpers.FieldSizes.TryGetValue(field.FieldType, out int v)
+							? -1 : DataTableHelpers.FieldSizes.TryGetValue(field.FieldType.IsEnum ? Enum.GetUnderlyingType(field.FieldType) : field.FieldType, out int v)
 							? v : -1
 						: sizeOfVar;
 		if (proxyFn == null) {
