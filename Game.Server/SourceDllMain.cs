@@ -24,6 +24,7 @@ public static class SourceDllMain
 	[Dependency] public static IEngineServer engine { get; private set; } = null!;
 	[Dependency] public static IFileSystem filesystem { get; private set; } = null!;
 	[Dependency] public static ServerGlobalVariables gpGlobals { get; private set; } = null!;
+	[Dependency] public static ServerGameDLL g_ServerGameDLL { get; private set; } = null!;
 	[Dependency] public static ICvar cvar { get; private set; } = null!;
 	[Dependency] public static ICommandLine commandLine { get; private set; } = null!;
 	[Dependency] public static ISpatialPartition partition { get; private set; } = null!;

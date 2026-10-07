@@ -4,6 +4,7 @@ using Source;
 using Source.Common;
 using Source.Common.Commands;
 using Source.Common.Physics;
+using Source.Common.Server;
 
 using System.Numerics;
 
@@ -1569,7 +1570,7 @@ public class LogicAutosave : LogicalEntity
 	protected void InputSaveDangerous(InputData inputdata) {
 		BasePlayer? player = Util.PlayerByIndex(1);
 
-		if (TriggerSave.AutoSaveDangerousTime != 0.0f && TriggerSave.AutoSaveDangerousTime >= gpGlobals.CurTime) {
+		if (g_ServerGameDLL.AutoSaveDangerousTime != 0.0f && g_ServerGameDLL.AutoSaveDangerousTime >= gpGlobals.CurTime) {
 			// A previous dangerous auto save was waiting to become safe
 
 			if (player!.GetDeathTime() == 0.0f || player.GetDeathTime() > gpGlobals.CurTime) {
@@ -1583,10 +1584,10 @@ public class LogicAutosave : LogicalEntity
 
 		if (player!.GetHealth() >= MinHitPoints) {
 			engine.ServerCommand("autosavedangerous\n");
-			TriggerSave.AutoSaveDangerousTime = gpGlobals.CurTime + inputdata.Value.Float();
+			g_ServerGameDLL.AutoSaveDangerousTime = gpGlobals.CurTime + inputdata.Value.Float();
 
 			// Player must have this much health when we go to commit, or we don't commit.
-			TriggerSave.AutoSaveDangerousMinHealthToCommit = MinHitPointsToCommit;
+			g_ServerGameDLL.AutoSaveDangerousMinHealthToCommit = MinHitPointsToCommit;
 		}
 	}
 

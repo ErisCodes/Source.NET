@@ -1339,9 +1339,6 @@ public class TriggerSave : BaseTrigger
 	float DangerousTimer;
 	int MinHitPoints;
 
-	public static TimeUnit_t AutoSaveDangerousTime;
-	public static float AutoSaveDangerousMinHealthToCommit;
-
 	public static readonly new DataMap DataDesc = new(typeof(TriggerSave), BaseTrigger.DataDesc, [
 		DEFINE<TriggerSave>.KEYFIELD(nameof(ForceNewLevelUnit), FieldType.Boolean, "NewLevelUnit"),
 		DEFINE<TriggerSave>.KEYFIELD(nameof(MinHitPoints), FieldType.Integer, "MinimumHitPoints"),
@@ -1371,7 +1368,7 @@ public class TriggerSave : BaseTrigger
 			return;
 
 		if (DangerousTimer != 0.0f) {
-			if (AutoSaveDangerousTime != 0.0f && AutoSaveDangerousTime >= gpGlobals.CurTime) {
+			if (g_ServerGameDLL.AutoSaveDangerousTime != 0.0f && g_ServerGameDLL.AutoSaveDangerousTime >= gpGlobals.CurTime) {
 				// A previous dangerous auto save was waiting to become safe
 				BasePlayer? player = Util.PlayerByIndex(1);
 
@@ -1393,7 +1390,7 @@ public class TriggerSave : BaseTrigger
 
 			if (player != null && player.GetHealth() >= MinHitPoints) {
 				engine.ServerCommand("autosavedangerous\n");
-				AutoSaveDangerousTime = gpGlobals.CurTime + DangerousTimer;
+				g_ServerGameDLL.AutoSaveDangerousTime = gpGlobals.CurTime + DangerousTimer;
 			}
 		}
 		else
