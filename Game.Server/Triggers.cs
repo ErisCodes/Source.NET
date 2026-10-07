@@ -119,6 +119,7 @@ public class BaseTrigger : BaseToggle
 		DEFINE<BaseTrigger>.KEYFIELD(nameof(FilterName), FieldType.String, "filtername"),
 		DEFINE<BaseTrigger>.FIELD(nameof(Filter), FieldType.EHandle),
 		DEFINE<BaseTrigger>.KEYFIELD(nameof(Disabled), FieldType.Boolean, "StartDisabled"),
+		DEFINE<BaseTrigger>.UTLVECTOR(nameof(TouchingEntities), FieldType.EHandle),
 
 		// Inputs
 		DEFINE<BaseTrigger>.INPUTFUNC(FieldType.Void, "Enable", nameof(InputEnable), (INPUTFUNCPTR)((self, data) => ((BaseTrigger)self).InputEnable(data))),
@@ -546,6 +547,10 @@ public class TriggerHurt : BaseTrigger
 	readonly List<EHANDLE> HurtEntities = [];
 
 	public static readonly new DataMap DataDesc = new(typeof(TriggerHurt), BaseTrigger.DataDesc, [
+		// Function Pointers
+		DEFINE<TriggerHurt>.FUNCTION(nameof(RadiationThink)),
+		DEFINE<TriggerHurt>.FUNCTION(nameof(HurtThink)),
+
 		// Fields
 		DEFINE<TriggerHurt>.FIELD(nameof(OriginalDamage), FieldType.Float),
 		DEFINE<TriggerHurt>.KEYFIELD(nameof(Damage), FieldType.Float, "damage"),
@@ -556,6 +561,7 @@ public class TriggerHurt : BaseTrigger
 
 		DEFINE<TriggerHurt>.FIELD(nameof(LastDmgTime), FieldType.Time),
 		DEFINE<TriggerHurt>.FIELD(nameof(DmgResetTime), FieldType.Time),
+		DEFINE<TriggerHurt>.UTLVECTOR(nameof(HurtEntities), FieldType.EHandle),
 
 		// Inputs
 		DEFINE<TriggerHurt>.INPUT(nameof(Damage), FieldType.Float, "SetDamage"),
@@ -766,6 +772,10 @@ public class TriggerMultiple : BaseTrigger
 	protected OutputEvent OnTrigger = new();
 
 	public static readonly new DataMap DataDesc = new(typeof(TriggerMultiple), BaseTrigger.DataDesc, [
+		// Function Pointers
+		DEFINE<TriggerMultiple>.FUNCTION(nameof(MultiTouch)),
+		DEFINE<TriggerMultiple>.FUNCTION(nameof(MultiWaitOver)),
+
 		// Outputs
 		DEFINE<TriggerMultiple>.OUTPUT(nameof(OnTrigger), "OnTrigger", eventFuncs)
 	]);
@@ -873,6 +883,8 @@ public class TriggerLook : TriggerOnce
 		DEFINE<TriggerLook>.FIELD(nameof(Activator), FieldType.EHandle),
 
 		DEFINE<TriggerLook>.OUTPUT(nameof(OnTimeout), "OnTimeout", eventFuncs),
+
+		DEFINE<TriggerLook>.FUNCTION(nameof(TimeoutThink)),
 
 		// Inputs
 		DEFINE<TriggerLook>.INPUT(nameof(FieldOfView), FieldType.Float, "FieldOfView"),
@@ -1490,6 +1502,9 @@ public class TriggerProximity : BaseTrigger
 	protected OutputFloat NearestEntityDistance = new();
 
 	public static readonly new DataMap DataDesc = new(typeof(TriggerProximity), BaseTrigger.DataDesc, [
+		// Functions
+		DEFINE<TriggerProximity>.FUNCTION(nameof(MeasureThink)),
+
 		// Keys
 		DEFINE<TriggerProximity>.KEYFIELD(nameof(MeasureTargetName), FieldType.String, "measuretarget"),
 		DEFINE<TriggerProximity>.FIELD(nameof(MeasureTarget), FieldType.EHandle),
@@ -1641,6 +1656,9 @@ public class TriggerImpact : TriggerMultiple
 
 		// Outputs
 		DEFINE<TriggerImpact>.OUTPUT(nameof(OutputForce), "ImpactForce", eventFuncs),
+
+		// Function Pointers
+		DEFINE<TriggerImpact>.FUNCTION(nameof(Disable)),
 	]);
 	public override DataMap? GetDataDescMap() => DataDesc;
 

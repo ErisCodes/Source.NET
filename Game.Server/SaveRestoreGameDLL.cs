@@ -8,6 +8,53 @@ namespace Game.Server;
 
 public static class SaveRestoreGameDLL
 {
+	static bool FunctionsMatch(Delegate a, Delegate b) => a.Method.GetBaseDefinition().MethodHandle == b.Method.GetBaseDefinition().MethodHandle;
+
+	/// <summary>
+	/// Search this datamap for the name of this member function
+	/// This is used to save/restore function pointers (convert pointer to text)
+	/// </summary>
+	/// <param name="map"></param>
+	/// <param name="function">pointer to member function</param>
+	/// <returns>function name</returns>
+	public static string? FunctionToName(DataMap? map, Delegate function) {
+		while (map != null) {
+			for (int i = 0; i < map.DataNumFields; i++) {
+				if ((map.DataDesc[i].Flags & FieldTypeDescFlags.FunctionTable) != 0) {
+					Delegate? test = map.DataDesc[i].InputFunc;
+
+					if (test != null && FunctionsMatch(test, function))
+						return map.DataDesc[i].FieldName;
+				}
+			}
+			map = map.BaseMap;
+		}
+
+		return null;
+	}
+
+	/// <summary>
+	/// Search the datamap for a function named pName
+	/// This is used to save/restore function pointers (convert text back to pointer)
+	/// </summary>
+	/// <param name="map"></param>
+	/// <param name="name">name of the member function</param>
+	public static Delegate? FunctionFromName(DataMap? map, ReadOnlySpan<char> name) {
+		while (map != null) {
+			for (int i = 0; i < map.DataNumFields; i++) {
+				if ((map.DataDesc[i].Flags & FieldTypeDescFlags.FunctionTable) != 0) {
+					if (FStrEq(name, map.DataDesc[i].FieldName))
+						return map.DataDesc[i].InputFunc;
+				}
+			}
+			map = map.BaseMap;
+		}
+
+		Msg($"Failed to find function {name}\n");
+
+		return null;
+	}
+
 	public static bool ParseKeyvalue(object obj, TypeDescription[] fields, int numFields, ReadOnlySpan<char> keyName, ReadOnlySpan<char> value)
 	{
 		for (int i = 0; i < numFields; i++)

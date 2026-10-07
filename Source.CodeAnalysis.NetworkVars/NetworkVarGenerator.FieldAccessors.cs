@@ -24,7 +24,7 @@ namespace Source.CodeAnalysis.NetworkVars
 		private static readonly HashSet<string> FieldMethods = new HashSet<string> {
 			"OF", "OF_NAMED", "OF_ARRAY", "OF_ARRAYINDEX", "OF_SENDINFO_ARRAY", "OF_VECTORELEM", "OF_LIST",
 			"FIELD", "KEYFIELD", "KEYFIELD_NOT_SAVED", "ARRAY", "GLOBAL_FIELD", "GLOBAL_KEYFIELD", "AUTO_ARRAY_KEYFIELD", "INPUT", "OUTPUT",
-			"AUTO_ARRAY", "PRED_FIELD", "PRED_ARRAY", "PRED_FIELD_TOL", "PRED_ARRAY_TOL", "PRED_TYPEDESCRIPTION"
+			"AUTO_ARRAY", "PRED_FIELD", "PRED_ARRAY", "PRED_FIELD_TOL", "PRED_ARRAY_TOL", "PRED_TYPEDESCRIPTION", "EMBEDDED", "UTLVECTOR"
 		};
 		private static readonly HashSet<string> ValueMethods = new HashSet<string> { "GetValue", "SetValue", "CopyTo", "CopyFrom", "GetElement", "SetElement" };
 

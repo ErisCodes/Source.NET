@@ -337,6 +337,9 @@ public class AmbientGeneric : PointEntity
 		DEFINE<AmbientGeneric>.FIELD(nameof(Looping), FieldType.Boolean),
 		DEFINE<AmbientGeneric>.FIELD(nameof(SoundLevel), FieldType.Integer),
 
+		// Function Pointers
+		DEFINE<AmbientGeneric>.FUNCTION(nameof(RampThink)),
+
 		// Inputs
 		DEFINE<AmbientGeneric>.INPUTFUNC(FieldType.Void, "PlaySound", nameof(InputPlaySound), (INPUTFUNCPTR)((self, data) => ((AmbientGeneric)self).InputPlaySound(data))),
 		DEFINE<AmbientGeneric>.INPUTFUNC(FieldType.Void, "StopSound", nameof(InputStopSound), (INPUTFUNCPTR)((self, data) => ((AmbientGeneric)self).InputStopSound(data))),

@@ -386,8 +386,10 @@ public class TriggerSoundscape : BaseTrigger
 	List<Handle<BasePlayer>> Spectators = []; // spectators in our volume
 
 	public static readonly new DataMap DataDesc = new(typeof(TriggerSoundscape), BaseTrigger.DataDesc, [
+		DEFINE<TriggerSoundscape>.THINKFUNC(nameof(PlayerUpdateThink)),
 		DEFINE<TriggerSoundscape>.KEYFIELD(nameof(SoundscapeName), FieldType.String, "soundscape"),
 		DEFINE<TriggerSoundscape>.FIELD(nameof(Soundscape), FieldType.EHandle),
+		DEFINE<TriggerSoundscape>.UTLVECTOR(nameof(Spectators), FieldType.EHandle),
 	]);
 	public override DataMap? GetDataDescMap() => DataDesc;
 

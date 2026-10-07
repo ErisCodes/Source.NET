@@ -1,3 +1,6 @@
+using Source;
+using Source.Common;
+
 namespace Game.Server;
 
 public class SimpleSimTimer
@@ -31,6 +34,10 @@ public class SimpleSimTimer
 	}
 
 	protected TimeUnit_t Next;
+
+	public static readonly DataMap DataDesc = new(typeof(SimpleSimTimer), [
+		DEFINE<SimpleSimTimer>.FIELD(nameof(Next), FieldType.Time),
+	]);
 }
 
 public class SimTimer : SimpleSimTimer
@@ -54,6 +61,10 @@ public class SimTimer : SimpleSimTimer
 	public float GetInterval() => Interval;
 
 	float Interval;
+
+	public static readonly new DataMap DataDesc = new(typeof(SimTimer), SimpleSimTimer.DataDesc, [
+		DEFINE<SimTimer>.FIELD(nameof(Interval), FieldType.Float),
+	]);
 }
 
 public class StopwatchBase : SimpleSimTimer
@@ -65,6 +76,10 @@ public class StopwatchBase : SimpleSimTimer
 	public void Stop() => IsRunning = false;
 
 	protected bool IsRunning;
+
+	public static readonly new DataMap DataDesc = new(typeof(StopwatchBase), SimpleSimTimer.DataDesc, [
+		DEFINE<StopwatchBase>.FIELD(nameof(IsRunning), FieldType.Boolean),
+	]);
 }
 
 public class RandStopwatch : StopwatchBase
@@ -80,4 +95,9 @@ public class RandStopwatch : StopwatchBase
 
 	float MinInterval;
 	float MaxInterval;
+
+	public static readonly new DataMap DataDesc = new(typeof(RandStopwatch), StopwatchBase.DataDesc, [
+		DEFINE<RandStopwatch>.FIELD(nameof(MinInterval), FieldType.Float),
+		DEFINE<RandStopwatch>.FIELD(nameof(MaxInterval), FieldType.Float),
+	]);
 }

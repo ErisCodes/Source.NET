@@ -111,6 +111,8 @@ public class ScriptIntro : BaseEntity
 		DEFINE.INPUTFUNC(FieldType.Void, "Deactivate", nameof(InputDeactivate), (INPUTFUNCPTR)((self, data) => ((ScriptIntro)self).InputDeactivate(data))),
 		DEFINE.INPUTFUNC(FieldType.String, "FadeTo", nameof(InputFadeTo), (INPUTFUNCPTR)((self, data) => ((ScriptIntro)self).InputFadeTo(data))),
 		DEFINE.INPUTFUNC(FieldType.String, "SetFadeColor", nameof(InputSetFadeColor), (INPUTFUNCPTR)((self, data) => ((ScriptIntro)self).InputSetFadeColor(data))),
+
+		DEFINE.THINKFUNC(nameof(BlendComplete)),
 	]);
 	public override DataMap? GetDataDescMap() => DataDesc;
 

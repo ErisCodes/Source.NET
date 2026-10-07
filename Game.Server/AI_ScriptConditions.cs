@@ -31,6 +31,11 @@ public class AI_ProxTester
 
 	float DistSq;
 	bool Inside;
+
+	public static readonly DataMap DataDesc = new(typeof(AI_ProxTester), [
+		DEFINE<AI_ProxTester>.FIELD(nameof(DistSq), FieldType.Float),
+		DEFINE<AI_ProxTester>.FIELD(nameof(Inside), FieldType.Boolean),
+	]);
 }
 
 public class AI_ScriptConditionsElement
@@ -47,6 +52,12 @@ public class AI_ScriptConditionsElement
 	EHANDLE Actor;
 	SimTimer Timer = new();
 	SimTimer Timeout = new();
+
+	public static readonly DataMap DataDesc = new(typeof(AI_ScriptConditionsElement), [
+		DEFINE<AI_ScriptConditionsElement>.FIELD(nameof(Actor), FieldType.EHandle),
+		DEFINE<AI_ScriptConditionsElement>.EMBEDDED(nameof(Timer)),
+		DEFINE<AI_ScriptConditionsElement>.EMBEDDED(nameof(Timeout)),
+	]);
 }
 
 /// <summary>
@@ -61,7 +72,7 @@ public class AI_ScriptConditions : BaseEntity, IEntityListener
 	static readonly ConVar debugscriptconditions = new("ai_debugscriptconditions", "0");
 
 	public static readonly new DataMap DataDesc = new(typeof(AI_ScriptConditions), BaseEntity.DataDesc, [
-		// DEFINE_THINKFUNC( EvaluationThink ),
+		DEFINE.THINKFUNC(nameof(EvaluationThink)),
 
 		DEFINE.OUTPUT(nameof(OnConditionsSatisfied), "OnConditionsSatisfied", eventFuncs),
 		DEFINE.OUTPUT(nameof(OnConditionsTimeout), "OnConditionsTimeout", eventFuncs),
@@ -80,8 +91,8 @@ public class AI_ScriptConditions : BaseEntity, IEntityListener
 
 #if !HL2_EPISODIC
 		DEFINE.FIELD(nameof(ActorHandle), FieldType.EHandle),
-		// DEFINE_EMBEDDED(m_Timer ),
-		// DEFINE_EMBEDDED(m_Timeout ),
+		DEFINE.EMBEDDED(nameof(Timer)),
+		DEFINE.EMBEDDED(nameof(Timeout)),
 #endif
 
 		DEFINE.KEYFIELD(nameof(MinState), FieldType.Integer, "MinimumState"),
@@ -91,7 +102,7 @@ public class AI_ScriptConditions : BaseEntity, IEntityListener
 		DEFINE.KEYFIELD(nameof(ActorSeePlayer), FieldType.Integer, "ActorSeePlayer"),
 
 		DEFINE.KEYFIELD(nameof(PlayerActorProximity), FieldType.Float, "PlayerActorProximity"),
-		// DEFINE_EMBEDDED(m_PlayerActorProxTester),
+		DEFINE.EMBEDDED(nameof(PlayerActorProxTester)),
 
 		DEFINE.KEYFIELD(nameof(PlayerActorFOV), FieldType.Float, "PlayerActorFOV"),
 		DEFINE.KEYFIELD(nameof(PlayerActorFOVTrueCone), FieldType.Boolean, "PlayerActorFOVTrueCone"),
@@ -100,10 +111,10 @@ public class AI_ScriptConditions : BaseEntity, IEntityListener
 		DEFINE.KEYFIELD(nameof(ActorSeeTarget), FieldType.Integer, "ActorSeeTarget"),
 
 		DEFINE.KEYFIELD(nameof(ActorTargetProximity), FieldType.Float, "ActorTargetProximity"),
-		// DEFINE_EMBEDDED(m_ActorTargetProxTester),
+		DEFINE.EMBEDDED(nameof(ActorTargetProxTester)),
 
 		DEFINE.KEYFIELD(nameof(PlayerTargetProximity), FieldType.Float, "PlayerTargetProximity"),
-		// DEFINE_EMBEDDED(m_PlayerTargetProxTester),
+		DEFINE.EMBEDDED(nameof(PlayerTargetProxTester)),
 
 		DEFINE.KEYFIELD(nameof(PlayerTargetFOV), FieldType.Float, "PlayerTargetFOV"),
 		DEFINE.KEYFIELD(nameof(PlayerTargetFOVTrueCone), FieldType.Boolean, "PlayerTargetFOVTrueCone"),
@@ -119,7 +130,7 @@ public class AI_ScriptConditions : BaseEntity, IEntityListener
 		DEFINE.KEYFIELD(nameof(ActorInVehicle), FieldType.Integer, "ActorInVehicle"),
 		DEFINE.KEYFIELD(nameof(PlayerInVehicle), FieldType.Integer, "PlayerInVehicle"),
 
-		// DEFINE_UTLVECTOR( m_ElementList, FIELD_EMBEDDED ),
+		DEFINE.UTLVECTOR(nameof(ElementList), FieldType.Embedded),
 		DEFINE.FIELD(nameof(LeaveAsleep), FieldType.Boolean),
 	]);
 	public override DataMap? GetDataDescMap() => DataDesc;
