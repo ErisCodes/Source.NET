@@ -287,8 +287,8 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 				break;
 #endif
 		}
+		// todo: review if this exists. Came from Raphaeli's attempts, may not be present now?
 		// GarrysMod.GarrysMod.StringTable.Install();
-
 
 		GameRulesRegister.InstallStringTableCallback_GameRules();
 	}
