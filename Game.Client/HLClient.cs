@@ -1,5 +1,6 @@
 using CommunityToolkit.HighPerformance;
 
+using Game.Client.GarrysMod;
 using Game.Client.HL2;
 using Game.Client.HUD;
 using Game.Shared;
@@ -266,16 +267,28 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 	public void InstallStringTableCallback(ReadOnlySpan<char> tableName) {
 		switch (tableName) {
-			case "networkstring":
+			case "VguiScreen": Warning("FIXME: VguiScreen string table not being processed yet\n"); break;
+			case "Materials": Warning("FIXME: Materials string table not being processed yet\n"); break;
+			case "EffectDispatch": Warning("FIXME: EffectDispatch string table not being processed yet\n"); break;
+			// I don't think InfoPanel is a thing?
+			case "Scenes":
+				g_pStringTableClientSideChoreoScenes = networkstringtable.FindTable(tableName);
+				break;
+			case "ParticleEffectNames": Warning("FIXME: ParticleEffectNames string table not being processed yet\n"); break;
+#if GMOD_DLL
+			case Protocol.NETWORKSTRING_TABLENAME:
 				Game.Client.GarrysMod.NetworkString.Install();
+				break;
+			case Protocol.NETWORKVARS_TABLENAME:
+				Game.Client.GarrysMod.NetworkVarNames.Install();
 				break;
 			case Protocol.CLIENT_LUA_FILES_TABLENAME:
 				Game.Client.GarrysMod.GModDataPack.DataPack().Initialize();
 				break;
-			case "Scenes":
-				g_pStringTableClientSideChoreoScenes = networkstringtable.FindTable(tableName);
-				break;
+#endif
 		}
+		// GarrysMod.GarrysMod.StringTable.Install();
+
 
 		GameRulesRegister.InstallStringTableCallback_GameRules();
 	}
