@@ -51,7 +51,7 @@ public partial class C_BaseCombatCharacter : C_BaseFlex
 	[NetworkArraySize(MAX_AMMO_TYPES)] public readonly NetworkArray<int> Ammo = new(MAX_AMMO_TYPES);
 
 	[NetworkName("m_bloodColor")]
-	public Color BloodColor;
+	public int BloodColor;
 
 	public int WeaponCount() => MAX_WEAPONS;
 
