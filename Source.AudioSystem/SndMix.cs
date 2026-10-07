@@ -186,7 +186,7 @@ public static class SndMix
 
 		Assert(!output.IsEmpty);
 
-		snd_vol = (int)(S_GetMasterVolume() * 256);
+		snd_vol = IsOutputMuted ? 0 : (int)(S_GetMasterVolume() * 256);
 		ReadOnlySpan<int> snd_p = MemoryMarshal.Cast<PortableSamplePair, int>(front.AsSpan());
 
 		// get size of output buffer in full samples (LR pairs)
@@ -259,7 +259,7 @@ public static class SndMix
 		out_idx = (lpaintedtime * g_AudioDevice.DeviceChannels()) & out_mask;
 
 		step = 3 - g_AudioDevice.DeviceChannels();  // mono output buffer - step 2, stereo - step 1
-		soundVol = (int)(S_GetMasterVolume() * 256);
+		soundVol = IsOutputMuted ? 0 : (int)(S_GetMasterVolume() * 256);
 
 		if (g_AudioDevice.DeviceSampleBits() == 16) {
 			Span<short> @out = MemoryMarshal.Cast<byte, short>(output);
@@ -1735,6 +1735,8 @@ public static class SndMix
 
 	public static readonly ConVar snd_mute_losefocus = new("snd_mute_losefocus", "1", FCvar.Archive);
 
+	static bool IsOutputMuted => !soundServices.IsGameActive() && snd_mute_losefocus.GetBool();
+
 	// build a list of channels that will actually do mixing in this update
 	// remove all active channels that won't mix for some reason
 	public static void MIX_BuildChannelList(ChannelList list) {
@@ -1748,8 +1750,6 @@ public static class SndMix
 		bool delayStartServer = false;
 		bool delayStartClient = false;
 		bool paused = soundServices.IsGamePaused();
-		bool active = soundServices.IsGameActive();
-		bool stopOnFocusLoss = !active && snd_mute_losefocus.GetBool();
 
 		ChannelCullList cullList = new();
 		if (snd_cull_duplicates.GetInt() > 0)
@@ -1785,16 +1785,6 @@ public static class SndMix
 				// If the sound wants to stop when the game pauses, do so
 				if (paused && SND_ShouldPause(ch))
 					remove = true;
-				// If we aren't the active app and the option for background audio isn't on, mute the audio
-				// Windows has it's own system for background muting
-				if (!remove && stopOnFocusLoss) {
-					remove = true;
-
-					// Free up the sound channels otherwise they start filling up
-					if (source != null && (!source.IsLooped() && !source.IsStreaming()))
-						S_FreeChannel(ch);
-
-				}
 				// On lowend, aggressively cull duplicate sounds.
 				if (!remove && snd_cull_duplicates.GetInt() > 0) {
 					// We can't simply remove them, because then sounds will pile up waiting to finish later.
