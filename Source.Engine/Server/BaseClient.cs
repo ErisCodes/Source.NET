@@ -6,6 +6,7 @@ using SharpCompress.Common;
 
 using Source.Common;
 using Source.Common.Bitbuffers;
+using Source.Common.Client;
 using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.Keyvalues;
@@ -723,6 +724,26 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 	}
 
 	public bool IsConnected() => SignOnState >= SignOnState.Connected;
+
+	public bool FillUserInfo(out PlayerInfo userInfo) {
+		userInfo = default;
+
+		if (Name[0] == '\0' || !IsConnected())
+			return false;
+
+		strcpy(userInfo.Name, GetClientName());
+		Encoding.ASCII.GetBytes(GetNetworkIDString()[..Math.Min(GetNetworkIDString().Length, 32)], userInfo.GUID);
+		userInfo.FriendsID = FriendsID;
+		strcpy(userInfo.FriendsName, FriendsName ?? "");
+		userInfo.UserID = GetUserID();
+		userInfo.FakePlayer = IsFakeClient();
+		userInfo.IsHLTV = IsHLTV();
+		userInfo.IsReplay = IsReplay();
+		for (int i = 0; i < Constants.MAX_CUSTOM_FILES; i++)
+			userInfo.CustomFiles[i] = (CRC32_t)CustomFiles[i].CRC;
+		userInfo.FilesDownloaded = (byte)FilesDownloaded;
+		return true;
+	}
 	public virtual void Disconnect(ReadOnlySpan<char> str) {
 		if (SignOnState == SignOnState.None)
 			return;

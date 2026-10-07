@@ -460,9 +460,6 @@ public partial class Render(
 					break;
 			}
 
-			if (Vector3.Dot(CurrentViewForward, normal) < MathF.Cos(MathLib.DEG2RAD(MathF.Min(180.0f, fov_desired.GetFloat() + 26.0f))))
-				continue;
-
 			if (skyboxMaterials[SkyTexOrder[i]] != null) {
 				renderContext.Bind(skyboxMaterials[SkyTexOrder[i]]!);
 

@@ -1,5 +1,6 @@
 global using static Game.Server.GameServerClientGlobals;
 
+using Game.Server.GarrysMod;
 using Game.Shared;
 
 using Source;
@@ -7,6 +8,7 @@ using Source.Common;
 using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
+using Source.Common.GarrysMod.Lua;
 
 using System.Numerics;
 
@@ -182,6 +184,137 @@ public class GameServerClientMethods
 
 public static class HostSV
 {
+#if GMOD_DLL
+	public static void Host_Say(Edict? edict, in TokenizedCommand args, bool teamOnly) {
+		Span<char> text = stackalloc char[256];
+		Span<char> temp = stackalloc char[256];
+		Span<char> replaced = stackalloc char[256];
+		scoped ReadOnlySpan<char> p;
+
+		if (args.ArgC() == 0)
+			return;
+
+		ReadOnlySpan<char> cmd = args[0];
+		if (stricmp(cmd, "say") == 0 || stricmp(cmd, "say_team") == 0) {
+			if (args.ArgC() < 2)
+				return;
+			p = args.ArgS();
+		}
+		else {
+			if (args.ArgC() < 2)
+				sprintf(temp, "%s").S(cmd);
+			else
+				sprintf(temp, "%s %s").S(cmd).S(args.ArgS());
+			p = temp.SliceNullTerminatedString();
+		}
+
+		BasePlayer? player = null;
+		if (edict != null) {
+			player = (BasePlayer?)BaseEntity.Instance(edict);
+			p = GameServerClientMethods.CheckChatText(player, p);
+			if (p.IsEmpty || !player!.CanSpeak())
+				return;
+
+			player.CheckChatText(p[..Math.Min(p.Length, 127)]);
+
+			if (gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.PlayerSay)) {
+				LuaEntity.Push_Entity(player);
+				g_Lua!.PushString(p);
+				g_Lua.PushBool(teamOnly);
+				if (gGM.CallReturns(3, 1)) {
+					ILuaObject ret = g_Lua.GetReturn(0);
+					string? str = ret.GetString();
+					if (str == null) {
+						if (ret.GetType() == LuaType.Bool) {
+							if (!ret.GetBool())
+								return;
+						}
+						else
+							g_Lua.ErrorFromLua("Error: PlayerSay hook returned a non-string!\n");
+					}
+					else {
+						sprintf(replaced, "%s").S(str);
+						p = replaced.SliceNullTerminatedString();
+					}
+				}
+				if (p.IsEmpty)
+					return;
+			}
+		}
+
+		ReadOnlySpan<char> prefix = null;
+		if (g_pGameRules != null)
+			prefix = g_pGameRules.GetChatPrefix(teamOnly, player);
+		ReadOnlySpan<char> playerName = player != null ? player.GetPlayerName() : "Console";
+
+		if (prefix.IsStringEmpty)
+			sprintf(text, "%s: ").S(playerName);
+		else
+			sprintf(text, "%s %s: ").S(prefix).S(playerName);
+
+		nint j = text.Length - 2 - strlen(text);
+		if (strlen(p) > j)
+			p = p[..(int)j];
+
+		strcat(text, p);
+		strcat(text, "\n");
+		ReadOnlySpan<char> fullText = text.SliceNullTerminatedString();
+
+		for (int i = 1; i <= gpGlobals.MaxClients; i++) {
+			BasePlayer? client = Util.PlayerByIndex(i);
+			if (client == null || client.Edict() == null || client.Edict() == edict || !client.IsNetClient())
+				continue;
+
+			if (gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.PlayerCanSeePlayersChat)) {
+				g_Lua!.PushString(p);
+				g_Lua.PushBool(teamOnly);
+				LuaEntity.Push_Entity(client);
+				LuaEntity.Push_Entity(player);
+				if (!gGM.CallFinish(4))
+					continue;
+			}
+
+			SingleUserRecipientFilter user = new(client);
+			user.MakeReliable();
+			Util.SayTextFilter(user, p, player, true, teamOnly, player != null && !player.IsAlive());
+		}
+
+		if (player != null) {
+			SingleUserRecipientFilter user = new(player);
+			user.MakeReliable();
+			Util.SayTextFilter(user, p, player, true, teamOnly, !player.IsAlive());
+		}
+
+		if (engine.IsDedicatedServer())
+			Msg(fullText);
+
+		int userid = 0;
+		ReadOnlySpan<char> networkID = "Console";
+		ReadOnlySpan<char> logName = "Console";
+		ReadOnlySpan<char> playerTeam = "Console";
+		if (player != null) {
+			userid = engine.GetPlayerUserId(player.Edict());
+			networkID = player.GetNetworkIDString();
+			logName = player.GetPlayerName();
+			Team? team = player.GetTeam();
+			playerTeam = team != null ? team.GetName() : "Team";
+		}
+
+		if (teamOnly)
+			Util.LogPrintf($"\"{logName}<{userid}><{networkID}><{playerTeam}>\" say_team \"{p}\"\n");
+		else
+			Util.LogPrintf($"\"{logName}<{userid}><{networkID}><{playerTeam}>\" say \"{p}\"\n");
+
+		IGameEvent? ev = gameeventmanager.CreateEvent("player_say", false);
+		if (ev != null) {
+			ev.SetInt("userid", userid);
+			ev.SetString("text", p);
+			ev.SetInt("priority", 1);
+			ev.SetBool("teamonly", teamOnly);
+			gameeventmanager.FireEvent(ev, false);
+		}
+	}
+#else
 	public static void Host_Say(Edict? edict, in TokenizedCommand args, bool teamOnly) {
 		BasePlayer? client;
 		nint j;
@@ -348,6 +481,7 @@ public static class HostSV
 			gameeventmanager.FireEvent(ev, true);
 		}
 	}
+#endif
 }
 
 public static class ServerClient

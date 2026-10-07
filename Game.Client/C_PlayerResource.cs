@@ -3,7 +3,12 @@ namespace Game.Client;
 
 using Game.Shared;
 
+using Source;
 using Source.Common;
+using Source.Common.Client;
+using Source.Common.GarrysMod.Lua;
+
+using Game.Client.GarrysMod;
 
 using FIELD = Source.FIELD<C_PlayerResource>;
 
@@ -42,4 +47,48 @@ public class C_PlayerResource : C_BaseEntity
 	new InlineArrayMaxPlayersPlusOne<int> Health = new();
 	[NetworkName("m_iArmor")]
 	InlineArrayMaxPlayersPlusOne<int> Armor = new();
+
+	const string PLAYER_UNCONNECTED_NAME = "unconnected";
+	readonly string?[] Name = new string?[Constants.MAX_PLAYERS + 1];
+
+	public C_PlayerResource() => g_pPlayerResource = this;
+
+	public Color GetTeamColor(int index) {
+		if (index < 16384 && gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.GetTeamColor)) {
+			LuaEntity.Push_Entity(cl_entitylist.GetBaseEntity(index));
+			if (gGM.CallReturns(1, 1)) {
+				ILuaObject? ret = g_Lua!.GetReturn(0);
+				if (ret == null || !ret.isTable())
+					return new(0, 200, 255, 255);
+
+				return new((byte)(int)ret.GetMemberFloat("r", 255), (byte)(int)ret.GetMemberFloat("g", 255), (byte)(int)ret.GetMemberFloat("b", 255), (byte)(int)ret.GetMemberFloat("a", 255));
+			}
+		}
+		return new(255, 0, 255, 255);
+	}
+
+	public bool IsConnected(int index) {
+		if (index < 1 || index > Constants.MAX_PLAYERS)
+			return false;
+		return Connected[index];
+	}
+
+	public ReadOnlySpan<char> GetPlayerName(int index) {
+		if (index < 1 || index > Constants.MAX_PLAYERS) {
+			Assert(false);
+			return "ERRORNAME";
+		}
+
+		if (!IsConnected(index))
+			return PLAYER_UNCONNECTED_NAME;
+
+		if (Name[index] == null || stricmp(Name[index], PLAYER_UNCONNECTED_NAME) == 0) {
+			if (IsConnected(index) && engine.GetPlayerInfo(index, out PlayerInfo info))
+				Name[index] = new string(((ReadOnlySpan<char>)info.Name).SliceNullTerminatedString());
+			else
+				Name[index] = PLAYER_UNCONNECTED_NAME;
+		}
+
+		return Name[index];
+	}
 }

@@ -1,5 +1,6 @@
 using CommunityToolkit.HighPerformance;
 
+using Game.Client.GarrysMod;
 using Game.Shared;
 
 using Source;
@@ -8,6 +9,7 @@ using Source.Common.Bitbuffers;
 using Source.Common.Client;
 using Source.Common.Commands;
 using Source.Common.Formats.Keyvalues;
+using Source.Common.GarrysMod.Lua;
 using Source.Common.GUI;
 using Source.Common.Input;
 using Source.Engine;
@@ -638,8 +640,15 @@ public class BaseHudChat : EditableHudElement
 		bool teamChat = msg.ReadByte() != 0;
 		bool isDead = msg.ReadByte() != 0;
 
-		// todo OnPlayerChat hook
-		// until then, no player names in chat :(
+		C_BasePlayer? player = Util.PlayerByIndex(client);
+		if (wantsToChat && gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.OnPlayerChat)) {
+			LuaEntity.Push_Entity(player);
+			g_Lua!.PushString(str);
+			g_Lua.PushBool(teamChat);
+			g_Lua.PushBool(isDead);
+			if (gGM.CallFinish(4))
+				return;
+		}
 
 		if (wantsToChat)
 			ChatPrintf(client, ChatFilters.PublicChat, str);
@@ -683,7 +692,21 @@ public class BaseHudChat : EditableHudElement
 			engine.GetPlayerInfo(playerIndex, out playerInfo);
 
 #if GMOD_DLL
-		// todo ChatText hook
+		if (g_Lua != null && gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.ChatText)) {
+			g_Lua.PushNumber(playerIndex);
+			g_Lua.PushString(((ReadOnlySpan<char>)playerInfo.Name).SliceNullTerminatedString());
+			g_Lua.PushString(trimmed);
+			g_Lua.PushString(filter switch {
+				ChatFilters.PublicChat => "chat",
+				ChatFilters.JoinLeave => "joinleave",
+				ChatFilters.NameChange => "namechange",
+				ChatFilters.ServerMsg => "servermsg",
+				ChatFilters.TeamChange => "teamchange",
+				_ => "none"
+			});
+			if (gGM.CallFinish(4))
+				return;
+		}
 #endif
 
 		int nameStart = 0;
@@ -714,10 +737,16 @@ public class BaseHudChat : EditableHudElement
 	}
 
 	public virtual Color GetClientColor(int clientIndex) {
+#if GMOD_DLL
+		if (clientIndex != 0 && g_pPlayerResource != null)
+			return g_pPlayerResource.GetTeamColor(clientIndex);
+		return new(204, 204, 204, 235);
+#else
 		if (clientIndex == 0)
 			return ColorGreen;
 		else
 			return ColorYellow;
+#endif
 	}
 
 	protected void TextMsg(bf_read msg) {
@@ -807,6 +836,72 @@ public class BaseHudChat : EditableHudElement
 	}
 
 	public MessageModeType GetMessageMode() => MessageMode;
+
+#if GMOD_DLL
+	public void AddText() {
+		BaseHudChatLine? line = ChatLine;
+		if (line == null)
+			return;
+
+		line.SetText("");
+		Color color = new(150, 210, 255, 255);
+		ChatHistory.InsertColorChange(color);
+		line.InsertColorChange(color);
+
+		int top = g_Lua!.Top();
+		for (int i = 1; i <= top; i++) {
+			LuaObject arg = new(i, LuaType.None);
+
+			if (arg.isString() || arg.isNumber()) {
+				line.InsertString(arg.GetString());
+				ChatHistory.InsertString(arg.GetString());
+				cvar.ConsoleColorPrintf(color, "%s", arg.GetString());
+				ChatHistory.InsertFade(hud_saytext_time.GetFloat(), 2.5f);
+			}
+
+			if (arg.isTable()) {
+				color = new((byte)arg.GetMemberInt("r", 255), (byte)arg.GetMemberInt("g", 255), (byte)arg.GetMemberInt("b", 255), 255);
+				line.InsertColorChange(color);
+				ChatHistory.InsertColorChange(color);
+			}
+
+			if (arg.isUserData() && arg.GetType() == LuaType.Entity) {
+				C_BaseEntity? ent = LuaEntity.Get_Entity(i, true);
+				if (ent == null) {
+					line.InsertString("NULL");
+					ChatHistory.InsertString("NULL");
+					ChatHistory.InsertFade(hud_saytext_time.GetFloat(), 2.5f);
+					cvar.ConsoleColorPrintf(color, "%s", "NULL");
+				}
+				else if (!ent.IsPlayer()) {
+					line.InsertString(ent.GetClassname());
+					ChatHistory.InsertString(ent.GetClassname());
+					cvar.ConsoleColorPrintf(color, "%s", ent.GetClassname().ToString());
+					ChatHistory.InsertFade(hud_saytext_time.GetFloat(), 2.5f);
+				}
+				else {
+					C_BasePlayer player = (C_BasePlayer)ent;
+					Color playerColor = GetClientColor(player.EntIndex());
+					line.InsertColorChange(playerColor);
+					ChatHistory.InsertColorChange(playerColor);
+					line.InsertString(player.GetPlayerName());
+					ChatHistory.InsertString(player.GetPlayerName());
+					cvar.ConsoleColorPrintf(playerColor, "%s", player.GetPlayerName().ToString());
+					ChatHistory.InsertFade(hud_saytext_time.GetFloat(), 2.5f);
+					line.InsertColorChange(color);
+					ChatHistory.InsertColorChange(color);
+				}
+			}
+
+			arg.UnReference();
+		}
+
+		ChatHistory.InsertString("\n");
+		ChatHistory.InsertFade(hud_saytext_time.GetFloat(), 2.5f);
+		ChatHistory.InsertFade(-1, -1);
+		Msg("\n");
+	}
+#endif
 
 	public Color GetTextColorForClient(TextColor tcCur, int playerIndex) {
 		Color c;

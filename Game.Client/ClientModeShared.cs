@@ -31,6 +31,12 @@ public class ClientModeShared : GameEventListener, IClientMode
 	static readonly ConVar cl_drawhud = new("cl_drawhud", "1", 0, "Enable the rendering of the hud");
 
 #if GMOD_DLL
+	public static InlineArray512<char> HostName;
+
+	public ClientModeShared() {
+		strcpy(HostName, "Unset");
+	}
+
 	static void SetupVGuiMatrices(bool push, IMatRenderContext renderContext) {
 		if (!push) {
 			renderContext.MatrixMode(MaterialMatrixMode.Projection);
@@ -76,6 +82,9 @@ public class ClientModeShared : GameEventListener, IClientMode
 		WeaponSelection = (BaseHudWeaponSelection?)gHUD.FindElement("CHudWeaponSelection");
 		Assert(WeaponSelection != null);
 
+#if GMOD_DLL
+		ListenForGameEvent("server_spawn");
+#endif
 		ListenForGameEvent("player_connect_client");
 		ListenForGameEvent("player_disconnect");
 		ListenForGameEvent("player_team");
@@ -122,13 +131,21 @@ public class ClientModeShared : GameEventListener, IClientMode
 		if (engine.Con_IsVisible())
 			return 1;
 
+#if GMOD_DLL
+		if (!currentBinding.IsEmpty && (currentBinding.Equals("messagemode", StringComparison.Ordinal) || currentBinding.Equals("say", StringComparison.Ordinal))) {
+#else
 		if (!currentBinding.IsEmpty && currentBinding.Equals("messagemode", StringComparison.Ordinal)) {
+#endif
 			if (down != 0)
 				StartMessageMode(MessageModeType.Say);
 
 			return 0;
 		}
+#if GMOD_DLL
+		else if (!currentBinding.IsEmpty && (currentBinding.Equals("messagemode2", StringComparison.Ordinal) || currentBinding.Equals("say_team", StringComparison.Ordinal))) {
+#else
 		else if (!currentBinding.IsEmpty && currentBinding.Equals("messagemode2", StringComparison.Ordinal)) {
+#endif
 			if (down != 0)
 				StartMessageMode(MessageModeType.SayTeam);
 
@@ -154,8 +171,10 @@ public class ClientModeShared : GameEventListener, IClientMode
 	}
 
 	public void StartMessageMode(MessageModeType messageModeType) {
+#if !GMOD_DLL
 		if (gpGlobals.MaxClients == 1)
 			return;
+#endif
 
 		ChatElement?.StartMessageMode(messageModeType);
 	}
@@ -247,6 +266,11 @@ public class ClientModeShared : GameEventListener, IClientMode
 		ReadOnlySpan<char> eventname = ev.GetName();
 
 		switch (eventname) {
+#if GMOD_DLL
+			case "server_spawn":
+				strcpy(HostName, ev.GetString("hostname"));
+				break;
+#endif
 			case "player_connect_client": {
 					if (hudChat == null)
 						return;

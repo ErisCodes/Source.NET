@@ -34,7 +34,7 @@ public static class BSPFileCommon
 	public const int MAX_MAP_MODELS = 4096;
 	public const int MAX_MAP_BRUSHES = 16384;
 	public const int MAX_MAP_ENTITIES = 8192;
-	public const int MAX_MAP_TEXINFO = 16384;
+	public const int MAX_MAP_TEXINFO = 32768;
 	public const int MAX_MAP_TEXDATA = 8192;
 	public const int MAX_MAP_DISPINFO = 2048;
 	public const int MAX_MAP_DISP_VERTS = (MAX_MAP_DISPINFO * ((1 << MAX_MAP_DISP_POWER) + 1) * ((1 << MAX_MAP_DISP_POWER) + 1));
