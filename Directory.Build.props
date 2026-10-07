@@ -1,5 +1,9 @@
 <Project>
 	<PropertyGroup>
+		<Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+	</PropertyGroup>
+
+	<PropertyGroup>
 		<DefineConstants>$(DefineConstants);HL2_DLL</DefineConstants>
 		<DefineConstants>$(DefineConstants);HL2_EPISODIC</DefineConstants>
 		<DefineConstants>$(DefineConstants);HL2MP</DefineConstants>
