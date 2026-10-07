@@ -160,7 +160,7 @@ static class PackedEntities
 		PackedEntity packedEntity = frameSnapshotManager.CreatePackedEntity(snapshot, edictId);
 		packedEntity.SetChangeFrameList(changeFrame);
 		packedEntity.SetServerAndClientClass(serverClass, null);
-		packedEntity.AllocAndCopyPadded(packedData);
+		packedEntity.AllocAndCopyPadded(packedData.AsSpan(0, writeBuf.BytesWritten));
 		packedEntity.SetRecipients(recip);
 
 		edict.ClearStateChanged();
