@@ -125,11 +125,10 @@ public abstract class BaseServer : IServer
 		int maxPlayers = GetUserInfoTable()!.GetNumStrings();
 
 		for (int i = 0; i < maxPlayers; i++) {
-			Span<PlayerInfo> pi = UserInfoTable!.GetStringUserData(i).AsSpan().Cast<byte, PlayerInfo>();
-			if (pi.IsEmpty)
+			if (!PlayerInfo.FromBytes(UserInfoTable!.GetStringUserData(i), out PlayerInfo pi))
 				continue;
 
-			if (pi[0].FakePlayer)
+			if (pi.FakePlayer)
 				continue;
 
 			count++;
@@ -143,13 +142,7 @@ public abstract class BaseServer : IServer
 			return false;
 		}
 
-		Span<PlayerInfo> pi = UserInfoTable!.GetStringUserData(clientIndex).AsSpan().Cast<byte, PlayerInfo>();
-		if (pi.IsEmpty) {
-			pinfo = default;
-			return false;
-		}
-		pinfo = pi[0];
-		return true;
+		return PlayerInfo.FromBytes(UserInfoTable!.GetStringUserData(clientIndex), out pinfo);
 	}
 	public virtual float GetCPUUsage() => CPUPercent;
 
