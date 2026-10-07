@@ -485,6 +485,9 @@ public class CollisionEvent : IPhysicsCollisionEvent, IPhysicsCollisionSolver, I
 		for (int i = 0; i < damageEvents.Length; i++) {
 			ref DamageEvent ev = ref damageEvents[i];
 
+			if (ev.Entity == null)
+				continue;
+
 			// Track changes in the entity's life state
 			int iEntBits = ev.Entity!.IsAlive() ? 0x0001 : 0;
 			iEntBits |= ev.Entity.IsMarkedForDeletion() ? 0x0002 : 0;
