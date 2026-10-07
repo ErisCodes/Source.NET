@@ -446,7 +446,7 @@ public struct PropTypeFns
 	#region SendPropType.String
 	public static int String_CompareDeltas(SendProp prop, bf_read p1, bf_read p2) {
 		int len1 = (int)p1.ReadUBitLong(Constants.DT_MAX_STRING_BITS);
-		int len2 = (int)p1.ReadUBitLong(Constants.DT_MAX_STRING_BITS);
+		int len2 = (int)p2.ReadUBitLong(Constants.DT_MAX_STRING_BITS);
 
 		if (len1 == len2) {
 			if (len1 == 0)
@@ -455,6 +455,8 @@ public struct PropTypeFns
 			return p1.CompareBits(p2, len1 * 8) ? 1 : 0;
 		}
 		else {
+			p1.SeekRelative(len1 * 8);
+			p2.SeekRelative(len2 * 8);
 			return 1;
 		}
 	}
