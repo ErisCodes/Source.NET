@@ -1,5 +1,6 @@
 #if CLIENT_DLL || GAME_DLL
 using Source;
+using Source.Common.Commands;
 using Source.Common.GarrysMod;
 using Source.Common.GarrysMod.Lua;
 #if CLIENT_DLL
@@ -149,6 +150,24 @@ public static partial class LuaGlobalFunctions
 		Bootil.String.Lower(ref name);
 		if (name != "timer") // Wow wtf
 			g_Lua!.Require(name);
+	}
+
+#if GAME_DLL
+	static ConVar? hostnameCvar;
+#endif
+
+	[LuaGlobal]
+	static int GetHostName(ILuaInterface lua) {
+#if CLIENT_DLL
+		lua.PushString(((ReadOnlySpan<char>)ClientModeShared.HostName).SliceNullTerminatedString());
+		return 1;
+#else
+		ConVar? hostname = hostnameCvar ??= cvar.FindVar("hostname");
+		if (hostname == null)
+			return 0;
+		lua.PushString(hostname.IsFlagSet(FCvar.NeverAsString) ? "FCVAR_NEVER_AS_STRING" : hostname.GetString());
+		return 1;
+#endif
 	}
 
 #if CLIENT_DLL

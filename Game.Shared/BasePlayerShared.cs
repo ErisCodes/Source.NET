@@ -306,7 +306,11 @@ public partial class
 
 
 	public ReadOnlySpan<char> GetPlayerName() {
+#if CLIENT_DLL
+		return g_pPlayerResource != null ? g_pPlayerResource.GetPlayerName(EntIndex()) : "";
+#else
 		return ((Span<char>)Netname).SliceNullTerminatedString();
+#endif
 	}
 	public void SetPlayerName(ReadOnlySpan<char> name) {
 		strcpy(Netname, name);

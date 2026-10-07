@@ -828,7 +828,13 @@ public abstract class BaseServer : IServer
 	}
 
 	public virtual void UserInfoChanged(int nClientIndex) {
-
+		if (Clients[nClientIndex].FillUserInfo(out PlayerInfo pi)) {
+			Span<byte> data = stackalloc byte[PlayerInfo.SIZEOF];
+			pi.ToBytes(data);
+			UserInfoTable!.SetStringUserData(nClientIndex, PlayerInfo.SIZEOF, data);
+		}
+		else
+			UserInfoTable!.SetStringUserData(nClientIndex, 0, null);
 	}
 
 	public bool GetClassBaseline(ServerClass pClass, out byte[]? pData) {

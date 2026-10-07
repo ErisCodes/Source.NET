@@ -10,6 +10,8 @@ using Source.Common.Mathematics;
 using Source.Common.Physics;
 using Source.Engine;
 
+using Steamworks;
+
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -89,6 +91,20 @@ public partial class C_BasePlayer : C_BaseCombatCharacter, IGameEventListener2
 	public override bool IsPlayer() => true;
 	public TimeUnit_t GetFinalPredictedTime() => FinalPredictedTick * TICK_INTERVAL;
 	public bool IsLocalPlayer() => GetLocalPlayer() == this;
+
+	static EUniverse SteamIDUniverse = EUniverse.k_EUniverseInvalid;
+	public bool GetSteamID(out CSteamID id) {
+		id = default;
+		if (engine.GetPlayerInfo(EntIndex(), out PlayerInfo pi)) {
+			if (pi.FriendsID != 0 && SteamAPI.IsSteamRunning()) {
+				if (SteamIDUniverse == EUniverse.k_EUniverseInvalid)
+					SteamIDUniverse = SteamUtils.GetConnectedUniverse();
+				id.InstancedSet(new AccountID_t(pi.FriendsID), 1, SteamIDUniverse, EAccountType.k_EAccountTypeIndividual);
+				return true;
+			}
+		}
+		return false;
+	}
 	public bool IsHLTV() => IsLocalPlayer() && engine.IsHLTV();
 	public bool IsBot() => false; // TODO, gmod
 	public static bool ShouldDrawLocalPlayer() {

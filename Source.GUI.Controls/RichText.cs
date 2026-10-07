@@ -304,7 +304,7 @@ public class RichText : Panel
 
 	public void SelectNoText() {
 		Select[0] = 0;
-		Select[1] = 1;
+		Select[1] = 0;
 	}
 
 	private void InvalidateLineBreakStream() {

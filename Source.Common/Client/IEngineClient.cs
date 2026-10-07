@@ -70,6 +70,27 @@ public struct PlayerInfo
 		info.FilesDownloaded = bytes[224];
 		return true;
 	}
+
+	public readonly void ToBytes(Span<byte> bytes) {
+		bytes[..SIZEOF].Clear();
+
+		ReadOnlySpan<char> name = ((ReadOnlySpan<char>)Name).SliceNullTerminatedString();
+		Encoding.ASCII.GetBytes(name[..Math.Min(name.Length, 127)], bytes[0..128]);
+
+		MemoryMarshal.Write(bytes[128..132], in UserID);
+		((ReadOnlySpan<byte>)GUID).CopyTo(bytes[132..165]);
+		MemoryMarshal.Write(bytes[168..172], in FriendsID);
+
+		ReadOnlySpan<char> friendsName = ((ReadOnlySpan<char>)FriendsName).SliceNullTerminatedString();
+		Encoding.ASCII.GetBytes(friendsName[..Math.Min(friendsName.Length, 31)], bytes[172..204]);
+
+		bytes[204] = (byte)(FakePlayer ? 1 : 0);
+		bytes[205] = (byte)(IsHLTV ? 1 : 0);
+		bytes[206] = (byte)(IsReplay ? 1 : 0);
+
+		MemoryMarshal.Cast<CRC32_t, byte>((ReadOnlySpan<CRC32_t>)CustomFiles).CopyTo(bytes[208..224]);
+		bytes[224] = FilesDownloaded;
+	}
 }
 
 public struct AudioState

@@ -329,6 +329,18 @@ public static partial class Util
 		ShowMessage(str, null);
 	}
 
+#if GMOD_DLL
+	public static void SayTextFilter<T>(scoped in T filter, ReadOnlySpan<char> pText, BasePlayer? player, bool chat, bool teamOnly, bool dead) where T : IRecipientFilter {
+		UserMessageBegin(filter, "SayText");
+		WRITE_BYTE((byte)(player?.EntIndex() ?? 0));
+
+		WRITE_STRING(pText);
+		WRITE_BYTE((byte)(chat ? 1 : 0));
+		WRITE_BYTE((byte)(teamOnly ? 1 : 0));
+		WRITE_BYTE((byte)(dead ? 1 : 0));
+		MessageEnd();
+	}
+#else
 	public static void SayTextFilter<T>(scoped in T filter, ReadOnlySpan<char> pText, BasePlayer? player, bool chat) where T : IRecipientFilter {
 		UserMessageBegin(filter, "SayText");
 		WRITE_BYTE((byte)(player?.EntIndex() ?? 0));
@@ -337,6 +349,7 @@ public static partial class Util
 		WRITE_BYTE((byte)(chat ? 1 : 0));
 		MessageEnd();
 	}
+#endif
 	public static void SayText2Filter<T>(scoped in T filter, BasePlayer? entity, bool chat, ReadOnlySpan<char> msgName, ReadOnlySpan<char> param1 = default, ReadOnlySpan<char> param2 = default, ReadOnlySpan<char> param3 = default, ReadOnlySpan<char> param4 = default) where T : IRecipientFilter {
 		UserMessageBegin(filter, "SayText2");
 		WRITE_BYTE((byte)(entity?.EntIndex() ?? 0));

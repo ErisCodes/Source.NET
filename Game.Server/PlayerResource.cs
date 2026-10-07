@@ -4,11 +4,14 @@ namespace Game.Server;
 
 using Game.Shared;
 
+using Source;
 using Source.Common;
+using Source.Common.Engine;
 
 using FIELD = Source.FIELD<PlayerResource>;
 
-public static class PlayerResourceGlobals{
+public static class PlayerResourceGlobals
+{
 	public static PlayerResource? g_pPlayerResource;
 }
 
@@ -45,4 +48,37 @@ public class PlayerResource : BaseEntity
 	new InlineArrayMaxPlayersPlusOne<int> Health = new();
 	[NetworkName("m_iArmor")]
 	InlineArrayMaxPlayersPlusOne<int> Armor = new();
+
+	public override void Spawn() {
+		SetThink(ResourceThink);
+		SetNextThink(gpGlobals.CurTime);
+	}
+
+	public override EdictFlags UpdateTransmitState() => SetTransmitState(EdictFlags.Always);
+
+	void ResourceThink() {
+		UpdatePlayerData();
+		SetNextThink(gpGlobals.CurTime + 0.1f);
+	}
+
+	void UpdatePlayerData() {
+		for (int i = 1; i <= Constants.MAX_PLAYERS; i++) {
+			BasePlayer? player = Util.PlayerByIndex(i);
+			if (player != null && player.IsConnected())
+				UpdateConnectedPlayer(i, player);
+			else
+				UpdateDisconnectedPlayer(i);
+		}
+	}
+
+	void UpdateConnectedPlayer(int index, BasePlayer player) {
+		Score[index] = player.FragCount();
+		Deaths[index] = player.DeathCount();
+		Connected[index] = true;
+		Team[index] = player.GetTeamNumber();
+		Alive[index] = player.IsAlive();
+		Health[index] = Math.Max(0, player.GetHealth());
+	}
+
+	void UpdateDisconnectedPlayer(int index) => Connected[index] = false;
 }

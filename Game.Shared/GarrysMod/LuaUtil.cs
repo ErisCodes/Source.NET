@@ -10,6 +10,10 @@ using Source.Common.GarrysMod.Lua;
 using Source.Common.Mathematics;
 using Source.Common.Physics;
 
+#if CLIENT_DLL
+using Steamworks;
+#endif
+
 using System.Numerics;
 
 #if CLIENT_DLL
@@ -87,6 +91,29 @@ public static partial class LuaUtil
 #if GAME_DLL
 	[LuaFunction]
 	static int AddNetworkString(string name) => NetworkString.Add(name);
+#endif
+
+#if CLIENT_DLL
+	[LuaFunction]
+	static int FilterText(ILuaInterface lua) {
+		string text = lua.CheckString(1);
+		float context = (int)lua.CheckNumberOpt(2, 0);
+		if (context <= 0)
+			context = 0;
+		if (3 <= context)
+			context = 3;
+
+		CSteamID steamID = default;
+		if (lua.GetType(3) != LuaType.Nil) {
+			C_BasePlayer? player = LuaPlayer.Get_Player(3, false);
+			player?.GetSteamID(out steamID);
+		}
+
+		Span<char> filtered = stackalloc char[4096];
+		get.FilterText(text, filtered, (ETextFilteringContext)(uint)context, steamID);
+		lua.PushString(filtered);
+		return 1;
+	}
 #endif
 
 	public static void SetTableFromTrace(ref Trace tr, ILuaObject table) {
