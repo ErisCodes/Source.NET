@@ -194,9 +194,9 @@ public static partial class LuaAngle
 	[LuaMethod]
 	static void Angle__Random(ref QAngle ang, [LuaOpt<float>(-360.0f)] float minVal, [LuaOpt<float>(360.0f)] float maxVal) {
 		float range = maxVal - minVal;
-		ang.X = RandomInt(0, 0x7FFF) * (1.0f / VALVE_RAND_MAX) * range + minVal;
-		ang.Y = RandomInt(0, 0x7FFF) * (1.0f / VALVE_RAND_MAX) * range + minVal;
-		ang.Z = RandomInt(0, 0x7FFF) * (1.0f / VALVE_RAND_MAX) * range + minVal;
+		ang.X = Random.Shared.NextSingle() * range + minVal;
+		ang.Y = Random.Shared.NextSingle() * range + minVal;
+		ang.Z = Random.Shared.NextSingle() * range + minVal;
 	}
 
 	[LuaMethod]

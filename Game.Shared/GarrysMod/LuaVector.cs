@@ -317,9 +317,9 @@ public static partial class LuaVector
 	[LuaMethod]
 	static void Vector__Random(ref Vector3 vec, [LuaOpt<float>(-1.0f)] float minVal, [LuaOpt<float>(1.0f)] float maxVal) {
 		float range = maxVal - minVal;
-		vec.X = RandomInt(0, 0x7FFF) * (1.0f / VALVE_RAND_MAX) * range + minVal;
-		vec.Y = RandomInt(0, 0x7FFF) * (1.0f / VALVE_RAND_MAX) * range + minVal;
-		vec.Z = RandomInt(0, 0x7FFF) * (1.0f / VALVE_RAND_MAX) * range + minVal;
+		vec.X = Random.Shared.NextSingle() * range + minVal;
+		vec.Y = Random.Shared.NextSingle() * range + minVal;
+		vec.Z = Random.Shared.NextSingle() * range + minVal;
 	}
 
 	[LuaMethod]
