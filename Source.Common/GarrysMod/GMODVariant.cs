@@ -160,14 +160,11 @@ public struct GMODVariant
 		return 0;
 	}
 
-	// todo: I don't like that these use .ToString("G6"), it's not
-	// gonna be the same string we would've gotten... we really need to
-	// flesh out the cformatting stuff
 	public override readonly string ToString() => Type switch {
-		GMODVariantType.Float => (Float).ToString("G6"),
+		GMODVariantType.Float => FormatG(Float),
 		GMODVariantType.Int or GMODVariantType.Entity => Int.ToString(),
 		GMODVariantType.Bool => Int != 0 ? "true" : "false",
-		GMODVariantType.Vector or GMODVariantType.Angle => $"{(Vec.X).ToString("G6")} {(Vec.Y).ToString("G6")} {(Vec.Z).ToString("G6")}",
+		GMODVariantType.Vector or GMODVariantType.Angle => $"{FormatG(Vec.X)} {FormatG(Vec.Y)} {FormatG(Vec.Z)}",
 		GMODVariantType.String => String ?? "",
 		_ => ""
 	};
