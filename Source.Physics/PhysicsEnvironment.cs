@@ -230,6 +230,30 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		return bodyDef;
 	}
 
+	static void ApplyMassProperties(b3BodyId body, float mass, in Vector3 massCenter, Vector3 unitInertia, float inertiaFactor) {
+		if (inertiaFactor <= 0)
+			inertiaFactor = 1.0f;
+
+		if (inertiaFactor > 1e14f)
+			inertiaFactor = 1e14f;
+
+		const float minInertia = BoxUnits.InchesToMetres * BoxUnits.InchesToMetres;
+		Vector3 inertia = unitInertia * (mass * inertiaFactor);
+		inertia.X = inertia.X > 0.0f ? inertia.X : minInertia;
+		inertia.Y = inertia.Y > 0.0f ? inertia.Y : minInertia;
+		inertia.Z = inertia.Z > 0.0f ? inertia.Z : minInertia;
+
+		b3Body_ApplyMassFromShapes(body);
+
+		b3MassData massData = default;
+		massData.mass = mass;
+		massData.center = SourceToBox.Distance(massCenter);
+		massData.inertia.cx.x = inertia.X;
+		massData.inertia.cy.y = inertia.Y;
+		massData.inertia.cz.z = inertia.Z;
+		b3Body_SetMassData(body, massData);
+	}
+
 	internal IPhysicsObject? CreateObject(PhysCollide? collisionModel, int materialIndex, in Vector3 position, in QAngle angles, ref ObjectParams objParams, bool hasParams, bool isStatic) {
 		b3BodyDef bodyDef = MakeBodyDef(isStatic, position, angles);
 		b3BodyId bodyId = b3CreateBody(WorldId, &bodyDef);
@@ -251,10 +275,9 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		if (hasParams && objParams.MassCenterOverrideFn != null && objParams.MassCenterOverride != Vector3.Zero)
 			massCenter = objParams.MassCenterOverride;
 
-		if (!isStatic && massCenter != Vector3.Zero) {
-			b3MassData massData = b3Body_GetMassData(bodyId);
-			massData.center = SourceToBox.Distance(massCenter);
-			b3Body_SetMassData(bodyId, massData);
+		if (!isStatic) {
+			float mass = Math.Clamp(objParams.Mass, PhysicsConstants.VPHYSICS_MIN_MASS, PhysicsConstants.VPHYSICS_MAX_MASS);
+			ApplyMassProperties(bodyId, mass, massCenter, collide?.UnitInertia ?? default, objParams.Inertia);
 		}
 
 		PhysicsObject obj = new(bodyId, this, isStatic, materialIndex, collisionModel, objParams, hasParams);
@@ -276,6 +299,12 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		b3ShapeDef shapeDef = PhysicsObject.MakeShapeDef(materialIndex, false);
 		b3Sphere sphere = new() { center = default, radius = SourceToBox.Distance(radius) };
 		b3CreateSphereShape(bodyId, &shapeDef, &sphere);
+
+		if (!isStatic) {
+			float r = sphere.radius;
+			float mass = Math.Clamp(objParams.Mass, PhysicsConstants.VPHYSICS_MIN_MASS, PhysicsConstants.VPHYSICS_MAX_MASS);
+			ApplyMassProperties(bodyId, mass, default, new Vector3(0.4f * r * r), objParams.Inertia);
+		}
 
 		PhysicsObject obj = new(bodyId, this, isStatic, materialIndex, null, objParams, true);
 		obj.SetSphereRadius(radius);

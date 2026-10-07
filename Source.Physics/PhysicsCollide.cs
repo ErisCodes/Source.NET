@@ -116,6 +116,7 @@ internal sealed unsafe class BoxPhysCollide : PhysCollide
 	public b3MeshData* Mesh;
 
 	public Vector3 MassCenter;
+	public Vector3 UnitInertia;
 	public Vector3 OrthographicAreas = new(1.0f, 1.0f, 1.0f);
 }
 
@@ -380,7 +381,8 @@ internal static unsafe class IVPCompat
 		GetAllLedges(firstNode, ledges);
 
 		BoxPhysCollide collide = new() {
-			MassCenter = BoxToSource.Distance(new b3Vec3 { x = surface->MassCenter.X, y = surface->MassCenter.Z, z = -surface->MassCenter.Y })
+			MassCenter = BoxToSource.Distance(new b3Vec3 { x = surface->MassCenter.X, y = surface->MassCenter.Z, z = -surface->MassCenter.Y }),
+			UnitInertia = new Vector3(surface->RotationInertia.X, surface->RotationInertia.Z, surface->RotationInertia.Y)
 		};
 		foreach (nint ledge in ledges) {
 			BoxPhysConvex? convex = LedgeToConvex((CompactLedge*)ledge);
@@ -506,6 +508,7 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 		BoxPhysCollide collide = new();
 
 		Vector3 weightedCenter = default;
+		Vector3 weightedInertia = default;
 		float totalMass = 0.0f;
 
 		for (int i = 0; i < convex.Length; i++) {
@@ -518,12 +521,15 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 			if (box.Hull != null) {
 				b3MassData massData = b3ComputeHullMass(box.Hull, 1.0f);
 				weightedCenter += massData.mass * BoxToSource.Unitless(massData.center);
+				weightedInertia += new Vector3(massData.inertia.cx.x, massData.inertia.cy.y, massData.inertia.cz.z);
 				totalMass += massData.mass;
 			}
 		}
 
-		if (totalMass > 0.0f)
+		if (totalMass > 0.0f) {
 			collide.MassCenter = BoxToSource.Distance(SourceToBox.Unitless(weightedCenter / totalMass));
+			collide.UnitInertia = weightedInertia / totalMass;
+		}
 
 		return collide;
 	}
