@@ -379,25 +379,11 @@ public static partial class SndDma
 	}
 
 	static void S_Update_(float mixAheadTime) {
-		if (!snd_mix_async.GetBool()) {
-			S_ShutdownMixThread();
-			S_Update_Guts(mixAheadTime);
+		if (g_hMixThread == null) {
+			g_bMixThreadExit = false;
+			g_hMixThread = new Thread(S_Update_Thread) { Name = "SndMix", IsBackground = true };
+			g_hMixThread.Start();
 		}
-		else {
-			if (g_hMixThread == null) {
-				g_bMixThreadExit = false;
-				g_hMixThread = new Thread(S_Update_Thread) { Name = "SndMix", IsBackground = true };
-				g_hMixThread.Start();
-			}
-		}
-	}
-
-	//-----------------------------------------------------------------------------
-	// Threaded mixing enable. Purposely hiding enable/disable details.
-	//-----------------------------------------------------------------------------
-	public static void S_EnableThreadedMixing(bool bEnable) {
-		if (snd_mix_async.GetBool() != bEnable)
-			snd_mix_async.SetValue(bEnable ? 1 : 0);
 	}
 
 	/*

@@ -27,7 +27,6 @@ public class Sound
 	public float GetMasterVolume() => AudioSystem?.GetMasterVolume() ?? 0;
 	public void SoundFade(float percent, float holdtime, float intime, float outtime) => AudioSystem?.SoundFade(percent, holdtime, intime, outtime);
 	public void OnLoadScreen(bool value) => AudioSystem?.OnLoadScreen(value);
-	public void EnableThreadedMixing(bool enable) => AudioSystem?.EnableThreadedMixing(enable);
 	public void EnableMusic(bool enable) => AudioSystem?.EnableMusic(enable);
 
 	public int StartSound(in StartSoundParams parms) {
