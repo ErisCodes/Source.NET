@@ -904,7 +904,7 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 	public static bool SurfNeedsBumpedLightmaps(ref BSPMSurface2 surfID) => ModelLoader.MSurf_TexInfo(ref surfID).Material!.GetPropertyFlag(MaterialPropertyTypes.NeedsBumpedLightmaps);
 	public static bool SurfNeedsLightmap(ref BSPMSurface2 surfID) => ModelLoader.MSurf_TexInfo(ref surfID).Material!.GetPropertyFlag(MaterialPropertyTypes.NeedsLightmap);
 	private void RegisterUnlightmappedSurface(ref BSPMSurface2 surfID) {
-		ModelLoader.MSurf_MaterialSortID(ref surfID) = materials.AllocateWhiteLightmap(ModelLoader.MSurf_TexInfo(ref surfID).Material);
+		ModelLoader.MSurf_MaterialSortID(ref surfID) = (short)materials.AllocateWhiteLightmap(ModelLoader.MSurf_TexInfo(ref surfID).Material);
 		ModelLoader.MSurf_OffsetIntoLightmapPage(ref surfID)[0] = 0;
 		ModelLoader.MSurf_OffsetIntoLightmapPage(ref surfID)[1] = 0;
 	}
@@ -929,7 +929,7 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 		allocationHeight = lightmapSize[1];
 
 		Span<int> offsetIntoLightmapPage = stackalloc int[2];
-		ModelLoader.MSurf_MaterialSortID(ref surfID) = materials.AllocateLightmap(
+		ModelLoader.MSurf_MaterialSortID(ref surfID) = (short)materials.AllocateLightmap(
 			allocationWidth,
 			allocationHeight,
 			offsetIntoLightmapPage,

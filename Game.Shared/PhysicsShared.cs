@@ -56,7 +56,7 @@ public struct TouchEvent
 public struct FluidEvent
 {
 	public EHANDLE Entity;
-	public Vector3 ImpactTime;
+	public TimeUnit_t ImpactTime;
 }
 
 public struct TriggerEvent
@@ -274,6 +274,70 @@ public static class PhysicsSharedGlobals
 		}
 		phys.DestroyFrictionSnapshot(snapshot);
 	}
+
+#if GAME_DLL
+	public static void PhysFrictionSound(BaseEntity? entity, IPhysicsObject obj, float energy, int surfaceProps, int surfacePropsHit) {
+		if (entity == null || energy < 75.0f || surfaceProps < 0)
+			return;
+
+		SurfaceData_ptr hit = physprops.GetSurfaceData(surfacePropsHit)!;
+		SurfaceData_ptr surf = physprops.GetSurfaceData(surfaceProps)!;
+
+		if ((CharTex)hit.Game.Material == CharTex.Default || (CharTex)surf.Game.Material == CharTex.Default)
+			return;
+
+		energy *= ENERGY_VOLUME_SCALE;
+
+		float volume = energy * energy;
+
+		UtlSymId_t soundName = surf.Sounds.ScrapeRough;
+		ref short soundHandle = ref surf.SoundHandles.ScrapeRough;
+
+		if (surf.Sounds.ScrapeSmooth != 0 && hit.Audio.RoughnessFactor < surf.Audio.RoughThreshold) {
+			soundName = surf.Sounds.ScrapeSmooth;
+			soundHandle = ref surf.SoundHandles.ScrapeRough;
+		}
+
+		ReadOnlySpan<char> soundStr = physprops.GetString(soundName);
+
+		Game.Server.PhysicsHookGlobals.PhysFrictionSound(entity, obj, soundStr, ref soundHandle, volume);
+	}
+
+	public static void PhysFrictionEffect(in Vector3 pos, Vector3 vel, float energy, int surfaceProps, int surfacePropsHit) {
+		Vector3 invVecVel = -vel;
+		MathLib.VectorNormalize(ref invVecVel);
+
+		SurfaceData_ptr surf = physprops.GetSurfaceData(surfaceProps)!;
+		SurfaceData_ptr hit = physprops.GetSurfaceData(surfacePropsHit)!;
+
+		switch ((CharTex)hit.Game.Material) {
+			case CharTex.Dirt:
+				if (energy < MASS10_SPEED2ENERGY(15))
+					break;
+
+				g_pEffects.Dust(pos, invVecVel, 1, 16);
+				break;
+
+			case CharTex.Concrete:
+				if (energy < MASS10_SPEED2ENERGY(28))
+					break;
+
+				g_pEffects.Dust(pos, invVecVel, 1, 16);
+				break;
+		}
+
+		if (energy > MASS10_SPEED2ENERGY(50)) {
+			if ((CharTex)surf.Game.Material == CharTex.Metal || (CharTex)surf.Game.Material == CharTex.Grate) {
+				switch ((CharTex)hit.Game.Material) {
+					case CharTex.Concrete:
+					case CharTex.Metal:
+						g_pEffects.MetalSparks(pos, invVecVel);
+						break;
+				}
+			}
+		}
+	}
+#endif
 
 	public static bool PhysModelParseSolidByIndex(ref Solid solid, BaseEntity entity, VCollide? collide, int solidIndex) {
 		if (collide == null || collide.KeyValues == null)

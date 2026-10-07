@@ -88,7 +88,7 @@ public partial class BaseVSShader
 			shader.SetVertexShaderConstant(VertexShaderConst.ShaderSpecificConst4, info.GlintU);
 			shader.SetVertexShaderConstant(VertexShaderConst.ShaderSpecificConst5, info.GlintV);
 
-			shaderAPI.GetLightState(out LightState lightState);
+			shaderAPI.GetDX9LightState(out LightState lightState);
 
 			if (!HardwareConfig.HasFastVertexTextures()) {
 				bool useStaticControlFlow = HardwareConfig.SupportsStaticControlFlow();
@@ -125,7 +125,7 @@ public partial class BaseVSShader
 			shaderAPI.SetPixelShaderConstant(0, psConst);
 
 			Span<float> eyePos_SpecExponent = [0, 0, 0, 0];
-			shaderAPI.GetWorldSpaceCameraPosition(ref eyePos_SpecExponent);
+			shaderAPI.GetWorldSpaceCameraPosition(eyePos_SpecExponent);
 			eyePos_SpecExponent[3] = 0.0f;
 			shaderAPI.SetPixelShaderConstant((int)PixelShaderConst.EyePosSpecExponent, eyePos_SpecExponent);
 

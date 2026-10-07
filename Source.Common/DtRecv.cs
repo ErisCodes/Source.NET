@@ -137,7 +137,7 @@ public static class RecvPropHelpers
 	public static RecvProp RecvPropInt(string? nameOverride, IFieldAccessor? field, PropFlags flags = 0, RecvVarProxyFn? proxyFn = null, int sizeOfVar = -1) {
 		RecvProp ret = new();
 
-		sizeOfVar = sizeOfVar == -1 ? field == null ? -1 : DataTableHelpers.FieldSizes.TryGetValue(field.FieldType, out int v) ? v : -1 : sizeOfVar;
+		sizeOfVar = sizeOfVar == -1 ? field == null ? -1 : DataTableHelpers.FieldSizes.TryGetValue(field.FieldType.IsEnum ? Enum.GetUnderlyingType(field.FieldType) : field.FieldType, out int v) ? v : -1 : sizeOfVar;
 		if (proxyFn == null) {
 			if (sizeOfVar == 1)
 				proxyFn = RecvProxy_Int32ToInt8;

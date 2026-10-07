@@ -573,7 +573,7 @@ public partial class BaseVSShader
 			if (hasEnvmap)
 				DynamicCmdsOut.BindTexture(shader, Sampler.Sampler2, info.Envmap, info.EnvmapFrame);
 
-			int fixedLightingMode = shaderAPI.GetIntRenderingParameter(RenderParamInt.EnableFixedLighting);
+			int fixedLightingMode = shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting);
 
 			bool vertexShaderFastPath = contextData.VertexShaderFastPath;
 

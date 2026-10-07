@@ -855,7 +855,13 @@ public interface IPhysicsSurfaceProps
 
 public interface IPhysicsFluidController
 {
+	void SetGameData(object? gameData);
+	object? GetGameData();
 
+	void GetSurfacePlane(out Vector3 normal, out float dist);
+	float GetDensity();
+	void WakeAllSleepingObjects();
+	int GetContents();
 }
 
 public struct ConvertConvexParams

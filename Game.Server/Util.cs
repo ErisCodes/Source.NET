@@ -328,6 +328,7 @@ public static partial class Util
 	public static void ShowMessageAll(ReadOnlySpan<char> str) {
 		ShowMessage(str, null);
 	}
+  public static void ScreenShake(in Vector3 center, float amplitude, float frequency, float duration, float radius, ShakeCommand command, bool airShake = false) { }
 
 #if GMOD_DLL
 	public static void SayTextFilter<T>(scoped in T filter, ReadOnlySpan<char> pText, BasePlayer? player, bool chat, bool teamOnly, bool dead) where T : IRecipientFilter {

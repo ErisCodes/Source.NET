@@ -2,7 +2,6 @@
 ### [Join our Discord](https://discord.gg/rFzd5uEDSE)
 ###### Table of Contents
 > <sub>[What is this?](#what-is-this)</sub><br>
-> <sub>[Goals](#goals)</sub><br>
 > <sub>[Credits & Thanks](#credits--thanks)</sub><br>
 > <sub>[Structure](#structure)</sub><br>
 >> <sub>[Stage 0: External Dependencies + Global Usings](#stage-0-external-dependencies--global-usings)</sub><br>
@@ -14,7 +13,6 @@
 >> <sub>[Stage 6: Executables](#stage-6-executables)</sub><br>
 
 > <sub>[API Notes](#api-notes)</sub><br>
-> <sub>[Future Plans](#future-plans)</sub><br>
 
 ## What is this?
 This is an open source clone of the Source Engine, based on [RaphaelIT7's Source Engine branch](https://github.com/RaphaelIT7/obsolete-source-engine), written in C#. It aims to be as compatible as possible with Source Engine's formats and protocols, more specifically targetting [Garry's Mod](https://store.steampowered.com/app/4000/Garrys_Mod/) compatibility. 
@@ -23,14 +21,7 @@ This is an open source clone of the Source Engine, based on [RaphaelIT7's Source
 <img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/d456bd33-b96a-4847-b97c-0a2cb16fbe0a" />
 <img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/903488b0-0c1d-4485-940a-d9acc3c2b929" />
 
-It can currently connect to real Garry's Mod servers. Development is currently done by connecting to a local Garry's Mod SRCDS instance - if you wish to contribute, you can set one up relatively easily with [these instructions](https://wiki.facepunch.com/gmod/Downloading_a_Dedicated_Server). 
-
-Generally speaking, testing is done on a vanilla, -noworkshop -noaddons SRCDS server on gm_flatgrass.
-
-## Goals
-I originally started this project mostly to learn more about the Source Engine, but due to public interest I've made it open-sourced in the case that it helps others and could be further worked on by people smarter than I (especially in the graphics department). 
-
-In an ideal world, it could serve as a playable Garry's Mod client - but that is a herculean task (and even that feels like an understatement) - and would require a lot more hands than just me to even be remotely feasible.
+It can currently create singleplayer games (WIP,) connect to real Garry's Mod servers, and load some basic Garry's Mod Lua code on both realms.
 
 ## Credits & Thanks
 - Valve for obvious reasons
@@ -40,12 +31,12 @@ In an ideal world, it could serve as a playable Garry's Mod client - but that is
 
 ## Building
 You need the following:
-- A C#-compatible IDE obviously (Visual Studio 2022 is what I use for now, although I'm sure it would work fine on Rider or VS Code)
+- A C#-compatible IDE obviously (Visual Studio 2026 is what I use for now, although I'm sure it would work fine on Rider or VS Code)
 - The .NET 10.0 SDK
 - A license for Garry's Mod on Steam
 
 ## Structure
-The engine is very similar to Source, with various deviations where I saw fit, to better match .NET/C# implementation details. Things like UtlVector/UtlMap/UtlLinkedList are replaced with their C# equivalents. Each "stage" described here builds on each other incrementally - ie. stage 3 can include stage 2 and stage 1 libraries, stage 2 can include stage 1 libraries, but stage 1 cannot include stage 2 libraries, etc. Libraries can include other libraries within their own stage if needed - but is done only in a few cases (VTF including Common and Bitmap, for example.)
+The engine is very similar to Source, with various deviations where I saw fit, to better match .NET/C# implementation details. Things like UtlVector/UtlMap/UtlLinkedList are replaced with their C# equivalents. Each "stage" described here builds on each other incrementally - ie. stage 3 can include stage 2 and stage 1 libraries, stage 2 can include stage 1 libraries, but stage 1 cannot include stage 2 libraries, etc. Libraries can include other libraries within their own stage if needed - but is done only in a few cases (VTF including Common and Bitmap, for example). This was done at the start to get a general idea of the Source Engine structure.
 
 There are currently seven stages. The Solution is organized via Solution Folders as well in this order.
 
@@ -53,7 +44,7 @@ There are currently seven stages. The Solution is organized via Solution Folders
 > AppFramework in Source is instead replaced by [Microsoft.Extensions.DependencyInjection](https://www.nuget.org/packages/microsoft.extensions.dependencyinjection/).
 
 > > [!NOTE]  
-> Some of this is outdated (or missing new libraries that now exist), however the majority of this information and the general structure is still correct.
+> A lot of this is outdated (or missing new libraries that now exist), however the majority of this information and the general structure is still correct.
 
 ---
 
@@ -71,7 +62,7 @@ Various external dependencies & components, along with various non-project-speci
 The Source SDK provides a "public" folder which contains the vast majority of engine interfaces, enumerations, etc. These are statically linked at compile time. There are also dynamic libraries (tier0) and static libraries (tier1, tier2) which various components use shared functionality from. In Source.NET, these are all merged into one single common dynamic library, since C# doesn't support static linking.
 
 > [!NOTE]  
-> A future goal is to further separate these files - tier0 and tier1 being their own individual projects, for example, rather than tier0 and tier1 functionality being contained within the Source.Common dll. 
+> A future goal is to further separate the files in Common.
 
 > [!NOTE]  
 > This stage also includes a couple other libraries, such as bitmap/common - which also are static libraries in C++, but in our case, are dynamic libraries.
@@ -95,7 +86,7 @@ The Source SDK provides a "public" folder which contains the vast majority of en
 ---
 
 ### Stage 2: Pre-Engine Components
-These are components of the engine which the engine includes directly. This is a rare case as most things are implemented in the post-engine stage, but things like VGUI and VGUI controls have to be in this stage.
+These are components of the engine which the engine depends upon directly. This is a rare case as most things are implemented in the post-engine stage, but things like VGUI and VGUI controls have to be in this stage.
 
 #### Libraries
 - ##### GUI
@@ -124,9 +115,13 @@ This is only the engine core. Everything else beyond this point are extensions w
 ---
 
 ### Stage 4: Post-Engine Components
-These are the implementations of various systems the engine uses. A lot of deviations happen in these components.
+These are the implementations of systems that the engine does not require as a direct dependency.
 
 #### Libraries
+- ##### AudioSystem
+	- Reimplementation of the Source audio system as a separate interface
+- ##### DataCache
+	- Model loading code (IMDLCache etc)
 - ##### FileSystem
 	- Implements IFileSystem
 	- Handles the various types of search paths
@@ -147,15 +142,18 @@ These are the implementations of various systems the engine uses. A lot of devia
 - ##### LauncherManager
 	- Implements ILauncherMgr around SDL 3
 	- Produces the game window
+- ##### Physics
+	- Currently a wrapper around Jitter physics, but moving to Box3D very soon
+- ##### InputSystem
 - ##### System
 	- Implements ISystem around SDL 3
 - ##### StdShader.Gl46
 	- Defines BaseShader, BaseVSShader
 	- Implements IShaderDLL (StdShaderGl46)
 	- The core logic for various shaders (currently only UnlitGeneric for now)
-
-> [!WARNING]
-> MaterialSystem/ShaderAPI/StdShader etc. deviates heavily from Source and generally is an abomination of horribleness. DirectX 8/9 is a very outdated API + graphics programming is complicated + whatever the hell Valve was doing I only barely was able to understand. If anyone wishes to help clean up the graphics API, that would be <i>very</i> appreciated... it took me nearly 3 weeks to get to this point :^(
+	- Currently the only available shader API, but we likely will move to Vulkan at a later point
+- ##### SoundEmitterSystem
+- ##### StudioRender
 
 ---
 
@@ -234,7 +232,3 @@ All assemblies are searched for a static class named "SourceDllMain". If this cl
 
 #### Public Class with [EngineComponent] Attribute
 All assemblies are searched for classes with the EngineComponentAttribute. All classes with this attribute are added as concrete singletons into the service collection after EngineBuilder.Build() inserts its own engine components.
-
-## Future Plans
-
-I intend to do physics simulation with [BepuPhysics v2](https://github.com/bepu/bepuphysics2). I believe that this will serve as a viable replacement - after trying out [VPhysics-Jolt](https://github.com/misyltoad/VPhysics-Jolt) by [misyltoad](https://github.com/misyltoad) as purely a clientside module (because of [this issue](https://github.com/Facepunch/garrysmod-issues/issues/6426) causing clientside crashes), I noticed a significant increase in clientside performance while still seeing relative stability (a few things were broken, but it wasn't that bad). This makes me believe that any general physics engine could be used in place of VPhysics on the clientside for the sake of prediction, but we'll have to see in testing. It definitely would be less of a nightmare to do this than trying to somehow use IVP from managed code. If singleplayer is ever implemented, it would just be using this. The interfaces will be pretty similar to VPhysics's interfaces.

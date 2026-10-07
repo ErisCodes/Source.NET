@@ -113,6 +113,16 @@ public class PhysicsProp : BreakableProp
 		CreateVPhysics();
 	}
 
+	public static bool PropIsGib(BaseEntity entity) {
+		if (FClassnameIs(entity, "prop_physics")) {
+			PhysicsProp prop = (PhysicsProp)entity;
+			return prop.IsGib();
+		}
+		return false;
+	}
+
+	public bool IsGib() => (SpawnFlags & SF_PHYSPROP_IS_GIB) != 0;
+
 	public virtual bool CreateVPhysics() {
 		SetSolid(SolidType.VPhysics);
 

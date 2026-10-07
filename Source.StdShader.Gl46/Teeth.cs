@@ -199,10 +199,10 @@ public class Teeth : BaseVSShader
 			lighting[3] = parms[ILLUMFACTOR].GetFloatValue();
 			shaderAPI.SetVertexShaderConstant(VertexShaderConst.ShaderSpecificConst0, lighting);
 
-			shaderAPI.GetLightState(out LightState lightState);
+			shaderAPI.GetDX9LightState(out LightState lightState);
 
 			Span<float> eyePos_SpecExponent = [0, 0, 0, 0];
-			shaderAPI.GetWorldSpaceCameraPosition(ref eyePos_SpecExponent);
+			shaderAPI.GetWorldSpaceCameraPosition(eyePos_SpecExponent);
 			eyePos_SpecExponent[3] = 0.0f;
 			shaderAPI.SetPixelShaderConstant((int)PixelShaderConst.EyePosSpecExponent, eyePos_SpecExponent);
 

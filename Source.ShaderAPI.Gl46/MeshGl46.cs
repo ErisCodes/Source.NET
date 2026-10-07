@@ -15,7 +15,7 @@ public struct PrimList
 
 public unsafe class MeshGl46 : IMesh
 {
-	public IShaderAPI ShaderAPI;
+	public ShaderAPIGl46 ShaderAPI;
 	public IShaderUtil ShaderUtil;
 	public MeshMgr MeshMgr;
 	public IShaderDevice ShaderDevice;
