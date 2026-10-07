@@ -7,6 +7,7 @@ using Source.Common.GarrysMod.Lua;
 using Source.Common.Launcher;
 #endif
 
+using System.Globalization;
 using System.Numerics;
 using System.Text;
 
@@ -420,7 +421,7 @@ public static partial class LuaGlobalFunctions
 			}
 
 			if (type == LuaType.Number)
-				argument = g_Lua.GetNumber(i).ToString("F2");
+				argument = g_Lua.GetNumber(i).ToString("F2", CultureInfo.InvariantCulture);
 
 			StringBuilder escaped = new();
 			for (int c = 0; c < argument.Length && c < 511; c++)
