@@ -659,7 +659,7 @@ public class KeyValues : IEnumerable<KeyValues>
 	public ReadOnlySpan<char> GetString() {
 		switch (Type) {
 			case Types.Double:
-				Value = ((float)(double)Value!).ToString("F6", CultureInfo.InvariantCulture);
+				Value = Convert.ToSingle(Value, CultureInfo.InvariantCulture).ToString("F6", CultureInfo.InvariantCulture);
 				Type = Types.String;
 				break;
 			case Types.Int:
@@ -667,7 +667,7 @@ public class KeyValues : IEnumerable<KeyValues>
 				Type = Types.String;
 				break;
 			case Types.Uint64:
-				Value = ((long)(ulong)Value!).ToString(CultureInfo.InvariantCulture);
+				Value = (Value is ulong u ? unchecked((long)u) : Convert.ToInt64(Value, CultureInfo.InvariantCulture)).ToString(CultureInfo.InvariantCulture);
 				Type = Types.String;
 				break;
 		}
