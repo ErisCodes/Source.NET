@@ -165,7 +165,7 @@ public static partial class LuaGlobalFunctions
 		ConVar? hostname = hostnameCvar ??= cvar.FindVar("hostname");
 		if (hostname == null)
 			return 0;
-		lua.PushString(hostname.IsFlagSet(FCvar.NeverAsString) ? "FCVAR_NEVER_AS_STRING" : hostname.GetString());
+		lua.PushString(LuaConVar.ConVar__GetString(hostname));
 		return 1;
 #endif
 	}

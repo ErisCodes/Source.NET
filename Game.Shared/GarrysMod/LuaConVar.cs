@@ -83,7 +83,7 @@ public static partial class LuaConVar
 	static string ConVar__GetHelpText(ConVar convar) => convar.GetHelpText() ?? "";
 
 	[LuaMethod]
-	static string ConVar__GetString(ConVar convar) {
+	public static string ConVar__GetString(ConVar convar) {
 		if ((convar.GetFlags() & FCvar.NeverAsString) != 0)
 			return "FCVAR_NEVER_AS_STRING";
 		return convar.GetString();
