@@ -82,18 +82,18 @@ public class EnvMicrophone : PointEntity
 		base.UpdateOnRemove();
 	}
 
-	public override void Spawn() {
-		ReadOnlySpan<(int SpawnFlag, SoundInstanceType Type)> flags = [
-			(SF_MICROPHONE_SOUND_COMBAT, SoundInstanceType.Combat),
-			(SF_MICROPHONE_SOUND_WORLD, SoundInstanceType.World),
-			(SF_MICROPHONE_SOUND_PLAYER, SoundInstanceType.Player),
-			(SF_MICROPHONE_SOUND_BULLET_IMPACT, SoundInstanceType.BulletImpact),
-			(SF_MICROPHONE_SOUND_EXPLOSION, SoundInstanceType.ContextExplosion),
-		];
+	static readonly (int SpawnFlag, SoundInstanceType Type)[] SpawnFlagSoundTypes = [
+		(SF_MICROPHONE_SOUND_COMBAT, SoundInstanceType.Combat),
+		(SF_MICROPHONE_SOUND_WORLD, SoundInstanceType.World),
+		(SF_MICROPHONE_SOUND_PLAYER, SoundInstanceType.Player),
+		(SF_MICROPHONE_SOUND_BULLET_IMPACT, SoundInstanceType.BulletImpact),
+		(SF_MICROPHONE_SOUND_EXPLOSION, SoundInstanceType.ContextExplosion),
+	];
 
-		for (int i = 0; i < flags.Length; i++) {
-			if (HasSpawnFlags(flags[i].SpawnFlag))
-				SoundMask |= flags[i].Type;
+	public override void Spawn() {
+		for (int i = 0; i < SpawnFlagSoundTypes.Length; i++) {
+			if (HasSpawnFlags(SpawnFlagSoundTypes[i].SpawnFlag))
+				SoundMask |= SpawnFlagSoundTypes[i].Type;
 		}
 
 		if (Sensitivity == 0)
