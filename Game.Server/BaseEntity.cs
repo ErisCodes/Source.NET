@@ -4,6 +4,7 @@ using Game.Shared;
 
 using Source;
 using Source.Common;
+using Source.Common.GarrysMod;
 using Source.Common.Audio;
 using Source.Common.Commands;
 using Source.Common.Engine;
@@ -818,6 +819,9 @@ public partial class BaseEntity : IServerEntity
 		NetworkProp().MarkPVSInformationDirty();
 
 		AddEFlags(EFL.UsePartitionWhenNotSolid);
+#if GMOD_DLL
+		GMOD_DataTable = engine.GMOD_CreateDataTable();
+#endif
 	}
 
 	public virtual void StopLoopingSounds() { }
@@ -1596,7 +1600,7 @@ public partial class BaseEntity : IServerEntity
 	public readonly PredictableId PredictableId = new();
 
 	[NetworkName("m_GMOD_DataTable")]
-	public readonly GModTable GMOD_DataTable = new();
+	public readonly IGMODDataTable GMOD_DataTable;
 
 	public float Speed;
 

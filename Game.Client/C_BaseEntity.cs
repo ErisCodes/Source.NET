@@ -7,6 +7,7 @@ using Game.Shared;
 
 using Source;
 using Source.Common;
+using Source.Common.GarrysMod;
 using Source.Common.Bitbuffers;
 using Source.Common.Commands;
 using Source.Common.Engine;
@@ -680,6 +681,9 @@ public partial class C_BaseEntity : IClientEntity
 		ReadyToDraw = true;
 		PredictionContext = null;
 		Clear();
+#if GMOD_DLL
+		GMOD_DataTable = engine.GMOD_CreateDataTable(Game.Client.GarrysMod.LuaDataTable.GMOD_DataTableRecvProxy);
+#endif
 	}
 
 	public virtual bool IsTwoPass() => modelinfo.IsTranslucentTwoPass(GetModel());
@@ -794,7 +798,7 @@ public partial class C_BaseEntity : IClientEntity
 	public InlineArray512<char> GMOD_String3;
 
 	[NetworkName("m_GMOD_DataTable")]
-	public readonly GModTable GMOD_DataTable = new();
+	public readonly IGMODDataTable GMOD_DataTable;
 
 	[NetworkName("m_nSpeed")]
 	public int Speed;
