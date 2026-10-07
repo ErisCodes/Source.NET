@@ -6,44 +6,43 @@ using Source.Common.Physics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
-using static Box3D.Box3D;
 
 namespace Source.Physics;
 
 internal static unsafe class ConstraintMath
 {
-	public static readonly b3Vec3 AxisX = new() { x = 1.0f, y = 0.0f, z = 0.0f };
-	public static readonly b3Vec3 AxisY = new() { x = 0.0f, y = 1.0f, z = 0.0f };
-	public static readonly b3Vec3 AxisZ = new() { x = 0.0f, y = 0.0f, z = 1.0f };
-	public static readonly b3Quat IdentityQuat = new() { v = default, s = 1.0f };
-	public static readonly b3Transform IdentityTransform = new() { p = default, q = IdentityQuat };
+	public static readonly Vector3 AxisX = new() { X = 1.0f, Y = 0.0f, Z = 0.0f };
+	public static readonly Vector3 AxisY = new() { X = 0.0f, Y = 1.0f, Z = 0.0f };
+	public static readonly Vector3 AxisZ = new() { X = 0.0f, Y = 0.0f, Z = 1.0f };
+	public static readonly Quaternion IdentityQuat = Quaternion.Identity;
+	public static readonly Transform IdentityTransform = new() { p = default, q = IdentityQuat };
 
-	public static b3Vec3 SafeNormalize(b3Vec3 v) {
+	public static Vector3 SafeNormalize(Vector3 v) {
 		Vector3 vec = BoxToSource.Unitless(v);
 		float len = vec.Length();
 		return len > 1e-9f ? SourceToBox.Unitless(vec / len) : AxisZ;
 	}
 
-	public static b3Vec3 WorldToLocalPoint(b3BodyId body, b3Vec3 worldPoint) {
-		b3Transform wt = b3Body_GetTransform(body);
-		return b3InvRotateVector(wt.q, Sub(worldPoint, wt.p));
+	public static Vector3 WorldToLocalPoint(Body body, Vector3 worldPoint) {
+		Transform wt = body.Transform;
+		return BoxMath.InvRotateVector(wt.q, Sub(worldPoint, wt.p));
 	}
 
-	public static b3Quat BodyRotation(b3BodyId body) => b3Body_GetTransform(body).q;
+	public static Quaternion BodyRotation(Body body) => body.Transform.q;
 
-	public static b3Quat LocalFrameForAxis(b3BodyId body, b3Vec3 fromAxis, b3Vec3 worldAxis) {
-		b3Quat qWorld = b3ComputeQuatBetweenUnitVectors(fromAxis, SafeNormalize(worldAxis));
-		return b3InvMulQuat(BodyRotation(body), qWorld);
+	public static Quaternion LocalFrameForAxis(Body body, Vector3 fromAxis, Vector3 worldAxis) {
+		Quaternion qWorld = B3.ComputeQuatBetweenUnitVectors(fromAxis, SafeNormalize(worldAxis));
+		return BoxMath.InvMulQuat(BodyRotation(body), qWorld);
 	}
 
 	public static float ClampAngle(float radians, float limit) => Math.Clamp(radians, -limit, limit);
 
-	public static b3Vec3 Add(b3Vec3 a, b3Vec3 b) => SourceToBox.Unitless(BoxToSource.Unitless(a) + BoxToSource.Unitless(b));
-	public static b3Vec3 Sub(b3Vec3 a, b3Vec3 b) => SourceToBox.Unitless(BoxToSource.Unitless(a) - BoxToSource.Unitless(b));
-	public static b3Vec3 Mul(float s, b3Vec3 v) => SourceToBox.Unitless(BoxToSource.Unitless(v) * s);
-	public static float Dot(b3Vec3 a, b3Vec3 b) => Vector3.Dot(BoxToSource.Unitless(a), BoxToSource.Unitless(b));
-	public static b3Vec3 Cross(b3Vec3 a, b3Vec3 b) => SourceToBox.Unitless(Vector3.Cross(BoxToSource.Unitless(a), BoxToSource.Unitless(b)));
-	public static float Length(b3Vec3 v) => BoxToSource.Unitless(v).Length();
+	public static Vector3 Add(Vector3 a, Vector3 b) => SourceToBox.Unitless(BoxToSource.Unitless(a) + BoxToSource.Unitless(b));
+	public static Vector3 Sub(Vector3 a, Vector3 b) => SourceToBox.Unitless(BoxToSource.Unitless(a) - BoxToSource.Unitless(b));
+	public static Vector3 Mul(float s, Vector3 v) => SourceToBox.Unitless(BoxToSource.Unitless(v) * s);
+	public static float Dot(Vector3 a, Vector3 b) => Vector3.Dot(BoxToSource.Unitless(a), BoxToSource.Unitless(b));
+	public static Vector3 Cross(Vector3 a, Vector3 b) => SourceToBox.Unitless(Vector3.Cross(BoxToSource.Unitless(a), BoxToSource.Unitless(b)));
+	public static float Length(Vector3 v) => BoxToSource.Unitless(v).Length();
 }
 
 internal unsafe class PhysicsConstraint : IPhysicsConstraint
@@ -53,22 +52,22 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 	PhysicsObject? Attached;
 	PhysicsConstraintGroup? Group;
 	object? GameData;
-	b3JointId JointId;
-	Func<b3JointId>? BuildFn;
+	Joint JointId;
+	Func<Joint>? BuildFn;
 	ConstraintBreakableParams BreakParams;
 	bool Broken;
 	GCHandle Handle;
 
 	bool Pulley;
-	b3Vec3 PulleyWorld0, PulleyWorld1;
-	b3Vec3 PulleyLocal0, PulleyLocal1;
+	Vector3 PulleyWorld0, PulleyWorld1;
+	Vector3 PulleyLocal0, PulleyLocal1;
 	float PulleyTotalLength;
 	float PulleyGearRatio = 1.0f;
 	bool PulleyRigid;
 
 	bool AngularLimits;
-	b3Quat AngFrameRef;
-	b3Quat AngFrameAtt;
+	Quaternion AngFrameRef;
+	Quaternion AngFrameAtt;
 	bool AngCone;
 	float AngConeAngle;
 	bool AngTwist;
@@ -82,8 +81,8 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 	float FrictionRefSwing;
 	bool FrictionInit;
 	bool AngHasJoint;
-	b3Vec3 AngAnchorRef;
-	b3Vec3 AngAnchorAtt;
+	Vector3 AngAnchorRef;
+	Vector3 AngAnchorAtt;
 
 	public PhysicsConstraint(PhysicsEnvironment environment, PhysicsObject reference, PhysicsObject attached) {
 		Environment = environment;
@@ -92,10 +91,10 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 		Handle = GCHandle.Alloc(this, GCHandleType.Normal);
 	}
 
-	public static PhysicsConstraint? FromUserData(void* userData) {
-		if (userData == null)
+	public static PhysicsConstraint? FromUserData(nint userData) {
+		if (userData == 0)
 			return null;
-		return GCHandle.FromIntPtr((nint)userData).Target as PhysicsConstraint;
+		return GCHandle.FromIntPtr(userData).Target as PhysicsConstraint;
 	}
 
 	public void Destroy() {
@@ -105,7 +104,7 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 			Handle.Free();
 	}
 
-	public void Init(Func<b3JointId>? buildFn, bool active) {
+	public void Init(Func<Joint>? buildFn, bool active) {
 		BuildFn = buildFn;
 		if (active)
 			Activate();
@@ -113,7 +112,7 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 
 	public void SetGroup(PhysicsConstraintGroup? group) => Group = group;
 	public PhysicsConstraintGroup? GetGroup() => Group;
-	public b3JointId GetJointId() => JointId;
+	public Joint GetJointId() => JointId;
 	public void SetBreakParams(in ConstraintBreakableParams parms) => BreakParams = parms;
 	public bool IsBroken() => Broken;
 	public bool IsPulley() => Pulley;
@@ -121,19 +120,19 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 	public void SetAngularFriction(float friction) => AngFriction = friction;
 
 	void DestroyJoint() {
-		if (b3Joint_IsValid(JointId))
-			b3DestroyJoint(JointId, true);
+		if (JointId.IsValid)
+			JointId.Destroy(true);
 		JointId = default;
 	}
 
 	public void Activate() {
 		if (Broken)
 			return;
-		if (!b3Joint_IsValid(JointId) && BuildFn != null) {
+		if (!JointId.IsValid && BuildFn != null) {
 			JointId = BuildFn();
-			if (b3Joint_IsValid(JointId)) {
-				b3Joint_SetUserData(JointId, (void*)GCHandle.ToIntPtr(Handle));
-				b3Joint_SetCollideConnected(JointId, true);
+			if (JointId.IsValid) {
+				JointId.UserData = GCHandle.ToIntPtr(Handle);
+				JointId.CollideConnected = true;
 				ApplyConstraintTuning();
 			}
 		}
@@ -146,14 +145,13 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 			gravityLength = 9.80665f;
 
 		if (BreakParams.ForceLimit > 0.0f)
-			b3Joint_SetForceThreshold(JointId, BreakParams.ForceLimit * gravityLength);
+			JointId.ForceThreshold = BreakParams.ForceLimit * gravityLength;
 		if (BreakParams.TorqueLimit > 0.0f)
-			b3Joint_SetTorqueThreshold(JointId, BreakParams.TorqueLimit * gravityLength * BoxUnits.InchesToMetres);
+			JointId.TorqueThreshold = BreakParams.TorqueLimit * gravityLength * BoxUnits.InchesToMetres;
 
 		if (BreakParams.Strength > 0.0f && BreakParams.Strength < 0.999f) {
-			float hertz, damping;
-			b3Joint_GetConstraintTuning(JointId, &hertz, &damping);
-			b3Joint_SetConstraintTuning(JointId, hertz * BreakParams.Strength, damping);
+			JointId.GetConstraintTuning(out float hertz, out float damping);
+			JointId.SetConstraintTuning(hertz * BreakParams.Strength, damping);
 		}
 	}
 
@@ -162,7 +160,7 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 		Broken = true;
 	}
 
-	public void SetupPulley(b3Vec3 pulleyWorld0, b3Vec3 pulleyWorld1, b3Vec3 localAttach0, b3Vec3 localAttach1, float totalLength, float gearRatio, bool rigid) {
+	public void SetupPulley(Vector3 pulleyWorld0, Vector3 pulleyWorld1, Vector3 localAttach0, Vector3 localAttach1, float totalLength, float gearRatio, bool rigid) {
 		Pulley = true;
 		PulleyWorld0 = pulleyWorld0;
 		PulleyWorld1 = pulleyWorld1;
@@ -177,37 +175,37 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 		if (!Pulley || Reference == null || Attached == null || dt <= 0.0f)
 			return;
 
-		b3BodyId refBody = Reference.BodyId;
-		b3BodyId attBody = Attached.BodyId;
-		if (!b3Body_IsAwake(refBody) && !b3Body_IsAwake(attBody))
+		Body refBody = Reference.BodyId;
+		Body attBody = Attached.BodyId;
+		if (!refBody.IsAwake && !attBody.IsAwake)
 			return;
 
-		b3Transform xfRef = b3Body_GetTransform(refBody);
-		b3Transform xfAtt = b3Body_GetTransform(attBody);
-		b3Vec3 worldA = b3TransformWorldPoint(xfRef, PulleyLocal0);
-		b3Vec3 worldB = b3TransformWorldPoint(xfAtt, PulleyLocal1);
+		Transform xfRef = refBody.Transform;
+		Transform xfAtt = attBody.Transform;
+		Vector3 worldA = BoxMath.TransformWorldPoint(xfRef, PulleyLocal0);
+		Vector3 worldB = BoxMath.TransformWorldPoint(xfAtt, PulleyLocal1);
 
-		b3Vec3 dA = ConstraintMath.Sub(worldA, PulleyWorld0);
-		b3Vec3 dB = ConstraintMath.Sub(worldB, PulleyWorld1);
+		Vector3 dA = ConstraintMath.Sub(worldA, PulleyWorld0);
+		Vector3 dB = ConstraintMath.Sub(worldB, PulleyWorld1);
 		float lenA = ConstraintMath.Length(dA), lenB = ConstraintMath.Length(dB);
 		if (lenA < 1e-6f || lenB < 1e-6f)
 			return;
-		b3Vec3 uA = ConstraintMath.Mul(1.0f / lenA, dA);
-		b3Vec3 uB = ConstraintMath.Mul(1.0f / lenB, dB);
+		Vector3 uA = ConstraintMath.Mul(1.0f / lenA, dA);
+		Vector3 uB = ConstraintMath.Mul(1.0f / lenB, dB);
 
 		float gear = PulleyGearRatio;
 		float c = lenA + gear * lenB - PulleyTotalLength;
 		if (!PulleyRigid && c < 0.0f)
 			return;
 
-		b3Vec3 comA = b3TransformWorldPoint(xfRef, b3Body_GetMassData(refBody).center);
-		b3Vec3 comB = b3TransformWorldPoint(xfAtt, b3Body_GetMassData(attBody).center);
-		b3Vec3 crossA = ConstraintMath.Cross(ConstraintMath.Sub(worldA, comA), uA);
-		b3Vec3 crossB = ConstraintMath.Cross(ConstraintMath.Sub(worldB, comB), uB);
-		b3Matrix3 invIA = b3Body_GetWorldInverseRotationalInertia(refBody);
-		b3Matrix3 invIB = b3Body_GetWorldInverseRotationalInertia(attBody);
-		float kA = b3Body_GetInverseMass(refBody) + ConstraintMath.Dot(crossA, b3MulMV(invIA, crossA));
-		float kB = b3Body_GetInverseMass(attBody) + ConstraintMath.Dot(crossB, b3MulMV(invIB, crossB));
+		Vector3 comA = BoxMath.TransformWorldPoint(xfRef, refBody.MassData.center);
+		Vector3 comB = BoxMath.TransformWorldPoint(xfAtt, attBody.MassData.center);
+		Vector3 crossA = ConstraintMath.Cross(ConstraintMath.Sub(worldA, comA), uA);
+		Vector3 crossB = ConstraintMath.Cross(ConstraintMath.Sub(worldB, comB), uB);
+		Matrix3 invIA = refBody.WorldInverseRotationalInertia;
+		Matrix3 invIB = attBody.WorldInverseRotationalInertia;
+		float kA = refBody.InverseMass + ConstraintMath.Dot(crossA, BoxMath.MulMV(invIA, crossA));
+		float kB = attBody.InverseMass + ConstraintMath.Dot(crossB, BoxMath.MulMV(invIB, crossB));
 		float k = kA + gear * gear * kB;
 		if (k <= 1e-9f)
 			return;
@@ -216,18 +214,18 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 		float bias = (0.2f / dt) * Math.Clamp(c, -clampC, clampC);
 
 		for (int i = 0; i < 4; i++) {
-			b3Vec3 vA = b3Body_GetWorldPointVelocity(refBody, worldA);
-			b3Vec3 vB = b3Body_GetWorldPointVelocity(attBody, worldB);
+			Vector3 vA = refBody.GetWorldPointVelocity(worldA);
+			Vector3 vB = attBody.GetWorldPointVelocity(worldB);
 			float cdot = ConstraintMath.Dot(uA, vA) + gear * ConstraintMath.Dot(uB, vB);
 			float impulse = -(cdot + bias) / k;
 			if (!PulleyRigid && impulse > 0.0f)
 				impulse = 0.0f;
-			b3Body_ApplyLinearImpulse(refBody, ConstraintMath.Mul(impulse, uA), worldA, true);
-			b3Body_ApplyLinearImpulse(attBody, ConstraintMath.Mul(gear * impulse, uB), worldB, true);
+			refBody.ApplyLinearImpulse(ConstraintMath.Mul(impulse, uA), worldA, true);
+			attBody.ApplyLinearImpulse(ConstraintMath.Mul(gear * impulse, uB), worldB, true);
 		}
 	}
 
-	public void SetupAngularLimits(in b3Transform frameRef, in b3Transform frameAtt, bool cone, float coneAngle, bool twist, float twistMin, float twistMax, float friction, bool hasJoint) {
+	public void SetupAngularLimits(in Transform frameRef, in Transform frameAtt, bool cone, float coneAngle, bool twist, float twistMin, float twistMax, float friction, bool hasJoint) {
 		AngularLimits = true;
 		AngFrameRef = frameRef.q;
 		AngFrameAtt = frameAtt.q;
@@ -242,48 +240,48 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 		AngFriction = friction;
 	}
 
-	static b3Vec3 AnchorRelativeVelocity(b3BodyId refBody, b3BodyId attBody, b3Vec3 anchorRefLocal, b3Vec3 anchorAttLocal) {
-		b3Vec3 worldRef = b3TransformWorldPoint(b3Body_GetTransform(refBody), anchorRefLocal);
-		b3Vec3 worldAtt = b3TransformWorldPoint(b3Body_GetTransform(attBody), anchorAttLocal);
-		return ConstraintMath.Sub(b3Body_GetWorldPointVelocity(attBody, worldAtt), b3Body_GetWorldPointVelocity(refBody, worldRef));
+	static Vector3 AnchorRelativeVelocity(Body refBody, Body attBody, Vector3 anchorRefLocal, Vector3 anchorAttLocal) {
+		Vector3 worldRef = BoxMath.TransformWorldPoint(refBody.Transform, anchorRefLocal);
+		Vector3 worldAtt = BoxMath.TransformWorldPoint(attBody.Transform, anchorAttLocal);
+		return ConstraintMath.Sub(attBody.GetWorldPointVelocity(worldAtt), refBody.GetWorldPointVelocity(worldRef));
 	}
 
-	static void RepinAnchorVelocity(b3BodyId refBody, b3BodyId attBody, b3Vec3 anchorRefLocal, b3Vec3 anchorAttLocal, b3Vec3 vRelTarget) {
-		b3Transform xfRef = b3Body_GetTransform(refBody);
-		b3Transform xfAtt = b3Body_GetTransform(attBody);
-		b3Vec3 worldRef = b3TransformWorldPoint(xfRef, anchorRefLocal);
-		b3Vec3 worldAtt = b3TransformWorldPoint(xfAtt, anchorAttLocal);
-		b3Matrix3 invIRef = b3Body_GetWorldInverseRotationalInertia(refBody);
-		b3Matrix3 invIAtt = b3Body_GetWorldInverseRotationalInertia(attBody);
-		b3Vec3 rRef = ConstraintMath.Sub(worldRef, b3Body_GetWorldCenter(refBody));
-		b3Vec3 rAtt = ConstraintMath.Sub(worldAtt, b3Body_GetWorldCenter(attBody));
-		float invMass = b3Body_GetInverseMass(refBody) + b3Body_GetInverseMass(attBody);
+	static void RepinAnchorVelocity(Body refBody, Body attBody, Vector3 anchorRefLocal, Vector3 anchorAttLocal, Vector3 vRelTarget) {
+		Transform xfRef = refBody.Transform;
+		Transform xfAtt = attBody.Transform;
+		Vector3 worldRef = BoxMath.TransformWorldPoint(xfRef, anchorRefLocal);
+		Vector3 worldAtt = BoxMath.TransformWorldPoint(xfAtt, anchorAttLocal);
+		Matrix3 invIRef = refBody.WorldInverseRotationalInertia;
+		Matrix3 invIAtt = attBody.WorldInverseRotationalInertia;
+		Vector3 rRef = ConstraintMath.Sub(worldRef, refBody.WorldCenter);
+		Vector3 rAtt = ConstraintMath.Sub(worldAtt, attBody.WorldCenter);
+		float invMass = refBody.InverseMass + attBody.InverseMass;
 
 		for (int i = 0; i < 4; i++) {
-			b3Vec3 vRel = ConstraintMath.Sub(ConstraintMath.Sub(b3Body_GetWorldPointVelocity(attBody, worldAtt), b3Body_GetWorldPointVelocity(refBody, worldRef)), vRelTarget);
+			Vector3 vRel = ConstraintMath.Sub(ConstraintMath.Sub(attBody.GetWorldPointVelocity(worldAtt), refBody.GetWorldPointVelocity(worldRef)), vRelTarget);
 			float len = ConstraintMath.Length(vRel);
 			if (len < 1e-4f)
 				break;
-			b3Vec3 dir = ConstraintMath.Mul(1.0f / len, vRel);
-			b3Vec3 crossRef = ConstraintMath.Cross(rRef, dir);
-			b3Vec3 crossAtt = ConstraintMath.Cross(rAtt, dir);
-			float k = invMass + ConstraintMath.Dot(crossRef, b3MulMV(invIRef, crossRef)) + ConstraintMath.Dot(crossAtt, b3MulMV(invIAtt, crossAtt));
+			Vector3 dir = ConstraintMath.Mul(1.0f / len, vRel);
+			Vector3 crossRef = ConstraintMath.Cross(rRef, dir);
+			Vector3 crossAtt = ConstraintMath.Cross(rAtt, dir);
+			float k = invMass + ConstraintMath.Dot(crossRef, BoxMath.MulMV(invIRef, crossRef)) + ConstraintMath.Dot(crossAtt, BoxMath.MulMV(invIAtt, crossAtt));
 			if (k <= 1e-9f)
 				break;
-			b3Vec3 impulse = ConstraintMath.Mul(-len / k, dir);
-			b3Body_ApplyLinearImpulse(attBody, impulse, worldAtt, false);
-			b3Body_ApplyLinearImpulse(refBody, ConstraintMath.Mul(-1.0f, impulse), worldRef, false);
+			Vector3 impulse = ConstraintMath.Mul(-len / k, dir);
+			attBody.ApplyLinearImpulse(impulse, worldAtt, false);
+			refBody.ApplyLinearImpulse(ConstraintMath.Mul(-1.0f, impulse), worldRef, false);
 		}
 	}
 
-	static float SolveAngularFrictionImpulse(b3BodyId refBody, b3BodyId attBody, b3Vec3 axis, float alpha, float refPos, float friction, float dt, ref bool applied) {
-		b3Matrix3 invIRef = b3Body_GetWorldInverseRotationalInertia(refBody);
-		b3Matrix3 invIAtt = b3Body_GetWorldInverseRotationalInertia(attBody);
-		float k = ConstraintMath.Dot(axis, b3MulMV(invIRef, axis)) + ConstraintMath.Dot(axis, b3MulMV(invIAtt, axis));
+	static float SolveAngularFrictionImpulse(Body refBody, Body attBody, Vector3 axis, float alpha, float refPos, float friction, float dt, ref bool applied) {
+		Matrix3 invIRef = refBody.WorldInverseRotationalInertia;
+		Matrix3 invIAtt = attBody.WorldInverseRotationalInertia;
+		float k = ConstraintMath.Dot(axis, BoxMath.MulMV(invIRef, axis)) + ConstraintMath.Dot(axis, BoxMath.MulMV(invIAtt, axis));
 		if (k <= 1e-9f)
 			return refPos;
 
-		float vel = ConstraintMath.Dot(axis, ConstraintMath.Sub(b3Body_GetAngularVelocity(attBody), b3Body_GetAngularVelocity(refBody)));
+		float vel = ConstraintMath.Dot(axis, ConstraintMath.Sub(attBody.AngularVelocity, refBody.AngularVelocity));
 		float dAlpha = refPos - alpha;
 		float correction = dAlpha * 0.8f / dt - vel;
 		if (MathF.Abs(correction) < 0.03f)
@@ -301,20 +299,20 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 			return refPos;
 
 		applied = true;
-		b3Body_ApplyAngularImpulse(attBody, ConstraintMath.Mul(impulse, axis), false);
-		b3Body_ApplyAngularImpulse(refBody, ConstraintMath.Mul(-impulse, axis), false);
+		attBody.ApplyAngularImpulse(ConstraintMath.Mul(impulse, axis), false);
+		refBody.ApplyAngularImpulse(ConstraintMath.Mul(-impulse, axis), false);
 		return refPos;
 	}
 
-	static void SolveAngularLimitImpulse(b3BodyId refBody, b3BodyId attBody, b3Vec3 axis, float alpha, float min, float max, float tau, float dt, ref bool applied) {
-		b3Matrix3 invIRef = b3Body_GetWorldInverseRotationalInertia(refBody);
-		b3Matrix3 invIAtt = b3Body_GetWorldInverseRotationalInertia(attBody);
-		float k = ConstraintMath.Dot(axis, b3MulMV(invIRef, axis)) + ConstraintMath.Dot(axis, b3MulMV(invIAtt, axis));
+	static void SolveAngularLimitImpulse(Body refBody, Body attBody, Vector3 axis, float alpha, float min, float max, float tau, float dt, ref bool applied) {
+		Matrix3 invIRef = refBody.WorldInverseRotationalInertia;
+		Matrix3 invIAtt = attBody.WorldInverseRotationalInertia;
+		float k = ConstraintMath.Dot(axis, BoxMath.MulMV(invIRef, axis)) + ConstraintMath.Dot(axis, BoxMath.MulMV(invIAtt, axis));
 		if (k <= 1e-9f)
 			return;
 
 		const float slop = 0.015f;
-		float vel = ConstraintMath.Dot(axis, ConstraintMath.Sub(b3Body_GetAngularVelocity(attBody), b3Body_GetAngularVelocity(refBody)));
+		float vel = ConstraintMath.Dot(axis, ConstraintMath.Sub(attBody.AngularVelocity, refBody.AngularVelocity));
 		float next = alpha + vel * dt;
 		float impulse = 0.0f;
 		if (next > max + slop)
@@ -323,8 +321,8 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 			impulse = -tau * (next - (min - slop)) / (dt * k);
 		if (MathF.Abs(impulse) > 1e-6f) {
 			applied = true;
-			b3Body_ApplyAngularImpulse(attBody, ConstraintMath.Mul(impulse, axis), false);
-			b3Body_ApplyAngularImpulse(refBody, ConstraintMath.Mul(-impulse, axis), false);
+			attBody.ApplyAngularImpulse(ConstraintMath.Mul(impulse, axis), false);
+			refBody.ApplyAngularImpulse(ConstraintMath.Mul(-impulse, axis), false);
 		}
 	}
 
@@ -332,27 +330,27 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 		if (!AngularLimits || Broken || Reference == null || Attached == null || dt <= 0.0f)
 			return false;
 
-		b3BodyId refBody = Reference.BodyId;
-		b3BodyId attBody = Attached.BodyId;
-		if (!b3Body_IsAwake(refBody) && !b3Body_IsAwake(attBody))
+		Body refBody = Reference.BodyId;
+		Body attBody = Attached.BodyId;
+		if (!refBody.IsAwake && !attBody.IsAwake)
 			return false;
 
 		bool applied = false;
 
-		b3Quat qRef = b3MulQuat(ConstraintMath.BodyRotation(refBody), AngFrameRef);
-		b3Quat qAtt = b3MulQuat(ConstraintMath.BodyRotation(attBody), AngFrameAtt);
-		b3Vec3 xRef = b3RotateVector(qRef, ConstraintMath.AxisX);
-		b3Vec3 xAtt = b3RotateVector(qAtt, ConstraintMath.AxisX);
+		Quaternion qRef = BoxMath.MulQuat(ConstraintMath.BodyRotation(refBody), AngFrameRef);
+		Quaternion qAtt = BoxMath.MulQuat(ConstraintMath.BodyRotation(attBody), AngFrameAtt);
+		Vector3 xRef = BoxMath.RotateVector(qRef, ConstraintMath.AxisX);
+		Vector3 xAtt = BoxMath.RotateVector(qAtt, ConstraintMath.AxisX);
 
 		bool friction = applyFriction && AngFriction > 0.0f;
 
-		b3Vec3 anchorBefore = AngHasJoint ? AnchorRelativeVelocity(refBody, attBody, AngAnchorRef, AngAnchorAtt) : default;
+		Vector3 anchorBefore = AngHasJoint ? AnchorRelativeVelocity(refBody, attBody, AngAnchorRef, AngAnchorAtt) : default;
 
 		if (AngCone) {
-			b3Vec3 crossRA = ConstraintMath.Cross(xRef, xAtt);
+			Vector3 crossRA = ConstraintMath.Cross(xRef, xAtt);
 			float crossLen = ConstraintMath.Length(crossRA);
 			if (crossLen > 1e-6f) {
-				b3Vec3 axis = ConstraintMath.Mul(1.0f / crossLen, crossRA);
+				Vector3 axis = ConstraintMath.Mul(1.0f / crossLen, crossRA);
 				float swing = MathF.Atan2(crossLen, ConstraintMath.Dot(xAtt, xRef));
 				if (friction) {
 					if (!FrictionInit)
@@ -363,15 +361,13 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 			}
 		}
 
-		b3Vec3 axisSum = ConstraintMath.Add(xRef, xAtt);
+		Vector3 axisSum = ConstraintMath.Add(xRef, xAtt);
 		float sumLenSq = ConstraintMath.Dot(axisSum, axisSum);
 		if (AngTwist && sumLenSq > 1e-4f) {
-			b3Quat qRel = b3InvMulQuat(qRef, qAtt);
-			if (qRel.s < 0.0f) {
-				qRel.s = -qRel.s;
-				qRel.v = ConstraintMath.Mul(-1.0f, qRel.v);
-			}
-			float raw = 2.0f * MathF.Atan2(qRel.v.x, qRel.s);
+			Quaternion qRel = BoxMath.InvMulQuat(qRef, qAtt);
+			if (qRel.W < 0.0f)
+				qRel = -qRel;
+			float raw = 2.0f * MathF.Atan2(qRel.X, qRel.W);
 			if (!TwistInit) {
 				TwistInit = true;
 				TwistUnwrapped = raw;
@@ -387,7 +383,7 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 			TwistLastRaw = raw;
 
 			float sumLen = MathF.Sqrt(sumLenSq);
-			b3Vec3 twistAxis = ConstraintMath.Mul(1.0f / sumLen, axisSum);
+			Vector3 twistAxis = ConstraintMath.Mul(1.0f / sumLen, axisSum);
 			float twistTau = 0.5f * sumLen;
 			if (friction) {
 				if (!FrictionInit)
@@ -427,12 +423,13 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 	}
 
 	public void SetLinearMotor(float speed, float maxLinearImpulse) {
-		if (!b3Joint_IsValid(JointId) || b3Joint_GetType(JointId) != b3JointType.b3_prismaticJoint)
+		if (!JointId.IsValid || JointId.Type != JointType.Prismatic)
 			return;
 
-		b3PrismaticJoint_EnableMotor(JointId, speed != 0.0f);
-		b3PrismaticJoint_SetMotorSpeed(JointId, SourceToBox.Distance(speed));
-		b3PrismaticJoint_SetMaxMotorForce(JointId, MathF.Abs(SourceToBox.Distance(maxLinearImpulse)));
+		PrismaticJoint prismatic = (PrismaticJoint)JointId;
+		prismatic.IsMotorEnabled = speed != 0.0f;
+		prismatic.MotorSpeed = SourceToBox.Distance(speed);
+		prismatic.MaxMotorForce = MathF.Abs(SourceToBox.Distance(maxLinearImpulse));
 	}
 
 	public void SetAngularMotor(float rotSpeed, float maxAngularImpulse) {
@@ -442,20 +439,22 @@ internal unsafe class PhysicsConstraint : IPhysicsConstraint
 			return;
 		}
 
-		if (!b3Joint_IsValid(JointId))
+		if (!JointId.IsValid)
 			return;
 
-		switch (b3Joint_GetType(JointId)) {
-			case b3JointType.b3_revoluteJoint:
-				b3RevoluteJoint_EnableMotor(JointId, maxAngularImpulse != 0.0f);
-				b3RevoluteJoint_SetMotorSpeed(JointId, MathLib.DEG2RAD(-rotSpeed));
-				b3RevoluteJoint_SetMaxMotorTorque(JointId, MathF.Abs(MathLib.DEG2RAD(maxAngularImpulse)));
+		switch (JointId.Type) {
+			case JointType.Revolute:
+				RevoluteJoint revolute = (RevoluteJoint)JointId;
+				revolute.IsMotorEnabled = maxAngularImpulse != 0.0f;
+				revolute.MotorSpeed = MathLib.DEG2RAD(-rotSpeed);
+				revolute.MaxMotorTorque = MathF.Abs(MathLib.DEG2RAD(maxAngularImpulse));
 				break;
-			case b3JointType.b3_sphericalJoint:
+			case JointType.Spherical:
 				if (rotSpeed == 0.0f) {
-					b3SphericalJoint_EnableMotor(JointId, maxAngularImpulse != 0.0f);
-					b3SphericalJoint_SetMotorVelocity(JointId, default);
-					b3SphericalJoint_SetMaxMotorTorque(JointId, MathF.Abs(MathLib.DEG2RAD(maxAngularImpulse)));
+					SphericalJoint spherical = (SphericalJoint)JointId;
+					spherical.IsMotorEnabled = maxAngularImpulse != 0.0f;
+					spherical.MotorVelocity = default;
+					spherical.MaxMotorTorque = MathF.Abs(MathLib.DEG2RAD(maxAngularImpulse));
 				}
 				break;
 		}
@@ -485,7 +484,7 @@ internal unsafe partial class PhysicsEnvironment
 	readonly List<PhysicsConstraint> Pulleys = [];
 	readonly List<PhysicsSpring> Springs = [];
 
-	IPhysicsConstraint FinishConstraint(PhysicsConstraint constraint, IPhysicsConstraintGroup? group, in ConstraintBreakableParams breakParams, Func<b3JointId>? buildFn) {
+	IPhysicsConstraint FinishConstraint(PhysicsConstraint constraint, IPhysicsConstraintGroup? group, in ConstraintBreakableParams breakParams, Func<Joint>? buildFn) {
 		constraint.SetBreakParams(breakParams);
 		Constraints.Add(constraint);
 		if (group is PhysicsConstraintGroup boxGroup) {
@@ -499,25 +498,25 @@ internal unsafe partial class PhysicsEnvironment
 	public IPhysicsConstraint CreateFixedConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintFixedParams fixedParams) {
 		PhysicsObject refObj = (PhysicsObject)pReferenceObject;
 		PhysicsObject attObj = (PhysicsObject)pAttachedObject;
-		b3WorldId world = WorldId;
-		b3BodyId refBody = refObj.BodyId, attBody = attObj.BodyId;
+		World world = WorldId;
+		Body refBody = refObj.BodyId, attBody = attObj.BodyId;
 
-		b3Transform relative = SourceToBox.Transform(fixedParams.AttachedRefXform);
+		Transform relative = SourceToBox.Transform(fixedParams.AttachedRefXform);
 		bool anchorAtAttached = refObj.IsStatic() || (!attObj.IsStatic() && attObj.GetMass() < refObj.GetMass());
-		b3Transform frameA = ConstraintMath.IdentityTransform;
-		b3Transform frameB = b3InvertTransform(relative);
+		Transform frameA = ConstraintMath.IdentityTransform;
+		Transform frameB = BoxMath.InvertTransform(relative);
 		if (anchorAtAttached) {
 			frameA = relative;
 			frameB = ConstraintMath.IdentityTransform;
 		}
 
-		b3JointId Build() {
-			b3WeldJointDef def = b3DefaultWeldJointDef();
+		Joint Build() {
+			WeldJointDef def = WeldJointDef.Default;
 			def.@base.bodyIdA = refBody;
 			def.@base.bodyIdB = attBody;
 			def.@base.localFrameA = frameA;
 			def.@base.localFrameB = frameB;
-			return b3CreateWeldJoint(world, &def);
+			return (Joint)WeldJoint.Create(world, def);
 		}
 		return FinishConstraint(new PhysicsConstraint(this, refObj, attObj), group, fixedParams.Constraint, Build);
 	}
@@ -525,13 +524,13 @@ internal unsafe partial class PhysicsEnvironment
 	public IPhysicsConstraint CreateHingeConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintHingeParams hinge) {
 		PhysicsObject refObj = (PhysicsObject)pReferenceObject;
 		PhysicsObject attObj = (PhysicsObject)pAttachedObject;
-		b3WorldId world = WorldId;
-		b3BodyId refBody = refObj.BodyId, attBody = attObj.BodyId;
+		World world = WorldId;
+		Body refBody = refObj.BodyId, attBody = attObj.BodyId;
 
-		b3Vec3 worldPos = SourceToBox.Distance(hinge.WorldPosition);
-		b3Vec3 worldAxis = SourceToBox.Unitless(hinge.WorldAxisDirection);
-		b3Transform frameA = new() { p = ConstraintMath.WorldToLocalPoint(refBody, worldPos), q = ConstraintMath.LocalFrameForAxis(refBody, ConstraintMath.AxisZ, worldAxis) };
-		b3Transform frameB = new() { p = ConstraintMath.WorldToLocalPoint(attBody, worldPos), q = ConstraintMath.LocalFrameForAxis(attBody, ConstraintMath.AxisZ, worldAxis) };
+		Vector3 worldPos = SourceToBox.Distance(hinge.WorldPosition);
+		Vector3 worldAxis = SourceToBox.Unitless(hinge.WorldAxisDirection);
+		Transform frameA = new() { p = ConstraintMath.WorldToLocalPoint(refBody, worldPos), q = ConstraintMath.LocalFrameForAxis(refBody, ConstraintMath.AxisZ, worldAxis) };
+		Transform frameB = new() { p = ConstraintMath.WorldToLocalPoint(attBody, worldPos), q = ConstraintMath.LocalFrameForAxis(attBody, ConstraintMath.AxisZ, worldAxis) };
 
 		bool limit = hinge.HingeAxis.MinRotation != hinge.HingeAxis.MaxRotation;
 		float lower = ConstraintMath.ClampAngle(MathLib.DEG2RAD(-hinge.HingeAxis.MaxRotation), 0.99f * MathF.PI);
@@ -541,8 +540,8 @@ internal unsafe partial class PhysicsEnvironment
 		float motorSpeed = MathLib.DEG2RAD(-hinge.HingeAxis.AngularVelocity);
 		float maxTorque = MathF.Abs(hinge.HingeAxis.Torque) * (BoxUnits.InchesToMetres * BoxUnits.InchesToMetres);
 
-		b3JointId Build() {
-			b3RevoluteJointDef def = b3DefaultRevoluteJointDef();
+		Joint Build() {
+			RevoluteJointDef def = RevoluteJointDef.Default;
 			def.@base.bodyIdA = refBody;
 			def.@base.bodyIdB = attBody;
 			def.@base.localFrameA = frameA;
@@ -557,7 +556,7 @@ internal unsafe partial class PhysicsEnvironment
 				def.motorSpeed = motorSpeed;
 				def.maxMotorTorque = maxTorque;
 			}
-			return b3CreateRevoluteJoint(world, &def);
+			return (Joint)RevoluteJoint.Create(world, def);
 		}
 		return FinishConstraint(new PhysicsConstraint(this, refObj, attObj), group, hinge.Constraint, Build);
 	}
@@ -565,19 +564,19 @@ internal unsafe partial class PhysicsEnvironment
 	public IPhysicsConstraint CreateBallsocketConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintBallSocketParams ballsocket) {
 		PhysicsObject refObj = (PhysicsObject)pReferenceObject;
 		PhysicsObject attObj = (PhysicsObject)pAttachedObject;
-		b3WorldId world = WorldId;
-		b3BodyId refBody = refObj.BodyId, attBody = attObj.BodyId;
+		World world = WorldId;
+		Body refBody = refObj.BodyId, attBody = attObj.BodyId;
 
-		b3Vec3 posA = SourceToBox.Distance(ballsocket.ConstraintPosition[0]);
-		b3Vec3 posB = SourceToBox.Distance(ballsocket.ConstraintPosition[1]);
+		Vector3 posA = SourceToBox.Distance(ballsocket.ConstraintPosition[0]);
+		Vector3 posB = SourceToBox.Distance(ballsocket.ConstraintPosition[1]);
 
-		b3JointId Build() {
-			b3SphericalJointDef def = b3DefaultSphericalJointDef();
+		Joint Build() {
+			SphericalJointDef def = SphericalJointDef.Default;
 			def.@base.bodyIdA = refBody;
 			def.@base.bodyIdB = attBody;
 			def.@base.localFrameA.p = posA;
 			def.@base.localFrameB.p = posB;
-			return b3CreateSphericalJoint(world, &def);
+			return (Joint)SphericalJoint.Create(world, def);
 		}
 		return FinishConstraint(new PhysicsConstraint(this, refObj, attObj), group, ballsocket.Constraint, Build);
 	}
@@ -585,13 +584,13 @@ internal unsafe partial class PhysicsEnvironment
 	public IPhysicsConstraint CreateSlidingConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintSlidingParams sliding) {
 		PhysicsObject refObj = (PhysicsObject)pReferenceObject;
 		PhysicsObject attObj = (PhysicsObject)pAttachedObject;
-		b3WorldId world = WorldId;
-		b3BodyId refBody = refObj.BodyId, attBody = attObj.BodyId;
+		World world = WorldId;
+		Body refBody = refObj.BodyId, attBody = attObj.BodyId;
 
-		b3Transform attToRef = SourceToBox.Transform(sliding.AttachedRefXform);
-		b3Vec3 slideAxis = ConstraintMath.SafeNormalize(SourceToBox.Unitless(sliding.SlideAxisRef));
-		b3Transform frameA = new() { p = attToRef.p, q = b3ComputeQuatBetweenUnitVectors(ConstraintMath.AxisX, slideAxis) };
-		b3Transform frameB = b3InvMulTransforms(attToRef, frameA);
+		Transform attToRef = SourceToBox.Transform(sliding.AttachedRefXform);
+		Vector3 slideAxis = ConstraintMath.SafeNormalize(SourceToBox.Unitless(sliding.SlideAxisRef));
+		Transform frameA = new() { p = attToRef.p, q = B3.ComputeQuatBetweenUnitVectors(ConstraintMath.AxisX, slideAxis) };
+		Transform frameB = BoxMath.InvMulTransforms(attToRef, frameA);
 
 		bool limit = sliding.LimitMin != sliding.LimitMax;
 		float lo = SourceToBox.Distance(sliding.LimitMin);
@@ -600,8 +599,8 @@ internal unsafe partial class PhysicsEnvironment
 		float motorSpeed = SourceToBox.Distance(sliding.Velocity);
 		float maxForce = sliding.Friction;
 
-		b3JointId Build() {
-			b3PrismaticJointDef def = b3DefaultPrismaticJointDef();
+		Joint Build() {
+			PrismaticJointDef def = PrismaticJointDef.Default;
 			def.@base.bodyIdA = refBody;
 			def.@base.bodyIdB = attBody;
 			def.@base.localFrameA = frameA;
@@ -616,7 +615,7 @@ internal unsafe partial class PhysicsEnvironment
 				def.motorSpeed = motorSpeed;
 				def.maxMotorForce = maxForce;
 			}
-			return b3CreatePrismaticJoint(world, &def);
+			return (Joint)PrismaticJoint.Create(world, def);
 		}
 		return FinishConstraint(new PhysicsConstraint(this, refObj, attObj), group, sliding.Constraint, Build);
 	}
@@ -624,17 +623,17 @@ internal unsafe partial class PhysicsEnvironment
 	public IPhysicsConstraint CreateLengthConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintLengthParams length) {
 		PhysicsObject refObj = (PhysicsObject)pReferenceObject;
 		PhysicsObject attObj = (PhysicsObject)pAttachedObject;
-		b3WorldId world = WorldId;
-		b3BodyId refBody = refObj.BodyId, attBody = attObj.BodyId;
+		World world = WorldId;
+		Body refBody = refObj.BodyId, attBody = attObj.BodyId;
 
-		b3Vec3 posA = SourceToBox.Distance(length.ObjectPosition[0]);
-		b3Vec3 posB = SourceToBox.Distance(length.ObjectPosition[1]);
+		Vector3 posA = SourceToBox.Distance(length.ObjectPosition[0]);
+		Vector3 posB = SourceToBox.Distance(length.ObjectPosition[1]);
 		float total = SourceToBox.Distance(length.TotalLength);
 		float min = SourceToBox.Distance(length.MinLength);
 		bool rigid = length.MinLength >= length.TotalLength;
 
-		b3JointId Build() {
-			b3DistanceJointDef def = b3DefaultDistanceJointDef();
+		Joint Build() {
+			DistanceJointDef def = DistanceJointDef.Default;
 			def.@base.bodyIdA = refBody;
 			def.@base.bodyIdB = attBody;
 			def.@base.localFrameA.p = posA;
@@ -650,7 +649,7 @@ internal unsafe partial class PhysicsEnvironment
 				def.minLength = min;
 				def.maxLength = total;
 			}
-			return b3CreateDistanceJoint(world, &def);
+			return (Joint)DistanceJoint.Create(world, def);
 		}
 		return FinishConstraint(new PhysicsConstraint(this, refObj, attObj), group, length.Constraint, Build);
 	}
@@ -658,11 +657,11 @@ internal unsafe partial class PhysicsEnvironment
 	public IPhysicsConstraint CreateRagdollConstraint(IPhysicsObject pReferenceObject, IPhysicsObject pAttachedObject, IPhysicsConstraintGroup group, in ConstraintRagdollParams ragdoll) {
 		PhysicsObject refObj = (PhysicsObject)pReferenceObject;
 		PhysicsObject attObj = (PhysicsObject)pAttachedObject;
-		b3WorldId world = WorldId;
-		b3BodyId refBody = refObj.BodyId, attBody = attObj.BodyId;
+		World world = WorldId;
+		Body refBody = refObj.BodyId, attBody = attObj.BodyId;
 
-		b3Transform frameRef = SourceToBox.Transform(ragdoll.ConstraintToReference);
-		b3Transform frameAtt = SourceToBox.Transform(ragdoll.ConstraintToAttached);
+		Transform frameRef = SourceToBox.Transform(ragdoll.ConstraintToReference);
+		Transform frameAtt = SourceToBox.Transform(ragdoll.ConstraintToAttached);
 
 		float[] mins = new float[3], maxs = new float[3];
 		bool[] free = new bool[3];
@@ -698,24 +697,24 @@ internal unsafe partial class PhysicsEnvironment
 			bool twistFree = free[0];
 			bool twistRigid = !free[0] && MathF.Abs(ragdoll.Axes[0].MaxRotation - ragdoll.Axes[0].MinRotation) <= 2.0f;
 			if (cone <= MathLib.DEG2RAD(2.0f) && twistFree) {
-				b3Quat qZtoX = b3ComputeQuatBetweenUnitVectors(ConstraintMath.AxisZ, ConstraintMath.AxisX);
-				b3JointId BuildBearing() {
-					b3ParallelJointDef def = b3DefaultParallelJointDef();
+				Quaternion qZtoX = B3.ComputeQuatBetweenUnitVectors(ConstraintMath.AxisZ, ConstraintMath.AxisX);
+				Joint BuildBearing() {
+					ParallelJointDef def = ParallelJointDef.Default;
 					def.@base.bodyIdA = refBody;
 					def.@base.bodyIdB = attBody;
 					def.@base.localFrameA.p = frameRef.p;
-					def.@base.localFrameA.q = b3MulQuat(frameRef.q, qZtoX);
+					def.@base.localFrameA.q = BoxMath.MulQuat(frameRef.q, qZtoX);
 					def.@base.localFrameB.p = frameAtt.p;
-					def.@base.localFrameB.q = b3MulQuat(frameAtt.q, qZtoX);
+					def.@base.localFrameB.q = BoxMath.MulQuat(frameAtt.q, qZtoX);
 					def.hertz = 120.0f;
 					def.dampingRatio = 2.0f;
-					return b3CreateParallelJoint(world, &def);
+					return (Joint)ParallelJoint.Create(world, def);
 				}
 				return FinishConstraint(new PhysicsConstraint(this, refObj, attObj), group, breakParams, BuildBearing);
 			}
 			if (cone <= MathLib.DEG2RAD(2.0f) && twistRigid) {
-				b3JointId BuildLock() {
-					b3MotorJointDef def = b3DefaultMotorJointDef();
+				Joint BuildLock() {
+					MotorJointDef def = MotorJointDef.Default;
 					def.@base.bodyIdA = refBody;
 					def.@base.bodyIdB = attBody;
 					def.@base.localFrameA = frameRef;
@@ -723,7 +722,7 @@ internal unsafe partial class PhysicsEnvironment
 					def.angularHertz = 120.0f;
 					def.angularDampingRatio = 2.0f;
 					def.maxSpringTorque = float.MaxValue;
-					return b3CreateMotorJoint(world, &def);
+					return (Joint)MotorJoint.Create(world, def);
 				}
 				return FinishConstraint(new PhysicsConstraint(this, refObj, attObj), group, breakParams, BuildLock);
 			}
@@ -736,25 +735,25 @@ internal unsafe partial class PhysicsEnvironment
 
 		float angleLimit = 0.99f * MathF.PI;
 
-		b3JointId Build() {
+		Joint Build() {
 			if (dof == 0) {
-				b3WeldJointDef def = b3DefaultWeldJointDef();
+				WeldJointDef def = WeldJointDef.Default;
 				def.@base.bodyIdA = refBody;
 				def.@base.bodyIdB = attBody;
 				def.@base.localFrameA = frameRef;
 				def.@base.localFrameB = frameAtt;
-				return b3CreateWeldJoint(world, &def);
+				return (Joint)WeldJoint.Create(world, def);
 			}
 			if (dof == 1) {
-				b3Vec3 axis = dofAxis switch { 0 => ConstraintMath.AxisX, 1 => ConstraintMath.AxisY, _ => ConstraintMath.AxisZ };
-				b3Quat qRemap = b3ComputeQuatBetweenUnitVectors(ConstraintMath.AxisZ, axis);
-				b3RevoluteJointDef def = b3DefaultRevoluteJointDef();
+				Vector3 axis = dofAxis switch { 0 => ConstraintMath.AxisX, 1 => ConstraintMath.AxisY, _ => ConstraintMath.AxisZ };
+				Quaternion qRemap = B3.ComputeQuatBetweenUnitVectors(ConstraintMath.AxisZ, axis);
+				RevoluteJointDef def = RevoluteJointDef.Default;
 				def.@base.bodyIdA = refBody;
 				def.@base.bodyIdB = attBody;
 				def.@base.localFrameA.p = frameRef.p;
-				def.@base.localFrameA.q = b3MulQuat(frameRef.q, qRemap);
+				def.@base.localFrameA.q = BoxMath.MulQuat(frameRef.q, qRemap);
 				def.@base.localFrameB.p = frameAtt.p;
-				def.@base.localFrameB.q = b3MulQuat(frameAtt.q, qRemap);
+				def.@base.localFrameB.q = BoxMath.MulQuat(frameAtt.q, qRemap);
 				if (!free[dofAxis]) {
 					def.enableLimit = true;
 					def.lowerAngle = ConstraintMath.ClampAngle(mins[dofAxis], angleLimit);
@@ -762,17 +761,17 @@ internal unsafe partial class PhysicsEnvironment
 				}
 				def.enableMotor = true;
 				def.maxMotorTorque = friction;
-				return b3CreateRevoluteJoint(world, &def);
+				return (Joint)RevoluteJoint.Create(world, def);
 			}
 
-			b3Quat qZtoX = b3ComputeQuatBetweenUnitVectors(ConstraintMath.AxisZ, ConstraintMath.AxisX);
-			b3SphericalJointDef sdef = b3DefaultSphericalJointDef();
+			Quaternion qZtoX = B3.ComputeQuatBetweenUnitVectors(ConstraintMath.AxisZ, ConstraintMath.AxisX);
+			SphericalJointDef sdef = SphericalJointDef.Default;
 			sdef.@base.bodyIdA = refBody;
 			sdef.@base.bodyIdB = attBody;
 			sdef.@base.localFrameA.p = frameRef.p;
-			sdef.@base.localFrameA.q = b3MulQuat(frameRef.q, qZtoX);
+			sdef.@base.localFrameA.q = BoxMath.MulQuat(frameRef.q, qZtoX);
 			sdef.@base.localFrameB.p = frameAtt.p;
-			sdef.@base.localFrameB.q = b3MulQuat(frameAtt.q, qZtoX);
+			sdef.@base.localFrameB.q = BoxMath.MulQuat(frameAtt.q, qZtoX);
 			if (hasCone) {
 				sdef.enableConeLimit = true;
 				sdef.coneAngle = MathF.Min(cone, 0.99f * 0.5f * MathF.PI);
@@ -784,7 +783,7 @@ internal unsafe partial class PhysicsEnvironment
 			}
 			sdef.enableMotor = true;
 			sdef.maxMotorTorque = friction;
-			return b3CreateSphericalJoint(world, &sdef);
+			return (Joint)SphericalJoint.Create(world, sdef);
 		}
 		return FinishConstraint(new PhysicsConstraint(this, refObj, attObj), group, breakParams, Build);
 	}
@@ -838,7 +837,7 @@ internal unsafe partial class PhysicsEnvironment
 	}
 
 	void DrainJointEvents() {
-		b3JointEvents events = b3World_GetJointEvents(WorldId);
+		JointEvents events = WorldId.JointEvents;
 		if (events.count <= 0)
 			return;
 
@@ -883,8 +882,8 @@ internal unsafe class PhysicsSpring : IPhysicsSpring
 {
 	PhysicsObject? Start;
 	PhysicsObject? End;
-	readonly b3Vec3 AnchorStart;
-	readonly b3Vec3 AnchorEnd;
+	readonly Vector3 AnchorStart;
+	readonly Vector3 AnchorEnd;
 	float NaturalLength;
 	float Constant;
 	float Damping;
@@ -914,17 +913,17 @@ internal unsafe class PhysicsSpring : IPhysicsSpring
 		if (Start == null || End == null || dt <= 0.0f)
 			return;
 
-		b3BodyId start = Start.BodyId;
-		b3BodyId end = End.BodyId;
-		if (!b3Body_IsAwake(start) && !b3Body_IsAwake(end))
+		Body start = Start.BodyId;
+		Body end = End.BodyId;
+		if (!start.IsAwake && !end.IsAwake)
 			return;
 
-		b3Transform xfStart = b3Body_GetTransform(start);
-		b3Transform xfEnd = b3Body_GetTransform(end);
-		b3Vec3 posStart = ConstraintMath.Add(xfStart.p, b3RotateVector(xfStart.q, AnchorStart));
-		b3Vec3 posEnd = ConstraintMath.Add(xfEnd.p, b3RotateVector(xfEnd.q, AnchorEnd));
+		Transform xfStart = start.Transform;
+		Transform xfEnd = end.Transform;
+		Vector3 posStart = ConstraintMath.Add(xfStart.p, BoxMath.RotateVector(xfStart.q, AnchorStart));
+		Vector3 posEnd = ConstraintMath.Add(xfEnd.p, BoxMath.RotateVector(xfEnd.q, AnchorEnd));
 
-		b3Vec3 dir = ConstraintMath.Sub(posStart, posEnd);
+		Vector3 dir = ConstraintMath.Sub(posStart, posEnd);
 		float len = ConstraintMath.Length(dir);
 		if (len < 1e-6f)
 			return;
@@ -933,26 +932,26 @@ internal unsafe class PhysicsSpring : IPhysicsSpring
 		if (OnlyStretch && len <= NaturalLength)
 			return;
 
-		b3Vec3 vRel = ConstraintMath.Sub(b3Body_GetWorldPointVelocity(end, posEnd), b3Body_GetWorldPointVelocity(start, posStart));
+		Vector3 vRel = ConstraintMath.Sub(end.GetWorldPointVelocity(posEnd), start.GetWorldPointVelocity(posStart));
 		float dampSpeed = ConstraintMath.Dot(dir, vRel);
 		float force = (len - NaturalLength) * Constant - Damping * dampSpeed;
 
-		b3Vec3 impulse = ConstraintMath.Mul(force * dt, dir);
+		Vector3 impulse = ConstraintMath.Mul(force * dt, dir);
 		impulse = ConstraintMath.Add(impulse, ConstraintMath.Mul(-dt * RelativeDamping, vRel));
-		b3Body_ApplyLinearImpulse(end, impulse, posEnd, false);
-		b3Body_ApplyLinearImpulse(start, ConstraintMath.Mul(-1.0f, impulse), posStart, false);
+		end.ApplyLinearImpulse(impulse, posEnd, false);
+		start.ApplyLinearImpulse(ConstraintMath.Mul(-1.0f, impulse), posStart, false);
 	}
 
 	public void GetEndpoints(out Vector3 worldPositionStart, out Vector3 worldPositionEnd) {
 		worldPositionStart = default;
 		worldPositionEnd = default;
 		if (Start != null) {
-			b3Transform wt = b3Body_GetTransform(Start.BodyId);
-			worldPositionStart = BoxToSource.Distance(ConstraintMath.Add(wt.p, b3RotateVector(wt.q, AnchorStart)));
+			Transform wt = Start.BodyId.Transform;
+			worldPositionStart = BoxToSource.Distance(ConstraintMath.Add(wt.p, BoxMath.RotateVector(wt.q, AnchorStart)));
 		}
 		if (End != null) {
-			b3Transform wt = b3Body_GetTransform(End.BodyId);
-			worldPositionEnd = BoxToSource.Distance(ConstraintMath.Add(wt.p, b3RotateVector(wt.q, AnchorEnd)));
+			Transform wt = End.BodyId.Transform;
+			worldPositionEnd = BoxToSource.Distance(ConstraintMath.Add(wt.p, BoxMath.RotateVector(wt.q, AnchorEnd)));
 		}
 	}
 

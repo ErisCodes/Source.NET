@@ -7,7 +7,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using static Box3D.Box3D;
+using CollisionPlane = Source.Common.Mathematics.CollisionPlane;
 
 namespace Source.Physics;
 
@@ -54,38 +54,38 @@ internal unsafe class PhysicsFluidController : IPhysicsFluidController
 		return worldPlane;
 	}
 
-	static float ComputeBodyBuoyancy(PhysicsObject obj, out b3AABB aabb) {
-		b3BodyId bodyId = obj.BodyId;
-		b3Transform xf = b3Body_GetTransform(bodyId);
+	static float ComputeBodyBuoyancy(PhysicsObject obj, out AABB aabb) {
+		Body bodyId = obj.BodyId;
+		Transform xf = bodyId.Transform;
 
 		float volume = 0.0f;
 		bool hasBounds = false;
-		b3AABB bounds = default;
+		AABB bounds = default;
 
 		if (obj.GetCollide() is BoxPhysCollide collide) {
 			foreach (BoxPhysConvex convex in collide.Convexes) {
-				if (convex.Hull == null)
+				if (convex.Hull.IsNull)
 					continue;
-				volume += b3ComputeHullMass(convex.Hull, 1.0f).mass;
-				b3AABB hullAABB = b3ComputeHullAABB(convex.Hull, xf);
-				bounds = hasBounds ? b3AABB_Union(bounds, hullAABB) : hullAABB;
+				volume += convex.Hull.ComputeMass(1.0f).mass;
+				AABB hullAABB = convex.Hull.ComputeAABB(xf);
+				bounds = hasBounds ? BoxMath.AABB_Union(bounds, hullAABB) : hullAABB;
 				hasBounds = true;
 			}
 		}
 
 		if (!hasBounds) {
-			int count = b3Body_GetShapeCount(bodyId);
-			b3ShapeId* shapes = stackalloc b3ShapeId[Math.Max(count, 1)];
-			b3Body_GetShapes(bodyId, shapes, count);
+			int count = bodyId.ShapeCount;
+			Span<Shape> shapes = stackalloc Shape[Math.Max(count, 1)];
+			count = bodyId.GetShapes(shapes);
 			for (int i = 0; i < count; i++) {
-				if (b3Shape_GetType(shapes[i]) != b3ShapeType.b3_sphereShape)
+				if (shapes[i].Type != ShapeType.Sphere)
 					continue;
-				b3Sphere sphere = b3Shape_GetSphere(shapes[i]);
+				Sphere sphere = shapes[i].Sphere;
 				volume += (4.0f / 3.0f) * MathF.PI * sphere.radius * sphere.radius * sphere.radius;
-				Vector3 center = BoxToSource.Unitless(b3TransformPoint(xf, sphere.center));
+				Vector3 center = BoxToSource.Unitless(BoxMath.TransformPoint(xf, sphere.center));
 				Vector3 rad = new(sphere.radius);
-				b3AABB sphAABB = new() { lowerBound = SourceToBox.Unitless(center - rad), upperBound = SourceToBox.Unitless(center + rad) };
-				bounds = hasBounds ? b3AABB_Union(bounds, sphAABB) : sphAABB;
+				AABB sphAABB = new() { lowerBound = SourceToBox.Unitless(center - rad), upperBound = SourceToBox.Unitless(center + rad) };
+				bounds = hasBounds ? BoxMath.AABB_Union(bounds, sphAABB) : sphAABB;
 				hasBounds = true;
 			}
 		}
@@ -94,20 +94,17 @@ internal unsafe class PhysicsFluidController : IPhysicsFluidController
 		return volume;
 	}
 
-	sealed class FluidQuery
+	struct FluidQuery : IOverlapResultHandler
 	{
 		public PhysicsObject? FluidObject;
-		public readonly List<PhysicsObject> Out = [];
-	}
+		public List<PhysicsObject> Out;
 
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	static bool FluidOverlap(b3ShapeId shapeId, void* context) {
-		if (GCHandle.FromIntPtr((nint)context).Target is not FluidQuery query)
-			return false;
-		PhysicsObject? obj = PhysicsObject.FromUserData(b3Body_GetUserData(b3Shape_GetBody(shapeId)));
-		if (obj != null && obj != query.FluidObject && !obj.IsStatic() && !query.Out.Contains(obj))
-			query.Out.Add(obj);
-		return true;
+		public bool OnOverlapResult(Shape shapeId) {
+			PhysicsObject? obj = PhysicsObject.FromUserData(shapeId.Body.UserData);
+			if (obj != null && obj != FluidObject && !obj.IsStatic() && !Out.Contains(obj))
+				Out.Add(obj);
+			return true;
+		}
 	}
 
 	public void SetGameData(object? gameData) => Params.GameData = gameData;
@@ -142,23 +139,17 @@ internal unsafe class PhysicsFluidController : IPhysicsFluidController
 		if (FluidObject == null || deltaTime <= 0.0f)
 			return;
 
-		b3WorldId worldId = FluidObject.Env.GetWorldId();
+		World worldId = FluidObject.Env.GetWorldId();
 
-		FluidQuery query = new() { FluidObject = FluidObject };
-		GCHandle queryHandle = GCHandle.Alloc(query, GCHandleType.Normal);
-		try {
-			b3World_OverlapAABB(worldId, b3Body_ComputeAABB(FluidObject.BodyId), b3DefaultQueryFilter(), &FluidOverlap, (void*)GCHandle.ToIntPtr(queryHandle));
-		}
-		finally {
-			queryHandle.Free();
-		}
+		FluidQuery query = new() { FluidObject = FluidObject, Out = [] };
+		worldId.OverlapAABB(FluidObject.BodyId.ComputeAABB(), QueryFilter.Default, ref query);
 
 		List<PhysicsObject> nowInFluid = [];
 
 		CollisionPlane worldPlane = GetWorldSurfacePlane();
 		Vector3 n = worldPlane.Normal;
 		float planeDist = SourceToBox.Distance(worldPlane.Dist);
-		Vector3 gravity = BoxToSource.Unitless(b3World_GetGravity(worldId));
+		Vector3 gravity = BoxToSource.Unitless(worldId.Gravity);
 		Vector3 current = BoxToSource.Unitless(SourceToBox.Distance(Params.CurrentVelocity));
 		float waterDensity = GetDensity();
 		float linearDrag = Params.Damping;
@@ -168,9 +159,9 @@ internal unsafe class PhysicsFluidController : IPhysicsFluidController
 			if (obj.HasShadowController() || (obj.GetCallbackFlags() & CallbackFlags.DoFluidSimulation) == 0)
 				continue;
 
-			b3BodyId body = obj.BodyId;
-			float invMass = b3Body_GetInverseMass(body);
-			float totalVolume = ComputeBodyBuoyancy(obj, out b3AABB aabb);
+			Body body = obj.BodyId;
+			float invMass = body.InverseMass;
+			float totalVolume = ComputeBodyBuoyancy(obj, out AABB aabb);
 			if (invMass <= 0.0f || totalVolume <= 0.0f)
 				continue;
 
@@ -194,14 +185,14 @@ internal unsafe class PhysicsFluidController : IPhysicsFluidController
 
 			float midSub = 0.5f * (lo + top);
 			Vector3 cob = c + (midSub - cn) * n;
-			Vector3 relCob = cob - BoxToSource.Unitless(b3Body_GetWorldCenter(body));
+			Vector3 relCob = cob - BoxToSource.Unitless(body.WorldCenter);
 
 			float fluidDensity = waterDensity * obj.GetBuoyancyRatio();
 
 			Vector3 buoyImpulse = -fluidDensity * submergedVolume * deltaTime * gravity;
 
-			Vector3 linVel = BoxToSource.Unitless(b3Body_GetLinearVelocity(body));
-			Vector3 angVel = BoxToSource.Unitless(b3Body_GetAngularVelocity(body));
+			Vector3 linVel = BoxToSource.Unitless(body.LinearVelocity);
+			Vector3 angVel = BoxToSource.Unitless(body.AngularVelocity);
 			Vector3 relVel = current - (linVel + Vector3.Cross(angVel, relCob));
 
 			Vector3 size = upper - lower;
@@ -219,11 +210,11 @@ internal unsafe class PhysicsFluidController : IPhysicsFluidController
 			}
 
 			Vector3 linImpulse = buoyImpulse + dragImpulse;
-			b3Body_ApplyLinearImpulseToCenter(body, SourceToBox.Unitless(linImpulse), false);
-			b3Body_ApplyAngularImpulse(body, SourceToBox.Unitless(Vector3.Cross(relCob, linImpulse)), false);
+			body.ApplyLinearImpulseToCenter(SourceToBox.Unitless(linImpulse), false);
+			body.ApplyAngularImpulse(SourceToBox.Unitless(Vector3.Cross(relCob, linImpulse)), false);
 
 			float l = (size.X + size.Y + size.Z) / 3.0f;
-			b3Body_ApplyAngularImpulse(body, SourceToBox.Unitless(-angularDrag * fraction * deltaTime * l * l / invMass * angVel), false);
+			body.ApplyAngularImpulse(SourceToBox.Unitless(-angularDrag * fraction * deltaTime * l * l / invMass * angVel), false);
 		}
 
 		IPhysicsCollisionEvent? ev = FluidObject.Env.GetCollisionEvent();

@@ -5,7 +5,6 @@ using Source.Common.Physics;
 
 using System.Numerics;
 
-using static Box3D.Box3D;
 
 namespace Source.Physics;
 
@@ -71,10 +70,10 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 
 	public void Destroy() => SetObjectInternal(null);
 
-	static PhysicsObject? ContactOther(in b3ContactData contact, PhysicsObject self, out bool selfIsA) {
-		PhysicsObject? a = PhysicsObject.FromUserData(b3Body_GetUserData(b3Shape_GetBody(contact.shapeIdA)));
+	static PhysicsObject? ContactOther(in ContactData contact, PhysicsObject self, out bool selfIsA) {
+		PhysicsObject? a = PhysicsObject.FromUserData(contact.shapeIdA.Body.UserData);
 		selfIsA = a == self;
-		return selfIsA ? PhysicsObject.FromUserData(b3Body_GetUserData(b3Shape_GetBody(contact.shapeIdB))) : a;
+		return selfIsA ? PhysicsObject.FromUserData(contact.shapeIdB.Body.UserData) : a;
 	}
 
 	static void ComputeController(ref Vector3 currentSpeed, in Vector3 delta, in Vector3 maxSpeed, float scaleDelta, float damping, out Vector3 impulse) {
@@ -100,9 +99,9 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 			return;
 
 		if (Object != null) {
-			b3BodyId oldId = Object.BodyId;
-			if (b3Body_IsValid(oldId))
-				b3Body_SetAngularDamping(oldId, SavedAngularDamping);
+			Body oldId = Object.BodyId;
+			if (oldId.IsValid)
+				oldId.AngularDamping = SavedAngularDamping;
 			Object.SetCallbackFlags(Object.GetCallbackFlags() & ~CallbackFlags.IsPlayerController);
 		}
 
@@ -110,11 +109,11 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 		SetGround(null);
 
 		if (Object != null) {
-			b3BodyId bodyId = Object.BodyId;
+			Body bodyId = Object.BodyId;
 
 			Object.EnableDrag(false);
-			SavedAngularDamping = b3Body_GetAngularDamping(bodyId);
-			b3Body_SetAngularDamping(bodyId, 100.0f);
+			SavedAngularDamping = bodyId.AngularDamping;
+			bodyId.AngularDamping = 100.0f;
 
 			Object.SetCallbackFlags(Object.GetCallbackFlags() | CallbackFlags.IsPlayerController);
 		}
@@ -140,7 +139,7 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 		SecondsToArrival = secondsToArrival < 0.0f ? 0.0f : secondsToArrival;
 
 		if (Object != null)
-			b3Body_SetAwake(Object.BodyId, true);
+			Object.BodyId.IsAwake = true;
 
 		IPhysicsObject? groundObject = ground;
 		Enable = true;
@@ -170,13 +169,12 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 		if (Object == null || !Object.IsCollisionEnabled())
 			return false;
 
-		b3ContactData* contacts = stackalloc b3ContactData[32];
-		int count = b3Body_GetContactData(Object.BodyId, contacts, 32);
+		Span<ContactData> contacts = stackalloc ContactData[32];
+		int count = Object.BodyId.GetContactData(contacts);
 		for (int i = 0; i < count; i++) {
-			b3Manifold* manifolds = (b3Manifold*)contacts[i].manifolds;
 			bool touching = false;
-			for (int j = 0; j < contacts[i].manifoldCount; j++)
-				touching |= manifolds[j].pointCount > 0;
+			foreach (ref readonly Manifold manifold in contacts[i].manifolds)
+				touching |= manifold.pointCount > 0;
 			if (!touching)
 				continue;
 
@@ -273,8 +271,8 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 		if (Object == null || !Enable || deltaTime <= 0.0f)
 			return;
 
-		b3BodyId bodyId = Object.BodyId;
-		if (!b3Body_IsAwake(bodyId))
+		Body bodyId = Object.BodyId;
+		if (!bodyId.IsAwake)
 			return;
 
 		Object.GetPosition(out Vector3 position, out _);
@@ -291,7 +289,7 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 
 		if (deltaPos.LengthSquared() > MaxDeltaPosition * MaxDeltaPosition) {
 			if (TryTeleportObject()) {
-				b3Body_SetLinearVelocity(bodyId, SourceToBox.Distance(speed));
+				bodyId.LinearVelocity = SourceToBox.Distance(speed);
 				return;
 			}
 		}
@@ -315,18 +313,16 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 		bool onGround = false;
 		NormalList normalList = default;
 
-		b3ContactData* contacts = stackalloc b3ContactData[32];
-		int count = b3Body_GetContactData(bodyId, contacts, 32);
+		Span<ContactData> contacts = stackalloc ContactData[32];
+		int count = bodyId.GetContactData(contacts);
 		for (int i = 0; i < count; i++) {
 			PhysicsObject? other = ContactOther(contacts[i], Object, out bool selfIsA);
 
-			b3Manifold* manifolds = (b3Manifold*)contacts[i].manifolds;
-			for (int j = 0; j < contacts[i].manifoldCount; j++) {
-				b3Manifold* manifold = &manifolds[j];
-				if (manifold->pointCount <= 0)
+			foreach (ref readonly Manifold manifold in contacts[i].manifolds) {
+				if (manifold.pointCount <= 0)
 					continue;
 
-				Vector3 normal = BoxToSource.Unitless(manifold->normal);
+				Vector3 normal = BoxToSource.Unitless(manifold.normal);
 				if (!selfIsA)
 					normal = -normal;
 
@@ -338,9 +334,8 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 						limitVel = 0.0f;
 
 					float impulse = 0.0f;
-					b3ManifoldPoint* points = (b3ManifoldPoint*)&manifold->points;
-					for (int p = 0; p < manifold->pointCount; p++)
-						impulse = MathF.Max(impulse, points[p].totalNormalImpulse);
+					for (int p = 0; p < manifold.pointCount; p++)
+						impulse = MathF.Max(impulse, manifold.points[p].totalNormalImpulse);
 
 					float pushSpeed = Vector3.Dot(speed, normal);
 					float contactVel = BoxToSource.Distance(impulse * invMass);
@@ -355,7 +350,7 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 		LastImpulse += limit;
 
 		if (onGround) {
-			Vector3 gravity = BoxToSource.Unitless(b3World_GetGravity(Object.Env.GetWorldId()));
+			Vector3 gravity = BoxToSource.Unitless(Object.Env.GetWorldId().Gravity);
 			float gravDt = BoxToSource.Distance(gravity.Length()) * deltaTime;
 			if (LastImpulse.Z <= 0.0f) {
 				float delta = -gravDt - LastImpulse.Z;
@@ -364,7 +359,7 @@ internal unsafe class PhysicsPlayerController : IPhysicsPlayerController
 			}
 		}
 
-		b3Body_SetLinearVelocity(bodyId, SourceToBox.Distance(speed));
+		bodyId.LinearVelocity = SourceToBox.Distance(speed);
 
 		SecondsToArrival = MathF.Max(SecondsToArrival - deltaTime, 0.0f);
 	}

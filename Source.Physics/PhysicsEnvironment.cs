@@ -11,7 +11,6 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using static Box3D.Box3D;
 
 namespace Source.Physics;
 
@@ -22,7 +21,7 @@ internal static class PhysicsEnvironmentGlobals
 	internal static IPhysicsObjectPairHash CreateObjectPairHash() => new ObjectPairHash();
 }
 
-internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
+internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment, ICustomFilterHandler, IPreSolveHandler
 {
 	static readonly ConVar vbox_substeps = new("vbox_substeps", "16", 0, "Solver substeps per physics step.", 1.0, 1024.0);
 	static readonly ConVar vbox_contact_hertz = new("vbox_contact_hertz", "240", 0, "Contact stiffness in Hz. Lower is softer/smushier.", 1.0, 480.0);
@@ -55,8 +54,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 
 	static void UnlockWrite() => Volatile.Write(ref CollisionCacheLockState, 0);
 
-	readonly b3WorldId WorldId;
-	GCHandle Handle;
+	World WorldId;
 
 	Vector3 Gravity;
 	float AirDensity = 2.0f;
@@ -88,20 +86,18 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 	public PhysicsEnvironment() {
 		PerformanceParams.Defaults();
 
-		b3WorldDef def = b3DefaultWorldDef();
+		WorldDef def = WorldDef.Default;
 		def.hitEventThreshold = SourceToBox.Distance(70.0f);
 		def.maximumLinearSpeed = SourceToBox.Distance(3500.0f);
 		def.enableContinuous = true;
 		def.contactSpeed = SourceToBox.Distance(100.0f);
 		def.workerCount = (uint)Math.Clamp(Environment.ProcessorCount / 2, 1, MaxWorkers);
-		def.frictionCallback = &FrictionCombine;
-		def.restitutionCallback = &RestitutionCombine;
-		WorldId = b3CreateWorld(&def);
+		def.frictionMixingRule = MixingRule.Multiply;
+		def.restitutionMixingRule = MixingRule.Multiply;
+		WorldId = World.Create(def);
 
-		Handle = GCHandle.Alloc(this, GCHandleType.Normal);
-		void* context = (void*)GCHandle.ToIntPtr(Handle);
-		b3World_SetCustomFilterCallback(WorldId, &CustomFilter, context);
-		b3World_SetPreSolveCallback(WorldId, &PreSolve, context);
+		WorldId.SetCustomFilterHandler(this);
+		WorldId.SetPreSolveHandler(this);
 	}
 
 	internal void Destroy() {
@@ -115,30 +111,22 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 			obj.ReleaseHandle();
 		Objects.Clear();
 		ActiveObjects.Clear();
-		b3DestroyWorld(WorldId);
-		if (Handle.IsAllocated)
-			Handle.Free();
+		WorldId.Destroy();
 	}
 
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	static float FrictionCombine(float a, ulong materialA, float b, ulong materialB) => a * b;
-
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	static float RestitutionCombine(float a, ulong materialA, float b, ulong materialB) => Math.Clamp(a * b, 0.0f, 1.0f);
-
-	static PhysicsObject? ObjectFromShapeFast(b3ShapeId shape) {
-		if (!b3Shape_IsValid(shape))
+	static PhysicsObject? ObjectFromShapeFast(Shape shape) {
+		if (!shape.IsValid)
 			return null;
-		return PhysicsObject.FromUserData(b3Body_GetUserData(b3Shape_GetBody(shape)));
+		return PhysicsObject.FromUserData(shape.Body.UserData);
 	}
 
-	static PhysicsObject? ObjectFromShape(b3ShapeId shape) {
-		if (!b3Shape_IsValid(shape))
+	static PhysicsObject? ObjectFromShape(Shape shape) {
+		if (!shape.IsValid)
 			return null;
-		b3BodyId body = b3Shape_GetBody(shape);
-		if (!b3Body_IsValid(body))
+		Body body = shape.Body;
+		if (!body.IsValid)
 			return null;
-		return PhysicsObject.FromUserData(b3Body_GetUserData(body));
+		return PhysicsObject.FromUserData(body.UserData);
 	}
 
 	static bool LocalShouldCollide(PhysicsObject a, PhysicsObject b) {
@@ -149,7 +137,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		return true;
 	}
 
-	bool ShapesCollide(b3ShapeId shapeA, b3ShapeId shapeB) {
+	bool ShapesCollide(Shape shapeA, Shape shapeB) {
 		PhysicsObject? a = ObjectFromShapeFast(shapeA);
 		PhysicsObject? b = ObjectFromShapeFast(shapeB);
 		if (a == null || b == null)
@@ -185,15 +173,9 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		return collide;
 	}
 
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	static bool CustomFilter(b3ShapeId shapeA, b3ShapeId shapeB, void* context) {
-		if (GCHandle.FromIntPtr((nint)context).Target is not PhysicsEnvironment env)
-			return true;
-		return env.ShapesCollide(shapeA, shapeB);
-	}
+	public bool OnCustomFilter(Shape shapeA, Shape shapeB) => ShapesCollide(shapeA, shapeB);
 
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	static bool PreSolve(b3ShapeId shapeA, b3ShapeId shapeB, b3Vec3 point, b3Vec3 normal, void* context) {
+	public bool OnPreSolve(Shape shapeA, Shape shapeB, Vector3 point, Vector3 normal) {
 		PhysicsObject? a = ObjectFromShapeFast(shapeA);
 		PhysicsObject? b = ObjectFromShapeFast(shapeB);
 		if (a == null || b == null)
@@ -201,7 +183,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		return LocalShouldCollide(a, b);
 	}
 
-	public b3WorldId GetWorldId() => WorldId;
+	public World GetWorldId() => WorldId;
 	public float GetMaxAngularVelocity() => MaxAngularVelocity;
 	public float GetLastStepTime() => LastStepTime;
 	public IPhysicsCollisionEvent? GetCollisionEvent() => CollisionEvent;
@@ -212,7 +194,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 
 	public void SetGravity(in Vector3 gravityVector) {
 		Gravity = gravityVector;
-		b3World_SetGravity(WorldId, SourceToBox.Distance(gravityVector));
+		WorldId.Gravity = SourceToBox.Distance(gravityVector);
 	}
 
 	public void GetGravity(out Vector3 gravityVector) => gravityVector = Gravity;
@@ -220,9 +202,9 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 	public void SetAirDensity(float density) => AirDensity = density;
 	public float GetAirDensity() => AirDensity;
 
-	static b3BodyDef MakeBodyDef(bool isStatic, in Vector3 position, in QAngle angles) {
-		b3BodyDef bodyDef = b3DefaultBodyDef();
-		bodyDef.type = isStatic ? b3BodyType.b3_staticBody : b3BodyType.b3_dynamicBody;
+	static BodyDef MakeBodyDef(bool isStatic, in Vector3 position, in QAngle angles) {
+		BodyDef bodyDef = BodyDef.Default;
+		bodyDef.type = isStatic ? BodyType.Static : BodyType.Dynamic;
 		bodyDef.position = SourceToBox.Distance(position);
 		bodyDef.rotation = SourceToBox.Angle(angles);
 		bodyDef.isAwake = false;
@@ -230,7 +212,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		return bodyDef;
 	}
 
-	static void ApplyMassProperties(b3BodyId body, float mass, in Vector3 massCenter, Vector3 unitInertia, float inertiaFactor) {
+	static void ApplyMassProperties(Body body, float mass, in Vector3 massCenter, Vector3 unitInertia, float inertiaFactor) {
 		if (inertiaFactor <= 0)
 			inertiaFactor = 1.0f;
 
@@ -243,32 +225,32 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		inertia.Y = inertia.Y > 0.0f ? inertia.Y : minInertia;
 		inertia.Z = inertia.Z > 0.0f ? inertia.Z : minInertia;
 
-		b3Body_ApplyMassFromShapes(body);
+		body.ApplyMassFromShapes();
 
-		b3MassData massData = default;
+		MassData massData = default;
 		massData.mass = mass;
 		massData.center = SourceToBox.Distance(massCenter);
-		massData.inertia.cx.x = inertia.X;
-		massData.inertia.cy.y = inertia.Y;
-		massData.inertia.cz.z = inertia.Z;
-		b3Body_SetMassData(body, massData);
+		massData.inertia.cx.X = inertia.X;
+		massData.inertia.cy.Y = inertia.Y;
+		massData.inertia.cz.Z = inertia.Z;
+		body.MassData = massData;
 	}
 
 	internal IPhysicsObject? CreateObject(PhysCollide? collisionModel, int materialIndex, in Vector3 position, in QAngle angles, ref ObjectParams objParams, bool hasParams, bool isStatic) {
-		b3BodyDef bodyDef = MakeBodyDef(isStatic, position, angles);
-		b3BodyId bodyId = b3CreateBody(WorldId, &bodyDef);
+		BodyDef bodyDef = MakeBodyDef(isStatic, position, angles);
+		Body bodyId = Body.Create(WorldId, bodyDef);
 
 		BoxPhysCollide? collide = collisionModel as BoxPhysCollide;
 		if (collide != null) {
-			b3ShapeDef shapeDef = PhysicsObject.MakeShapeDef(materialIndex, false);
+			ShapeDef shapeDef = PhysicsObject.MakeShapeDef(materialIndex, false);
 			foreach (BoxPhysConvex convex in collide.Convexes) {
-				if (convex.Hull == null)
+				if (convex.Hull.IsNull)
 					continue;
-				b3CreateHullShape(bodyId, &shapeDef, isStatic ? convex.Hull : convex.GetSimHull());
+				Shape.CreateHull(bodyId, shapeDef, isStatic ? convex.Hull : convex.GetSimHull());
 			}
 
-			if (collide.Mesh != null)
-				b3CreateMeshShape(bodyId, &shapeDef, collide.Mesh, new b3Vec3 { x = 1.0f, y = 1.0f, z = 1.0f });
+			if (!collide.Mesh.IsNull)
+				Shape.CreateMesh(bodyId, shapeDef, collide.Mesh, Vector3.One);
 		}
 
 		Vector3 massCenter = collide?.MassCenter ?? default;
@@ -293,12 +275,12 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		=> CreateObject(pCollisionModel, materialIndex, position, angles, ref objParams, true, true);
 
 	public IPhysicsObject? CreateSphereObject(float radius, int materialIndex, in Vector3 position, in QAngle angles, ref ObjectParams objParams, bool isStatic) {
-		b3BodyDef bodyDef = MakeBodyDef(isStatic, position, angles);
-		b3BodyId bodyId = b3CreateBody(WorldId, &bodyDef);
+		BodyDef bodyDef = MakeBodyDef(isStatic, position, angles);
+		Body bodyId = Body.Create(WorldId, bodyDef);
 
-		b3ShapeDef shapeDef = PhysicsObject.MakeShapeDef(materialIndex, false);
-		b3Sphere sphere = new() { center = default, radius = SourceToBox.Distance(radius) };
-		b3CreateSphereShape(bodyId, &shapeDef, &sphere);
+		ShapeDef shapeDef = PhysicsObject.MakeShapeDef(materialIndex, false);
+		Sphere sphere = new() { center = default, radius = SourceToBox.Distance(radius) };
+		Shape.CreateSphere(bodyId, shapeDef, sphere);
 
 		if (!isStatic) {
 			float r = sphere.radius;
@@ -353,7 +335,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 
 	void DeleteObject(PhysicsObject obj) {
 		Objects.Remove(obj);
-		b3DestroyBody(obj.BodyId);
+		obj.BodyId.Destroy();
 		obj.ReleaseHandle();
 	}
 
@@ -457,8 +439,8 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 				obj.ApplyAirDrag(AirDensity, dt);
 		}
 
-		b3World_SetContactTuning(WorldId, vbox_contact_hertz.GetFloat(), vbox_contact_damping.GetFloat(), SourceToBox.Distance(vbox_contact_speed.GetFloat()));
-		b3World_Step(WorldId, dt, vbox_substeps.GetInt());
+		WorldId.SetContactTuning(vbox_contact_hertz.GetFloat(), vbox_contact_damping.GetFloat(), SourceToBox.Distance(vbox_contact_speed.GetFloat()));
+		WorldId.Step(dt, vbox_substeps.GetInt());
 
 		foreach (PhysicsObject obj in Objects) {
 			bool awake = !obj.IsAsleep();
@@ -474,7 +456,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 			}
 		}
 
-		b3BodyEvents events = b3World_GetBodyEvents(WorldId);
+		BodyEvents events = WorldId.BodyEvents;
 		ActiveObjects.Clear();
 
 		MaxAngularVelocity = PerformanceParams.MaxAngularVelocity > 0.0f ? MathLib.DEG2RAD(PerformanceParams.MaxAngularVelocity) : (MathF.PI * 0.5f) / dt;
@@ -487,17 +469,17 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 				continue;
 			ActiveObjects.Add(obj);
 
-			b3BodyId body = obj.BodyId;
+			Body body = obj.BodyId;
 
-			Vector3 angVel = BoxToSource.Unitless(b3Body_GetAngularVelocity(body));
+			Vector3 angVel = BoxToSource.Unitless(body.AngularVelocity);
 			float angularLen = angVel.Length();
 			if (angularLen > MaxAngularVelocity)
-				b3Body_SetAngularVelocity(body, SourceToBox.Unitless(angVel * (MaxAngularVelocity / angularLen)));
+				body.AngularVelocity = SourceToBox.Unitless(angVel * (MaxAngularVelocity / angularLen));
 
-			Vector3 linVel = BoxToSource.Unitless(b3Body_GetLinearVelocity(body));
+			Vector3 linVel = BoxToSource.Unitless(body.LinearVelocity);
 			float linearLen = linVel.Length();
 			if (linearLen > maxLinear)
-				b3Body_SetLinearVelocity(body, SourceToBox.Unitless(linVel * (maxLinear / linearLen)));
+				body.LinearVelocity = SourceToBox.Unitless(linVel * (maxLinear / linearLen));
 		}
 
 		DrainContactEvents();
@@ -547,7 +529,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		if (CollisionEvent == null)
 			return;
 
-		b3ContactEvents events = b3World_GetContactEvents(WorldId);
+		ContactEvents events = WorldId.ContactEvents;
 
 		for (int i = 0; i < events.beginCount; i++) {
 			PhysicsObject? p1 = ObjectFromShape(events.beginEvents[i].shapeIdA);
@@ -559,7 +541,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		}
 
 		for (int i = 0; i < events.hitCount; i++) {
-			ref b3ContactHitEvent hit = ref events.hitEvents[i];
+			ref ContactHitEvent hit = ref events.hitEvents[i];
 			PhysicsObject? p1 = ObjectFromShape(hit.shapeIdA);
 			PhysicsObject? p2 = ObjectFromShape(hit.shapeIdB);
 			if (p1 == null || p2 == null)
@@ -617,7 +599,7 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 		if (CollisionEvent == null)
 			return;
 
-		b3SensorEvents events = b3World_GetSensorEvents(WorldId);
+		SensorEvents events = WorldId.SensorEvents;
 
 		for (int i = 0; i < events.beginCount; i++) {
 			PhysicsObject? trigger = ObjectFromShape(events.beginEvents[i].sensorShapeId);
@@ -640,19 +622,17 @@ internal unsafe partial class PhysicsEnvironment : IPhysicsEnvironment
 
 		float threshold = SourceToBox.Distance(PenetrationDepth);
 
-		b3ContactData* contacts = stackalloc b3ContactData[16];
+		Span<ContactData> contacts = stackalloc ContactData[16];
 		foreach (PhysicsObject a in ActiveObjects) {
 			if (a.GetGameData() == null)
 				continue;
 
-			int count = b3Body_GetContactData(a.BodyId, contacts, 16);
+			int count = a.BodyId.GetContactData(contacts);
 			for (int c = 0; c < count; c++) {
 				float separation = 0.0f;
-				b3Manifold* manifolds = (b3Manifold*)contacts[c].manifolds;
-				for (int m = 0; m < contacts[c].manifoldCount; m++) {
-					b3ManifoldPoint* points = (b3ManifoldPoint*)&manifolds[m].points;
-					for (int p = 0; p < manifolds[m].pointCount; p++)
-						separation = MathF.Min(separation, points[p].separation);
+				foreach (ref readonly Manifold manifold in contacts[c].manifolds) {
+					for (int p = 0; p < manifold.pointCount; p++)
+						separation = MathF.Min(separation, manifold.points[p].separation);
 				}
 				if (separation > -threshold)
 					continue;

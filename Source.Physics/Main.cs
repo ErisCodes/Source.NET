@@ -1,5 +1,7 @@
 global using static Source.Physics.SourceDllMain;
 
+using Box3D;
+
 using Microsoft.Extensions.DependencyInjection;
 
 using Source.Common.Physics;
@@ -7,7 +9,6 @@ using Source.Common.Physics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using static Box3D.Box3D;
 
 [assembly: DisableRuntimeMarshalling]
 
@@ -46,18 +47,21 @@ public unsafe class PhysicsInterface : IPhysics
 		services.AddSingleton<IPhysicsCollision, PhysicsCollide>();
 		services.AddSingleton<IPhysicsSurfaceProps, PhysicsSurfaceProps>();
 
-		b3SetAssertFcn(&OnAssert);
-		b3SetLogFcn(&OnLog);
+		B3.SetAssertHandler(DiagnosticHandler.Instance);
+		B3.SetLogHandler(DiagnosticHandler.Instance);
 	}
 
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	static int OnAssert(sbyte* condition, sbyte* fileName, int lineNumber) {
-		Warning($"Box3D assert: {Marshal.PtrToStringUTF8((nint)condition)} ({Marshal.PtrToStringUTF8((nint)fileName)}:{lineNumber})\n");
-		return 0;
-	}
+	sealed class DiagnosticHandler : IAssertHandler, ILogHandler
+	{
+		public static readonly DiagnosticHandler Instance = new();
 
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	static void OnLog(sbyte* message) => Msg(Marshal.PtrToStringUTF8((nint)message));
+		public int OnAssert(string condition, string fileName, int lineNumber) {
+			Warning($"Box3D assert: {condition} ({fileName}:{lineNumber})\n");
+			return 0;
+		}
+
+		public void OnLog(string message) => Msg(message);
+	}
 
 	public IPhysicsEnvironment CreateEnvironment() {
 		IPhysicsEnvironment environment = CreatePhysicsEnvironment();

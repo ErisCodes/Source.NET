@@ -9,37 +9,36 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using static Box3D.Box3D;
 
 namespace Source.Physics;
 
 internal sealed unsafe class BoxPhysConvex : PhysConvex
 {
-	public b3HullData* Hull;
-	public b3HullData* SimHull;
+	public HullData Hull;
+	public HullData SimHull;
 	public uint GameData;
 
-	public b3Vec3[]? QueryVerts;
+	public Vector3[]? QueryVerts;
 	public byte[]? QueryMaterials;
 
-	public b3HullData* GetSimHull() {
-		if (SimHull != null)
+	public HullData GetSimHull() {
+		if (!SimHull.IsNull)
 			return SimHull;
-		if (Hull == null)
-			return null;
+		if (Hull.IsNull)
+			return default;
 
-		int vertexCount = Hull->vertexCount;
-		if (Hull->faceCount < 4 || vertexCount < 4)
+		int vertexCount = Hull.VertexCount;
+		if (Hull.FaceCount < 4 || vertexCount < 4)
 			return Hull;
 
-		b3Vec3* points = b3GetHullPoints(Hull);
-		b3HullVertex* vertices = b3GetHullVertices(Hull);
-		b3HullHalfEdge* edges = b3GetHullEdges(Hull);
-		b3Plane* planes = b3GetHullPlanes(Hull);
+		ReadOnlySpan<Vector3> points = Hull.Points;
+		ReadOnlySpan<HullVertex> vertices = Hull.Vertices;
+		ReadOnlySpan<HullHalfEdge> edges = Hull.Edges;
+		ReadOnlySpan<Box3D.Plane> planes = Hull.Planes;
 
 		float inflate = SourceToBox.Distance(0.25f);
 
-		b3Vec3[] verts = new b3Vec3[vertexCount];
+		Vector3[] verts = new Vector3[vertexCount];
 		Span<int> faces = stackalloc int[32];
 		for (int v = 0; v < vertexCount; v++) {
 			Vector3 p = BoxToSource.Unitless(points[v]);
@@ -95,25 +94,24 @@ internal sealed unsafe class BoxPhysConvex : PhysConvex
 			verts[v] = SourceToBox.Unitless(x);
 		}
 
-		fixed (b3Vec3* pVerts = verts)
-			SimHull = BoxHullCooking.CreateHullSafe(pVerts, verts.Length, BoxHullCooking.MaxHullVertices);
-		return SimHull != null ? SimHull : Hull;
+		SimHull = BoxHullCooking.CreateHullSafe(verts, BoxHullCooking.MaxHullVertices);
+		return !SimHull.IsNull ? SimHull : Hull;
 	}
 
 	public void Free() {
-		if (Hull != null)
-			b3DestroyHull(Hull);
-		if (SimHull != null)
-			b3DestroyHull(SimHull);
-		Hull = null;
-		SimHull = null;
+		if (!Hull.IsNull)
+			Hull.Destroy();
+		if (!SimHull.IsNull)
+			SimHull.Destroy();
+		Hull = default;
+		SimHull = default;
 	}
 }
 
 internal sealed unsafe class BoxPhysCollide : PhysCollide
 {
 	public readonly List<BoxPhysConvex> Convexes = [];
-	public b3MeshData* Mesh;
+	public MeshData Mesh;
 
 	public Vector3 MassCenter;
 	public Vector3 UnitInertia;
@@ -122,7 +120,7 @@ internal sealed unsafe class BoxPhysCollide : PhysCollide
 
 internal sealed class BoxPhysPolysoup : PhysPolysoup
 {
-	public readonly List<b3Vec3> Vertices = [];
+	public readonly List<Vector3> Vertices = [];
 	public readonly List<byte> MaterialIndices = [];
 }
 
@@ -131,7 +129,7 @@ internal static unsafe class BoxHullCooking
 	public const int MaxHullVertices = 44;
 	public const int MaxCloudPoints = 40;
 
-	static bool CloudIsCookable(b3Vec3* points, int count) {
+	static bool CloudIsCookable(Vector3* points, int count) {
 		if (count < 4)
 			return false;
 
@@ -182,10 +180,10 @@ internal static unsafe class BoxHullCooking
 		return MathF.Sqrt(MathF.Max(minEig, 0.0f)) >= 1e-4f * maxExtent;
 	}
 
-	static int DecimateCloud(b3Vec3* input, int count, b3Vec3* output) {
+	static int DecimateCloud(Vector3* input, int count, Vector3* output) {
 		int first = 0;
 		for (int i = 1; i < count; i++)
-			if (input[i].x < input[first].x)
+			if (input[i].X < input[first].X)
 				first = i;
 		output[0] = input[first];
 
@@ -211,20 +209,20 @@ internal static unsafe class BoxHullCooking
 		return outCount;
 	}
 
-	public static b3HullData* CreateHullSafe(b3Vec3* points, int count, int maxVerts) {
+	public static HullData CreateHullSafe(Vector3* points, int count, int maxVerts) {
 		if (!CloudIsCookable(points, count))
-			return null;
+			return default;
 
 		if (count <= MaxCloudPoints)
-			return b3CreateHull(points, count, maxVerts);
+			return HullData.Create(new ReadOnlySpan<Vector3>(points, count), maxVerts);
 
-		b3Vec3* decimated = stackalloc b3Vec3[MaxCloudPoints];
+		Vector3* decimated = stackalloc Vector3[MaxCloudPoints];
 		int decimatedCount = DecimateCloud(points, count, decimated);
-		return b3CreateHull(decimated, decimatedCount, maxVerts);
+		return HullData.Create(new ReadOnlySpan<Vector3>(decimated, decimatedCount), maxVerts);
 	}
 
-	public static b3HullData* CreateHullSafe(ReadOnlySpan<b3Vec3> points, int maxVerts) {
-		fixed (b3Vec3* p = points)
+	public static HullData CreateHullSafe(ReadOnlySpan<Vector3> points, int maxVerts) {
+		fixed (Vector3* p = points)
 			return CreateHullSafe(p, points.Length, maxVerts);
 	}
 }
@@ -322,17 +320,17 @@ internal static unsafe class IVPCompat
 		CompactTriangle* triangles = (CompactTriangle*)(ledge + 1);
 		int vertCount = ledge->NTriangles * 3;
 
-		b3Vec3[] verts = new b3Vec3[vertCount];
+		Vector3[] verts = new Vector3[vertCount];
 		for (int i = 0; i < ledge->NTriangles; i++) {
 			for (int j = 0; j < 3; j++) {
 				int index = triangles[i].GetEdge(j).StartPointIndex;
 				float* vertex = (float*)(vertices + index * IVPAlignedVectorSize);
-				verts[i * 3 + j] = new b3Vec3 { x = vertex[0], y = vertex[2], z = -vertex[1] };
+				verts[i * 3 + j] = new Vector3 { X = vertex[0], Y = vertex[2], Z = -vertex[1] };
 			}
 		}
 
-		b3HullData* hull = BoxHullCooking.CreateHullSafe(verts, BoxHullCooking.MaxHullVertices);
-		if (hull == null) {
+		HullData hull = BoxHullCooking.CreateHullSafe(verts, BoxHullCooking.MaxHullVertices);
+		if (hull.IsNull) {
 			Vector3 min = BoxToSource.Unitless(verts[0]), max = min;
 			for (int i = 1; i < vertCount; i++) {
 				min = Vector3.Min(min, BoxToSource.Unitless(verts[i]));
@@ -341,11 +339,11 @@ internal static unsafe class IVPCompat
 			float pad = SourceToBox.Distance(0.1f);
 			min -= new Vector3(pad);
 			max += new Vector3(pad);
-			Span<b3Vec3> corners = stackalloc b3Vec3[8];
+			Span<Vector3> corners = stackalloc Vector3[8];
 			for (int i = 0; i < 8; i++)
-				corners[i] = new b3Vec3 { x = (i & 1) != 0 ? max.X : min.X, y = (i & 2) != 0 ? max.Y : min.Y, z = (i & 4) != 0 ? max.Z : min.Z };
+				corners[i] = new Vector3 { X = (i & 1) != 0 ? max.X : min.X, Y = (i & 2) != 0 ? max.Y : min.Y, Z = (i & 4) != 0 ? max.Z : min.Z };
 			hull = BoxHullCooking.CreateHullSafe(corners, 8);
-			if (hull == null)
+			if (hull.IsNull)
 				return null;
 			Warning($"Uncookable ledge ({vertCount} points) approximated by its bounding box\n");
 		}
@@ -381,7 +379,7 @@ internal static unsafe class IVPCompat
 		GetAllLedges(firstNode, ledges);
 
 		BoxPhysCollide collide = new() {
-			MassCenter = BoxToSource.Distance(new b3Vec3 { x = surface->MassCenter.X, y = surface->MassCenter.Z, z = -surface->MassCenter.Y }),
+			MassCenter = BoxToSource.Distance(new Vector3 { X = surface->MassCenter.X, Y = surface->MassCenter.Z, Z = -surface->MassCenter.Y }),
 			UnitInertia = new Vector3(surface->RotationInertia.X, surface->RotationInertia.Z, surface->RotationInertia.Y)
 		};
 		foreach (nint ledge in ledges) {
@@ -409,10 +407,10 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 	static BoxPhysCollide? Box(PhysCollide? collide) => collide as BoxPhysCollide;
 	static BoxPhysConvex? Box(PhysConvex? convex) => convex as BoxPhysConvex;
 
-	static BoxPhysConvex? HullToConvex(b3HullData* hull) => hull == null ? null : new BoxPhysConvex { Hull = hull };
+	static BoxPhysConvex? HullToConvex(HullData hull) => hull.IsNull ? null : new BoxPhysConvex { Hull = hull };
 
 	public PhysConvex ConvexFromVerts(Span<Vector3> verts) {
-		b3Vec3[] points = new b3Vec3[verts.Length];
+		Vector3[] points = new Vector3[verts.Length];
 		for (int i = 0; i < verts.Length; i++)
 			points[i] = SourceToBox.Distance(verts[i]);
 
@@ -423,10 +421,10 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 
 	public float ConvexVolume(PhysConvex convex) {
 		BoxPhysConvex? box = Box(convex);
-		if (box == null || box.Hull == null)
+		if (box == null || box.Hull.IsNull)
 			return 0.0f;
 
-		b3MassData massData = b3ComputeHullMass(box.Hull, 1.0f);
+		MassData massData = box.Hull.ComputeMass(1.0f);
 		return BoxToSource.Volume(massData.mass);
 	}
 
@@ -441,7 +439,7 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 	public void ConvexFree(PhysConvex convex) => Box(convex)?.Free();
 
 	public PhysConvex BBoxToConvex(in Vector3 mins, in Vector3 maxs) {
-		Span<b3Vec3> corners = stackalloc b3Vec3[8];
+		Span<Vector3> corners = stackalloc Vector3[8];
 		for (int i = 0; i < 8; i++) {
 			Vector3 corner = new((i & 1) != 0 ? maxs.X : mins.X, (i & 2) != 0 ? maxs.Y : mins.Y, (i & 4) != 0 ? maxs.Z : mins.Z);
 			corners[i] = SourceToBox.Distance(corner);
@@ -472,31 +470,23 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 		if (soup is not BoxPhysPolysoup box || box.Vertices.Count < 3)
 			return null!;
 
-		int triangleCount = box.Vertices.Count / 3;
 		int[] indices = new int[box.Vertices.Count];
 		for (int i = 0; i < indices.Length; i++)
 			indices[i] = i;
 
-		Span<b3Vec3> vertices = CollectionsMarshal.AsSpan(box.Vertices);
+		Span<Vector3> vertices = CollectionsMarshal.AsSpan(box.Vertices);
 		Span<byte> materials = CollectionsMarshal.AsSpan(box.MaterialIndices);
 
-		b3MeshData* mesh;
-		fixed (b3Vec3* pVertices = vertices)
-		fixed (int* pIndices = indices)
-		fixed (byte* pMaterials = materials) {
-			b3MeshDef def = default;
-			def.vertices = pVertices;
-			def.vertexCount = box.Vertices.Count;
-			def.indices = pIndices;
-			def.triangleCount = triangleCount;
-			def.materialIndices = pMaterials;
-			def.weldVertices = true;
-			def.weldTolerance = SourceToBox.Distance(0.1f);
-			def.identifyEdges = true;
-			mesh = b3CreateMesh(&def, null, 0);
-		}
+		MeshDef def = default;
+		def.vertices = vertices;
+		def.indices = indices;
+		def.materialIndices = materials;
+		def.weldVertices = true;
+		def.weldTolerance = SourceToBox.Distance(0.1f);
+		def.identifyEdges = true;
+		MeshData mesh = MeshData.Create(def, default);
 
-		if (mesh == null)
+		if (mesh.IsNull)
 			return null!;
 
 		return new BoxPhysCollide { Mesh = mesh };
@@ -518,10 +508,10 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 
 			collide.Convexes.Add(box);
 
-			if (box.Hull != null) {
-				b3MassData massData = b3ComputeHullMass(box.Hull, 1.0f);
+			if (!box.Hull.IsNull) {
+				MassData massData = box.Hull.ComputeMass(1.0f);
 				weightedCenter += massData.mass * BoxToSource.Unitless(massData.center);
-				weightedInertia += new Vector3(massData.inertia.cx.x, massData.inertia.cy.y, massData.inertia.cz.z);
+				weightedInertia += new Vector3(massData.inertia.cx.X, massData.inertia.cy.Y, massData.inertia.cz.Z);
 				totalMass += massData.mass;
 			}
 		}
@@ -543,9 +533,9 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 			convex.Free();
 		box.Convexes.Clear();
 
-		if (box.Mesh != null)
-			b3DestroyMesh(box.Mesh);
-		box.Mesh = null;
+		if (!box.Mesh.IsNull)
+			box.Mesh.Destroy();
+		box.Mesh = default;
 	}
 
 	public int CollideSize(PhysCollide collide) => 0;
@@ -571,20 +561,20 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 		if (box == null)
 			return collideOrigin;
 
-		b3Transform xf = SourceToBox.Transform(collideOrigin, collideAngles);
-		b3Vec3 localDir = b3InvRotateVector(xf.q, SourceToBox.Unitless(direction));
+		Transform xf = SourceToBox.Transform(collideOrigin, collideAngles);
+		Vector3 localDir = BoxMath.InvRotateVector(xf.q, SourceToBox.Unitless(direction));
 
 		float best = float.MinValue;
-		b3Vec3 bestPoint = default;
+		Vector3 bestPoint = default;
 		bool found = false;
 
 		foreach (BoxPhysConvex convex in box.Convexes) {
-			b3HullData* hull = convex.Hull;
-			if (hull == null)
+			HullData hull = convex.Hull;
+			if (hull.IsNull)
 				continue;
 
-			b3Vec3* points = b3GetHullPoints(hull);
-			for (int p = 0; p < hull->vertexCount; p++) {
+			ReadOnlySpan<Vector3> points = hull.Points;
+			for (int p = 0; p < points.Length; p++) {
 				float dot = Vector3.Dot(BoxToSource.Unitless(points[p]), BoxToSource.Unitless(localDir));
 				if (dot > best) {
 					best = dot;
@@ -597,7 +587,7 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 		if (!found)
 			return collideOrigin;
 
-		return BoxToSource.Distance(b3TransformPoint(xf, bestPoint));
+		return BoxToSource.Distance(BoxMath.TransformPoint(xf, bestPoint));
 	}
 
 	public void CollideGetAABB(out Vector3 mins, out Vector3 maxs, PhysCollide collide, in Vector3 collideOrigin, in QAngle collideAngles) {
@@ -608,22 +598,22 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 			return;
 		}
 
-		b3Transform xf = SourceToBox.Transform(collideOrigin, collideAngles);
+		Transform xf = SourceToBox.Transform(collideOrigin, collideAngles);
 
-		b3AABB bounds = default;
+		AABB bounds = default;
 		bool hasBounds = false;
 		foreach (BoxPhysConvex convex in box.Convexes) {
-			if (convex.Hull == null)
+			if (convex.Hull.IsNull)
 				continue;
 
-			b3AABB hullBounds = b3ComputeHullAABB(convex.Hull, xf);
-			bounds = hasBounds ? b3AABB_Union(bounds, hullBounds) : hullBounds;
+			AABB hullBounds = convex.Hull.ComputeAABB(xf);
+			bounds = hasBounds ? BoxMath.AABB_Union(bounds, hullBounds) : hullBounds;
 			hasBounds = true;
 		}
 
-		if (box.Mesh != null) {
-			b3AABB meshBounds = b3ComputeMeshAABB(box.Mesh, xf, new b3Vec3 { x = 1.0f, y = 1.0f, z = 1.0f });
-			bounds = hasBounds ? b3AABB_Union(bounds, meshBounds) : meshBounds;
+		if (!box.Mesh.IsNull) {
+			AABB meshBounds = box.Mesh.ComputeAABB(xf, Vector3.One);
+			bounds = hasBounds ? BoxMath.AABB_Union(bounds, meshBounds) : meshBounds;
 			hasBounds = true;
 		}
 
@@ -707,7 +697,7 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 		trace.StartSolid = true;
 	}
 
-	static float MinSeparation(b3LocalManifoldPoint* points, int count, float start) {
+	static float MinSeparation(LocalManifoldPoint* points, int count, float start) {
 		float separation = start;
 		for (int p = 0; p < count; p++)
 			separation = MathF.Min(separation, points[p].separation);
@@ -744,16 +734,16 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 		return hitLength < 0.0f ? 0.0f : hitLength;
 	}
 
-	static void AcceptCast(ref BestHit best, in b3CastOutput output, uint contents, in b3Transform surfaceXf, float baseLength, in Vector3 rayDir) {
+	static void AcceptCast(ref BestHit best, in CastOutput output, uint contents, in Transform surfaceXf, float baseLength, in Vector3 rayDir) {
 		if (!output.hit)
 			return;
 
-		if (output.fraction == 0.0f && b3Dot(output.normal, output.normal) == 0.0f) {
+		if (output.fraction == 0.0f && BoxMath.Dot(output.normal, output.normal) == 0.0f) {
 			AcceptHit(ref best, 0.0f, default, contents, true);
 			return;
 		}
 
-		Vector3 worldNormal = BoxToSource.Unitless(b3RotateVector(surfaceXf.q, output.normal));
+		Vector3 worldNormal = BoxToSource.Unitless(BoxMath.RotateVector(surfaceXf.q, output.normal));
 		MathLib.VectorNormalize(ref worldNormal);
 		float len = PullBack(output.fraction * baseLength, rayDir, worldNormal, DIST_EPSILON);
 		AcceptHit(ref best, len, worldNormal, contents, false);
@@ -768,7 +758,7 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 			return;
 		}
 
-		b3Transform surfaceXf = SourceToBox.Transform(collideOrigin, collideAngles);
+		Transform surfaceXf = SourceToBox.Transform(collideOrigin, collideAngles);
 
 		Vector3 delta = ray.Delta;
 		float baseLength = MathF.Sqrt(Vector3.Dot(delta, delta));
@@ -776,66 +766,65 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 		if (baseLength > 0)
 			rayDir /= baseLength;
 
-		b3Vec3 localStart = b3InvTransformPoint(surfaceXf, SourceToBox.Distance(ray.Start));
-		b3Vec3 localDelta = b3InvRotateVector(surfaceXf.q, SourceToBox.Distance(delta));
+		Vector3 localStart = BoxMath.InvTransformPoint(surfaceXf, SourceToBox.Distance(ray.Start));
+		Vector3 localDelta = BoxMath.InvRotateVector(surfaceXf.q, SourceToBox.Distance(delta));
 
 		BestHit best = default;
 		best.TotalTraceLength = MathF.Max(baseLength, 1e-8f);
 
 		uint defaultContents = (uint)Contents.Solid;
-		b3Vec3 unitScale = new() { x = 1.0f, y = 1.0f, z = 1.0f };
+		Vector3 unitScale = Vector3.One;
 
 		if (ray.IsRay) {
-			b3RayCastInput input = new() { origin = localStart, translation = localDelta, maxFraction = 1.0f };
+			RayCastInput input = new() { origin = localStart, translation = localDelta, maxFraction = 1.0f };
 
-			if (surface.Mesh != null) {
+			if (!surface.Mesh.IsNull) {
 				uint contents = convexInfo?.GetContents(0) ?? defaultContents;
 				if ((contentsMask & contents) != 0) {
-					b3Mesh mesh = new() { data = surface.Mesh, scale = unitScale };
-					AcceptCast(ref best, b3RayCastMesh(&mesh, &input), contents, surfaceXf, baseLength, rayDir);
+					Mesh mesh = new() { data = surface.Mesh, scale = unitScale };
+					AcceptCast(ref best, mesh.RayCast(input), contents, surfaceXf, baseLength, rayDir);
 				}
 			}
 			foreach (BoxPhysConvex convex in surface.Convexes) {
-				if (convex.Hull == null)
+				if (convex.Hull.IsNull)
 					continue;
 				uint contents = convexInfo?.GetContents((int)convex.GameData) ?? defaultContents;
 				if ((contentsMask & contents) == 0)
 					continue;
-				AcceptCast(ref best, b3RayCastHull(convex.Hull, &input), contents, surfaceXf, baseLength, rayDir);
+				AcceptCast(ref best, convex.Hull.RayCast(input), contents, surfaceXf, baseLength, rayDir);
 			}
 		}
 		else {
-			b3Vec3* corners = stackalloc b3Vec3[8];
+			Span<Vector3> corners = stackalloc Vector3[8];
 			Vector3 e = ray.Extents;
 			for (int i = 0; i < 8; i++) {
 				Vector3 corner = new(
 					ray.Start.X + ((i & 1) != 0 ? e.X : -e.X), ray.Start.Y + ((i & 2) != 0 ? e.Y : -e.Y),
 					ray.Start.Z + ((i & 4) != 0 ? e.Z : -e.Z));
-				corners[i] = b3InvTransformPoint(surfaceXf, SourceToBox.Distance(corner));
+				corners[i] = BoxMath.InvTransformPoint(surfaceXf, SourceToBox.Distance(corner));
 			}
 
-			b3ShapeCastInput input = default;
+			scoped ShapeCastInput input = default;
 			input.proxy.points = corners;
-			input.proxy.count = 8;
 			input.proxy.radius = 0.0f;
 			input.translation = localDelta;
 			input.maxFraction = 1.0f;
 			input.canEncroach = true;
 
-			if (surface.Mesh != null) {
+			if (!surface.Mesh.IsNull) {
 				uint contents = convexInfo?.GetContents(0) ?? defaultContents;
 				if ((contentsMask & contents) != 0) {
-					b3Mesh mesh = new() { data = surface.Mesh, scale = unitScale };
-					AcceptCast(ref best, b3ShapeCastMesh(&mesh, &input), contents, surfaceXf, baseLength, rayDir);
+					Mesh mesh = new() { data = surface.Mesh, scale = unitScale };
+					AcceptCast(ref best, mesh.ShapeCast(input), contents, surfaceXf, baseLength, rayDir);
 				}
 			}
 			foreach (BoxPhysConvex convex in surface.Convexes) {
-				if (convex.Hull == null)
+				if (convex.Hull.IsNull)
 					continue;
 				uint contents = convexInfo?.GetContents((int)convex.GameData) ?? defaultContents;
 				if ((contentsMask & contents) == 0)
 					continue;
-				AcceptCast(ref best, b3ShapeCastHull(convex.Hull, &input), contents, surfaceXf, baseLength, rayDir);
+				AcceptCast(ref best, convex.Hull.ShapeCast(input), contents, surfaceXf, baseLength, rayDir);
 			}
 		}
 
@@ -879,29 +868,29 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 		if (start != end)
 			return;
 
-		b3Transform xfSweep = SourceToBox.Transform(start, sweepAngles);
-		b3Transform xfHit = SourceToBox.Transform(collideOrigin, collideAngles);
-		b3Transform sweepToHit = b3InvMulTransforms(xfHit, xfSweep);
+		Transform xfSweep = SourceToBox.Transform(start, sweepAngles);
+		Transform xfHit = SourceToBox.Transform(collideOrigin, collideAngles);
+		Transform sweepToHit = BoxMath.InvMulTransforms(xfHit, xfSweep);
 
 		foreach (BoxPhysConvex convex in target.Convexes) {
-			b3HullData* hull = convex.Hull;
-			if (hull == null)
+			HullData hull = convex.Hull;
+			if (hull.IsNull)
 				continue;
 
 			foreach (BoxPhysConvex sweepConvex in sweep.Convexes) {
-				b3HullData* sweepHull = sweepConvex.Hull;
-				if (sweepHull == null)
+				HullData sweepHull = sweepConvex.Hull;
+				if (sweepHull.IsNull)
 					continue;
 
-				b3DistanceInput input = default;
-				input.proxyA = new b3ShapeProxy { points = b3GetHullPoints(hull), count = hull->vertexCount, radius = 0.0f };
-				input.proxyB = new b3ShapeProxy { points = b3GetHullPoints(sweepHull), count = sweepHull->vertexCount, radius = 0.0f };
+				DistanceInput input = default;
+				input.proxyA = new ShapeProxy { points = hull.Points, radius = 0.0f };
+				input.proxyB = new ShapeProxy { points = sweepHull.Points, radius = 0.0f };
 				input.transform = sweepToHit;
 				input.useRadii = true;
 
-				b3SimplexCache cache = default;
-				b3DistanceOutput output = b3ShapeDistance(&input, &cache, null, 0);
-				if (output.distance < B3_OVERLAP_SLOP) {
+				SimplexCache cache = default;
+				DistanceOutput output = B3.ShapeDistance(input, ref cache, default);
+				if (output.distance < Box3D.Constants.OverlapSlop) {
 					trace.Fraction = 0.0f;
 					trace.Contents = Contents.Solid;
 					trace.AllSolid = true;
@@ -977,13 +966,13 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 
 	public void VPhysicsKeyParserDestroy(IVPhysicsKeyParser parser) { }
 
-	static void TriangulateHull(b3HullData* hull, List<Vector3> verts, List<int>? materials) {
-		b3Vec3* points = b3GetHullPoints(hull);
-		b3HullFace* faces = b3GetHullFaces(hull);
-		b3HullHalfEdge* edges = b3GetHullEdges(hull);
+	static void TriangulateHull(HullData hull, List<Vector3> verts, List<int>? materials) {
+		ReadOnlySpan<Vector3> points = hull.Points;
+		ReadOnlySpan<HullFace> faces = hull.Faces;
+		ReadOnlySpan<HullHalfEdge> edges = hull.Edges;
 
 		List<int> loop = [];
-		for (int f = 0; f < hull->faceCount; f++) {
+		for (int f = 0; f < faces.Length; f++) {
 			loop.Clear();
 			int start = faces[f].edge;
 			int e = start;
@@ -1011,17 +1000,17 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 
 		foreach (BoxPhysConvex convex in box.Convexes) {
 			if (convex.QueryVerts != null && convex.QueryVerts.Length > 0) {
-				foreach (b3Vec3 v in convex.QueryVerts)
+				foreach (Vector3 v in convex.QueryVerts)
 					verts.Add(BoxToSource.Distance(v));
 			}
-			else if (convex.Hull != null)
+			else if (!convex.Hull.IsNull)
 				TriangulateHull(convex.Hull, verts, null);
 		}
 
-		if (box.Mesh != null) {
-			b3Vec3* meshVerts = b3GetMeshVertices(box.Mesh);
-			b3MeshTriangle* tris = b3GetMeshTriangles(box.Mesh);
-			for (int t = 0; t < box.Mesh->triangleCount; t++) {
+		if (!box.Mesh.IsNull) {
+			ReadOnlySpan<Vector3> meshVerts = box.Mesh.Vertices;
+			ReadOnlySpan<MeshTriangle> tris = box.Mesh.Triangles;
+			for (int t = 0; t < tris.Length; t++) {
 				verts.Add(BoxToSource.Distance(meshVerts[tris[t].index1]));
 				verts.Add(BoxToSource.Distance(meshVerts[tris[t].index2]));
 				verts.Add(BoxToSource.Distance(meshVerts[tris[t].index3]));
@@ -1065,25 +1054,25 @@ public unsafe class PhysicsCollide : IPhysicsCollision
 						Materials.Add(convex.QueryMaterials[t]);
 					}
 				}
-				else if (convex.Hull != null)
+				else if (!convex.Hull.IsNull)
 					TriangulateHull(convex.Hull, Verts, Materials);
 
 				info.TriCount = Materials.Count - info.TriStart;
 				Convexes.Add(info);
 			}
 
-			if (collide.Mesh != null) {
-				b3MeshData* mesh = collide.Mesh;
-				b3Vec3* verts = b3GetMeshVertices(mesh);
-				b3MeshTriangle* tris = b3GetMeshTriangles(mesh);
-				byte* mats = b3GetMeshMaterialIndices(mesh);
+			if (!collide.Mesh.IsNull) {
+				MeshData mesh = collide.Mesh;
+				ReadOnlySpan<Vector3> verts = mesh.Vertices;
+				ReadOnlySpan<MeshTriangle> tris = mesh.Triangles;
+				ReadOnlySpan<byte> mats = mesh.MaterialIndices;
 
 				ConvexInfo info = new() { GameData = 0, TriStart = Materials.Count };
-				for (int t = 0; t < mesh->triangleCount; t++) {
+				for (int t = 0; t < tris.Length; t++) {
 					Verts.Add(BoxToSource.Distance(verts[tris[t].index1]));
 					Verts.Add(BoxToSource.Distance(verts[tris[t].index2]));
 					Verts.Add(BoxToSource.Distance(verts[tris[t].index3]));
-					Materials.Add(mats != null ? mats[t] : 0);
+					Materials.Add(!mats.IsEmpty ? mats[t] : 0);
 				}
 				info.TriCount = Materials.Count - info.TriStart;
 				Convexes.Add(info);

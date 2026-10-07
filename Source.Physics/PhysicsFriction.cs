@@ -4,7 +4,6 @@ using Source.Common.Physics;
 
 using System.Numerics;
 
-using static Box3D.Box3D;
 
 namespace Source.Physics;
 
@@ -25,50 +24,44 @@ internal unsafe class PhysicsFrictionSnapshot : IPhysicsFrictionSnapshot
 
 	public PhysicsFrictionSnapshot(PhysicsObject self, float stepTime) {
 		float invStep = stepTime > 0.0f ? 1.0f / stepTime : 0.0f;
-		b3BodyId body = self.BodyId;
+		Body body = self.BodyId;
 
-		int capacity = b3Body_GetContactCapacity(body);
+		int capacity = body.ContactCapacity;
 		if (capacity <= 0)
 			return;
 
-		b3ContactData[] contacts = new b3ContactData[capacity];
-		int count;
-		fixed (b3ContactData* pContacts = contacts)
-			count = b3Body_GetContactData(body, pContacts, capacity);
+		ContactData[] contacts = new ContactData[capacity];
+		int count = body.GetContactData(contacts);
 
 		for (int i = 0; i < count; i++) {
-			ref b3ContactData contact = ref contacts[i];
-			b3BodyId bodyA = b3Shape_GetBody(contact.shapeIdA);
-			PhysicsObject? a = PhysicsObject.FromUserData(b3Body_GetUserData(bodyA));
+			ref ContactData contact = ref contacts[i];
+			Body bodyA = contact.shapeIdA.Body;
+			PhysicsObject? a = PhysicsObject.FromUserData(bodyA.UserData);
 			bool selfIsA = a == self;
-			PhysicsObject? other = selfIsA ? PhysicsObject.FromUserData(b3Body_GetUserData(b3Shape_GetBody(contact.shapeIdB))) : a;
+			PhysicsObject? other = selfIsA ? PhysicsObject.FromUserData(contact.shapeIdB.Body.UserData) : a;
 			if (other == null)
 				continue;
 
-			Vector3 comA = BoxToSource.Unitless(b3Body_GetWorldCenter(bodyA));
+			Vector3 comA = BoxToSource.Unitless(bodyA.WorldCenter);
 
-			fixed (b3ContactData* pContact = &contact) {
-				b3Manifold* manifolds = (b3Manifold*)pContact->manifolds;
-				for (int m = 0; m < contact.manifoldCount; m++) {
-					b3Manifold* manifold = &manifolds[m];
-
-					Vector3 normal = BoxToSource.Unitless(manifold->normal);
+			{
+				foreach (ref readonly Manifold manifold in contact.manifolds) {
+					Vector3 normal = BoxToSource.Unitless(manifold.normal);
 					if (!selfIsA)
 						normal = -normal;
 
-					b3ManifoldPoint* points = (b3ManifoldPoint*)&manifold->points;
-					for (int p = 0; p < manifold->pointCount; p++) {
-						b3ManifoldPoint* point = &points[p];
-						if (point->totalNormalImpulse <= 0.0f)
+					for (int p = 0; p < manifold.pointCount; p++) {
+						ref readonly ManifoldPoint point = ref manifold.points[p];
+						if (point.totalNormalImpulse <= 0.0f)
 							continue;
 
 						Entries.Add(new Entry {
 							Self = self,
 							Other = other,
 							Normal = normal,
-							Point = BoxToSource.Distance(SourceToBox.Unitless(comA + BoxToSource.Unitless(point->anchorA))),
-							NormalForce = BoxToSource.Distance(point->totalNormalImpulse * invStep),
-							Energy = BoxToSource.Distance(BoxToSource.Distance(MathF.Abs(point->totalNormalImpulse * point->normalVelocity)))
+							Point = BoxToSource.Distance(SourceToBox.Unitless(comA + BoxToSource.Unitless(point.anchorA))),
+							NormalForce = BoxToSource.Distance(point.totalNormalImpulse * invStep),
+							Energy = BoxToSource.Distance(BoxToSource.Distance(MathF.Abs(point.totalNormalImpulse * point.normalVelocity)))
 						});
 					}
 				}

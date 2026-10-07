@@ -5,7 +5,6 @@ using Source.Common.Physics;
 
 using System.Numerics;
 
-using static Box3D.Box3D;
 
 namespace Source.Physics;
 
@@ -25,7 +24,7 @@ internal class PhysicsShadowController : IPhysicsShadowController
 	float TeleportDistance;
 
 	readonly bool SavedGravity;
-	readonly b3MassData SavedMassData;
+	readonly MassData SavedMassData;
 	int SavedMaterialIndex;
 	readonly CallbackFlags SavedCallbackFlags;
 	readonly bool AllowTranslation;
@@ -42,15 +41,15 @@ internal class PhysicsShadowController : IPhysicsShadowController
 		Object.EnableGravity(false);
 
 		if (!Object.IsStatic()) {
-			b3BodyId bodyId = Object.BodyId;
-			SavedMassData = b3Body_GetMassData(bodyId);
+			Body bodyId = Object.BodyId;
+			SavedMassData = bodyId.MassData;
 			if (!AllowTranslation)
 				Object.SetMass(PhysicsConstants.VPHYSICS_MAX_MASS);
 			if (!AllowRotation) {
-				b3MassData massData = b3Body_GetMassData(bodyId);
+				MassData massData = bodyId.MassData;
 				massData.inertia = default;
-				massData.inertia.cx.x = massData.inertia.cy.y = massData.inertia.cz.z = 1e15f;
-				b3Body_SetMassData(bodyId, massData);
+				massData.inertia.cx.X = massData.inertia.cy.Y = massData.inertia.cz.Z = 1e15f;
+				bodyId.MassData = massData;
 			}
 		}
 
@@ -68,7 +67,7 @@ internal class PhysicsShadowController : IPhysicsShadowController
 	}
 
 	public void Destroy() {
-		b3BodyId bodyId = Object.BodyId;
+		Body bodyId = Object.BodyId;
 		bool markedForDelete = (Object.GetCallbackFlags() & CallbackFlags.MarkedForDelete) != 0;
 
 		if (!markedForDelete) {
@@ -79,12 +78,12 @@ internal class PhysicsShadowController : IPhysicsShadowController
 
 			if (!Object.IsStatic() && SavedMassData.mass > 0.0f) {
 				Object.SetMass(SavedMassData.mass);
-				if (b3Body_IsValid(bodyId))
-					b3Body_SetMassData(bodyId, SavedMassData);
+				if (bodyId.IsValid)
+					bodyId.MassData = SavedMassData;
 			}
 
-			if (b3Body_IsValid(bodyId))
-				b3Body_SetAwake(bodyId, true);
+			if (bodyId.IsValid)
+				bodyId.IsAwake = true;
 		}
 	}
 
