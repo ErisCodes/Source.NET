@@ -28,13 +28,7 @@
     <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.CodeFixes/Source.CodeAnalysis.CodeFixes.csproj">
       <Platform Project="x64" />
     </Project>
-    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.Package/Source.CodeAnalysis.Package.csproj">
-      <Platform Project="x64" />
-    </Project>
     <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.Test/Source.CodeAnalysis.Test.csproj">
-      <Platform Project="x64" />
-    </Project>
-    <Project Path="Source.CodeAnalysis/Source.CodeAnalysis.Vsix/Source.CodeAnalysis.Vsix.csproj">
       <Platform Project="x64" />
     </Project>
     <Project Path="Source.CodeAnalysis/Source.CodeAnalysis/Source.CodeAnalysis.csproj">
