@@ -231,6 +231,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 	static readonly HLVoiceStatusHelper g_VoiceStatusHelper = new();
 
 	public static bool g_bLevelInitialized;
+	public static INetworkStringTable? g_pStringTableClientSideChoreoScenes;
 
 	public void EncodeUserCmdToBuffer(bf_write buf, int slot) {
 		input.EncodeUserCmdToBuffer(buf, slot);
@@ -264,13 +265,15 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 	}
 
 	public void InstallStringTableCallback(ReadOnlySpan<char> tableName) {
-		// TODO: what to do here, if anything
 		switch (tableName) {
 			case "networkstring":
 				Game.Client.GarrysMod.NetworkString.Install();
 				break;
 			case Protocol.CLIENT_LUA_FILES_TABLENAME:
 				Game.Client.GarrysMod.GModDataPack.DataPack().Initialize();
+				break;
+			case "Scenes":
+				g_pStringTableClientSideChoreoScenes = networkstringtable.FindTable(tableName);
 				break;
 		}
 

@@ -81,19 +81,22 @@ public class EngineBuilder(ICommandLine cmdLine) : ServiceCollection
 
 	public EngineBuilder WithGameUIDLL<UIDLL>() where UIDLL : class, IGameUI {
 		PreInject<UIDLL>(this);
-		WithComponent<IGameUI, UIDLL>();
+		WithComponent<UIDLL>();
+		WithResolvedComponent<IGameUI, UIDLL>(static x => x.GetRequiredService<UIDLL>());
 		return this;
 	}
 
 	public EngineBuilder WithClientDLL<ClDLL>() where ClDLL : class, IBaseClientDLL {
 		PreInject<ClDLL>(this);
-		WithComponent<IBaseClientDLL, ClDLL>();
+		WithComponent<ClDLL>();
+		WithResolvedComponent<IBaseClientDLL, ClDLL>(static x => x.GetRequiredService<ClDLL>());
 		return this;
 	}
 
 	public EngineBuilder WithGameDLL<SvDLL>() where SvDLL : class, IServerGameDLL {
 		PreInject<SvDLL>(this);
-		WithComponent<IServerGameDLL, SvDLL>();
+		WithComponent<SvDLL>();
+		WithResolvedComponent<IServerGameDLL, SvDLL>(static x => x.GetRequiredService<SvDLL>());
 		return this;
 	}
 
