@@ -27,6 +27,8 @@ public static partial class SndDma
 	Called once each time through the main loop
 	============
 	*/
+	static readonly ChannelList s_UpdateChannelList = new();
+
 	public static void S_Update(AudioState? pAudioState) {
 		Channel ch;
 
@@ -67,7 +69,7 @@ public static partial class SndDma
 			DAS_CheckNewRoomDSP();
 
 			// update spatialization for static and dynamic sounds
-			ChannelList list = new();
+			ChannelList list = s_UpdateChannelList;
 			g_ActiveChannels.GetActiveChannels(list);
 
 			if (snd_spatialize_roundrobin.GetInt() == 0) {
@@ -379,25 +381,11 @@ public static partial class SndDma
 	}
 
 	static void S_Update_(float mixAheadTime) {
-		if (!snd_mix_async.GetBool()) {
-			S_ShutdownMixThread();
-			S_Update_Guts(mixAheadTime);
+		if (g_hMixThread == null) {
+			g_bMixThreadExit = false;
+			g_hMixThread = new Thread(S_Update_Thread) { Name = "SndMix", IsBackground = true };
+			g_hMixThread.Start();
 		}
-		else {
-			if (g_hMixThread == null) {
-				g_bMixThreadExit = false;
-				g_hMixThread = new Thread(S_Update_Thread) { Name = "SndMix", IsBackground = true };
-				g_hMixThread.Start();
-			}
-		}
-	}
-
-	//-----------------------------------------------------------------------------
-	// Threaded mixing enable. Purposely hiding enable/disable details.
-	//-----------------------------------------------------------------------------
-	public static void S_EnableThreadedMixing(bool bEnable) {
-		if (snd_mix_async.GetBool() != bEnable)
-			snd_mix_async.SetValue(bEnable ? 1 : 0);
 	}
 
 	/*

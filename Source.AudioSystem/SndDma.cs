@@ -262,7 +262,6 @@ public static partial class SndDma
 	static readonly ConVar volume = new("volume", "1.0", FCvar.Archive, "Sound volume", 0.0, 1.0);
 
 	public static readonly ConVar snd_mixahead = new("snd_mixahead", "0.1", FCvar.Archive);
-	public static readonly ConVar snd_mix_async = new("snd_mix_async", "0");
 #if DEBUG
 	[ConCommand("snd_mixvol", "Set named Mixgroup to mix volume.")]
 	static void snd_mixvol(in TokenizedCommand args) => MXR_DebugSetMixGroupVolume(in args);

@@ -38,7 +38,6 @@ public class AudioSystem : IAudioSystem
 	public float GetMasterVolume() => S_GetMasterVolume();
 	public void SoundFade(float percent, float holdtime, float intime, float outtime) => S_SoundFade(percent, holdtime, intime, outtime);
 	public void OnLoadScreen(bool value) => S_OnLoadScreen(value);
-	public void EnableThreadedMixing(bool enable) => S_EnableThreadedMixing(enable);
 	public void EnableMusic(bool enable) => S_EnableMusic(enable);
 
 	public int StartSound(ref StartSoundParams parms) => S_StartSound(ref parms);
