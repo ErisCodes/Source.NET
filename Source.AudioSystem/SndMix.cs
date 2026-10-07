@@ -1657,6 +1657,8 @@ public static class SndMix
 			public object? NameHash; // a unique id for a sound file
 		}
 
+		static readonly Comparer<ChannelVolData> VolumeComparer = Comparer<ChannelVolData>.Create((a, b) => b.Vol - a.Vol);
+
 		readonly ChannelVolData[] channelInfo = new ChannelVolData[MAX_CHANNELS];
 
 		readonly bool[] shouldCull = new bool[MAX_CHANNELS]; // in ChannelList order, not sorted order
@@ -1699,7 +1701,7 @@ public static class SndMix
 			}
 
 			// Sort the list.
-			Array.Sort(channelInfo, (a, b) => b.Vol - a.Vol);
+			Array.Sort(channelInfo, VolumeComparer);
 
 			// Then, determine if the given sound is less than the nth loudest of its hash. If so, mark its flag
 			// for removal.
@@ -1735,6 +1737,9 @@ public static class SndMix
 
 	public static readonly ConVar snd_mute_losefocus = new("snd_mute_losefocus", "1", FCvar.Archive);
 
+	static readonly ChannelCullList s_CullList = new();
+	static readonly ChannelList s_MixChannelList = new();
+
 	// build a list of channels that will actually do mixing in this update
 	// remove all active channels that won't mix for some reason
 	public static void MIX_BuildChannelList(ChannelList list) {
@@ -1751,7 +1756,7 @@ public static class SndMix
 		bool active = soundServices.IsGameActive();
 		bool stopOnFocusLoss = !active && snd_mute_losefocus.GetBool();
 
-		ChannelCullList cullList = new();
+		ChannelCullList cullList = s_CullList;
 		if (snd_cull_duplicates.GetInt() > 0)
 			cullList.Initialize(list);
 
@@ -1896,7 +1901,7 @@ public static class SndMix
 		// directional dsp processing is enabled if dsp_facingaway is non-zero
 
 		g_bDspOff = dsp_off.GetInt() != 0;
-		ChannelList list = new();
+		ChannelList list = s_MixChannelList;
 
 		MIX_BuildChannelList(list);
 

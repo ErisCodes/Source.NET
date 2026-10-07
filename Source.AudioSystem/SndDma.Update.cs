@@ -27,6 +27,8 @@ public static partial class SndDma
 	Called once each time through the main loop
 	============
 	*/
+	static readonly ChannelList s_UpdateChannelList = new();
+
 	public static void S_Update(AudioState? pAudioState) {
 		Channel ch;
 
@@ -67,7 +69,7 @@ public static partial class SndDma
 			DAS_CheckNewRoomDSP();
 
 			// update spatialization for static and dynamic sounds
-			ChannelList list = new();
+			ChannelList list = s_UpdateChannelList;
 			g_ActiveChannels.GetActiveChannels(list);
 
 			if (snd_spatialize_roundrobin.GetInt() == 0) {
