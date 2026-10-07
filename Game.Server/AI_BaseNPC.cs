@@ -2877,6 +2877,14 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return player == null || IRelationType(player) == Disposition.LI;
 	}
 
+	public virtual bool QuerySeeEntity(BaseEntity entity, bool onlyHateOrFearIfNPC = false) {
+		if (onlyHateOrFearIfNPC && entity.IsNPC()) {
+			Disposition disposition = IRelationType(entity);
+			return (disposition == Disposition.HT || disposition == Disposition.FR);
+		}
+		return true;
+	}
+
 	public void SetTarget(BaseEntity? target) => TargetEnt.Set(target);
 
 	public float GetHullWidth() => NAI_Hull.Width(GetHullType());

@@ -23,6 +23,13 @@ public class SimpleSimTimer
 			Next = gpGlobals.CurTime + minInterval;
 	}
 
+	public float GetRemaining() {
+		float result = (float)(Next - gpGlobals.CurTime);
+		if (result < 0)
+			return 0;
+		return result;
+	}
+
 	protected TimeUnit_t Next;
 }
 
@@ -36,6 +43,15 @@ public class SimTimer : SimpleSimTimer
 		Interval = interval;
 		Next = startExpired ? -1.0 : gpGlobals.CurTime + Interval;
 	}
+
+	public void Reset(float interval = -1.0f) {
+		if (interval == -1.0f)
+			Next = gpGlobals.CurTime + Interval;
+		else
+			Next = gpGlobals.CurTime + interval;
+	}
+
+	public float GetInterval() => Interval;
 
 	float Interval;
 }
