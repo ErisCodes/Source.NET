@@ -432,7 +432,7 @@ public class HL2_Player : BaseMultiplayerPlayer
 		throw new NotImplementedException();
 	}
 
-	void DrawDebugGeometryOverlays() { }
+	public override void DrawDebugGeometryOverlays() { }
 
 	public void ExitLadder() { }
 
