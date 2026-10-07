@@ -358,22 +358,31 @@ class PropCullStack : DatatableStack
 		NumOutProps = 0;
 		NumNewProxyProps = 0;
 
+		Init();
+
+		NewProxyProps[NumNewProxyProps] = -1;
+		int curNewProxyProp = 0;
+
 		for (int i = 0; i < numStartProps; i++) {
 			int prop = startProps[i];
 
-			while (NumNewProxyProps < Constants.MAX_DATATABLE_PROPS && NewProxyProps[NumNewProxyProps] < prop)
-				AddProp(NewProxyProps[NumNewProxyProps++]);
+			while ((uint)NewProxyProps[curNewProxyProp] < (uint)prop) {
+				AddProp(NewProxyProps[curNewProxyProp]);
+				++curNewProxyProp;
+			}
 
 			if (IsPropProxyValid(prop)) {
 				AddProp(prop);
 
-				if (NumNewProxyProps < Constants.MAX_DATATABLE_PROPS && NewProxyProps[NumNewProxyProps] == prop)
-					NumNewProxyProps++;
+				if (NewProxyProps[curNewProxyProp] == prop)
+					++curNewProxyProp;
 			}
 		}
 
-		while (NumNewProxyProps < Constants.MAX_DATATABLE_PROPS)
-			AddProp(NewProxyProps[NumNewProxyProps++]);
+		while ((uint)NewProxyProps[curNewProxyProp] < Constants.MAX_DATATABLE_PROPS) {
+			AddProp(NewProxyProps[curNewProxyProp]);
+			++curNewProxyProp;
+		}
 	}
 
 	void AddProp(int prop) {

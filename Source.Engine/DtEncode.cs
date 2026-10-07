@@ -79,7 +79,7 @@ public struct PropTypeFns
 			uint val;
 			int bits = prop.Bits;
 			if ((flags & PropFlags.NoScale) != 0) {
-				val = MemoryMarshal.Cast<float, byte>(new ReadOnlySpan<float>(ref incoming))[0];
+				val = BitConverter.SingleToUInt32Bits(incoming);
 				bits = 32;
 			}
 			else if (incoming < prop.LowValue) {
@@ -181,22 +181,26 @@ public struct PropTypeFns
 
 	public static string? DecodeString(SendProp prop, bf_read inBuffer) {
 		int len = (int)inBuffer.ReadUBitLong(Constants.DT_MAX_STRING_BITS);
-		if (len > Constants.DT_MAX_STRING_BUFFERSIZE) {
+		if (len >= Constants.DT_MAX_STRING_BUFFERSIZE) {
 			Warning($"String_Decode( {prop.GetName()} ) invalid length ({len})\n");
 			len = Constants.DT_MAX_STRING_BUFFERSIZE - 1;
 		}
 
-		inBuffer.ReadString(out string? str, len);
-		return str;
+		Span<char> str = stackalloc char[len];
+		for (int i = 0; i < len; i++)
+			str[i] = (char)inBuffer.ReadByte();
+		return new string(str);
 	}
 
 	public static void EncodeString(SendProp prop, string? incoming, bf_write outBuffer, int objectID) {
-		if (incoming == null) {
-			outBuffer.WriteUBitLong(0u, 16);
-			return;
-		}
-		outBuffer.WriteUBitLong((uint)(incoming.Length + 1), Constants.DT_MAX_STRING_BITS);
-		outBuffer.WriteString(incoming, true, incoming.Length);
+		ReadOnlySpan<char> str = incoming;
+		int len = Math.Min(str.Length, Constants.DT_MAX_STRING_BUFFERSIZE - 1);
+		if (str.Length > len)
+			DevWarning($"String_Encode( {prop.GetName()} ) string too long ({str.Length}), truncated to {len}\n");
+
+		outBuffer.WriteUBitLong((uint)len, Constants.DT_MAX_STRING_BITS);
+		for (int i = 0; i < len; i++)
+			outBuffer.WriteByte(str[i]);
 	}
 
 	/// <summary>
@@ -446,7 +450,7 @@ public struct PropTypeFns
 	#region SendPropType.String
 	public static int String_CompareDeltas(SendProp prop, bf_read p1, bf_read p2) {
 		int len1 = (int)p1.ReadUBitLong(Constants.DT_MAX_STRING_BITS);
-		int len2 = (int)p1.ReadUBitLong(Constants.DT_MAX_STRING_BITS);
+		int len2 = (int)p2.ReadUBitLong(Constants.DT_MAX_STRING_BITS);
 
 		if (len1 == len2) {
 			if (len1 == 0)
@@ -455,6 +459,8 @@ public struct PropTypeFns
 			return p1.CompareBits(p2, len1 * 8) ? 1 : 0;
 		}
 		else {
+			p1.SeekRelative(len1 * 8);
+			p2.SeekRelative(len2 * 8);
 			return 1;
 		}
 	}
