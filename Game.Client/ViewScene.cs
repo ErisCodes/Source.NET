@@ -1,6 +1,7 @@
 ﻿global using static Game.Client.ViewScene;
 
 using Source;
+using Source.Common;
 using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.MaterialSystem;
@@ -10,6 +11,7 @@ using Source.Engine;
 using System.Drawing.Drawing2D;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 namespace Game.Client;
 
 [EngineComponent]
@@ -17,6 +19,39 @@ public static class ViewScene
 {
 	public static readonly ConVar r_updaterefracttexture = new("r_updaterefracttexture", "1", FCvar.Cheat);
 	public static readonly ConVar r_depthoverlay = new("r_depthoverlay", "0", FCvar.Cheat, "Replaces opaque objects with their grayscaled depth values. r_showz_power scales the output.");
+
+	public static long g_viewscene_refractUpdateFrame = 0;
+	public static bool g_bAllowMultipleRefractUpdatesPerScenePerFrame = false;
+
+	public static void UpdateRefractTexture(int x, int y, int w, int h, bool forceUpdate = false) {
+		Assert(!DrawingShadowDepthView());
+
+		if (!IsRetail() && !r_updaterefracttexture.GetBool())
+			return;
+
+		using MatRenderContextPtr renderContext = new(materials);
+		ITexture? texture = RenderTexture.GetPowerOfTwoFrameBufferTexture();
+		if (IsPC() || forceUpdate || g_bAllowMultipleRefractUpdatesPerScenePerFrame || (gpGlobals.FrameCount != g_viewscene_refractUpdateFrame)) {
+			// forced or only once per frame 
+			System.Drawing.Rectangle rect = new(x, y, w, h);
+			renderContext.CopyRenderTargetToTextureEx(texture!, 0, ref rect, ref Unsafe.NullRef<System.Drawing.Rectangle>());
+
+			g_viewscene_refractUpdateFrame = gpGlobals.FrameCount;
+		}
+		renderContext.SetFrameBufferCopyTexture(texture);
+	}
+
+	public static void UpdateRefractTexture(bool forceUpdate = false) {
+		Assert(!DrawingShadowDepthView());
+
+		using MatRenderContextPtr renderContext = new(materials);
+
+		renderContext.GetViewport(out int x, out int y, out int w, out int h);
+		UpdateRefractTexture(x, y, w, h, forceUpdate);
+	}
+
+	public static void UpdateScreenEffectTexture(int textureIndex, int x, int y, int w, int h, bool destFullScreen = false)
+		=> UpdateScreenEffectTexture(textureIndex, x, y, w, h, destFullScreen, out _);
 
 	public static void UpdateScreenEffectTexture(int textureIndex, int x, int y, int w, int h, bool destFullScreen, out System.Drawing.Rectangle actualRect) {
 		System.Drawing.Rectangle srcRect = new(x, y, w, h);
@@ -29,6 +64,8 @@ public static class ViewScene
 
 		System.Drawing.Rectangle destRect = srcRect;
 		if (!destFullScreen && (srcWidth > destWidth || srcHeight > destHeight)) {
+			// the source and target sizes aren't necessarily the same (specifically in dx7 where 
+			// nonpow2 rendertargets aren't supported), so lets figure it out here.
 			float scaleX = (float)destWidth / (float)srcWidth;
 			float scaleY = (float)destHeight / (float)srcHeight;
 			destRect.X = (int)(srcRect.X * scaleX);
@@ -41,10 +78,43 @@ public static class ViewScene
 			destRect.Height = Math.Clamp(destRect.Height, 0, destHeight - destRect.Y);
 		}
 
-		renderContext.CopyRenderTargetToTextureEx(texture, 0, srcRect, destFullScreen ? null : destRect);
+		renderContext.CopyRenderTargetToTextureEx(texture, 0, ref srcRect, ref destFullScreen ? ref Unsafe.NullRef<System.Drawing.Rectangle>() : ref destRect);
 		renderContext.SetFrameBufferCopyTexture(texture, textureIndex);
 
 		actualRect = destRect;
+	}
+
+	/// <summary>
+	/// Draws the screen effect
+	/// </summary>
+	public static void DrawScreenEffectMaterial(IMaterial material, int x, int y, int w, int h) {
+		UpdateScreenEffectTexture(0, x, y, w, h, false, out System.Drawing.Rectangle actualRect);
+		ITexture texture = RenderTexture.GetFullFrameFrameBufferTexture(0)!;
+
+		Singleton<RenderUtils>().DrawScreenSpaceRectangle(material, x, y, w, h,
+			actualRect.X, actualRect.Y, actualRect.X + actualRect.Width - 1, actualRect.Y + actualRect.Height - 1,
+			texture.GetActualWidth(), texture.GetActualHeight(), null, 1, 1, 0);
+	}
+
+	/// <summary>
+	/// intended for use by dynamic meshes to naively update front buffer textures needed by a material
+	/// </summary>
+	public static void UpdateFrontBufferTexturesForMaterial(IMaterial material, bool force = false) {
+		Assert(!DrawingShadowDepthView());
+
+		if (material.NeedsPowerOfTwoFrameBufferTexture(true))
+			UpdateRefractTexture(force);
+		else if (material.NeedsFullFrameBufferTexture(true)) {
+			ref ViewSetup viewSetup = ref view.GetViewSetup();
+			UpdateScreenEffectTexture(0, viewSetup.X, viewSetup.Y, viewSetup.Width, viewSetup.Height);
+		}
+	}
+
+	public static void UpdateScreenEffectTexture() {
+		Assert(!DrawingShadowDepthView());
+
+		ref ViewSetup viewSetup = ref view.GetViewSetup();
+		UpdateScreenEffectTexture(0, viewSetup.X, viewSetup.Y, viewSetup.Width, viewSetup.Height);
 	}
 
 	public static void ViewTransform(in Vector3 worldSpace, out Vector3 viewSpace) {

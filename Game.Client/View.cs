@@ -46,6 +46,18 @@ public static class ViewAccessors
 	public static ref readonly Matrix4x4 CurrentWorldToViewMatrix() => ref ViewRender.g_MatCurrentCamInverse;
 	public static void AllowCurrentViewAccess(bool allow) => ViewRender.s_bCanAccessCurrentView = allow;
 	public static bool IsCurrentViewAccessAllowed() => ViewRender.s_bCanAccessCurrentView;
+	public static ViewID CurrentViewID() {
+		Assert(ViewRender.g_CurrentViewID != ViewID.Illegal);
+		return ViewRender.g_CurrentViewID;
+	}
+	/// <summary>
+	/// for easy externing
+	/// </summary>
+	public static bool DrawingShadowDepthView() => CurrentViewID() == ViewID.ShadowDepthTexture;
+	/// <summary>
+	/// for easy externing
+	/// </summary>
+	public static bool DrawingMainView() => CurrentViewID() == ViewID.Main;
 	public static void ComputeCameraVariables(in Vector3 origin, in QAngle angles, out Vector3 forward, out Vector3 right, out Vector3 up, ref Matrix4x4 currentCamInverse) {
 		angles.Vectors(out forward, out right, out up);
 
@@ -483,6 +495,10 @@ public class ViewRender : IViewRender
 	}
 
 	private void ViewDrawScene(bool drew3dSkybox, SkyboxVisibility skyboxVisible, in ViewSetup viewRender, ClearFlags clearFlags, ViewID viewID, bool drawViewModel = false, DrawFlags baseDrawFlags = 0) {
+		// this allows the refract texture to be updated once per *scene* on 360
+		// (e.g. once for a monitor scene and once for the main scene)
+		g_viewscene_refractUpdateFrame = gpGlobals.FrameCount - 1;
+
 		BaseDrawFlags = baseDrawFlags;
 		SetupCurrentView(in viewRender.Origin, in viewRender.Angles, viewID);
 		IGameSystem.PreRenderAllSystems();
@@ -509,6 +525,10 @@ public class ViewRender : IViewRender
 
 	private void ViewDrawScene_Intro(in ViewSetup view, ClearFlags clearFlags, IntroData introData) {
 		using MatRenderContextPtr renderContext = new(materials);
+
+		// this allows the refract texture to be updated once per *scene* on 360
+		// (e.g. once for a monitor scene and once for the main scene)
+		g_viewscene_refractUpdateFrame = gpGlobals.FrameCount - 1;
 
 		renderContext.ClearColor4ub(0, 0, 0, 255);
 

@@ -102,10 +102,10 @@ public class MeshMgr : IMeshMgr
 	// system crash and burn
 	private TMesh InitMesh<TMesh>() where TMesh : MeshGl46, new() {
 		TMesh ret = new TMesh();
-		ret.ShaderAPI = MaterialSystem.GetRenderContext().GetShaderAPI();
-		ret.ShaderUtil = MaterialSystem.GetShaderUtil();
+		ret.ShaderAPI = ShaderAPI;
+		ret.ShaderUtil = ShaderAPI.ShaderUtil;
 		ret.MeshMgr = ShaderAPI.MeshMgr;
-		ret.ShaderDevice = ret.ShaderAPI.GetShaderDevice();
+		ret.ShaderDevice = ShaderAPI.GetShaderDevice();
 		return ret;
 	}
 

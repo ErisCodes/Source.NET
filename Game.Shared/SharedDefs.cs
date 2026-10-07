@@ -656,6 +656,12 @@ public struct InlineArrayNewMaxControlPoints<T> where T : new()
 	public InlineArrayNewMaxControlPoints() { for (int i = 0; i < kMAXCONTROLPOINTS; i++) this[i] = new(); }
 }
 
+[Flags]
+public enum WaterSplashFlags
+{
+	InSlime = 0x1,
+}
+
 public enum DataObjectType
 {
 	GroundLink,

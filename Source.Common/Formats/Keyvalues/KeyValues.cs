@@ -1195,12 +1195,12 @@ public class KeyValues : IEnumerable<KeyValues>
 					}
 
 				case Types.Uint64: {
-						dat.Value = buffer.GetInt64();
+						dat.Value = (ulong)buffer.GetInt64();
 						break;
 					}
 
 				case Types.Double: {
-						dat.Value = buffer.GetFloat();
+						dat.Value = (double)buffer.GetFloat();
 						break;
 					}
 				case Types.Color: {

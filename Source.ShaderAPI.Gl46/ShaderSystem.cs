@@ -22,11 +22,11 @@ public class ShaderSystem : IShaderSystemInternal
 	List<IShaderDLL> ShaderDLLs = [];
 	IShaderShadow? RenderState;
 	private IMaterialSystem? _MaterialSystem;
-	private IShaderAPI? _ShaderAPI;
+	private ShaderAPIGl46? _ShaderAPI;
 	private MaterialSystem_Config? _Config;
 
 	private IMaterialSystem MaterialSystem => _MaterialSystem ??= Singleton<IMaterialSystem>();
-	private IShaderAPI ShaderAPI => _ShaderAPI ??= Singleton<IShaderAPI>();
+	private ShaderAPIGl46 ShaderAPI => _ShaderAPI ??= (ShaderAPIGl46)Singleton<IShaderAPI>();
 	private MaterialSystem_Config Config => _Config ??= Singleton<MaterialSystem_Config>();
 	readonly ITextureManager TextureSystem = Singleton<ITextureManager>()!;
 
@@ -240,7 +240,7 @@ public class ShaderSystem : IShaderSystemInternal
 
 		if (textureVar.GetVarType() != MaterialVarType.String) {
 			if (textureVar.GetVarType() != MaterialVarType.Texture)
-				textureVar.SetTextureValue(MaterialSystem.GetErrorTexture());
+				textureVar.SetTextureValue(TextureSystem.ErrorTexture());
 			return;
 		}
 
@@ -254,8 +254,8 @@ public class ShaderSystem : IShaderSystemInternal
 		if (HardwareConfig.GetHDRType() != HDRType.None)
 			textureName += ".hdr";
 
-		ITexture texture = MaterialSystem.FindTexture(textureName, TEXTURE_GROUP_CUBE_MAP, false, additionalCreationFlags)
-			?? MaterialSystem.GetErrorTexture();
+		ITexture texture = MaterialSystem.FindTexture(textureName, TEXTURE_GROUP_CUBE_MAP, false, (CreateTextureFlags)additionalCreationFlags)
+			?? TextureSystem.ErrorTexture();
 
 		textureVar.SetTextureValue(texture);
 	}
@@ -263,7 +263,7 @@ public class ShaderSystem : IShaderSystemInternal
 	public void LoadTexture(IMaterialVar textureVar, ReadOnlySpan<char> textureGroupName, int additionalCreationFlags = 0) {
 		if (textureVar.GetVarType() != MaterialVarType.String) {
 			if (textureVar.GetVarType() != MaterialVarType.Texture)
-				textureVar.SetTextureValue(MaterialSystem.GetErrorTexture());
+				textureVar.SetTextureValue(TextureSystem.ErrorTexture());
 			return;
 		}
 
@@ -271,12 +271,12 @@ public class ShaderSystem : IShaderSystemInternal
 		if (name[0] == Path.PathSeparator || name[1] == Path.PathSeparator)
 			name = name[1..];
 
-		ITexture texture = MaterialSystem.FindTexture(name, textureGroupName, false, additionalCreationFlags);
+		ITexture texture = MaterialSystem.FindTexture(name, textureGroupName, false, (CreateTextureFlags)additionalCreationFlags);
 
 		if (texture == null) {
 			if (!ShaderDevice.IsUsingGraphics())
 				Warning($"Shader_t::LoadTexture: texture \"{name}.vtf\" doesn't exist\n");
-			texture = MaterialSystem.GetErrorTexture();
+			texture = TextureSystem.ErrorTexture();
 		}
 
 		textureVar.SetTextureValue(texture);
@@ -307,10 +307,6 @@ public class ShaderSystem : IShaderSystemInternal
 		shader.DrawElements(shaderParams, renderState, null, VertexCompressionType.None, ref ((ShadowStateGl46)renderState).ContextData);
 		DoneWithShaderDraw();
 	}
-
-	public const int SNAPSHOT_COUNT_NORMAL = 16;
-	public const int SNAPSHOT_COUNT_EDITOR = 32;
-	public int SnapshotTypeCount() => MaterialSystem.CanUseEditorMaterials() ? SNAPSHOT_COUNT_EDITOR : SNAPSHOT_COUNT_NORMAL;
 
 	private void InitRenderStateFlags(ref IShaderShadow renderState, IMaterialVar[] shaderParams) {
 

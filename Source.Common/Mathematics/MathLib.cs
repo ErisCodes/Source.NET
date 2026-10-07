@@ -17,6 +17,7 @@ public static class MathLibConsts
 	public const int PITCH = 0;
 	public const int YAW = 1;
 	public const int ROLL = 2;
+	public const vec_t VEC_T_NAN = vec_t.NaN;
 
 	public const float FLT_EPSILON = 1.192092896e-07f; // FLT_EPSILON (2^-23), MathF.BitIncrement(1.0f) - 1.0f, not the same as float.Epsilon
 	public const double DBL_EPSILON = 2.2204460492503131e-16; // DBL_EPSILON (2^-52), Math.BitIncrement(1.0) - 1.0, not the same as double.Epsilon
@@ -1291,10 +1292,8 @@ public static class MathLib
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProduct(in Vector3 v1, ReadOnlySpan<vec_t> v2) => v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProduct(in Vector3 v1, in Vector3 v2) => v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(ReadOnlySpan<vec_t> v1, ReadOnlySpan<vec_t> v2) => MathF.Abs(v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(ReadOnlySpan<vec_t> v1, in Vector3 v2) => MathF.Abs(v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(in Vector3 v1, ReadOnlySpan<vec_t> v2) => MathF.Abs(v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(in Vector3 v1, in Vector3 v2) => MathF.Abs(v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(in Vector3 v0, ReadOnlySpan<vec_t> v1) => FloatMakePositive(v0.X * v1[0]) + FloatMakePositive(v0.Y * v1[1]) + FloatMakePositive(v0.Z * v1[2]);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static vec_t DotProductAbs(in Vector3 v0, in Vector3 v1) => FloatMakePositive(v0.X * v1.X) + FloatMakePositive(v0.Y * v1.Y) + FloatMakePositive(v0.Z * v1.Z);
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1991,6 +1990,11 @@ public static class MathLib
 		invlen = invlen * ((3.0f - invlen * invlen * sqlen) * 0.5f);
 		v = new Vector3(v.X * invlen, v.Y * invlen, v.Z * invlen);
 		return 1.0f / invlen;
+	}
+	public static Vector3 RandomVector(float minVal, float maxVal) {
+		Vector3 random = default;
+		random.Random(minVal, maxVal);
+		return random;
 	}
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static float VectorNormalize(ref Vector3 vec) {

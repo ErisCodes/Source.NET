@@ -761,7 +761,7 @@ public partial class BaseVSShader
 
 			LightState lightState = default;
 			if (vertexLitGeneric && (!hasFlashlight))
-				shaderAPI.GetLightState(out lightState);
+				shaderAPI.GetDX9LightState(out lightState);
 
 			MaterialFogMode fogType = shaderAPI.GetSceneFogMode();
 			int fogIndex = (fogType == MaterialFogMode.LinearBelowFogZ) ? 1 : 0;
@@ -841,7 +841,7 @@ public partial class BaseVSShader
 					vshIndex.Set("STATIC_LIGHT", lightState.StaticLightVertex ? 1 : 0);
 					vshIndex.Set("DOWATERFOG", fogIndex);
 					vshIndex.Set("SKINNING", numBones > 0);
-					vshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter(RenderParamInt.EnableFixedLighting) != 0);
+					vshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting) != 0);
 					vshIndex.Set("COMPRESSED_VERTS", (int)vertexCompression);
 					vshIndex.Set("NUM_LIGHTS", useStaticControlFlow ? 0 : lightState.NumLights);
 					dynamicCmdsOut.SetVertexShaderIndex(vshIndex.GetIndex());
@@ -849,13 +849,13 @@ public partial class BaseVSShader
 					if (HardwareConfig.SupportsPixelShaders_2_b() || HardwareConfig.ShouldAlwaysUseShaderModel2bShaders()) {
 						DynamicShaderIndex pshIndex = new(shaderAPI, ShaderType.Pixel);
 						pshIndex.Set("FLASHLIGHTSHADOWS", bFlashlightShadows);
-						pshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter(RenderParamInt.EnableFixedLighting));
+						pshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting));
 						dynamicCmdsOut.SetPixelShaderIndex(pshIndex.GetIndex());
 					}
 					else {
 						DynamicShaderIndex pshIndex = new(shaderAPI, ShaderType.Pixel);
 						pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo());
-						pshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter(RenderParamInt.EnableFixedLighting));
+						pshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting));
 						dynamicCmdsOut.SetPixelShaderIndex(pshIndex.GetIndex());
 					}
 				}
@@ -867,14 +867,14 @@ public partial class BaseVSShader
 					vshIndex.Set("STATIC_LIGHT", lightState.StaticLightVertex ? 1 : 0);
 					vshIndex.Set("DOWATERFOG", fogIndex);
 					vshIndex.Set("SKINNING", numBones > 0);
-					vshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter(RenderParamInt.EnableFixedLighting) != 0);
+					vshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting) != 0);
 					vshIndex.Set("MORPHING", shaderAPI.IsHWMorphingEnabled());
 					vshIndex.Set("COMPRESSED_VERTS", (int)vertexCompression);
 					dynamicCmdsOut.SetVertexShaderIndex(vshIndex.GetIndex());
 
 					DynamicShaderIndex pshIndex = new(shaderAPI, ShaderType.Pixel);
 					pshIndex.Set("FLASHLIGHTSHADOWS", bFlashlightShadows);
-					pshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter(RenderParamInt.EnableFixedLighting));
+					pshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting));
 					dynamicCmdsOut.SetPixelShaderIndex(pshIndex.GetIndex());
 
 					Span<bool> unusedTexCoords = [false, false, !shaderAPI.IsHWMorphingEnabled() || !isDecal];
@@ -888,7 +888,7 @@ public partial class BaseVSShader
 				shader.SetModulationPixelShaderDynamicState_LinearColorSpace(1);
 
 			Span<float> eyePos = [0, 0, 0, 0];
-			shaderAPI.GetWorldSpaceCameraPosition(ref eyePos);
+			shaderAPI.GetWorldSpaceCameraPosition(eyePos);
 			dynamicCmdsOut.SetPixelShaderConstant(20, eyePos);
 
 			if (!hasBump && !hasDiffuseWarp)
@@ -913,7 +913,7 @@ public partial class BaseVSShader
 					worldToTexture.M41, worldToTexture.M42, worldToTexture.M43, worldToTexture.M44
 				];
 
-				shaderAPI.SetVertexShaderConstant(VertexShaderConst.ShaderSpecificConst6, values);
+				shaderAPI.SetVertexShaderConstant(VertexShaderConst.ShaderSpecificConst6, values, 4);
 				shader.BindTexture(Sampler.Sampler7, flashlightState.SpotlightTexture, flashlightState.SpotlightTextureFrame);
 
 				Span<float> atten_pos = [

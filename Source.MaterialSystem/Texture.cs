@@ -12,6 +12,7 @@ using Source.Common.ShaderAPI;
 using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Source.MaterialSystem;
 
@@ -282,8 +283,12 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 	public void CopyFrameBufferToMe(int renderTargetID = 0, Rectangle? srcRect = null, Rectangle? dstRect = null) {
 		Assert(TextureHandles != null && FrameCount >= 1);
 
-		if (TextureHandles != null && FrameCount >= 1)
-			materials.ShaderAPI.CopyRenderTargetToTextureEx(TextureHandles[0], renderTargetID, srcRect, dstRect);
+		if (TextureHandles != null && FrameCount >= 1) {
+			Rectangle src = srcRect.GetValueOrDefault(), dst = dstRect.GetValueOrDefault();
+			materials.ShaderAPI.CopyRenderTargetToTextureEx(TextureHandles[0], renderTargetID,
+				ref srcRect.HasValue ? ref src : ref Unsafe.NullRef<Rectangle>(),
+				ref dstRect.HasValue ? ref dst : ref Unsafe.NullRef<Rectangle>());
+		}
 	}
 
 	public void Bind(Sampler sampler) => Bind(sampler, 0);
@@ -613,9 +618,9 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 
 		// Create all animated texture frames in a single call
 		materials.ShaderAPI.CreateTextures(
-			TextureHandles!, count,
+			TextureHandles.AsSpan(0, count),
 			DimsAllocated.Width, DimsAllocated.Height, shaderApiCreateTextureDepth, ImageFormat, DimsAllocated.MipCount,
-			nCopies, createFlags, GetName(), GetTextureGroupName());
+			nCopies, (int)createFlags, GetName(), GetTextureGroupName());
 
 		int accountingCount = count;
 
@@ -1062,6 +1067,7 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 						mipRect.Height,
 						vtfTexture.Format(),
 						stride,
+						false,
 						bits);
 				}
 			}
@@ -1142,7 +1148,61 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 	ITextureRegenerator? TextureRegenerator;
 
 	public void OnRestore() {
+		// May have to change whether or not we have a depth buffer.
+		// Are we a render target?
+		if ((Flags & (uint)TextureFlags.RenderTarget) != 0) {
+			int newWidth = 0, newHeight = 0;
 
+			// Did they not ask for a depth buffer?
+			if (OriginalRenderTargetType == RenderTargetType.RenderTarget) {
+				// But, did we force them to have one, or should we force them to have one this time around?
+				bool shouldForce = ShaderAPI.DoRenderTargetsNeedSeparateDepthBuffer();
+				bool didForce = (Flags & (uint)TextureFlags.DepthRenderTarget) != 0;
+				if (shouldForce != didForce) {
+					uint flags = Flags;
+					int frameCount = FrameCount;
+					if (shouldForce) {
+						Assert((flags & (uint)TextureFlags.DepthRenderTarget) == 0);
+						frameCount = 2;
+						flags |= (uint)TextureFlags.DepthRenderTarget;
+					}
+					else {
+						Assert((flags & (uint)TextureFlags.DepthRenderTarget) != 0);
+						frameCount = 1;
+						flags &= ~(uint)TextureFlags.DepthRenderTarget;
+					}
+
+					Shutdown();
+
+					ApplyRenderTargetSizeMode(ref newWidth, ref newHeight, ImageFormat);
+
+					Init(newWidth, newHeight, 1, ImageFormat, (int)flags, frameCount);
+					return;
+				}
+			}
+
+			// If we didn't recreate it up above, then we may need to resize it anyway if the framebuffer
+			// got smaller than we are.
+			ApplyRenderTargetSizeMode(ref newWidth, ref newHeight, ImageFormat);
+			if (newWidth != DimsMapping.Width || newHeight != DimsMapping.Height) {
+				Shutdown();
+				Init(newWidth, newHeight, 1, ImageFormat, (int)Flags, FrameCount);
+				return;
+			}
+		}
+	}
+
+	private void Shutdown() {
+		// Frees the texture regen class
+		TextureRegenerator = null;
+
+		ResidenceTarget = ResidencyType.None;
+		ResidenceCurrent = ResidencyType.None;
+
+		// This deletes the textures
+		FreeShaderAPITextures();
+		ReleaseTextureHandles();
+		NotifyUnloadedFile();
 	}
 
 	readonly IMaterialSystemHardwareConfig HardwareConfig = Singleton<IMaterialSystemHardwareConfig>();

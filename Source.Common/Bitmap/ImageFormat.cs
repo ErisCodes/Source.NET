@@ -78,3 +78,9 @@ public struct ImageFormatInfo
 		IsCompressed = compressed;
 	}
 }
+
+// todo
+public struct RGBX5551
+{
+
+}

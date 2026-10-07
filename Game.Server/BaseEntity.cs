@@ -4,6 +4,7 @@ using Game.Shared;
 
 using Source;
 using Source.Common;
+using Source.Common.Audio;
 using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
@@ -1367,6 +1368,44 @@ public partial class BaseEntity : IServerEntity
 				break;
 		}
 	}
+
+	public virtual void VPhysicsShadowCollision(int index, ref GameVCollisionEvent ev) { }
+
+	public virtual void VPhysicsCollision(int index, ref GameVCollisionEvent ev) {
+		int otherIndex = index == 0 ? 1 : 0;
+		BaseEntity hitEntity = ev.Entities[otherIndex]!;
+
+		if (GetMoveType() != Source.MoveType.VPhysics && hitEntity.GetMoveType() != Source.MoveType.VPhysics)
+			return;
+
+		if (ev.VCollisionEvent.DeltaCollisionTime < 0.5 && (hitEntity == this))
+			return;
+
+		if (hitEntity == this)
+			return;
+
+		SurfaceData_ptr hit = physprops.GetSurfaceData(ev.VCollisionEvent.SurfaceProps[otherIndex])!;
+		SurfaceData_ptr props = physprops.GetSurfaceData(ev.VCollisionEvent.SurfaceProps[index])!;
+		if ((CharTex)hit.Game.Material == CharTex.Default || (CharTex)props.Game.Material == CharTex.Default)
+			return;
+
+		if (hitEntity == this)
+			PhysCollisionSound(this, ev.VCollisionEvent.Objects[index]!, SoundEntityChannel.Body, ev.VCollisionEvent.SurfaceProps[index], ev.VCollisionEvent.SurfaceProps[otherIndex], ev.VCollisionEvent.DeltaCollisionTime, ev.VCollisionEvent.CollisionSpeed);
+		else
+			PhysCollisionSound(this, ev.VCollisionEvent.Objects[index]!, SoundEntityChannel.Static, ev.VCollisionEvent.SurfaceProps[index], ev.VCollisionEvent.SurfaceProps[otherIndex], ev.VCollisionEvent.DeltaCollisionTime, ev.VCollisionEvent.CollisionSpeed);
+		PhysCollisionScreenShake(ref ev, index);
+
+		PhysCollisionDust(ref ev, hit);
+	}
+
+	public virtual void VPhysicsFriction(IPhysicsObject obj, float energy, int surfaceProps, int surfacePropsHit) {
+		PhysFrictionSound(this, obj, energy, surfaceProps, surfacePropsHit);
+	}
+
+	public virtual bool ForceVPhysicsCollide(BaseEntity entity) => false;
+
+	public virtual bool PhysicsSplash(in Vector3 centerPoint, in Vector3 normal, float rawSpeed, float scaledSpeed) => false;
+
 	public IPhysicsObject? VPhysicsGetObject() => PhysicsObject;
 
 	public void VPhysicsSetObject(IPhysicsObject? physics) {

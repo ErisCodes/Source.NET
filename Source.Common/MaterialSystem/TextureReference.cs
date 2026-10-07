@@ -5,7 +5,8 @@ namespace Source.Common.MaterialSystem;
 
 public class TextureReference : Reference<ITexture>
 {
-	readonly IMaterialSystem materials = Singleton<IMaterialSystem>();
+	static IMaterialSystem? _materials;
+	static IMaterialSystem materials => _materials ??= Singleton<IMaterialSystem>();
 
 	public void Init(ReadOnlySpan<char> texture, ReadOnlySpan<char> textureGroupName, bool complain = true) {
 		Shutdown();

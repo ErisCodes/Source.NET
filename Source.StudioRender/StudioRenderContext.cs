@@ -89,9 +89,9 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 				Span<char> finalPath = path.SliceNullTerminatedString();
 
 				if ((studioHDR.Flags & StudioHdrFlags.Obsolete) != 0)
-					material = materialSystem.FindMaterialEx("models/obsolete/obsolete", TEXTURE_GROUP_MODEL, MaterialFindContext.IsOnAModel, false);
+					material = materialSystem.FindMaterialEx("models/obsolete/obsolete", TEXTURE_GROUP_MODEL, (int)MaterialFindContext.IsOnAModel, false);
 				else
-					material = materialSystem.FindMaterialEx(finalPath, TEXTURE_GROUP_MODEL, MaterialFindContext.IsOnAModel, false);
+					material = materialSystem.FindMaterialEx(finalPath, TEXTURE_GROUP_MODEL, (int)MaterialFindContext.IsOnAModel, false);
 			}
 
 			if (material == null)
@@ -809,7 +809,7 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 			renderContext.DisableAllLocalLights();
 		else {
 			int i;
-			int maxLightCount = renderContext.GetMaxLights();
+			int maxLightCount = hardwareConfig.MaxNumLights();
 			int localLightCount = Math.Min(RC.NumLocalLights, maxLightCount);
 			LightDesc desc = default;
 			desc.Type = LightType.Disable;

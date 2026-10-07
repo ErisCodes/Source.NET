@@ -1233,12 +1233,22 @@ public partial class Host
 
 		AllowQueuedMaterialSystem(false);
 #if !SWDS
-
+		g_ShadowMgr.LevelShutdown();
 #endif
-		// static prop manager
+		StaticPropMgr().LevelShutdown();
+
 		FreeStateAndWorld(true);
 		sv.Shutdown();
 		FreeToLowMark(true);
+
+		IGameEvent? ev = g_GameEventManager.CreateEvent("server_shutdown");
+
+		if (ev != null) {
+			ev.SetString("reason", "restart");
+			g_GameEventManager.FireEvent(ev);
+		}
+
+
 		GC.WaitForPendingFinalizers();
 		GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive);
 	}

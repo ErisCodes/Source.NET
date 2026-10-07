@@ -10,24 +10,45 @@ namespace Source.Common.Physics;
 
 public interface IPhysicsConstraint
 {
+	void Activate();
+	void Deactivate();
 
+	void SetGameData(object? gameData);
+	object? GetGameData();
+
+	IPhysicsObject? GetReferenceObject();
+	IPhysicsObject? GetAttachedObject();
+
+	void SetLinearMotor(float speed, float maxLinearImpulse);
+	void SetAngularMotor(float rotSpeed, float maxAngularImpulse);
+
+	void UpdateRagdollTransforms(in Matrix3x4 constraintToReference, in Matrix3x4 constraintToAttached);
+	bool GetConstraintTransform(out Matrix3x4 constraintToReference, out Matrix3x4 constraintToAttached);
+	bool GetConstraintParams(out ConstraintBreakableParams parms);
+
+	void OutputDebugInfo();
 }
 
 public interface IPhysicsConstraintGroup
 {
-
+	void Activate();
+	bool IsInErrorState();
+	void ClearErrorState();
+	void GetErrorParams(out ConstraintGroupParams parms);
+	void SetErrorParams(in ConstraintGroupParams parms);
+	void SolvePenetration(IPhysicsObject obj0, IPhysicsObject obj1);
 }
 
 public struct ConstraintGroupParams
 {
-	int additionalIterations;       // additional solver iterations make the constraint system more stable
-	int minErrorTicks;              // minimum number of ticks with an error before it's reported
-	float errorTolerance;           // error tolerance in HL units
+	public int AdditionalIterations;       // additional solver iterations make the constraint system more stable
+	public int MinErrorTicks;              // minimum number of ticks with an error before it's reported
+	public float ErrorTolerance;           // error tolerance in HL units
 
 	public void Defaults() {
-		additionalIterations = 0;
-		minErrorTicks = 15;
-		errorTolerance = 3.0f;
+		AdditionalIterations = 0;
+		MinErrorTicks = 15;
+		ErrorTolerance = 3.0f;
 	}
 }
 
@@ -110,10 +131,10 @@ public struct ConstraintRagdollParams
 
 public struct ConstraintHingeParams
 {
-	Vector3 WorldPosition;           // position in world space on the hinge axis
-	Vector3 WorldAxisDirection;      // unit direction vector of the hinge axis in world space
-	ConstraintAxisLimit HingeAxis;
-	ConstraintBreakableParams Constraint;
+	public Vector3 WorldPosition;           // position in world space on the hinge axis
+	public Vector3 WorldAxisDirection;      // unit direction vector of the hinge axis in world space
+	public ConstraintAxisLimit HingeAxis;
+	public ConstraintBreakableParams Constraint;
 
 	public void Defaults() {
 		WorldPosition.Init();
@@ -132,8 +153,8 @@ public struct ConstraintLimitedHingeParams
 
 public struct ConstraintFixedParams
 {
-	Matrix3x4 AttachedRefXform;   // xform attached object space to ref object space
-	ConstraintBreakableParams Constraint;
+	public Matrix3x4 AttachedRefXform;   // xform attached object space to ref object space
+	public ConstraintBreakableParams Constraint;
 
 	public void InitWithCurrentObjectState(IPhysicsObject refObj, IPhysicsObject attached) {
 		ConstraintFunctions.BuildObjectRelativeXform(refObj, attached, out AttachedRefXform);
@@ -147,8 +168,8 @@ public struct ConstraintFixedParams
 
 public struct ConstraintBallSocketParams
 {
-	InlineArray2<Vector3> ConstraintPosition;       // position of the constraint in each object's space 
-	ConstraintBreakableParams Constraint;
+	public InlineArray2<Vector3> ConstraintPosition;       // position of the constraint in each object's space
+	public ConstraintBreakableParams Constraint;
 	public void Defaults() {
 		Constraint.Defaults();
 		ConstraintPosition[0].Init();
@@ -227,7 +248,7 @@ public struct ConstraintLengthParams
 	public float TotalLength;      // Length of rope/spring/constraint.  Distance to maintain
 	public float MinLength;            // if rigid, objects are not allowed to move closer than totalLength either
 
-	void InitWorldspace(IPhysicsObject refObj, IPhysicsObject attached, in Vector3 refPosition, in Vector3 attachedPosition, bool rigid = false) {
+	public void InitWorldspace(IPhysicsObject refObj, IPhysicsObject attached, in Vector3 refPosition, in Vector3 attachedPosition, bool rigid = false) {
 		refObj.WorldToLocal(out ObjectPosition[0], refPosition);
 		attached.WorldToLocal(out ObjectPosition[1], attachedPosition);
 		TotalLength = (refPosition - attachedPosition).Length();
