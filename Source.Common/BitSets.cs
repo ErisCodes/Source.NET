@@ -73,6 +73,26 @@ public static class BitSetOps<T> where T : unmanaged, IBinaryInteger<T>, IUnsign
 		return a.SequenceEqual(b);
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool IsAllClear(ReadOnlySpan<T> words) {
+		return words.IndexOfAnyExcept(T.Zero) < 0;
+	}
+
+	public static void And(ReadOnlySpan<T> a, ReadOnlySpan<T> b, Span<T> result) {
+		for (int i = 0; i < result.Length; i++)
+			result[i] = a[i] & b[i];
+	}
+
+	public static void Or(ReadOnlySpan<T> a, ReadOnlySpan<T> b, Span<T> result) {
+		for (int i = 0; i < result.Length; i++)
+			result[i] = a[i] | b[i];
+	}
+
+	public static void Xor(ReadOnlySpan<T> a, ReadOnlySpan<T> b, Span<T> result) {
+		for (int i = 0; i < result.Length; i++)
+			result[i] = a[i] ^ b[i];
+	}
+
 	public static int Hash(ReadOnlySpan<T> words) {
 		HashCode hash = new();
 		hash.AddBytes(MemoryMarshal.AsBytes(words));

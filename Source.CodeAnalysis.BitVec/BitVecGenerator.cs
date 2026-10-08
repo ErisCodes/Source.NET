@@ -140,6 +140,15 @@ namespace Source.CodeAnalysis.BitVec
 			sb.AppendLine($"\tpublic readonly int FindNextSetBit(int startBit) => {ops}.FindNextSetBit(this, startBit);");
 			sb.AppendLine($"\tpublic void ClearAll() => {ops}.ClearAll(this);");
 			sb.AppendLine($"\tpublic void SetAll() => {ops}.SetAll(this);");
+			sb.AppendLine($"\tpublic readonly bool IsAllClear() => {ops}.IsAllClear(this);");
+			sb.AppendLine();
+			foreach (string op in new[] { "And", "Or", "Xor" }) {
+				sb.AppendLine($"\tpublic readonly {name} {op}(in {name} other) {{");
+				sb.AppendLine($"\t\t{name} result = default;");
+				sb.AppendLine($"\t\t{ops}.{op}(this, other, result);");
+				sb.AppendLine("\t\treturn result;");
+				sb.AppendLine("\t}");
+			}
 			sb.AppendLine();
 			sb.AppendLine($"\tpublic readonly bool Equals({name} other) => {ops}.Compare(this, other);");
 			sb.AppendLine($"\tpublic override readonly bool Equals(object? obj) => obj is {name} other && Equals(other);");

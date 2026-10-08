@@ -89,16 +89,4 @@ public enum SCOND_t
 }
 
 [BitVec<byte>(MAX_CONDITIONS)]
-public partial struct AI_ScheduleBits
-{
-	public bool IsAllClear() => ((ReadOnlySpan<byte>)this).IndexOfAnyExcept((byte)0) < 0;
-	public void And(in AI_ScheduleBits other, out AI_ScheduleBits result) {
-		AI_ScheduleBits temp = default;
-		ReadOnlySpan<byte> a = this;
-		ReadOnlySpan<byte> b = other;
-		Span<byte> r = temp;
-		for (int i = 0; i < r.Length; i++)
-			r[i] = (byte)(a[i] & b[i]);
-		result = temp;
-	}
-}
+public partial struct AI_ScheduleBits;
