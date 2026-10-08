@@ -221,7 +221,7 @@ public interface IEngineServer
 	// Also, this will return NULL if the client doesn't exist or if this client hasn't acked any frames yet.
 	// 
 	// iClientIndex is the CLIENT index, so if you use pPlayer->entindex(), subtract 1.
-	ref readonly MaxEdictsBitVec GetEntityTransmitBitsForClient(int iClientIndex);
+	ref readonly MaxEdictsBitSet GetEntityTransmitBitsForClient(int iClientIndex);
 
 	// Is the game paused?
 	bool IsPaused();

@@ -52,7 +52,7 @@ public class GameClient : BaseClient
 	public readonly CheckTransmitInfo PackInfo = new();
 	public bool IsInReplayMode;
 	public readonly CheckTransmitInfo PrevPackInfo = new();
-	public MaxEdictsBitVec PrevTransmitEdict;
+	public MaxEdictsBitSet PrevTransmitEdict;
 
 	protected override bool ProcessClientInfo(CLC_ClientInfo msg) {
 		base.ProcessClientInfo(msg);

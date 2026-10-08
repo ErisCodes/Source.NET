@@ -98,7 +98,7 @@ public static class BitSetOps<T> where T : unmanaged, IBinaryInteger<T>, IUnsign
 /// No idea if this works as it should... this is just simpler than porting the C++ right now
 /// review later
 /// </summary>
-public struct VarBitVec
+public struct VarBitSet
 {
 	public byte[] bytes;
 	public int NumBits;
@@ -158,20 +158,20 @@ public struct VarBitVec
 /// An inline bit-vector array of MAX_EDICTS >> 3 bytes.
 /// </summary>
 [BitVec(BSPFileCommon.MAX_DISPVERTS)]
-public partial struct MaxDispVertsBitVec;
+public partial struct MaxDispVertsBitSet;
 
 
 /// <summary>
 /// An inline bit-vector array able to hold the 85 nodes of a 17x17 displacement.
 /// </summary>
 [BitVec<byte>(85)]
-public partial struct DispNodeIntersectBitVec;
+public partial struct DispNodeIntersectBitSet;
 
 /// <summary>
 /// An inline bit-vector array of MAX_EDICTS >> 3 bytes.
 /// </summary>
 [BitVec(Constants.MAX_EDICTS)]
-public partial struct MaxEdictsBitVec;
+public partial struct MaxEdictsBitSet;
 
 /// <summary>
 /// An inline bit-vector array of ABSOLUTE_PLAYER_LIMIT >> 3 bytes.
@@ -183,4 +183,4 @@ public partial struct PlayerBitSet;
 /// An inline bit-vector array of MAX_EVENT_NUMBER >> 3 bytes.
 /// </summary>
 [BitVec(MAX_EVENT_NUMBER)]
-public partial struct MaxEventNumberBitVec;
+public partial struct MaxEventNumberBitSet;

@@ -28,8 +28,8 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 	public readonly List<ushort> Indices = [];
 	public readonly List<DispRenderVert> Verts = [];
 
-	public MaxDispVertsBitVec ActiveVerts;
-	public MaxDispVertsBitVec AllowedVerts;
+	public MaxDispVertsBitSet ActiveVerts;
+	public MaxDispVertsBitSet AllowedVerts;
 
 	int LMPageID;
 

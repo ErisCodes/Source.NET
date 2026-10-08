@@ -39,7 +39,7 @@ public static class ChoreoSceneGlobals
 }
 
 [BitVec<byte>((int)ChoreoEvent.EventType.NumTypes)]
-public partial struct ChoreoEventTypeBitVec;
+public partial struct ChoreoEventTypeBitSet;
 
 public class ChoreoScene : ICurveDataAccessor
 {
@@ -105,7 +105,7 @@ public class ChoreoScene : ICurveDataAccessor
 	readonly SortedList<string, int> TimeZoomLookup = new(Comparer<string>.Create(static (a, b) => stricmp(a, b)));
 	string FileName = "";
 
-	ChoreoEventTypeBitVec BitvecHasEventOfType;
+	ChoreoEventTypeBitSet BitvecHasEventOfType;
 
 	bool IsBackgroundValue;
 	bool IgnorePhonemesValue;

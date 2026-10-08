@@ -10,7 +10,7 @@ class EntityWriteInfo : EntityInfo
 	public int ClientEntity;
 	public PackedEntity? OldPack;
 	public PackedEntity? NewPack;
-	public MaxEdictsBitVec DeletionFlags;
+	public MaxEdictsBitSet DeletionFlags;
 	public FrameSnapshot? FromSnapshot; // = From->GetSnapshot();
 	public FrameSnapshot ToSnapshot; // = m_pTo->GetSnapshot();
 	public FrameSnapshot Baseline; // the clients baseline

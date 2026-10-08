@@ -19,7 +19,7 @@ namespace Source.Engine;
 internal class TraceVisits
 {
 	public PlayerBitSet m_Brushes;
-	public VarBitVec m_Disps;
+	public VarBitSet m_Disps;
 }
 
 

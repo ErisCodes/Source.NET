@@ -311,8 +311,8 @@ public class LocalNetworkBackdoor
 		}
 	}
 
-	MaxEdictsBitVec EntsAlive;
-	MaxEdictsBitVec PrevEntsAlive;
+	MaxEdictsBitSet EntsAlive;
+	MaxEdictsBitSet PrevEntsAlive;
 	InlineArrayMaxEdicts<uint> EntsCreatedIndices;
 	int EntsCreated;
 	InlineArrayMaxEdicts<uint> EntsChangedIndices;

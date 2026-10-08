@@ -490,16 +490,16 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 
 	public int GetEntityCount() => sv.NumEdicts - sv.FreeEdicts;
 
-	public ref readonly MaxEdictsBitVec GetEntityTransmitBitsForClient(int iClientIndex) {
+	public ref readonly MaxEdictsBitSet GetEntityTransmitBitsForClient(int iClientIndex) {
 		if (iClientIndex < 0 || iClientIndex >= sv.GetClientCount()) {
 			Assert(false);
-			return ref Unsafe.NullRef<MaxEdictsBitVec>();
+			return ref Unsafe.NullRef<MaxEdictsBitSet>();
 		}
 
 		GameClient client = sv.Client(iClientIndex);
 		ClientFrame? deltaFrame = client.FrameManager.GetClientFrame(client.DeltaTick);
 		if (deltaFrame == null)
-			return ref Unsafe.NullRef<MaxEdictsBitVec>();
+			return ref Unsafe.NullRef<MaxEdictsBitSet>();
 
 		return ref deltaFrame.TransmitEntity;
 	}

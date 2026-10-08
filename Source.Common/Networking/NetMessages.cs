@@ -1061,7 +1061,7 @@ public class CLC_ListenEvents : NetMessage, IPoolableObject
 {
 	public CLC_ListenEvents() : base(CLC.ListenEvents) { }
 	public override NetChannelGroup GetGroup() => NetChannelGroup.SignOn;
-	public MaxEventNumberBitVec EventArray = new();
+	public MaxEventNumberBitSet EventArray = new();
 
 	public void Init() { }
 	public void Reset() {

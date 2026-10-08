@@ -380,7 +380,7 @@ public partial class HL2MP_Player : HL2_Player
 
 	void NoteWeaponFired() { }
 
-	public override bool WantsLagCompensationOnEntity(BaseEntity entity, in UserCmd cmd, ref readonly MaxEdictsBitVec entityTransmitBits) {
+	public override bool WantsLagCompensationOnEntity(BaseEntity entity, in UserCmd cmd, ref readonly MaxEdictsBitSet entityTransmitBits) {
 		return base.WantsLagCompensationOnEntity(entity, in cmd, in entityTransmitBits);
 	}
 
