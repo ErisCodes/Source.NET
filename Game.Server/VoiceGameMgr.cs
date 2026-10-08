@@ -2,6 +2,7 @@
 
 using Game.Shared;
 
+using Source;
 using Source.Common;
 using Source.Common.Commands;
 using Source.Common.Engine;
@@ -25,17 +26,17 @@ public static class VoiceGameMgrGlobals
 	public const double UPDATE_INTERVAL = 0.3;
 
 	// These are stored off as VoiceGameMgr is created and deleted.
-	public static PlayerBitVec g_PlayerModEnable;      // Set to 1 for each player if the player wants to use voice in this mod.
+	public static PlayerBitSet g_PlayerModEnable;      // Set to 1 for each player if the player wants to use voice in this mod.
 													   // (If it's zero, then the server reports that the game rules are saying the
 													   // player can't hear anyone).
 
-	public static readonly PlayerBitVec[] g_BanMasks = new PlayerBitVec[VOICE_MAX_PLAYERS];  // Tells which players don't want to hear each other.
+	public static readonly PlayerBitSet[] g_BanMasks = new PlayerBitSet[VOICE_MAX_PLAYERS];  // Tells which players don't want to hear each other.
 																							  // These are indexed as clients and each bit represents a client
 																							  // (so player entity is bit+1).
 
-	public static readonly PlayerBitVec[] g_SentGameRulesMasks = new PlayerBitVec[VOICE_MAX_PLAYERS];    // These store the masks we last sent to each client so we can determine if
-	public static readonly PlayerBitVec[] g_SentBanMasks = new PlayerBitVec[VOICE_MAX_PLAYERS];          // we need to resend them.
-	public static PlayerBitVec g_bWantModEnable;
+	public static readonly PlayerBitSet[] g_SentGameRulesMasks = new PlayerBitSet[VOICE_MAX_PLAYERS];    // These store the masks we last sent to each client so we can determine if
+	public static readonly PlayerBitSet[] g_SentBanMasks = new PlayerBitSet[VOICE_MAX_PLAYERS];          // we need to resend them.
+	public static PlayerBitSet g_bWantModEnable;
 
 	public static readonly ConVar voice_serverdebug = new("voice_serverdebug", "0");
 
@@ -106,9 +107,9 @@ public class VoiceGameMgr
 		int index = edict.EdictIndex - 1;
 
 		// Clear out everything we use for deltas on this guy.
-		g_bWantModEnable[index] = true;
-		g_SentGameRulesMasks[index].Init(0);
-		g_SentBanMasks[index].Init(0);
+		g_bWantModEnable.Set(index, true);
+		g_SentGameRulesMasks[index].ClearAll();
+		g_SentBanMasks[index].ClearAll();
 	}
 
 	// Called on ClientCommand. Checks for the squelch and unsquelch commands.
@@ -127,7 +128,7 @@ public class VoiceGameMgr
 
 				if (i <= VOICE_MAX_PLAYERS_DW) {
 					VoiceServerDebug($"CVoiceGameMgr::ClientCommand: vban (0x{mask:x}) from {playerClientIndex}\n");
-					g_BanMasks[playerClientIndex].SetDWord(i - 1, mask);
+					g_BanMasks[playerClientIndex].SetWord(i - 1, mask);
 				}
 				else
 					VoiceServerDebug($"CVoiceGameMgr::ClientCommand: invalid index ({i})\n");
@@ -139,8 +140,8 @@ public class VoiceGameMgr
 		}
 		else if (args[0].Equals("VModEnable", StringComparison.OrdinalIgnoreCase) && args.ArgC() >= 2) {
 			VoiceServerDebug($"CVoiceGameMgr::ClientCommand: VModEnable ({(atoi(args[1]) != 0 ? 1 : 0)})\n");
-			g_PlayerModEnable[playerClientIndex] = atoi(args[1]) != 0;
-			g_bWantModEnable[playerClientIndex] = false;
+			g_PlayerModEnable.Set(playerClientIndex, atoi(args[1]) != 0);
+			g_bWantModEnable.Set(playerClientIndex, false);
 			//UpdateMasks();
 			return true;
 		}
@@ -160,7 +161,7 @@ public class VoiceGameMgr
 	}
 
 	public bool IsPlayerIgnoringPlayer(int talker, int listener) {
-		return g_BanMasks[listener - 1][talker - 1];
+		return g_BanMasks[listener - 1].IsBitSet(talker - 1);
 	}
 
 	// Force it to update the client masks.
@@ -179,24 +180,24 @@ public class VoiceGameMgr
 			SingleUserRecipientFilter user = new(player);
 
 			// Request the state of their "VModEnable" cvar.
-			if (g_bWantModEnable[iClient]) {
+			if (g_bWantModEnable.IsBitSet(iClient)) {
 				UserMessageBegin(user, "RequestState");
 				MessageEnd();
 				// Since this is reliable, only send it once
-				g_bWantModEnable[iClient] = false;
+				g_bWantModEnable.Set(iClient, false);
 			}
 
-			PlayerBitVec gameRulesMask = default;
-			PlayerBitVec proximityMask = default;
+			PlayerBitSet gameRulesMask = default;
+			PlayerBitSet proximityMask = default;
 			bool proximity = false;
-			if (g_PlayerModEnable[iClient]) {
+			if (g_PlayerModEnable.IsBitSet(iClient)) {
 				// Build a mask of who they can hear based on the game rules.
 				for (int iOtherClient = 0; iOtherClient < MaxPlayers; iOtherClient++) {
 					BaseEntity? otherEnt = Util.PlayerByIndex(iOtherClient + 1);
 					if (otherEnt != null && otherEnt.IsPlayer() &&
 						(allTalk || Helper!.CanPlayerHearPlayer(player, (BasePlayer)otherEnt, ref proximity))) {
-						gameRulesMask[iOtherClient] = true;
-						proximityMask[iOtherClient] = proximity;
+						gameRulesMask.Set(iOtherClient, true);
+						proximityMask.Set(iOtherClient, proximity);
 					}
 				}
 			}
@@ -210,20 +211,20 @@ public class VoiceGameMgr
 				UserMessageBegin(user, "VoiceMask");
 				int dw;
 				for (dw = 0; dw < VOICE_MAX_PLAYERS_DW; dw++) {
-					MessageWriteLong((int)gameRulesMask.GetDWord(dw));
-					MessageWriteLong((int)g_BanMasks[iClient].GetDWord(dw));
+					MessageWriteLong((int)gameRulesMask.GetWord(dw));
+					MessageWriteLong((int)g_BanMasks[iClient].GetWord(dw));
 				}
-				MessageWriteByte(g_PlayerModEnable[iClient] ? 1 : 0);
+				MessageWriteByte(g_PlayerModEnable.IsBitSet(iClient) ? 1 : 0);
 				MessageEnd();
 			}
 
 			// Tell the engine.
 			for (int iOtherClient = 0; iOtherClient < MaxPlayers; iOtherClient++) {
-				bool canHear = gameRulesMask[iOtherClient] && !g_BanMasks[iClient][iOtherClient];
+				bool canHear = gameRulesMask.IsBitSet(iOtherClient) && !g_BanMasks[iClient].IsBitSet(iOtherClient);
 				g_pVoiceServer.SetClientListening(iClient + 1, iOtherClient + 1, canHear);
 
 				if (canHear)
-					g_pVoiceServer.SetClientProximity(iClient + 1, iOtherClient + 1, proximityMask[iOtherClient]);
+					g_pVoiceServer.SetClientProximity(iClient + 1, iOtherClient + 1, proximityMask.IsBitSet(iOtherClient));
 			}
 		}
 	}
