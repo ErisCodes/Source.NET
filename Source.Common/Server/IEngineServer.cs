@@ -110,7 +110,7 @@ public interface IEngineServer
 	void StaticDecal(in Vector3 originInEntitySpace, int decalIndex, int entityIndex, int modelIndex, bool lowpriority);
 
 	// Given the current PVS(or PAS) and origin, determine which players should hear/receive the message
-	void Message_DetermineMulticastRecipients(bool usepas, in Vector3 origin, ref AbsolutePlayerLimitBitVec playerbits);
+	void Message_DetermineMulticastRecipients(bool usepas, in Vector3 origin, ref PlayerBitSet playerbits);
 
 	// Begin a message from a server side entity to its client side counterpart (func_breakable glass, e.g.)
 	bf_write? EntityMessageBegin(int ent_index, ServerClass ent_class, bool reliable);

@@ -40,8 +40,8 @@ public class GameClient : BaseClient
 		IsInReplayMode = false;
 	}
 	public bool VoiceLoopback;
-	public AbsolutePlayerLimitBitVec VoiceStreams;
-	public AbsolutePlayerLimitBitVec VoiceProximity;
+	public PlayerBitSet VoiceStreams;
+	public PlayerBitSet VoiceProximity;
 	public int LastMovementTick;
 	public int SoundSequence;
 	public Edict Edict = null!;

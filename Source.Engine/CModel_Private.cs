@@ -18,7 +18,7 @@ namespace Source.Engine;
 
 internal class TraceVisits
 {
-	public AbsolutePlayerLimitBitVec m_Brushes;
+	public PlayerBitSet m_Brushes;
 	public VarBitVec m_Disps;
 }
 

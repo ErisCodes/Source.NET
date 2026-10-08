@@ -214,7 +214,7 @@ public struct MaxEdictsBitVec
 /// An inline bit-vector array of ABSOLUTE_PLAYER_LIMIT >> 3 bytes.
 /// </summary>
 [InlineArray(Constants.ABSOLUTE_PLAYER_LIMIT >> 3)]
-public struct AbsolutePlayerLimitBitVec
+public struct PlayerBitSet
 {
 	public byte bytes;
 	public uint GetDWord(int i) => BitVecBase.GetDWord(this, i);

@@ -727,7 +727,7 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 		s_MsgData.Reset(); // clear message data
 	}
 
-	public void Message_DetermineMulticastRecipients(bool usepas, in Vector3 origin, ref AbsolutePlayerLimitBitVec playerbits) {
+	public void Message_DetermineMulticastRecipients(bool usepas, in Vector3 origin, ref PlayerBitSet playerbits) {
 		int cluster = CM.LeafCluster(CM.PointLeafnum(origin));
 		byte[] pvs = new byte[BSPFileCommon.MAX_MAP_LEAFS / 8];
 		int visflag = usepas ? CM.DVIS_PAS : CM.DVIS_PVS;
