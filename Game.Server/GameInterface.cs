@@ -33,8 +33,16 @@ public static class GameInterface
 	public const int MAX_CHOREO_SCENES_STRINGS = 1 << MAX_CHOREO_SCENES_STRING_BITS;
 	public const int CHOREO_SCENES_INVALID_STRING = MAX_CHOREO_SCENES_STRINGS - 1;
 
+	public const int MAX_MATERIAL_STRING_BITS = 10;
+	public const int MAX_MATERIAL_STRINGS = 1 << MAX_MATERIAL_STRING_BITS;
+
 	public static INetworkStringTable? g_pStringTableEffectDispatch;
 	public static INetworkStringTable? g_pStringTableClientSideChoreoScenes;
+	public static INetworkStringTable? g_pStringTableMaterials;
+
+	public static void PrecacheMaterial(ReadOnlySpan<char> materialName){
+		g_pStringTableMaterials!.AddString(true, materialName);
+	}
 
 	public static bf_write? g_pMsgBuffer;
 	public static void UserMessageBegin(in IRecipientFilter filter, ReadOnlySpan<char> messagename) {
@@ -207,6 +215,10 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 	static readonly ConVar host_workshop_autoupdate = new("host_workshop_autoupdate", "1", 0, "If set to above 0, will auto update addons from host_workshop_collection on server start.");
 #endif
 
+
+	public TimeUnit_t AutoSaveDangerousTime;
+	public float AutoSaveDangerousMinHealthToCommit;
+
 	public static void DLLInit(IServiceCollection services) {
 		services.AddSingleton<IServerGameEnts, ServerGameEnts>();
 		services.AddSingleton<IServerGameClients, ServerGameClients>();
@@ -228,6 +240,7 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 
 		g_pStringTableEffectDispatch = networkstringtable.CreateStringTable("EffectDispatch", EffectData.MAX_EFFECT_DISPATCH_STRINGS);
 		g_pStringTableClientSideChoreoScenes = networkstringtable.CreateStringTable("Scenes", MAX_CHOREO_SCENES_STRINGS);
+		g_pStringTableMaterials = networkstringtable.CreateStringTable("Materials", MAX_MATERIAL_STRINGS);
 
 		GameRulesRegister.CreateNetworkStringTables_GameRules();
 
@@ -502,8 +515,8 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 		// g_OneWayTransition = false;
 
 		// clear any pending autosavedangerous
-		// m_fAutoSaveDangerousTime = 0.0f;
-		// m_fAutoSaveDangerousMinHealthToCommit = 0.0f;
+		AutoSaveDangerousTime = 0.0f;
+		AutoSaveDangerousMinHealthToCommit = 0.0f;
 		return true;
 	}
 

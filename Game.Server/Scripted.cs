@@ -1,3 +1,5 @@
+using Game.Shared;
+
 using Source;
 
 namespace Game.Server;
@@ -18,6 +20,7 @@ public enum ScriptPlayerDeath
 	Cancel = 1,
 }
 
+[LinkEntityToClass("scripted_sequence")]
 public class AI_ScriptedSequence : BaseEntity
 {
 	public const int SF_SCRIPT_START_ON_SPAWN = 16;

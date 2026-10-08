@@ -11,6 +11,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 
 using FIELD = Source.FIELD<Game.Client.C_BaseFlex>;
+using EventType = Game.Shared.ChoreoEvent.EventType;
 
 namespace Game.Client;
 
@@ -195,6 +196,8 @@ public partial class C_BaseFlex : C_BaseAnimatingOverlay, IHasLocalToGlobalFlexS
 #endif
 
 	readonly Dictionary<FlexSettingHdr, int[]> LocalToGlobal = [];
+	readonly List<SceneEventInfo> SceneEvents = [];
+	readonly List<ChoreoScene> ActiveChoreoScenes = [];
 
 	TimeUnit_t BlinkTime;
 	int PrevBlinkToggle;
@@ -655,6 +658,8 @@ public partial class C_BaseFlex : C_BaseAnimatingOverlay, IHasLocalToGlobalFlexS
 
 		LocalFlexController i;
 
+		ProcessSceneEvents(true);
+
 		Assert(hdr.FlexController(0).LocalToGlobal != -1);
 
 		for (i = 0; i < hdr.NumFlexControllers(); i++) {
@@ -663,6 +668,8 @@ public partial class C_BaseFlex : C_BaseAnimatingOverlay, IHasLocalToGlobalFlexS
 			g_flexweight[flex.LocalToGlobal] = FlexWeight[(int)i];
 			g_flexweight[flex.LocalToGlobal] = g_flexweight[flex.LocalToGlobal] * (flex.Max - flex.Min) + flex.Min;
 		}
+
+		ProcessSceneEvents(false);
 
 		if (BlinkToggle != PrevBlinkToggle) {
 			PrevBlinkToggle = BlinkToggle;
@@ -773,4 +780,392 @@ public partial class C_BaseFlex : C_BaseAnimatingOverlay, IHasLocalToGlobalFlexS
 		int index = mapping[key];
 		return index;
 	}
+
+	public void StartChoreoScene(ChoreoScene scene) {
+		if (ActiveChoreoScenes.Contains(scene))
+			return;
+
+		ActiveChoreoScenes.Add(scene);
+	}
+
+	public void RemoveChoreoScene(ChoreoScene scene) {
+		ActiveChoreoScenes.Remove(scene);
+	}
+
+	public void ClearSceneEvents(ChoreoScene? scene, bool canceled) {
+		if (scene == null) {
+			SceneEvents.Clear();
+			return;
+		}
+
+		for (int i = SceneEvents.Count - 1; i >= 0; i--) {
+			SceneEventInfo info = SceneEvents[i];
+
+			Assert(info != null);
+			Assert(info!.Scene != null);
+			Assert(info.Event != null);
+
+			if (info.Scene != scene)
+				continue;
+
+			if (!ClearSceneEvent(info, false, canceled))
+				Assert(false);
+
+			info.Event = null;
+			info.Scene = null;
+			info.Started = false;
+
+			SceneEvents.RemoveAt(i);
+		}
+	}
+
+	public virtual bool ClearSceneEvent(SceneEventInfo info, bool fastKill, bool canceled) {
+		Assert(info != null);
+		Assert(info!.Scene != null);
+		Assert(info.Event != null);
+		return true;
+	}
+
+	public void AddSceneEvent(ChoreoScene? scene, ChoreoEvent? ev, C_BaseEntity? target, bool clientSide) {
+		if (scene == null || ev == null) {
+			Msg("C_BaseFlex::AddSceneEvent:  scene or event was NULL!!!\n");
+			return;
+		}
+
+		ChoreoActor? actor = ev.GetActor();
+		if (actor == null) {
+			Msg("C_BaseFlex::AddSceneEvent:  event->GetActor() was NULL!!!\n");
+			return;
+		}
+
+		SceneEventInfo info = new() { Layer = 0 };
+
+		info.Event = ev;
+		info.Scene = scene;
+		info.Target.Set(target);
+		info.Started = false;
+		info.ClientSide = clientSide;
+
+		if (StartSceneEvent(info, scene, ev, actor, target))
+			SceneEvents.Add(info);
+		else
+			scene.SceneMsg("C_BaseFlex::AddSceneEvent:  event failed\n");
+	}
+
+	public virtual bool StartSceneEvent(SceneEventInfo info, ChoreoScene scene, ChoreoEvent ev, ChoreoActor actor, C_BaseEntity? target) {
+		switch (ev.GetType()) {
+			default:
+				break;
+
+			case EventType.FlexAnimation:
+				info.InitWeight(this);
+				return true;
+
+			case EventType.Expression:
+				return true;
+
+			case EventType.Sequence:
+				if (info.ClientSide)
+					return RequestStartSequenceSceneEvent(info, scene, ev, actor, target);
+				break;
+
+			case EventType.Speak:
+				if (info.ClientSide)
+					return true;
+				break;
+		}
+
+		return false;
+	}
+
+	bool RequestStartSequenceSceneEvent(SceneEventInfo info, ChoreoScene scene, ChoreoEvent ev, ChoreoActor actor, C_BaseEntity? target) {
+		info.Sequence = LookupSequence(ev.GetParameters());
+
+		if (info.Sequence < 0)
+			return false;
+
+		info.Actor = actor;
+		return true;
+	}
+
+	public void RemoveSceneEvent(ChoreoScene? scene, ChoreoEvent? ev, bool fastKill) {
+		Assert(ev != null);
+
+		for (int i = 0; i < SceneEvents.Count; i++) {
+			SceneEventInfo info = SceneEvents[i];
+
+			Assert(info != null);
+			Assert(info!.Event != null);
+
+			if (info.Scene != scene)
+				continue;
+
+			if (info.Event != ev)
+				continue;
+
+			if (ClearSceneEvent(info, fastKill, false)) {
+				info.Event = null;
+				info.Scene = null;
+				info.Started = false;
+
+				SceneEvents.RemoveAt(i);
+			}
+		}
+	}
+
+	public bool CheckSceneEvent(TimeUnit_t currenttime, ChoreoScene? scene, ChoreoEvent? ev) {
+		for (int i = 0; i < SceneEvents.Count; i++) {
+			SceneEventInfo info = SceneEvents[i];
+
+			Assert(info != null);
+			Assert(info!.Event != null);
+
+			if (info.Scene != scene)
+				continue;
+
+			if (info.Event != ev)
+				continue;
+
+			return CheckSceneEventCompletion(info, currenttime, scene!, ev!);
+		}
+		return true;
+	}
+
+	public virtual bool CheckSceneEventCompletion(SceneEventInfo info, TimeUnit_t currenttime, ChoreoScene scene, ChoreoEvent ev) => true;
+
+	public void SetFlexWeight(LocalFlexController index, float value) {
+		if (index >= 0 && index < GetNumFlexControllers()) {
+			StudioHdr? studioHdr = GetModelPtr();
+			if (studioHdr == null)
+				return;
+
+			MStudioFlexController flexcontroller = studioHdr.FlexController(index);
+
+			if (flexcontroller.Max != flexcontroller.Min) {
+				value = (value - flexcontroller.Min) / (flexcontroller.Max - flexcontroller.Min);
+				value = Math.Clamp(value, 0.0f, 1.0f);
+			}
+
+			FlexWeight[(int)index] = value;
+		}
+	}
+
+	public float GetFlexWeight(LocalFlexController index) {
+		if (index >= 0 && index < GetNumFlexControllers()) {
+			StudioHdr? studioHdr = GetModelPtr();
+			if (studioHdr == null)
+				return 0;
+
+			MStudioFlexController flexcontroller = studioHdr.FlexController(index);
+
+			if (flexcontroller.Max != flexcontroller.Min)
+				return FlexWeight[(int)index] * (flexcontroller.Max - flexcontroller.Min) + flexcontroller.Min;
+
+			return FlexWeight[(int)index];
+		}
+		return 0.0f;
+	}
+
+	public virtual void ProcessSceneEvents(bool flexEvents) {
+		StudioHdr? hdr = GetModelPtr();
+		if (hdr == null)
+			return;
+
+		if (flexEvents) {
+			for (LocalFlexController i = 0; i < GetNumFlexControllers(); i++)
+				SetFlexWeight(i, GetFlexWeight(i) * 0.95f);
+		}
+
+		for (int i = 0; i < SceneEvents.Count; i++) {
+			SceneEventInfo info = SceneEvents[i];
+			Assert(info != null);
+
+			ChoreoEvent? ev = info!.Event;
+			Assert(ev != null);
+
+			ChoreoScene? scene = info.Scene;
+			Assert(scene != null);
+
+			if (ProcessSceneEvent(flexEvents, info, scene!, ev!))
+				info.Started = true;
+		}
+	}
+
+	bool ProcessFlexAnimationSceneEvent(SceneEventInfo info, ChoreoScene scene, ChoreoEvent ev) {
+		Assert(ev.HasEndTime());
+		if (ev.HasEndTime())
+			AddFlexAnimation(info);
+		return true;
+	}
+
+	bool ProcessFlexSettingSceneEvent(SceneEventInfo info, ChoreoScene scene, ChoreoEvent ev) {
+		if (!ev.HasEndTime())
+			return true;
+
+		string scenefile = ev.GetParameters();
+		string name = ev.GetParameters2();
+
+		if (scenefile != null && name != null) {
+			FlexSettingHdr? expHdr = FlexSceneFileManager.g_FlexSceneFileManager.FindSceneFile(this, scenefile, true);
+			if (expHdr != null) {
+				TimeUnit_t scenetime = scene.GetTime();
+
+				float scale = ev.GetIntensity(scenetime);
+
+				AddFlexSetting(name, scale, expHdr, !info.Started);
+			}
+		}
+
+		return true;
+	}
+
+	void AddFlexSetting(ReadOnlySpan<char> expr, float scale, FlexSettingHdr settinghdr, bool newexpression) {
+		int i;
+		FlexSetting? setting = null;
+
+		for (i = 0; i < settinghdr.NumFlexSettings; i++) {
+			setting = settinghdr.Setting(i);
+			if (setting == null)
+				continue;
+
+			string name = setting.Name();
+
+			if (stricmp(name, expr) == 0)
+				break;
+		}
+
+		if (i >= settinghdr.NumFlexSettings)
+			return;
+
+		int truecount = setting!.PSetting(0, out ReadOnlySpan<FlexSettingWeight> weights);
+
+		for (i = 0; i < truecount; i++) {
+			ref readonly FlexSettingWeight w = ref weights[i];
+
+			int flex = FlexControllerLocalToGlobal(settinghdr, w.Key);
+
+			float s = Math.Clamp(scale * w.Influence, 0.0f, 1.0f);
+			g_flexweight[flex] = g_flexweight[flex] * (1.0f - s) + w.Weight * s;
+		}
+	}
+
+	public virtual bool ProcessSceneEvent(bool flexEvents, SceneEventInfo info, ChoreoScene scene, ChoreoEvent ev) {
+		switch (ev.GetType()) {
+			default:
+				break;
+
+			case EventType.FlexAnimation:
+				if (flexEvents)
+					return ProcessFlexAnimationSceneEvent(info, scene, ev);
+				return true;
+
+			case EventType.Expression:
+				if (!flexEvents)
+					return ProcessFlexSettingSceneEvent(info, scene, ev);
+				return true;
+
+			case EventType.Sequence:
+				if (info.ClientSide) {
+					if (!flexEvents)
+						return ProcessSequenceSceneEvent(info, scene, ev);
+					return true;
+				}
+				break;
+
+			case EventType.Speak:
+				if (info.ClientSide)
+					return true;
+				break;
+		}
+
+		return false;
+	}
+
+	bool ProcessSequenceSceneEvent(SceneEventInfo? info, ChoreoScene? scene, ChoreoEvent? ev) {
+		if (info == null || ev == null || scene == null)
+			return false;
+
+		SetSequence(info.Sequence);
+		return true;
+	}
+
+	void AddFlexAnimation(SceneEventInfo? info) {
+		if (info == null)
+			return;
+
+		ChoreoEvent? ev = info.Event;
+		if (ev == null)
+			return;
+
+		ChoreoScene? scene = info.Scene;
+		if (scene == null)
+			return;
+
+		if (!ev.GetTrackLookupSet()) {
+			for (int i = 0; i < ev.GetNumFlexAnimationTracks(); i++) {
+				FlexAnimationTrack? track = ev.GetFlexAnimationTrack(i);
+				if (track == null)
+					continue;
+
+				if (track.IsComboType()) {
+					string name = "right_" + track.GetFlexControllerName();
+
+					track.SetFlexControllerIndex((LocalFlexController)Math.Max((int)FindFlexController(name), 0), 0, 0);
+
+					name = "left_" + track.GetFlexControllerName();
+
+					track.SetFlexControllerIndex((LocalFlexController)Math.Max((int)FindFlexController(name), 0), 0, 1);
+				}
+				else
+					track.SetFlexControllerIndex((LocalFlexController)Math.Max((int)FindFlexController(track.GetFlexControllerName()), 0), 0);
+			}
+
+			ev.SetTrackLookupSet(true);
+		}
+
+		if (!scene_clientflex.GetBool())
+			return;
+
+		TimeUnit_t scenetime = scene.GetTime();
+
+		float weight = ev.GetIntensity(scenetime);
+
+		weight = weight * info.UpdateWeight(this);
+
+		for (int i = 0; i < ev.GetNumFlexAnimationTracks(); i++) {
+			FlexAnimationTrack? track = ev.GetFlexAnimationTrack(i);
+			if (track == null)
+				continue;
+
+			if (!track.IsTrackActive())
+				continue;
+
+			if (track.IsComboType()) {
+				for (int side = 0; side < 2; side++) {
+					LocalFlexController controller = track.GetRawFlexControllerIndex(side);
+
+					float intensity = track.GetIntensity((float)scenetime, side);
+					if (controller >= 0) {
+						float orig = GetFlexWeight(controller);
+						float value = orig * (1 - weight) + intensity * weight;
+						SetFlexWeight(controller, value);
+					}
+				}
+			}
+			else {
+				LocalFlexController controller = track.GetRawFlexControllerIndex(0);
+
+				float intensity = track.GetIntensity((float)scenetime, 0);
+				if (controller >= 0) {
+					float orig = GetFlexWeight(controller);
+					float value = orig * (1 - weight) + intensity * weight;
+					SetFlexWeight(controller, value);
+				}
+			}
+		}
+
+		info.Started = true;
+	}
+
+	public bool HasSceneEvents() => SceneEvents.Count != 0;
 }

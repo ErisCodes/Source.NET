@@ -60,7 +60,7 @@ public class EnvTonemapController : PointEntity
 		DEFINE.FIELD(nameof(CustomBloomScaleMinimum), FieldType.Float),
 		DEFINE.FIELD(nameof(UseCustomBloomScale), FieldType.Boolean),
 
-		// DEFINE_THINKFUNC( UpdateTonemapScaleBlend ),
+		DEFINE.THINKFUNC(nameof(UpdateTonemapScaleBlend)),
 
 		DEFINE.INPUTFUNC(FieldType.Float, "SetTonemapScale", nameof(InputSetTonemapScale), (INPUTFUNCPTR)((self, data) => ((EnvTonemapController)self).InputSetTonemapScale(data))),
 		DEFINE.INPUTFUNC(FieldType.String, "BlendTonemapScale", nameof(InputBlendTonemapScale), (INPUTFUNCPTR)((self, data) => ((EnvTonemapController)self).InputBlendTonemapScale(data))),

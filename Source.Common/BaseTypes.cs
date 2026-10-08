@@ -4,6 +4,12 @@ using System.Numerics;
 
 namespace Source.Common;
 
+public enum ThreeState
+{
+	False,
+	True,
+	None
+}
 public struct Interval
 {
 	public float Start;

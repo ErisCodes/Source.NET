@@ -64,7 +64,20 @@ public class SoundEmitterSystem : BaseGameSystem
 		if ((ep.Flags & SoundFlags.ChangeVolume) != 0)
 			parms.Volume = ep.Volume;
 
-		// TODO: CEnvMicrophone
+#if !CLIENT_DLL
+		bool swallowed = EnvMicrophone.OnSoundPlayed(
+			entIndex,
+			parms.SoundName,
+			parms.SoundLevel,
+			parms.Volume,
+			ep.Flags,
+			parms.Pitch,
+			Unsafe.IsNullRef(in ep.Origin) ? null : ep.Origin,
+			ep.SoundTime,
+			ep.SoundOrigin);
+		if (swallowed)
+			return;
+#endif
 
 		TimeUnit_t st = ep.SoundTime;
 		if (st == 0 && parms.DelayMsec != 0)
@@ -100,7 +113,18 @@ public class SoundEmitterSystem : BaseGameSystem
 			 !stristr(ep.SoundName, ".mp3").IsEmpty ||
 			 ep.SoundName[0] == '!')) {
 #if !CLIENT_DLL
-			// TODO: CEnvMicrophone
+			bool swallowed = EnvMicrophone.OnSoundPlayed(
+				entindex,
+				ep.SoundName,
+				ep.SoundLevel,
+				ep.Volume,
+				ep.Flags,
+				ep.Pitch,
+				Unsafe.IsNullRef(in ep.Origin) ? null : ep.Origin,
+				ep.SoundTime,
+				ep.SoundOrigin);
+			if (swallowed)
+				return;
 #endif
 
 			if (ep.WarnOnDirectWaveReference && !stristr(ep.SoundName, ".wav").IsEmpty) {
@@ -288,6 +312,21 @@ public class SoundEmitterSystem : BaseGameSystem
 
 	public void EmitAmbientSound(int entindex, in Vector3 origin, ReadOnlySpan<char> sample, float volume, SoundLevel soundlevel, int flags, int pitch, TimeUnit_t soundtime, out TimeUnit_t duration) {
 		duration = 0;
+
+#if !CLIENT_DLL
+		bool swallowed = EnvMicrophone.OnSoundPlayed(
+			entindex,
+			sample,
+			soundlevel,
+			volume,
+			(SoundFlags)flags,
+			pitch,
+			origin,
+			soundtime,
+			null);
+		if (swallowed)
+			return;
+#endif
 
 		if (!sample.IsEmpty && (!stristr(sample, ".wav").IsEmpty || !stristr(sample, ".mp3").IsEmpty)) {
 #if CLIENT_DLL

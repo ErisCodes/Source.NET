@@ -197,8 +197,10 @@ public abstract class DatatableStack
 		SendProp sendprop = Precalc.GetDatatableProp(prop)!;
 
 		SendProxyRecipients? recipients = default;
-		if (Recipients != null && curChild.GetRecursiveProxyIndex() != Constants.DATATABLE_PROXY_INDEX_NOPROXY)
-			recipients = Recipients[curChild.GetRecursiveProxyIndex()];
+		if (Recipients != null && curChild.GetDataTableProxyIndex() != Constants.DATATABLE_PROXY_INDEX_NOPROXY) {
+			recipients = Recipients[curChild.GetDataTableProxyIndex()];
+			recipients.SetAllRecipients();
+		}
 
 		return sendprop.GetDataTableProxyFn()(
 			sendprop,

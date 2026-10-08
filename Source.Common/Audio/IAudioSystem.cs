@@ -33,7 +33,6 @@ public interface IAudioSystem
 	float GetMasterVolume();
 	void SoundFade(float percent, float holdtime, float intime, float outtime);
 	void OnLoadScreen(bool value);
-	void EnableThreadedMixing(bool enable);
 	void EnableMusic(bool enable);
 
 	int StartSound(ref StartSoundParams parms);

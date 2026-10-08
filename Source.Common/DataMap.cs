@@ -716,6 +716,16 @@ namespace Source.Common
 			BaseMap = baseMap;
 		}
 
+		public static DataMap GetDataMap(Type type) {
+			for (Type? t = type; t != null; t = t.BaseType) {
+				FieldInfo? f = t.GetField("DataDesc", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly);
+				if (f != null && f.FieldType == typeof(DataMap))
+					return (DataMap?)f.GetValue(null) ?? throw new Exception($"datamap for {type.Name} is not initialized yet");
+			}
+
+			throw new Exception($"can't find datamap for {type.Name}");
+		}
+
 		public TypeDescription[] DataDesc = [];
 		public int DataNumFields => DataDesc?.Length ?? 0;
 		public readonly Type DataClassType;
@@ -826,6 +836,50 @@ namespace Source
 		public static TypeDescription PRED_TYPEDESCRIPTION(ReadOnlySpan<char> name, DataMap baseMap) {
 			return new(FieldType.Embedded, name, GetField_R(typeof(T), new(name)), (ushort)1, FieldTypeDescFlags.Save, null, null, baseMap, 0f);
 		}
+
+		public static TypeDescription EMBEDDED(ReadOnlySpan<char> name) {
+			FieldInfo field = GetField_R(typeof(T), new(name));
+			return new(FieldType.Embedded, name, field, 1, FieldTypeDescFlags.Save, null, null, DataMap.GetDataMap(field.FieldType), 0);
+		}
+
+		public static TypeDescription UTLVECTOR(ReadOnlySpan<char> name, FieldType fieldType) {
+			FieldInfo field = GetField_R(typeof(T), new(name));
+			return new(FieldType.Custom, name, field, 1, FieldTypeDescFlags.Save, null, UtlVectorDataOps.GetDataOps(field.FieldType, fieldType), null, 0);
+		}
+
+		static MethodInfo GetMethod_R(Type t, string name, int paramCount) {
+			for (Type? type = t; type != null; type = type.BaseType) {
+				MethodInfo? found = null;
+				foreach (MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly)) {
+					if (method.Name != name)
+						continue;
+
+					int count = method.GetParameters().Length;
+					if (paramCount >= 0 && count != paramCount)
+						continue;
+
+					if (found == null || count < found.GetParameters().Length)
+						found = method;
+				}
+
+				if (found != null)
+					return found;
+			}
+
+			throw new Exception($"can't find function {name}");
+		}
+
+		public static TypeDescription FUNCTION_RAW(ReadOnlySpan<char> function, int paramCount) {
+			MethodInfo method = GetMethod_R(typeof(T), new(function), paramCount);
+			Type[] signature = [typeof(T), .. method.GetParameters().Select(p => p.ParameterType), method.ReturnType];
+			Delegate func = method.CreateDelegate(System.Linq.Expressions.Expression.GetDelegateType(signature));
+			return new(FieldType.Void, function, null!, 1, FieldTypeDescFlags.FunctionTable, null, null, null, 0, func);
+		}
+
+		public static TypeDescription FUNCTION(ReadOnlySpan<char> function) => FUNCTION_RAW(function, -1);
+		public static TypeDescription THINKFUNC(ReadOnlySpan<char> function) => FUNCTION_RAW(function, 0);
+		public static TypeDescription ENTITYFUNC(ReadOnlySpan<char> function) => FUNCTION_RAW(function, 1);
+		public static TypeDescription USEFUNC(ReadOnlySpan<char> function) => FUNCTION_RAW(function, 4);
 	}
 
 	public static unsafe class DataFrameExts {

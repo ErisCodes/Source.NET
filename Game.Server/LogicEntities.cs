@@ -4,6 +4,7 @@ using Source;
 using Source.Common;
 using Source.Common.Commands;
 using Source.Common.Physics;
+using Source.Common.Server;
 
 using System.Numerics;
 
@@ -722,7 +723,7 @@ public class MultiSource : LogicalEntity
 		DEFINE<MultiSource>.KEYFIELD(nameof(globalstate), FieldType.String, "globalstate"),
 
 		// Function pointers
-		// DEFINE_FUNCTION( Register ),
+		DEFINE<MultiSource>.FUNCTION(nameof(Register)),
 
 		// Outputs
 		DEFINE<MultiSource>.OUTPUT(nameof(OnTrigger), "OnTrigger", eventFuncs),
@@ -1432,7 +1433,7 @@ public class LogicBranch : LogicalEntity
 		// Keys
 		DEFINE<LogicBranch>.KEYFIELD(nameof(InValue), FieldType.Boolean, "InitialValue"),
 
-		// DEFINE_UTLVECTOR( m_Listeners, FIELD_EHANDLE ),
+		DEFINE<LogicBranch>.UTLVECTOR(nameof(Listeners), FieldType.EHandle),
 
 		// Inputs
 		DEFINE<LogicBranch>.INPUTFUNC(FieldType.Boolean, "SetValue", nameof(InputSetValue), (INPUTFUNCPTR)((self, data) => ((LogicBranch)self).InputSetValue(data))),
@@ -1569,7 +1570,7 @@ public class LogicAutosave : LogicalEntity
 	protected void InputSaveDangerous(InputData inputdata) {
 		BasePlayer? player = Util.PlayerByIndex(1);
 
-		if (TriggerSave.AutoSaveDangerousTime != 0.0f && TriggerSave.AutoSaveDangerousTime >= gpGlobals.CurTime) {
+		if (g_ServerGameDLL.AutoSaveDangerousTime != 0.0f && g_ServerGameDLL.AutoSaveDangerousTime >= gpGlobals.CurTime) {
 			// A previous dangerous auto save was waiting to become safe
 
 			if (player!.GetDeathTime() == 0.0f || player.GetDeathTime() > gpGlobals.CurTime) {
@@ -1583,10 +1584,10 @@ public class LogicAutosave : LogicalEntity
 
 		if (player!.GetHealth() >= MinHitPoints) {
 			engine.ServerCommand("autosavedangerous\n");
-			TriggerSave.AutoSaveDangerousTime = gpGlobals.CurTime + inputdata.Value.Float();
+			g_ServerGameDLL.AutoSaveDangerousTime = gpGlobals.CurTime + inputdata.Value.Float();
 
 			// Player must have this much health when we go to commit, or we don't commit.
-			TriggerSave.AutoSaveDangerousMinHealthToCommit = MinHitPointsToCommit;
+			g_ServerGameDLL.AutoSaveDangerousMinHealthToCommit = MinHitPointsToCommit;
 		}
 	}
 
@@ -1616,7 +1617,7 @@ public class LogicActiveAutosave : LogicAutosave
 		DEFINE<LogicActiveAutosave>.KEYFIELD(nameof(TimeToTrigger), FieldType.Float, "TimeToTrigger"),
 		DEFINE<LogicActiveAutosave>.KEYFIELD(nameof(DangerousTime), FieldType.Float, "DangerousTime"),
 		DEFINE<LogicActiveAutosave>.FIELD(nameof(StartTime), FieldType.Time),
-		// DEFINE_THINKFUNC( SaveThink ),
+		DEFINE<LogicActiveAutosave>.THINKFUNC(nameof(SaveThink)),
 		DEFINE<LogicActiveAutosave>.INPUTFUNC(FieldType.Void, "Enable", nameof(InputEnable), (INPUTFUNCPTR)((self, data) => ((LogicActiveAutosave)self).InputEnable(data))),
 		DEFINE<LogicActiveAutosave>.INPUTFUNC(FieldType.Void, "Disable", nameof(InputDisable), (INPUTFUNCPTR)((self, data) => ((LogicActiveAutosave)self).InputDisable(data))),
 	]);
@@ -1784,7 +1785,7 @@ public class LogicBranchList : LogicalEntity
 		DEFINE<LogicBranchList>.KEYFIELD(nameof(LogicBranchName15), FieldType.String, "Branch15"),
 		DEFINE<LogicBranchList>.KEYFIELD(nameof(LogicBranchName16), FieldType.String, "Branch16"),
 
-		// DEFINE_UTLVECTOR( m_LogicBranchList, FIELD_EHANDLE ),
+		DEFINE<LogicBranchList>.UTLVECTOR(nameof(List), FieldType.EHandle),
 
 		DEFINE<LogicBranchList>.FIELD(nameof(LastState), FieldType.Integer),
 

@@ -189,11 +189,11 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 
 	public void ClearSaveDir() {
-		throw new NotImplementedException();
+		Warning($"{nameof(ClearSaveDir)} is not yet implemented!!\n");
 	}
 
 	public void ClearSaveDirAfterClientLoad() {
-		throw new NotImplementedException();
+		Warning($"{nameof(ClearSaveDirAfterClientLoad)} is not yet implemented!!\n");
 	}
 
 	public void ClientCommand(Edict edict, ReadOnlySpan<char> cmd) {

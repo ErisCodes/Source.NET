@@ -85,6 +85,16 @@ public class ServerNetworkProperty : IServerNetworkable, IEventRegisterCallback
 	// event register later
 	bool PendingStateChange;
 
+	public static readonly DataMap DataDesc = new(typeof(ServerNetworkProperty), [
+		//	DEFINE_FIELD( m_pOuter, FIELD_CLASSPTR ),
+		//	DEFINE_FIELD( m_pPev, FIELD_CLASSPTR ),
+		//	DEFINE_FIELD( m_PVSInfo, PVSInfo_t ),
+		//	DEFINE_FIELD( m_pServerClass, FIELD_CLASSPTR ),
+		DEFINE<ServerNetworkProperty>.GLOBAL_FIELD(nameof(Parent), FieldType.EHandle),
+		//	DEFINE_FIELD( m_TimerEvent, CEventRegister ),
+		//	DEFINE_FIELD( m_bPendingStateChange, FIELD_BOOLEAN ),
+	]);
+
 	public void Init(BaseEntity entity) {
 		Pev = null;
 		Outer = entity;

@@ -24,18 +24,14 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 	static AudioDeviceSDLAudio? g_wave = null;
 
 	SDL_AudioStream* stream;
-	GCHandle selfHandle;
 
 	int deviceSampleCount;
 
-	int buffersSent;
 	int pauseCount;
-	int readPos;
-	int partialWrite;
+	long samplesPushed;
 
 	// Memory for the wave data
 	byte[]? buffer;
-	byte[] callbackBuffer = [];
 
 	//-----------------------------------------------------------------------------
 	// Constructor (just lookup SDL entry points, real work happens in this->Init())
@@ -69,11 +65,9 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 		Surround = false;
 		SurroundCenter = false;
 		Headphone = false;
-		buffersSent = 0;
 		pauseCount = 0;
 		buffer = null;
-		readPos = 0;
-		partialWrite = 0;
+		samplesPushed = 0;
 		stream = null;
 
 		OpenWaveOut();
@@ -131,8 +125,7 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 		desired.format = SDL_AudioFormat.SDL_AUDIO_S16LE;
 		desired.channels = 2;
 
-		selfHandle = GCHandle.Alloc(this);
-		stream = SDL3.SDL_OpenAudioDeviceStream(SDL3.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &desired, &AudioCallbackEntry, GCHandle.ToIntPtr(selfHandle));
+		stream = SDL3.SDL_OpenAudioDeviceStream(SDL3.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &desired, null, 0);
 
 		if (stream == null) {
 			SDLAUDIO_FAIL("SDL_OpenAudioDevice()");
@@ -159,8 +152,6 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 			SDL3.SDL_DestroyAudioStream(stream);
 			stream = null;
 		}
-		if (selfHandle.IsAllocated)
-			selfHandle.Free();
 		SDL3.SDL_QuitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO);
 		FreeOutputBuffers();
 	}
@@ -172,8 +163,7 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 		// Allocate and lock memory for the waveform data.
 		const int nBufferSize = WAV_BUFFER_SIZE * WAV_BUFFERS;
 		buffer = new byte[nBufferSize];
-		readPos = 0;
-		partialWrite = 0;
+		samplesPushed = 0;
 		deviceSampleCount = nBufferSize / DeviceSampleBytes();
 	}
 
@@ -182,7 +172,6 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 	//-----------------------------------------------------------------------------
 	void FreeOutputBuffers() {
 		buffer = null;
-		callbackBuffer = [];
 	}
 
 	//-----------------------------------------------------------------------------
@@ -194,7 +183,7 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 		//  endtime - target for samples in mixahead buffer at speed
 		uint endtime = (uint)(soundtime + mixAheadTime * DeviceDmaSpeed());
 
-		int samps = DeviceSampleCount() >> (DeviceChannels() - 1);
+		int samps = (DeviceSampleCount() >> (DeviceChannels() - 1)) - 1;
 
 		if ((int)(endtime - soundtime) > samps)
 			endtime = (uint)(soundtime + samps);
@@ -208,51 +197,24 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 		return (int)endtime;
 	}
 
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	static void AudioCallbackEntry(nint userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
-		if (additional_amount <= 0)
+	void PushSamples(int startSample, int endSample) {
+		if (stream == null || buffer == null)
 			return;
 
-		AudioDeviceSDLAudio? self = (AudioDeviceSDLAudio?)GCHandle.FromIntPtr(userdata).Target;
-		if (self == null)
-			return;
+		int bytesPerSample = DeviceSampleBytes() * DeviceChannels();
+		int fullSamples = DeviceSampleCount() / DeviceChannels();
+		int count = endSample - startSample;
+		int pos = startSample & (fullSamples - 1);
 
-		if (self.callbackBuffer.Length < additional_amount)
-			self.callbackBuffer = new byte[additional_amount];
-
-		self.AudioCallback(self.callbackBuffer, additional_amount);
-		fixed (byte* callbackBuffer = self.callbackBuffer)
-			SDL3.SDL_PutAudioStreamData(stream, (nint)callbackBuffer, additional_amount);
-	}
-
-	void AudioCallback(Span<byte> stream, int len) {
-		if (this.stream == null)
-			return;  // can this even happen?
-
-		int totalWriteable = len;
-
-		Assert(len <= (WAV_BUFFERS * WAV_BUFFER_SIZE));
-
-		while (len > 0) {
-			// spaceAvailable == bytes before we overrun the end of the ring buffer.
-			int spaceAvailable = (WAV_BUFFERS * WAV_BUFFER_SIZE) - readPos;
-			int writeLen = (len < spaceAvailable) ? len : spaceAvailable;
-
-			if (writeLen > 0) {
-				ReadOnlySpan<byte> buf = buffer.AsSpan(readPos, writeLen);
-				buf.CopyTo(stream);
-				stream = stream[writeLen..];
-				len -= writeLen;
-				Assert(len >= 0);
+		fixed (byte* data = buffer) {
+			while (count > 0) {
+				int chunk = Math.Min(count, fullSamples - pos);
+				SDL3.SDL_PutAudioStreamData(stream, (nint)(data + pos * bytesPerSample), chunk * bytesPerSample);
+				samplesPushed += chunk;
+				count -= chunk;
+				pos = 0;
 			}
-
-			readPos = len != 0 ? 0 : (readPos + writeLen);  // if still bytes to write to stream, we're rolling around the ring buffer.
 		}
-
-		// Translate between bytes written and buffers written.
-		partialWrite += totalWriteable;
-		buffersSent += partialWrite / WAV_BUFFER_SIZE;
-		partialWrite %= WAV_BUFFER_SIZE;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -262,7 +224,13 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 	}
 
 	public override int GetOutputPosition() {
-		return (readPos >> SAMPLE_16BIT_SHIFT) / DeviceChannels();
+		if (stream == null)
+			return 0;
+
+		int bytesPerSample = DeviceSampleBytes() * DeviceChannels();
+		long queued = Math.Max(SDL3.SDL_GetAudioStreamQueued(stream), 0) / bytesPerSample;
+		long played = samplesPushed - queued;
+		return (int)(played % (DeviceSampleCount() / DeviceChannels()));
 	}
 
 	//-----------------------------------------------------------------------------
@@ -303,6 +271,9 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 		clear = 0;
 
 		buffer.AsSpan(0, DeviceSampleCount() * DeviceSampleBytes()).Fill((byte)clear);
+
+		if (stream != null)
+			SDL3.SDL_ClearAudioStream(stream);
 	}
 
 	public override void MixBegin(int sampleCount) {
@@ -369,8 +340,10 @@ public unsafe class AudioDeviceSDLAudio : AudioDeviceBase
 
 		// resumes playback...
 
-		if (buffer != null)
+		if (buffer != null) {
 			S_TransferStereo16(MemoryMarshal.Cast<byte, short>(buffer.AsSpan()), PAINTBUFFER, lpaintedtime, endtime);
+			PushSamples(lpaintedtime, endtime);
+		}
 	}
 
 	public override void StopAllSounds() {

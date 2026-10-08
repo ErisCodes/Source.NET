@@ -115,7 +115,7 @@ public class Bootloader : IDisposable
 			.WithComponent<IMenuSystem, MenuSystem>()
 #endif
 			.WithComponent<MessageBoxFn>(PromptInConsole)
-			// Our game DLL'
+			// Our game DLL
 			.WithGameDLL<ServerGameDLL>()
 
 			// Let the engine builder take over and inject engine-specific dependencies

@@ -81,6 +81,13 @@ public class FuncRotating : BaseEntity
 		DEFINE.FIELD(nameof(StopAtStartPos), FieldType.Boolean),
 		DEFINE.KEYFIELD(nameof(SolidBsp), FieldType.Boolean, "solidbsp"),
 
+		DEFINE.FUNCTION(nameof(SpinUpMove)),
+		DEFINE.FUNCTION(nameof(SpinDownMove)),
+		DEFINE.FUNCTION(nameof(HurtTouch)),
+		DEFINE.FUNCTION(nameof(RotatingUse)),
+		DEFINE.FUNCTION(nameof(RotateMove)),
+		DEFINE.FUNCTION(nameof(ReverseMove)),
+
 		DEFINE.INPUTFUNC(FieldType.Float, "SetSpeed", nameof(InputSetSpeed), (INPUTFUNCPTR)((self, data) => ((FuncRotating)self).InputSetSpeed(data))),
 		DEFINE.INPUTFUNC(FieldType.Void, "Start", nameof(InputStart), (INPUTFUNCPTR)((self, data) => ((FuncRotating)self).InputStart(data))),
 		DEFINE.INPUTFUNC(FieldType.Void, "Stop", nameof(InputStop), (INPUTFUNCPTR)((self, data) => ((FuncRotating)self).InputStop(data))),

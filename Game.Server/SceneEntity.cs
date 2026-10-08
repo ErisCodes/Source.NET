@@ -324,6 +324,9 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 		DEFINE.FIELD(nameof(InterruptedActorsScenes), FieldType.Boolean),
 		DEFINE.FIELD(nameof(BreakOnNonIdle), FieldType.Boolean),
 
+		DEFINE.UTLVECTOR(nameof(ActorList), FieldType.EHandle),
+		DEFINE.UTLVECTOR(nameof(RemoveActorList), FieldType.EHandle),
+
 		DEFINE.FIELD(nameof(InterruptCount), FieldType.Integer),
 		DEFINE.FIELD(nameof(Interrupted), FieldType.Boolean),
 		DEFINE.FIELD(nameof(InterruptScene), FieldType.EHandle),
@@ -334,6 +337,9 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 		DEFINE.FIELD(nameof(SoundName), FieldType.String),
 		DEFINE.FIELD(nameof(Actor), FieldType.EHandle),
 		DEFINE.FIELD(nameof(Activator), FieldType.EHandle),
+
+		DEFINE.UTLVECTOR(nameof(NotifySceneCompletion), FieldType.EHandle),
+		DEFINE.UTLVECTOR(nameof(ListManagers), FieldType.EHandle),
 
 		DEFINE.FIELD(nameof(Multiplayer), FieldType.Boolean),
 

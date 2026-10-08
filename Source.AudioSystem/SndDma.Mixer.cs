@@ -423,6 +423,8 @@ public static partial class SndDma
 	// process duck volumes for all groups
 	// Call once per frame - updates occur at 10hz
 
+	static readonly ChannelList s_DuckerChannelList = new();
+
 	static void MXR_UpdateAllDuckerVolumes() {
 		if (snd_disable_mixer_duck.GetInt() != 0)
 			return;
@@ -447,7 +449,7 @@ public static partial class SndDma
 		// for every channel in a mix group which can cause ducking:
 		// get total volume, store total in grouprule:
 
-		ChannelList list = new();
+		ChannelList list = s_DuckerChannelList;
 		int ch_idx;
 
 		Channel pchan;

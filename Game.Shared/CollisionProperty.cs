@@ -210,6 +210,27 @@ public class CollisionProperty : ICollideable
 		}
 	}
 #else
+	public static readonly DataMap DataDesc = new(typeof(CollisionProperty), [
+		//		DEFINE_FIELD( m_pOuter, FIELD_CLASSPTR ),
+		DEFINE.GLOBAL_FIELD(nameof(MinsPreScaled), FieldType.Vector),
+		DEFINE.GLOBAL_FIELD(nameof(MaxsPreScaled), FieldType.Vector),
+		DEFINE.GLOBAL_FIELD(nameof(Mins), FieldType.Vector),
+		DEFINE.GLOBAL_FIELD(nameof(Maxs), FieldType.Vector),
+		DEFINE.KEYFIELD(nameof(SolidType), FieldType.Character, "solid"),
+		DEFINE.FIELD(nameof(SolidFlags), FieldType.Short),
+		DEFINE.FIELD(nameof(SurroundType), FieldType.Character),
+		DEFINE.FIELD(nameof(Radius), FieldType.Float),
+		DEFINE.FIELD(nameof(TriggerBloat), FieldType.Character),
+		DEFINE.FIELD(nameof(SpecifiedSurroundingMinsPreScaled), FieldType.Vector),
+		DEFINE.FIELD(nameof(SpecifiedSurroundingMaxsPreScaled), FieldType.Vector),
+		DEFINE.FIELD(nameof(SpecifiedSurroundingMins), FieldType.Vector),
+		DEFINE.FIELD(nameof(SpecifiedSurroundingMaxs), FieldType.Vector),
+		DEFINE.FIELD(nameof(SurroundingMins), FieldType.Vector),
+		DEFINE.FIELD(nameof(SurroundingMaxs), FieldType.Vector),
+		//		DEFINE_FIELD( m_Partition, FIELD_SHORT ),
+		//		DEFINE_PHYSPTR( m_pPhysicsObject ),
+	]);
+
 	private static void SendProxy_SolidFlags(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
 		outData.Int = ((CollisionProperty)(instance)).SolidFlags;
 	}
