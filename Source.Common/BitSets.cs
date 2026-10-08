@@ -1,62 +1,96 @@
-using CommunityToolkit.HighPerformance;
-
 using Source.Common.Formats.BSP;
 using Source.Common.Mathematics;
 
+using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Source;
 
-public static class BitVecBase
+[AttributeUsage(AttributeTargets.Struct, Inherited = false)]
+public sealed class BitVecAttribute(int numBits) : Attribute
 {
+	public int NumBits { get; } = numBits;
+}
+
+[AttributeUsage(AttributeTargets.Struct, Inherited = false)]
+public sealed class BitVecAttribute<T>(int numBits) : Attribute where T : unmanaged, IBinaryInteger<T>, IUnsignedNumber<T>
+{
+	public int NumBits { get; } = numBits;
+}
+
+public static class BitSetOps<T> where T : unmanaged, IBinaryInteger<T>, IUnsignedNumber<T>
+{
+	public static int BitsPerWord => Unsafe.SizeOf<T>() * 8;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] 
+	public static T Mask(int bit) => T.One << (bit % BitsPerWord);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] 
+	public static T GetWord(ReadOnlySpan<T> words, int i) => words[i];
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] 
+
+	public static void SetWord(Span<T> words, int i, T val) => words[i] = val;
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] 
+
+	public static int GetNumWords(ReadOnlySpan<T> words) => words.Length;
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static uint GetDWord(this Span<byte> bytes, int i) {
-		return bytes.Cast<byte, uint>()[i];
+
+	public static bool IsBitSet(ReadOnlySpan<T> words, int bit) {
+		return (words[bit / BitsPerWord] & Mask(bit)) != T.Zero;
 	}
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void SetDWord(this Span<byte> bytes, int i, uint val) {
-		bytes.Cast<byte, uint>()[i] = val;
-	}
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static byte ByteMask(int bit) => (byte)(1 << (bit % 8));
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsBitSet(this Span<byte> bytes, int bit) {
-		int byteIndex = bit >> 3;
-		byte b = bytes[byteIndex];
-		return (b & ByteMask(bit)) != 0;
-	}
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void Set(this Span<byte> bytes, int bit) {
-		ref byte b = ref bytes[bit >> 3];
-		b |= ByteMask(bit);
-	}
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void Clear(this Span<byte> bytes, int bit) {
-		ref byte b = ref bytes[bit >> 3];
-		b &= (byte)~ByteMask(bit);
-	}
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void Set(this Span<byte> bytes, int bit, bool newVal) {
-		ref byte b = ref bytes[bit >> 3];
-		if (newVal)
-			b |= ByteMask(bit);
-		else
-			b &= (byte)~ByteMask(bit);
-	}
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void ClearAll(this Span<byte> bytes) {
-		memreset(bytes);
-	}
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static int FindNextSetBit(this Span<byte> bytes, int startBit) {
-		while ((startBit >> 3) < bytes.Length && !IsBitSet(bytes, startBit))
-			startBit++;
-		if ((startBit >> 3) >= bytes.Length)
-			return -1;
-		return startBit;
+	public static void Set(Span<T> words, int bit) {
+		words[bit / BitsPerWord] |= Mask(bit);
 	}
 
-	public static int GetNumDWords(this Span<byte> bytes) {
-		return bytes.Length == 0 ? 0 : (1 + ((bytes.Length - 1) / 4));
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static void Clear(Span<T> words, int bit) {
+		words[bit / BitsPerWord] &= ~Mask(bit);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static void Set(Span<T> words, int bit, bool newVal) {
+		ref T word = ref words[bit / BitsPerWord];
+		if (newVal)
+			word |= Mask(bit);
+		else
+			word &= ~Mask(bit);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static void ClearAll(Span<T> words) {
+		words.Clear();
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static void SetAll(Span<T> words) {
+		words.Fill(T.AllBitsSet);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool Compare(ReadOnlySpan<T> a, ReadOnlySpan<T> b) {
+		return a.SequenceEqual(b);
+	}
+
+	public static int Hash(ReadOnlySpan<T> words) {
+		HashCode hash = new();
+		hash.AddBytes(MemoryMarshal.AsBytes(words));
+		return hash.ToHashCode();
+	}
+
+	public static int FindNextSetBit(ReadOnlySpan<T> words, int startBit) {
+		int index = startBit / BitsPerWord;
+		if (index >= words.Length)
+			return -1;
+
+		T word = words[index] & (T.AllBitsSet << (startBit % BitsPerWord));
+		while (word == T.Zero) {
+			if (++index >= words.Length)
+				return -1;
+			word = words[index];
+		}
+		return index * BitsPerWord + int.CreateTruncating(T.TrailingZeroCount(word));
 	}
 }
 
@@ -76,7 +110,7 @@ public struct VarBitVec
 		else if (numBytes != bytes.Length)
 			Array.Resize(ref bytes, numBytes);
 		else if (clearAll)
-			BitVecBase.ClearAll(bytes);
+			BitSetOps<byte>.ClearAll(bytes);
 		NumBits = resizeNumBits;
 	}
 	public void ReallocateIfNecessary(nint bitSet) {
@@ -88,35 +122,34 @@ public struct VarBitVec
 		return bytes == null || bit < 0 || (bit >> 3) >= bytes.Length;
 	}
 
-	public uint GetDWord(int i) => BitVecBase.GetDWord(bytes, i);
 	public int Get(int bit) {
 		if (Overflows(bit)) return 0;
-		return BitVecBase.IsBitSet(bytes, bit) ? 1 : 0;
+		return BitSetOps<byte>.IsBitSet(bytes, bit) ? 1 : 0;
 	}
 	public bool IsBitSet(int bit) {
 		if (Overflows(bit)) return false;
-		return BitVecBase.IsBitSet(bytes, bit);
+		return BitSetOps<byte>.IsBitSet(bytes, bit);
 	}
 	public void Set(int bit) {
 		ReallocateIfNecessary(bit);
-		BitVecBase.Set(bytes, bit);
+		BitSetOps<byte>.Set(bytes, bit);
 	}
 	public void Clear(int bit) {
 		if (Overflows(bit)) return;
-		BitVecBase.Clear(bytes, bit);
+		BitSetOps<byte>.Clear(bytes, bit);
 	}
 	public void Set(int bit, bool newVal) {
 		if (newVal == false && Overflows(bit))
 			return;
 		ReallocateIfNecessary(bit);
-		BitVecBase.Set(bytes, bit, newVal);
+		BitSetOps<byte>.Set(bytes, bit, newVal);
 	}
-	public int FindNextSetBit(int startBit) => BitVecBase.FindNextSetBit(bytes, startBit);
-	public void ClearAll() => BitVecBase.ClearAll(bytes);
+	public int FindNextSetBit(int startBit) => BitSetOps<byte>.FindNextSetBit(bytes, startBit);
+	public void ClearAll() => BitSetOps<byte>.ClearAll(bytes);
 	public bool TestAndSet(int bit) {
 		ReallocateIfNecessary(bit);
-		bool old = BitVecBase.IsBitSet(bytes, bit);
-		BitVecBase.Set(bytes, bit);
+		bool old = BitSetOps<byte>.IsBitSet(bytes, bit);
+		BitSetOps<byte>.Set(bytes, bit);
 		return old;
 	}
 }
@@ -124,91 +157,30 @@ public struct VarBitVec
 /// <summary>
 /// An inline bit-vector array of MAX_EDICTS >> 3 bytes.
 /// </summary>
-[InlineArray((BSPFileCommon.MAX_DISPVERTS + 31) / 32 * 4)]
-public struct MaxDispVertsBitVec
-{
-	public byte bytes;
-	public uint GetDWord(int i) => BitVecBase.GetDWord(this, i);
-	public void SetDWord(int i, uint val) => BitVecBase.SetDWord(this, i, val);
-	public int GetNumDWords() => (BSPFileCommon.MAX_DISPVERTS + 31) / 32;
-	public int Get(int bit) => BitVecBase.IsBitSet(this, bit) ? 1 : 0;
-	public bool IsBitSet(int bit) => BitVecBase.IsBitSet(this, bit);
-	public void Set(int bit) => BitVecBase.Set(this, bit);
-	public void Clear(int bit) => BitVecBase.Clear(this, bit);
-	public void Set(int bit, bool newVal) => BitVecBase.Set(this, bit, newVal);
-	public int FindNextSetBit(int startBit) => BitVecBase.FindNextSetBit(this, startBit);
-	public void ClearAll() => BitVecBase.ClearAll(this);
-}
+[BitVec(BSPFileCommon.MAX_DISPVERTS)]
+public partial struct MaxDispVertsBitVec;
 
 
 /// <summary>
 /// An inline bit-vector array able to hold the 85 nodes of a 17x17 displacement.
 /// </summary>
-[InlineArray((85 + 31) / 32 * 4)]
-public struct DispNodeIntersectBitVec
-{
-	public byte bytes;
-	public uint GetDWord(int i) => BitVecBase.GetDWord(this, i);
-	public void SetDWord(int i, uint val) => BitVecBase.SetDWord(this, i, val);
-	public int GetNumDWords() => (85 + 31) / 32;
-	public int Get(int bit) => BitVecBase.IsBitSet(this, bit) ? 1 : 0;
-	public bool IsBitSet(int bit) => BitVecBase.IsBitSet(this, bit);
-	public void Set(int bit) => BitVecBase.Set(this, bit);
-	public void Clear(int bit) => BitVecBase.Clear(this, bit);
-	public void Set(int bit, bool newVal) => BitVecBase.Set(this, bit, newVal);
-	public int FindNextSetBit(int startBit) => BitVecBase.FindNextSetBit(this, startBit);
-	public void ClearAll() => BitVecBase.ClearAll(this);
-}
+[BitVec<byte>(85)]
+public partial struct DispNodeIntersectBitVec;
 
 /// <summary>
 /// An inline bit-vector array of MAX_EDICTS >> 3 bytes.
 /// </summary>
-[InlineArray(Constants.MAX_EDICTS >> 3)]
-public struct MaxEdictsBitVec
-{
-	public byte bytes;
-	public uint GetDWord(int i) => BitVecBase.GetDWord(this, i);
-	public int Get(int bit) => BitVecBase.IsBitSet(this, bit) ? 1 : 0;
-	public bool IsBitSet(int bit) => BitVecBase.IsBitSet(this, bit);
-	public void Set(int bit) => BitVecBase.Set(this, bit);
-	public void Clear(int bit) => BitVecBase.Clear(this, bit);
-	public void Set(int bit, bool newVal) => BitVecBase.Set(this, bit, newVal);
-	public int FindNextSetBit(int startBit) => BitVecBase.FindNextSetBit(this, startBit);
-	public void ClearAll() => BitVecBase.ClearAll(this);
-	public int GetNumDWords() => BitVecBase.GetNumDWords(this);
-}
+[BitVec(Constants.MAX_EDICTS)]
+public partial struct MaxEdictsBitVec;
 
 /// <summary>
 /// An inline bit-vector array of ABSOLUTE_PLAYER_LIMIT >> 3 bytes.
 /// </summary>
-[InlineArray(Constants.ABSOLUTE_PLAYER_LIMIT >> 3)]
-public struct PlayerBitSet
-{
-	public byte bytes;
-	public uint GetDWord(int i) => BitVecBase.GetDWord(this, i);
-	public int Get(int bit) => BitVecBase.IsBitSet(this, bit) ? 1 : 0;
-	public bool IsBitSet(int bit) => BitVecBase.IsBitSet(this, bit);
-	public void Set(int bit) => BitVecBase.Set(this, bit);
-	public void Clear(int bit) => BitVecBase.Clear(this, bit);
-	public void Set(int bit, bool newVal) => BitVecBase.Set(this, bit, newVal);
-	public int FindNextSetBit(int startBit) => BitVecBase.FindNextSetBit(this, startBit);
-	public void ClearAll() => BitVecBase.ClearAll(this);
-}
+[BitVec(Constants.ABSOLUTE_PLAYER_LIMIT)]
+public partial struct PlayerBitSet;
 
 /// <summary>
 /// An inline bit-vector array of MAX_EVENT_NUMBER >> 3 bytes.
 /// </summary>
-[InlineArray(MAX_EVENT_NUMBER >> 3)]
-public struct MaxEventNumberBitVec
-{
-	public byte bytes;
-	public uint GetDWord(int i) => BitVecBase.GetDWord(this, i);
-	public void SetDWord(int i, uint val) => BitVecBase.SetDWord(this, i, val);
-	public int Get(int bit) => BitVecBase.IsBitSet(this, bit) ? 1 : 0;
-	public bool IsBitSet(int bit) => BitVecBase.IsBitSet(this, bit);
-	public void Set(int bit) => BitVecBase.Set(this, bit);
-	public void Clear(int bit) => BitVecBase.Clear(this, bit);
-	public void Set(int bit, bool newVal) => BitVecBase.Set(this, bit, newVal);
-	public int FindNextSetBit(int startBit) => BitVecBase.FindNextSetBit(this, startBit);
-	public void ClearAll() => BitVecBase.ClearAll(this);
-}
+[BitVec(MAX_EVENT_NUMBER)]
+public partial struct MaxEventNumberBitVec;

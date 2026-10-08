@@ -88,15 +88,9 @@ public enum SCOND_t
 	LAST_SHARED_CONDITION
 }
 
-[InlineArray(MAX_CONDITIONS >> 3)]
-public struct AI_ScheduleBits
+[BitVec<byte>(MAX_CONDITIONS)]
+public partial struct AI_ScheduleBits
 {
-	public byte bytes;
-	public void ClearAll() => BitVecBase.ClearAll(this);
-	public void SetAll() => ((Span<byte>)this).Fill(0xff);
-	public void Set(int bit) => BitVecBase.Set(this, bit);
-	public void Clear(int bit) => BitVecBase.Clear(this, bit);
-	public bool IsBitSet(int bit) => BitVecBase.IsBitSet(this, bit);
 	public bool IsAllClear() => ((ReadOnlySpan<byte>)this).IndexOfAnyExcept((byte)0) < 0;
 	public void And(in AI_ScheduleBits other, out AI_ScheduleBits result) {
 		AI_ScheduleBits temp = default;

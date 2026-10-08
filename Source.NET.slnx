@@ -19,6 +19,9 @@
     </Project>
   </Folder>
   <Folder Name="/0. Files, Dependencies, &amp; Code Analysis/Roslyn Code Analysis/">
+    <Project Path="Source.CodeAnalysis.BitVec/Source.CodeAnalysis.BitVec.csproj">
+      <Platform Project="x64" />
+    </Project>
     <Project Path="Source.CodeAnalysis.Lua/Source.CodeAnalysis.Lua.csproj">
       <Platform Project="x64" />
     </Project>

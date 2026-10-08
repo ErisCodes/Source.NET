@@ -42,12 +42,12 @@ public class LocalNetworkBackdoor
 		ClientDLL.FrameStageNotify(Source.Common.Client.ClientFrameStage.NetUpdatePostDataUpdateEnd);
 
 		// Handle entities removed (= SV_WriteDeletions() in normal mode)
-		int nDWords = PrevEntsAlive.GetNumDWords();
+		int nDWords = PrevEntsAlive.GetNumWords();
 
 		// Handle entities removed.
 		for (i = 0; i < nDWords; i++) {
-			uint prevEntsAlive = PrevEntsAlive.GetDWord(i);
-			uint entsAlive = EntsAlive.GetDWord(i);
+			uint prevEntsAlive = PrevEntsAlive.GetWord(i);
+			uint entsAlive = EntsAlive.GetWord(i);
 			uint toDelete = (prevEntsAlive ^ entsAlive) & prevEntsAlive;
 
 			if (toDelete != 0) {

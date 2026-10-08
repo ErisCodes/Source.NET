@@ -38,14 +38,8 @@ public static class ChoreoSceneGlobals
 	}
 }
 
-[InlineArray(((int)ChoreoEvent.EventType.NumTypes + 31) / 32 * 4)]
-public struct ChoreoEventTypeBitVec
-{
-	public byte bytes;
-	public bool IsBitSet(int bit) => BitVecBase.IsBitSet(this, bit);
-	public void Set(int bit, bool newVal) => BitVecBase.Set(this, bit, newVal);
-	public void ClearAll() => BitVecBase.ClearAll(this);
-}
+[BitVec<byte>((int)ChoreoEvent.EventType.NumTypes)]
+public partial struct ChoreoEventTypeBitVec;
 
 public class ChoreoScene : ICurveDataAccessor
 {

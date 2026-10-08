@@ -1072,7 +1072,7 @@ public class CLC_ListenEvents : NetMessage, IPoolableObject
 		buffer.WriteNetMessageType(this);
 		int count = MAX_EVENT_NUMBER / 32;
 		for (int i = 0; i < count; i++)
-			buffer.WriteUBitLong(EventArray.GetDWord(i), 32);
+			buffer.WriteUBitLong(EventArray.GetWord(i), 32);
 
 		return !buffer.Overflowed;
 	}
@@ -1080,7 +1080,7 @@ public class CLC_ListenEvents : NetMessage, IPoolableObject
 	public override bool ReadFromBuffer(bf_read buffer) {
 		int count = MAX_EVENT_NUMBER / 32;
 		for (int i = 0; i < count; i++)
-			EventArray.SetDWord(i, buffer.ReadUBitLong(32));
+			EventArray.SetWord(i, buffer.ReadUBitLong(32));
 
 		return !buffer.Overflowed;
 	}
