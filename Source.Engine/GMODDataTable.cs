@@ -315,6 +315,7 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 		GMODVariantType.Bool => (a.Int != 0) == (b.Int != 0),
 		GMODVariantType.Vector or GMODVariantType.Angle => a.Vec.X == b.Vec.X && a.Vec.Y == b.Vec.Y && a.Vec.Z == b.Vec.Z,
 		GMODVariantType.String => a.StringLength == b.StringLength && string.Equals(a.String, b.String, StringComparison.Ordinal),
+		GMODVariantType.Entity => a.Int == b.Int,
 		_ => true
 	};
 
