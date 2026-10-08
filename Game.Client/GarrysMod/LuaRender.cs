@@ -1,7 +1,11 @@
 using Source;
+using Source.Common;
 using Source.Common.Bitmap;
+using Source.Common.Client;
+using Source.Common.GUI;
 using Source.Common.GarrysMod.Lua;
 using Source.Common.MaterialSystem;
+using Source.Engine;
 
 using TextureFlags = Source.Common.TextureFlags;
 
@@ -173,6 +177,7 @@ public static partial class LuaRender
 			texture = (ITexture?)LuaTexture.LC_ITexture.Get(1);
 
 		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.Flush(false);
 		if (lua.GetType(2) == LuaType.Number)
 			renderContext.PushRenderTargetAndViewport(texture, (int)lua.CheckNumber(2), (int)lua.CheckNumber(3), (int)lua.CheckNumber(4), (int)lua.CheckNumber(5));
 		else
@@ -187,6 +192,7 @@ public static partial class LuaRender
 		if (RenderTargetStack > 0) {
 			RenderTargetStack--;
 			using MatRenderContextPtr renderContext = new(materials);
+			renderContext.Flush(false);
 			renderContext.PopRenderTargetAndViewport();
 			return 0;
 		}
@@ -268,6 +274,204 @@ public static partial class LuaRender
 
 	[LuaFunction]
 	static float GetBlend() => render.GetBlend();
+	public static ViewID RenderViewID = ViewID.Illegal;
+	public static readonly List<bool> DrawViewerStack = [];
+
+	static float UnscaleFOVByWidthRatio(float fovDegrees, float ratio) {
+		float halfAngleRadians = fovDegrees * (0.5f * MathF.PI / 180.0f);
+		float t = MathF.Tan(halfAngleRadians);
+		t /= ratio;
+		float retDegrees = (180.0f / MathF.PI) * MathF.Atan(t);
+		return retDegrees * 2.0f;
+	}
+
+	[LuaFunction]
+	static int RenderView(ILuaInterface lua) {
+		ViewSetup setup = view.GetViewSetup();
+		LuaTable data = new(null, 0);
+		data.SetFromStack(1);
+
+		RenderViewInfo whatToDraw = data.GetMemberBool("drawhud", false) ? RenderViewInfo.DrawHUD : 0;
+		if (data.GetMemberBool("drawviewmodel", true))
+			whatToDraw |= RenderViewInfo.DrawViewmodel;
+		if (!data.GetMemberBool("dopostprocess", false))
+			whatToDraw |= RenderViewInfo.NoPostProcess;
+		if (!data.GetMemberBool("drawmonitors", false))
+			whatToDraw |= RenderViewInfo.SuppressMonitorRendering;
+		bool drawViewer = data.GetMemberBool("drawviewer", false);
+		setup.DoBloomAndToneMapping = data.GetMemberBool("bloomtone", true);
+		setup.CacheFullSceneState = false;
+
+		setup.X = (int)data.GetMemberFloat("x", setup.X);
+		setup.Y = (int)data.GetMemberFloat("y", setup.Y);
+		setup.Width = (int)data.GetMemberFloat("w", setup.Width);
+		setup.Height = (int)data.GetMemberFloat("h", setup.Height);
+
+		LuaObject offCenter = new();
+		data.GetMember("offcenter", offCenter);
+		if (offCenter.isTable()) {
+			setup.OffCenter = true;
+			float invWidth = 1.0f / setup.Width;
+			float invHeight = 1.0f / setup.Height;
+			setup.OffCenterLeft = offCenter.GetMemberFloat("left", setup.OffCenterLeft) * invWidth;
+			setup.OffCenterRight = offCenter.GetMemberFloat("right", setup.OffCenterRight) * invWidth;
+			setup.OffCenterTop = offCenter.GetMemberFloat("bottom", setup.OffCenterTop) * invHeight;
+			setup.OffCenterBottom = offCenter.GetMemberFloat("top", setup.OffCenterBottom) * invHeight;
+		}
+		else
+			setup.OffCenter = false;
+
+		setup.Origin = data.GetMemberVector("origin", setup.Origin);
+		setup.Angles = data.GetMemberAngle("angles", setup.Angles);
+		setup.FOV = data.GetMemberFloat("fov", setup.FOV);
+		setup.FOVViewmodel = data.GetMemberFloat("viewmodelfov", setup.FOVViewmodel);
+		setup.ZNear = data.GetMemberFloat("znear", setup.ZNear);
+		setup.ZFar = data.GetMemberFloat("zfar", setup.ZFar);
+		setup.ZNearViewmodel = data.GetMemberFloat("znearviewmodel", setup.ZNearViewmodel);
+		setup.ZFarViewmodel = data.GetMemberFloat("zfarviewmodel", setup.ZFarViewmodel);
+
+		LuaObject ortho = new();
+		data.GetMember("ortho", ortho);
+		if (ortho.isTable()) {
+			setup.Ortho = true;
+			setup.OrthoLeft = ortho.GetMemberFloat("left", setup.OrthoLeft);
+			setup.OrthoRight = ortho.GetMemberFloat("right", setup.OrthoRight);
+			setup.OrthoTop = ortho.GetMemberFloat("top", setup.OrthoTop);
+			setup.OrthoBottom = ortho.GetMemberFloat("bottom", setup.OrthoBottom);
+		}
+		else if (ortho.isBool() && ortho.GetBool()) {
+			setup.Ortho = true;
+			setup.OrthoLeft = data.GetMemberFloat("ortholeft", setup.OrthoLeft);
+			setup.OrthoTop = data.GetMemberFloat("orthotop", setup.OrthoTop);
+			setup.OrthoRight = data.GetMemberFloat("orthoright", setup.OrthoRight);
+			setup.OrthoBottom = data.GetMemberFloat("orthobottom", setup.OrthoBottom);
+		}
+		else
+			setup.Ortho = false;
+
+		setup.RenderToSubrectOfLargerScreen = setup.X != 0 || setup.Y != 0 || setup.Width != ScreenWidth() || setup.Height != ScreenHeight();
+
+		float aspect = engine.GetScreenAspectRatio();
+		if (aspect <= 0.0f)
+			aspect = (float)setup.Width / setup.Height;
+		aspect = data.GetMemberFloat("aspect", aspect);
+		setup.AspectRatio = data.GetMemberFloat("aspectratio", aspect);
+
+		if (drawViewer)
+			DrawViewerStack.Add(true);
+
+		LuaCam.ResetFrameStateChecked();
+		RenderViewID = (ViewID)Math.Clamp(data.GetMemberInt("viewid", 0), 0, 9);
+		view.RenderView(in setup, ClearFlags.ClearColor | ClearFlags.ClearDepth | ClearFlags.ClearStencil, whatToDraw);
+		RenderViewID = ViewID.Illegal;
+
+		if (drawViewer)
+			DrawViewerStack.RemoveAt(DrawViewerStack.Count - 1);
+
+		LuaCam.ResetFrameStateChecked();
+		ortho.UnReference();
+		offCenter.UnReference();
+		data.UnReference();
+		return 0;
+	}
+
+	[LuaFunction]
+	static int GetViewSetup(ILuaInterface lua) {
+		ref ViewSetup setup = ref view.GetPlayerViewSetup();
+		if (lua.GetType(1) != LuaType.Nil && lua.GetBool(1))
+			setup = ref view.GetViewSetup();
+
+		LuaTable table = new(null, 0);
+		table.SetMemberAngle("angles", setup.Angles);
+		table.SetMemberVector("origin", setup.Origin);
+		table.SetMember("height", setup.Height);
+		table.SetMember("width", setup.Width);
+		table.SetMember("x", setup.X);
+		table.SetMember("y", setup.Y);
+		table.SetMember("znear", setup.ZNear);
+		table.SetMember("zfar", setup.ZFar);
+		table.SetMember("znearviewmodel", setup.ZNearViewmodel);
+		table.SetMember("zfarviewmodel", setup.ZFarViewmodel);
+		table.SetMember("fov", setup.FOV);
+		table.SetMember("fovviewmodel", setup.FOVViewmodel);
+		table.SetMember("fov_unscaled", UnscaleFOVByWidthRatio(setup.FOV, setup.AspectRatio / (4.0f / 3.0f)));
+		table.SetMember("fovviewmodel_unscaled", UnscaleFOVByWidthRatio(setup.FOVViewmodel, setup.AspectRatio / (4.0f / 3.0f)));
+		table.SetMember("bloomtone", setup.DoBloomAndToneMapping);
+		table.SetMember("subrect", setup.RenderToSubrectOfLargerScreen);
+		table.SetMember("aspect", setup.AspectRatio);
+		table.SetMember("viewid", (int)ViewRender.g_CurrentViewID);
+
+		if (setup.Ortho) {
+			LuaTable ortho = new(null, 0);
+			ortho.SetMember("left", setup.OrthoLeft);
+			ortho.SetMember("right", setup.OrthoRight);
+			ortho.SetMember("top", setup.OrthoTop);
+			ortho.SetMember("bottom", setup.OrthoBottom);
+			table.SetMember("ortho", ortho);
+			ortho.UnReference();
+		}
+
+		if (setup.OffCenter) {
+			LuaTable offCenter = new(null, 0);
+			offCenter.SetMember("left", setup.OffCenterLeft);
+			offCenter.SetMember("right", setup.OffCenterRight);
+			offCenter.SetMember("top", setup.OffCenterTop);
+			offCenter.SetMember("bottom", setup.OffCenterBottom);
+			table.SetMember("offcenter", offCenter);
+			offCenter.UnReference();
+		}
+
+		table.Push();
+		table.UnReference();
+		return 1;
+	}
+
+	[LuaFunction]
+	static int RenderHUD(ILuaInterface lua) {
+		int x = (int)lua.CheckNumber(1);
+		int y = (int)lua.CheckNumber(2);
+		int w = (int)lua.CheckNumber(3);
+		int h = (int)lua.CheckNumber(4);
+
+		using MatRenderContextPtr renderContext = new(materials);
+		LuaCam.SetInSurface3D(true);
+
+		ViewSetup hudView = default;
+		hudView.X = x;
+		hudView.Y = y;
+		hudView.Width = w;
+		hudView.Height = h;
+		hudView.Origin = vec3_origin;
+		hudView.Angles = default;
+		hudView.RenderToSubrectOfLargerScreen = false;
+		hudView.AspectRatio = 0;
+		hudView.OffCenter = false;
+		hudView.DoBloomAndToneMapping = true;
+		hudView.CacheFullSceneState = false;
+		hudView.ViewToProjectionOverride = false;
+		hudView.Ortho = false;
+		hudView.UnscaledHeight = 0;
+		render.Push2DView(hudView, 0, renderContext.GetRenderTarget(), view.GetFrustum());
+
+		IPanel? clientDll = enginevgui.GetPanel(VGuiPanelType.ClientDll);
+		if (clientDll != null) {
+			clientDll.SetPos(hudView.X, hudView.Y);
+			clientDll.SetSize(hudView.Width, hudView.Height);
+		}
+
+		IPanel? clientDllTools = enginevgui.GetPanel(VGuiPanelType.ClientDllTools);
+		if (clientDllTools != null) {
+			clientDllTools.SetPos(hudView.X, hudView.Y);
+			clientDllTools.SetSize(hudView.Width, hudView.Height);
+		}
+
+		render.VGui_Paint(PaintMode.InGamePanels);
+		renderContext.Flush(false);
+		render.PopView(view.GetFrustum());
+		LuaCam.SetInSurface3D(false);
+		return 0;
+	}
+
 	// todo: SetViewPort
 	// todo: Clear
 	// todo: ClearDepth

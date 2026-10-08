@@ -1011,9 +1011,7 @@ public class MatRenderContext : IMatRenderContextInternal
 		throw new NotImplementedException("Incomplete port of IMatRenderContext");
 	}
 
-	public void OverrideAlphaWriteEnable(bool enable, bool alphaWriteEnable) {
-		throw new NotImplementedException("Incomplete port of IMatRenderContext");
-	}
+	public void OverrideAlphaWriteEnable(bool enable, bool alphaWriteEnable) => shaderAPI.OverrideAlphaWriteEnable(enable, alphaWriteEnable);
 
 	public void OverrideBlend(bool unk1, bool unk2, int unk3, int unk4, int unk5) {
 		throw new NotImplementedException("Incomplete port of IMatRenderContext");
@@ -1027,9 +1025,7 @@ public class MatRenderContext : IMatRenderContextInternal
 		throw new NotImplementedException("Incomplete port of IMatRenderContext");
 	}
 
-	public void OverrideDepthEnable(bool enable, bool depthEnable) {
-		throw new NotImplementedException("Incomplete port of IMatRenderContext");
-	}
+	public void OverrideDepthEnable(bool enable, bool depthEnable) => shaderAPI.OverrideDepthEnable(enable, depthEnable);
 
 	public void PerformFullScreenStencilOperation() {
 		throw new NotImplementedException("Incomplete port of IMatRenderContext");

@@ -2442,14 +2442,23 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 					glBlendEquation(state.BlendOperation.GLEnum());
 			}
 
-			if (force || state.ColorWrite != last.ColorWrite || state.AlphaWrite != last.AlphaWrite)
-				glColorMask(state.ColorWrite, state.ColorWrite, state.ColorWrite, state.AlphaWrite);
+			bool alphaWrite = OverrideAlphaWrite ? OverriddenAlphaWriteValue : state.AlphaWrite;
+			if (force || state.ColorWrite != last.ColorWrite || alphaWrite != AppliedAlphaWrite) {
+				glColorMask(state.ColorWrite, state.ColorWrite, state.ColorWrite, alphaWrite);
+				AppliedAlphaWrite = alphaWrite;
+			}
 
-			if (force || state.DepthTest != last.DepthTest)
-				glToggle(GL_DEPTH_TEST, state.DepthTest);
+			bool depthTest = OverrideDepth || state.DepthTest;
+			if (force || depthTest != AppliedDepthTest) {
+				glToggle(GL_DEPTH_TEST, depthTest);
+				AppliedDepthTest = depthTest;
+			}
 
-			if (force || state.DepthWrite != last.DepthWrite)
-				glDepthMask(state.DepthWrite);
+			bool depthWrite = OverrideDepth ? OverriddenDepthWriteValue : state.DepthWrite;
+			if (force || depthWrite != AppliedDepthWrite) {
+				glDepthMask(depthWrite);
+				AppliedDepthWrite = depthWrite;
+			}
 
 			if (force || state.DepthFunc != last.DepthFunc)
 				glDepthFunc(state.DepthFunc.GLEnum());
@@ -3183,8 +3192,17 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
+	bool OverrideAlphaWrite;
+	bool OverriddenAlphaWriteValue;
+	bool AppliedAlphaWrite;
+
 	public void OverrideAlphaWriteEnable(bool enable, bool alphaWriteEnable) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (enable != OverrideAlphaWrite) {
+			FlushBufferedPrimitives();
+			OverrideAlphaWrite = enable;
+			OverriddenAlphaWriteValue = alphaWriteEnable;
+			lastBoardUploadHash = 0;
+		}
 	}
 
 	public void OverrideBlend(bool overrideEnable, bool useSeparateAlpha, int srcBlend, int destBlend, int blendFunc) {
@@ -3199,8 +3217,18 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
-	public void OverrideDepthEnable(bool bEnable, bool bDepthEnable) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	bool OverrideDepth;
+	bool OverriddenDepthWriteValue;
+	bool AppliedDepthTest;
+	bool AppliedDepthWrite;
+
+	public void OverrideDepthEnable(bool enable, bool depthEnable) {
+		if (enable != OverrideDepth) {
+			FlushBufferedPrimitives();
+			OverrideDepth = enable;
+			OverriddenDepthWriteValue = depthEnable;
+			lastBoardUploadHash = 0;
+		}
 	}
 
 	public bool OwnGPUResources(bool bEnable) {
