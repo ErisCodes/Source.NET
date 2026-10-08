@@ -249,7 +249,9 @@ public abstract class BaseServer : IServer
 			State = ServerState.Paused;
 		else
 			State = ServerState.Active;
-		// TODO: SEND THE NET MESSAGE!!!!!!!!!!!!!!!!!
+
+		SVC_SetPause setpause = new() { Paused = paused };
+		BroadcastMessage(setpause);
 	}
 	public virtual void SetPassword(ReadOnlySpan<char> password) {
 		if (!password.IsEmpty)
