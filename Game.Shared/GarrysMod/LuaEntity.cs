@@ -2,6 +2,7 @@
 using Source.Common;
 using Source.Common.GarrysMod.Lua;
 
+using System.Numerics;
 using System.Runtime.InteropServices;
 
 #if CLIENT_DLL
@@ -184,6 +185,28 @@ public static partial class LuaEntity
 			return 1;
 		}
 		lua.PushBool(false);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Entity__GetPos(ILuaInterface lua) {
+		BaseEntity ent = Get_Entity(1, false)!;
+		LuaVector.Push_Vector(ent.GetAbsOrigin());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Entity__GetForward(ILuaInterface lua) {
+		BaseEntity ent = Get_Entity(1, false)!;
+		ent.GetVectors(out Vector3 forward, out _, out _);
+		LuaVector.Push_Vector(forward);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Entity__EyeAngles(ILuaInterface lua) {
+		BaseEntity ent = Get_Entity(1, false)!;
+		LuaAngle.Push_Angle(ent.EyeAngles());
 		return 1;
 	}
 

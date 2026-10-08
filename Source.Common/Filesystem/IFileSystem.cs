@@ -164,6 +164,8 @@ public interface ISearchPath
 			fileName = fileName[1..];
 
 		fileName.ClampedCopyTo(target[writePtr..]); writePtr += fileName.Length;
+		if (writePtr < target.Length)
+			target[writePtr] = '\0';
 		return target[..writePtr];
 	}
 }

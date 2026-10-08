@@ -2110,6 +2110,17 @@ public partial class C_BaseEntity : IClientEntity
 		return ref CoordinateFrame;
 	}
 
+	public virtual void GetVectors(out Vector3 forward, out Vector3 right, out Vector3 up) {
+		ref readonly Matrix3x4 entityToWorld = ref EntityToWorldTransform();
+
+		MathLib.MatrixGetColumn(entityToWorld, 0, out forward);
+
+		MathLib.MatrixGetColumn(entityToWorld, 1, out right);
+		right *= -1.0f;
+
+		MathLib.MatrixGetColumn(entityToWorld, 2, out up);
+	}
+
 	public ref Vector3 GetNetworkOrigin() => ref NetworkOrigin;
 	public ref readonly Vector3 GetOldOrigin() => ref OldOrigin;
 	public ref QAngle GetNetworkAngles() => ref NetworkAngles;
