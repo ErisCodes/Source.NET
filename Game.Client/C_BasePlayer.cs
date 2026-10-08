@@ -47,6 +47,13 @@ public partial class C_BasePlayer : C_BaseCombatCharacter, IGameEventListener2
 
 	public override ShadowType ShadowCastType() => ShadowType.None;
 
+	static readonly DynamicAccessor DA_ViewOffset = FIELD.OF(nameof(ViewOffset));
+	public readonly InterpolatedVar<Vector3> IV_ViewOffset = new($"{nameof(C_BasePlayer)}.{nameof(IV_ViewOffset)}");
+
+	public C_BasePlayer() {
+		AddVar(this, DA_ViewOffset, IV_ViewOffset, LatchFlags.LatchSimulationVar, true);
+	}
+
 	public static readonly DataMap PM_PlayerState = new(typeof(PlayerState), [
 		DEFINE<PlayerState>.PRED_FIELD( nameof(PlayerState.DeadFlag), FieldType.Boolean, FieldTypeDescFlags.InSendTable ),
 	]);
