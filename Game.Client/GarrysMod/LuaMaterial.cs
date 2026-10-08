@@ -4,6 +4,8 @@ using Source.Common.GarrysMod.Lua;
 using Source.Common.MaterialSystem;
 
 using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Game.Client.GarrysMod;
 
@@ -198,6 +200,265 @@ public static partial class LuaMaterial
 
 		var.SetMatrixValue(LuaVMatrix.Get_VMatrix(3));
 		return 0;
+	}
+
+	[LuaMethod]
+	static int IMaterial__GetInt(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		lua.PushNumber(var.GetIntValue());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int IMaterial__SetInt(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		int value = (int)lua.CheckNumber(3);
+		if (value != var.GetIntValue()) {
+			var.SetIntValue(value);
+			material.RecomputeStateSnapshots();
+		}
+		return 0;
+	}
+
+	[LuaMethod]
+	static int IMaterial__GetFloat(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		lua.PushNumber(var.GetFloatValue());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int IMaterial__SetFloat(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		var.SetFloatValue((float)lua.CheckNumber(3));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int IMaterial__SetUndefined(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		var.SetUndefined();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int IMaterial__SetVector(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		ref Vector3 vec = ref LuaVector.Get_Vector(3);
+		var.SetVecValue(vec.X, vec.Y, vec.Z);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int IMaterial__GetVector(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		Vector3 vec = default;
+		var.GetVecValue(MemoryMarshal.CreateSpan(ref vec.X, 3));
+		LuaVector.Push_Vector(vec);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int IMaterial__SetVector4D(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		float x = (float)lua.CheckNumber(3);
+		float y = (float)lua.CheckNumber(4);
+		float z = (float)lua.CheckNumber(5);
+		float w = (float)lua.CheckNumber(6);
+		var.SetVecValue(x, y, z, w);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int IMaterial__GetVector4D(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		Span<float> vec = stackalloc float[4];
+		var.GetVecValue(vec);
+		lua.PushNumber(vec[0]);
+		lua.PushNumber(vec[1]);
+		lua.PushNumber(vec[2]);
+		lua.PushNumber(vec[3]);
+		return 4;
+	}
+
+	[LuaMethod]
+	static int IMaterial__GetVectorLinear(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		Vector3 vec = default;
+		var.GetLinearVecValue(MemoryMarshal.CreateSpan(ref vec.X, 3), 3);
+		LuaVector.Push_Vector(vec);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int IMaterial__SetString(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		var.SetStringValue(lua.CheckString(3));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int IMaterial__SetShader(ILuaInterface lua) => 0;
+
+	[LuaMethod]
+	static int IMaterial__Recompute(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		material.RecomputeStateSnapshots();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int IMaterial__GetKeyValues(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		int count = material.ShaderParamCount();
+		IMaterialVar[] vars = material.GetShaderParams()!;
+		lua.CreateTable();
+		for (int i = 0; i < count; i++) {
+			IMaterialVar var = vars[i];
+			lua.PushString(var.GetName());
+			switch (var.GetVarType()) {
+				case MaterialVarType.Float:
+					lua.PushNumber(var.GetFloatValue());
+					break;
+				default:
+					lua.PushString(var.GetStringValue());
+					break;
+				case MaterialVarType.Vector: {
+						Vector3 vec = default;
+						var.GetLinearVecValue(MemoryMarshal.CreateSpan(ref vec.X, 3), 3);
+						LuaVector.Push_Vector(vec);
+						break;
+					}
+				case MaterialVarType.Texture: {
+						ITexture? texture = var.GetTextureValue();
+						if (texture == null)
+							lua.PushNil();
+						else
+							LuaTexture.LC_ITexture.Push(texture);
+						break;
+					}
+				case MaterialVarType.Int:
+					lua.PushNumber(var.GetIntValue());
+					break;
+				case MaterialVarType.Undefined:
+					lua.PushNil();
+					break;
+				case MaterialVarType.Matrix:
+					LuaVMatrix.Push_VMatrix(var.GetMatrixValue());
+					break;
+			}
+			lua.SetTable(-3);
+		}
+		return 1;
 	}
 
 	static bool IsAllowedMaterialPath(ReadOnlySpan<char> name) {
