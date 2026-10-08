@@ -136,53 +136,6 @@ public class PooledValueDictionary<V> : IEnumerable<V> where V : IPoolableObject
 	public V this[ulong index] => dict[index];
 }
 
-public class ObjectPool<T> where T : IPoolableObject, new()
-{
-	public static readonly ObjectPool<T> Shared = new();
-
-
-	readonly ConcurrentDictionary<T, bool> valueStates = [];
-
-	public T Alloc() {
-		foreach (var kvp in valueStates) {
-			if (kvp.Value == false) { // We found something free
-				valueStates[kvp.Key] = true;
-				kvp.Key.Init();
-				return kvp.Key;
-			}
-		}
-
-		// Make an new instance of the class
-		var instance = new T();
-		valueStates[instance] = true;
-		instance.Init();
-		return instance;
-	}
-
-	public int Count() {
-		int count = 0;
-		foreach (KeyValuePair<T, bool> kvp in valueStates)
-			if (kvp.Value)
-				count++;
-
-		return count;
-	}
-
-	public bool IsMemoryPoolAllocated(T value) => valueStates.TryGetValue(value, out _);
-	public void Free(T value) {
-		if (value == null)
-			return;
-		if (!valueStates.TryGetValue(value, out bool state))
-			AssertMsg(false, $"Passed an instance of {typeof(T).Name} to {nameof(Free)}(T value) that was not allocated by {nameof(Alloc)}()");
-		else if (state == false)
-			AssertMsg(false, $"Attempted to free {typeof(T).Name} instance twice in ClassPool<T>, please verify\n");
-		else {
-			value.Reset();
-			valueStates[value] = false;
-		}
-	}
-}
-
 public sealed class PooledLinkedList<T> where T : struct
 {
 	struct Node
@@ -279,61 +232,6 @@ public sealed class PooledLinkedList<T> where T : struct
 			_freeHead = i;
 		}
 		_capacity = newCap;
-	}
-}
-
-public class StructMemoryPool<T> where T : struct
-{
-	public static readonly StructMemoryPool<T> Shared = new();
-
-	readonly RefStack<T> instances = new();
-	readonly ConcurrentDictionary<int, bool> valueStates = [];
-
-	public ref T Alloc() {
-		foreach (var kvp in valueStates) {
-			ref T existing = ref instances[kvp.Key];
-			if (kvp.Value == false) {
-				valueStates[kvp.Key] = true;
-				return ref existing;
-			}
-		}
-
-		lock (instances) {
-			ref T instance = ref instances.Push();
-			valueStates[instances.Count - 1] = true;
-			return ref instance;
-		}
-	}
-
-	public unsafe bool IsMemoryPoolAllocated(ref T value) {
-		lock (instances) {
-			for (int i = 0; i < instances.Count; i++) {
-				ref T instance = ref instances[i];
-				if (Unsafe.AreSame(ref value, ref instance))
-					return true;
-			}
-		}
-
-		return false;
-	}
-
-
-	public void Free(ref T value) {
-		lock (instances) {
-			for (int i = 0; i < instances.Count; i++) {
-				ref T instance = ref instances[i];
-				if (Unsafe.AreSame(ref value, ref instance)) {
-					if (!valueStates.TryGetValue(i, out bool state))
-						AssertMsg(false, $"Passed an instance of {typeof(T).Name} to {nameof(Free)}(T value) that was not allocated by {nameof(Alloc)}()");
-					else if (state == false)
-						AssertMsg(false, $"Attempted to free {typeof(T).Name} instance twice in StructPool<T>, please verify\n");
-					else {
-						valueStates[i] = false;
-						instance = default; // Zero out the instance
-					}
-				}
-			}
-		}
 	}
 }
 

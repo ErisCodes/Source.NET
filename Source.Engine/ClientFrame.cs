@@ -191,8 +191,5 @@ public class ClientFrameManager
 
 	public ClientFrame AllocateFrame() => ClientFramePool.Alloc();
 
-	public void FreeFrame(ClientFrame frame) {
-		if (ClientFramePool.IsMemoryPoolAllocated(frame))
-			ClientFramePool.Free(frame);
-	}
+	public void FreeFrame(ClientFrame frame) => ClientFramePool.Free(frame);
 }
