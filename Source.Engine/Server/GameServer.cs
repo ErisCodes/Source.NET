@@ -46,6 +46,13 @@ public class GameServer : BaseServer
 
 	public bool IsInPureServerMode() => PureServerWhitelist != null;
 
+	public override bool IsPausable() {
+		if (IsMultiplayer())
+			return SV.sv_pausable.GetBool();
+		else
+			return true;
+	}
+
 	public override void Shutdown() {
 		LevelMainMenuBackground = false;
 		base.Shutdown();
