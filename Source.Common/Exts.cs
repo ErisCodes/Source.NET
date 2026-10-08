@@ -282,61 +282,6 @@ public sealed class PooledLinkedList<T> where T : struct
 	}
 }
 
-public class StructMemoryPool<T> where T : struct
-{
-	public static readonly StructMemoryPool<T> Shared = new();
-
-	readonly RefStack<T> instances = new();
-	readonly ConcurrentDictionary<int, bool> valueStates = [];
-
-	public ref T Alloc() {
-		foreach (var kvp in valueStates) {
-			ref T existing = ref instances[kvp.Key];
-			if (kvp.Value == false) {
-				valueStates[kvp.Key] = true;
-				return ref existing;
-			}
-		}
-
-		lock (instances) {
-			ref T instance = ref instances.Push();
-			valueStates[instances.Count - 1] = true;
-			return ref instance;
-		}
-	}
-
-	public unsafe bool IsMemoryPoolAllocated(ref T value) {
-		lock (instances) {
-			for (int i = 0; i < instances.Count; i++) {
-				ref T instance = ref instances[i];
-				if (Unsafe.AreSame(ref value, ref instance))
-					return true;
-			}
-		}
-
-		return false;
-	}
-
-
-	public void Free(ref T value) {
-		lock (instances) {
-			for (int i = 0; i < instances.Count; i++) {
-				ref T instance = ref instances[i];
-				if (Unsafe.AreSame(ref value, ref instance)) {
-					if (!valueStates.TryGetValue(i, out bool state))
-						AssertMsg(false, $"Passed an instance of {typeof(T).Name} to {nameof(Free)}(T value) that was not allocated by {nameof(Alloc)}()");
-					else if (state == false)
-						AssertMsg(false, $"Attempted to free {typeof(T).Name} instance twice in StructPool<T>, please verify\n");
-					else {
-						valueStates[i] = false;
-						instance = default; // Zero out the instance
-					}
-				}
-			}
-		}
-	}
-}
-
 public static class StrTools
 {
 	// We're going to use / everywhere instead of \ on Windows, since C#'s API
