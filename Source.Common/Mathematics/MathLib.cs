@@ -1537,7 +1537,83 @@ public static class MathLib
 			return !Vector3.AnyWhereAllBitsSet(Vector3.IsNaN(*(Vector3*)pR));
 	}
 
-	public static void MatrixInverseGeneral(in Matrix4x4 src, out Matrix4x4 dst) => Matrix4x4.Invert(src, out dst);
+	public static bool MatrixInverseGeneral(in Matrix4x4 src, out Matrix4x4 dst) {
+		int iRow, i, j, iTemp, iTest;
+		float mul, fTest, fLargest;
+		Span<float> mat = stackalloc float[4 * 8];
+		Span<int> rowMap = stackalloc int[4];
+		int iLargest;
+
+		Matrix4x4 srcCopy = src;
+		ReadOnlySpan<float> pIn = MemoryMarshal.CreateReadOnlySpan(ref srcCopy.M11, 16);
+
+		for (i = 0; i < 4; i++) {
+			Span<float> pOut = mat.Slice(i * 8, 8);
+
+			for (j = 0; j < 4; j++)
+				pOut[j] = pIn[i * 4 + j];
+
+			pOut[4] = 0.0f;
+			pOut[5] = 0.0f;
+			pOut[6] = 0.0f;
+			pOut[7] = 0.0f;
+			pOut[i + 4] = 1.0f;
+
+			rowMap[i] = i;
+		}
+
+		for (iRow = 0; iRow < 4; iRow++) {
+			fLargest = 0.00001f;
+			iLargest = -1;
+			for (iTest = iRow; iTest < 4; iTest++) {
+				fTest = MathF.Abs(mat[rowMap[iTest] * 8 + iRow]);
+				if (fTest > fLargest) {
+					iLargest = iTest;
+					fLargest = fTest;
+				}
+			}
+
+			if (iLargest == -1) {
+				dst = srcCopy;
+				return false;
+			}
+
+			iTemp = rowMap[iLargest];
+			rowMap[iLargest] = rowMap[iRow];
+			rowMap[iRow] = iTemp;
+
+			Span<float> pRow = mat.Slice(rowMap[iRow] * 8, 8);
+
+			mul = 1.0f / pRow[iRow];
+			for (j = 0; j < 8; j++)
+				pRow[j] *= mul;
+
+			pRow[iRow] = 1.0f;
+
+			for (i = 0; i < 4; i++) {
+				if (i == iRow)
+					continue;
+
+				Span<float> pScaleRow = mat.Slice(rowMap[i] * 8, 8);
+
+				mul = -pScaleRow[iRow];
+				for (j = 0; j < 8; j++)
+					pScaleRow[j] += pRow[j] * mul;
+
+				pScaleRow[iRow] = 0.0f;
+			}
+		}
+
+		dst = default;
+		Span<float> dstOut = MemoryMarshal.CreateSpan(ref dst.M11, 16);
+		for (i = 0; i < 4; i++) {
+			ReadOnlySpan<float> pRowIn = mat.Slice(rowMap[i] * 8 + 4, 4);
+			for (j = 0; j < 4; j++)
+				dstOut[i * 4 + j] = pRowIn[j];
+		}
+
+		return true;
+	}
 
 	public static void V3Mul(this in Matrix4x4 m, in Vector3 vIn, out Vector3 vOut) {
 		float rw = 1.0f / (m[3, 0] * vIn.X + m[3, 1] * vIn.Y + m[3, 2] * vIn.Z + m[3, 3]);
@@ -2974,6 +3050,81 @@ public static class MathLib
 		m[0, 3] = trans.X;
 		m[1, 3] = trans.Y;
 		m[2, 3] = trans.Z;
+	}
+
+	public static Vector3 GetScale(this in Matrix4x4 m) {
+		m.GetBasisVectors(out Vector3 v0, out Vector3 v1, out Vector3 v2);
+		return new(v0.Length(), v1.Length(), v2.Length());
+	}
+
+	public static Matrix4x4 NormalizeBasisVectors(this in Matrix4x4 m) {
+		Matrix4x4 ret = default;
+		m.GetBasisVectors(out Vector3 v0, out Vector3 v1, out Vector3 v2);
+
+		VectorNormalize(ref v0);
+		VectorNormalize(ref v1);
+		VectorNormalize(ref v2);
+
+		ret.SetBasisVectors(in v0, in v1, in v2);
+
+		ret[3, 0] = ret[3, 1] = ret[3, 2] = 0.0f;
+		ret[3, 3] = 1.0f;
+
+		return ret;
+	}
+
+	public static bool IsRotationMatrix(this in Matrix4x4 m) {
+		Vector3 v1 = new(m[0, 0], m[0, 1], m[0, 2]);
+		Vector3 v2 = new(m[1, 0], m[1, 1], m[1, 2]);
+		Vector3 v3 = new(m[2, 0], m[2, 1], m[2, 2]);
+
+		return
+			MathF.Abs(1 - v1.Length()) < 0.01f &&
+			MathF.Abs(1 - v2.Length()) < 0.01f &&
+			MathF.Abs(1 - v3.Length()) < 0.01f &&
+			MathF.Abs(Vector3.Dot(v1, v2)) < 0.01f &&
+			MathF.Abs(Vector3.Dot(v1, v3)) < 0.01f &&
+			MathF.Abs(Vector3.Dot(v2, v3)) < 0.01f;
+	}
+
+	public static Matrix4x4 SetupMatrixTranslation(in Vector3 translation) {
+		Matrix4x4 ret = default;
+		ret.Init(
+			1.0f, 0.0f, 0.0f, translation.X,
+			0.0f, 1.0f, 0.0f, translation.Y,
+			0.0f, 0.0f, 1.0f, translation.Z,
+			0.0f, 0.0f, 0.0f, 1.0f
+		);
+		return ret;
+	}
+
+	public static Matrix4x4 SetupMatrixScale(in Vector3 scale) {
+		Matrix4x4 ret = default;
+		ret.Init(
+			scale.X, 0.0f, 0.0f, 0.0f,
+			0.0f, scale.Y, 0.0f, 0.0f,
+			0.0f, 0.0f, scale.Z, 0.0f,
+			0.0f, 0.0f, 0.0f, 1.0f
+		);
+		return ret;
+	}
+
+	public static void SetupMatrixAngles(ref this Matrix4x4 m, in QAngle angles) {
+		SetupMatrixAnglesInternal(ref m, angles);
+
+		m[0, 3] = 0.0f;
+		m[1, 3] = 0.0f;
+		m[2, 3] = 0.0f;
+		m[3, 0] = 0.0f;
+		m[3, 1] = 0.0f;
+		m[3, 2] = 0.0f;
+		m[3, 3] = 1.0f;
+	}
+
+	public static Matrix4x4 SetupMatrixAngles(in QAngle angles) {
+		Matrix4x4 ret = default;
+		ret.SetupMatrixAngles(in angles);
+		return ret;
 	}
 
 	public static void MatrixTranspose(in Matrix4x4 src, out Matrix4x4 dst) {

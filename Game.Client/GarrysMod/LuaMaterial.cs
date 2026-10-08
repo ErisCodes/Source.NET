@@ -168,6 +168,38 @@ public static partial class LuaMaterial
 		return 0;
 	}
 
+	[LuaMethod]
+	static int IMaterial__GetMatrix(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		LuaVMatrix.Push_VMatrix(var.GetMatrixValue());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int IMaterial__SetMatrix(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LC_IMaterial.Get(1);
+		if (material == null) {
+			lua.Error("Tried to use a NULL IMaterial!");
+			return 0;
+		}
+
+		IMaterialVar var = material.FindVar(lua.CheckString(2), out bool found, false);
+		if (var == null || !found)
+			return 0;
+
+		var.SetMatrixValue(LuaVMatrix.Get_VMatrix(3));
+		return 0;
+	}
+
 	static bool IsAllowedMaterialPath(ReadOnlySpan<char> name) {
 		Span<char> buffer = stackalloc char[MAX_PATH];
 		strcpy(buffer, name);
