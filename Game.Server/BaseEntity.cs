@@ -2261,7 +2261,27 @@ public partial class BaseEntity : IServerEntity
 	public ref readonly Vector3 GetLocalVelocity() => ref Velocity;
 
 	public ref readonly Vector3 GetAbsVelocity() {
+		if (IsEFlagSet(EFL.DirtyAbsVelocity))
+			CalcAbsoluteVelocity();
+
 		return ref AbsVelocity;
+	}
+
+	public void CalcAbsoluteVelocity() {
+		if (!IsEFlagSet(EFL.DirtyAbsVelocity))
+			return;
+
+		RemoveEFlags(EFL.DirtyAbsVelocity);
+
+		BaseEntity? moveParent = GetMoveParent();
+		if (moveParent == null) {
+			AbsVelocity = Velocity;
+			return;
+		}
+
+		MathLib.VectorRotate(Velocity, moveParent.EntityToWorldTransform(), out AbsVelocity);
+
+		AbsVelocity += moveParent.GetAbsVelocity();
 	}
 
 	public string? Classname; // prev m_iClassname
