@@ -295,9 +295,9 @@ public static class DispMapload
 		coreDisp.InitDispInfo(mapDisp.Power, mapDisp.MinTess, mapDisp.SmoothingAngle, verts, tris);
 		coreDisp.SetNeighborData(mapDisp.EdgeNeighbors, mapDisp.CornerNeighbors);
 
-		ErrorIfNot(coreDisp.GetAllowedVerts().GetNumDWords() == 10, $"DispInfo_StoreMapData: size mismatch in 'allowed verts' list ({coreDisp.GetAllowedVerts().GetNumDWords()} != 10)");
-		for (int iVert = 0; iVert < coreDisp.GetAllowedVerts().GetNumDWords(); ++iVert)
-			coreDisp.GetAllowedVerts().SetDWord(iVert, (uint)mapDisp.AllowedVerts[iVert]);
+		ErrorIfNot(coreDisp.GetAllowedVerts().GetNumWords() == 10, $"DispInfo_StoreMapData: size mismatch in 'allowed verts' list ({coreDisp.GetAllowedVerts().GetNumWords()} != 10)");
+		for (int iVert = 0; iVert < coreDisp.GetAllowedVerts().GetNumWords(); ++iVert)
+			coreDisp.GetAllowedVerts().SetWord(iVert, (uint)mapDisp.AllowedVerts[iVert]);
 
 		ref BSPMSurface2 parent = ref pDisp.GetParent();
 		BuildDispSurfInit(world, coreDisp, ref parent);

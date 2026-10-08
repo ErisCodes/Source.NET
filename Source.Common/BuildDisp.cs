@@ -544,7 +544,7 @@ public class CoreDispInfo : DispUtilsHelper
 	CoreDispInfo[]? ListBase;
 	nint ListSize;
 
-	MaxDispVertsBitVec AllowedVerts;
+	MaxDispVertsBitSet AllowedVerts;
 
 	nint ListIndex;
 
@@ -928,7 +928,7 @@ public class CoreDispInfo : DispUtilsHelper
 	public void SetListIndex(nint index) => throw new NotImplementedException();
 	public nint GetListIndex() => throw new NotImplementedException();
 
-	public ref MaxDispVertsBitVec GetAllowedVerts() => ref AllowedVerts;
+	public ref MaxDispVertsBitSet GetAllowedVerts() => ref AllowedVerts;
 	public void AllowedVerts_Clear() => throw new NotImplementedException();
 	public int AllowedVerts_GetNumDWords() => throw new NotImplementedException();
 	public uint AllowedVerts_GetDWord(int i) => throw new NotImplementedException();

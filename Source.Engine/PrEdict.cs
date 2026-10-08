@@ -31,7 +31,7 @@ public class ED
 	static readonly ConVar sv_useexplicitdelete = new("1", FCvar.DevelopmentOnly, "Explicitly delete dormant client entities caused by AllowImmediateReuse().");
 	static readonly ConVar sv_lowEdicthreshold = new("8", FCvar.None, "When only this many edicts are free, take the action specified by sv_lowedict_action.", 0, Constants.MAX_EDICTS);
 	static readonly ConVar sv_lowedict_action = new("0", FCvar.None, "0 - no action, 1 - warn to log file, 2 - attempt to restart the game, if applicable, 3 - restart the map, 4 - go to the next map in the map cycle, 5 - spew all edicts.", 0, 5);
-	static MaxEdictsBitVec FreeEdicts;
+	static MaxEdictsBitSet FreeEdicts;
 
 	public static Edict? Alloc(int forceEdictIndex) {
 		if (forceEdictIndex >= 0) {

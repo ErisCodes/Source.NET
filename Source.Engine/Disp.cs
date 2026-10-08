@@ -93,7 +93,7 @@ public enum DecalFlags : byte
 
 public struct DispDecalBase
 {
-	public DispNodeIntersectBitVec NodeIntersect;
+	public DispNodeIntersectBitSet NodeIntersect;
 
 	public DecalFlags Flags;
 	public ushort NVerts;

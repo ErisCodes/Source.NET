@@ -2,7 +2,7 @@ namespace Source.Common;
 
 public abstract class BaseTesselateHelper
 {
-	public MaxDispVertsBitVec ActiveVerts;
+	public MaxDispVertsBitSet ActiveVerts;
 	public PowerInfo PowerInfo = null!;
 
 	public int NIndices;

@@ -144,7 +144,7 @@ public class C_RecipientFilter : IRecipientFilter
 
 	public bool IgnorePredictionCull() => bIgnorePredictionCull;
 	public void SetIgnorePredictionCull(bool ignore) => bIgnorePredictionCull = ignore;
-	public void AddPlayersFromBitMask(in AbsolutePlayerLimitBitVec playerbits) {
+	public void AddPlayersFromBitMask(in PlayerBitSet playerbits) {
 		C_BasePlayer? player = C_BasePlayer.GetLocalPlayer();
 
 		if (player == null)

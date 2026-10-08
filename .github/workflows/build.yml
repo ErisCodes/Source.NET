@@ -24,3 +24,6 @@ jobs:
 
       - name: Build
         run: dotnet build Source.NET.slnx -c ${{ matrix.configuration }}
+
+      - name: Test
+        run: dotnet test --project Source.Common.Tests/Source.Common.Tests.csproj -c ${{ matrix.configuration }} --no-build

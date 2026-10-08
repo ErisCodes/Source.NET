@@ -294,7 +294,7 @@ public class LagCompensationManager(ReadOnlySpan<char> name) : AutoGameSystemPer
 		WeaponAngles = weaponAngles;
 		WeaponRange = weaponRange;
 
-		ref readonly MaxEdictsBitVec entityTransmitBits = ref engine.GetEntityTransmitBitsForClient(player.EntIndex() - 1);
+		ref readonly MaxEdictsBitSet entityTransmitBits = ref engine.GetEntityTransmitBitsForClient(player.EntIndex() - 1);
 
 		foreach (KeyValuePair<EHANDLE, EntityLagData> kvp in CompensatedEntities) {
 			EntityLagData ld = kvp.Value;
