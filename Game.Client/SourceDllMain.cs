@@ -10,6 +10,7 @@ using Source.Common.Commands;
 using Source.Common.DataCache;
 using Source.Common.Engine;
 using Source.Common.Filesystem;
+using Source.Common.Input;
 using Source.Common.GameUI;
 using Source.Common.GUI;
 using Source.Common.MaterialSystem;
@@ -88,6 +89,7 @@ public static class SourceDllMain
 	[Dependency] public static IVGui VGui { get; private set; } = null!;
 	[Dependency] public static ILocalize Localize { get; private set; } = null!;
 	[Dependency] public static IVGuiInput vguiInput { get; private set; } = null!;
+	[Dependency] public static IInputSystem inputsystem { get; private set; } = null!;
 	[Dependency] public static ISceneFileCache scenefilecache { get; private set; } = null!;
 #if GMOD_DLL
 	[Dependency] public static Source.Common.GarrysMod.IGet get { get; private set; } = null!;
