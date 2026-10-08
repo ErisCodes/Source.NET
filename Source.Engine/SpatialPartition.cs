@@ -747,7 +747,7 @@ public sealed class VoxelTree
 	SpatialPartitionImpl? _owner;
 	readonly List<ushort> _availableVisitBits = new(2048);
 	ushort _nextVisitBit;
-	readonly ReaderWriterLockSlim _lock = new();
+	readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.SupportsRecursion);
 
 	[ThreadStatic] static PartitionVisits? t_visits;
 
@@ -803,8 +803,8 @@ public sealed class VoxelTree
 	public void InsertIntoTree(ushort hPartition, in Vector3 mins, in Vector3 maxs) {
 		Debug.Assert(hPartition != PARTITION_INVALID_HANDLE);
 
-		bool wasReading = t_visits != null;
-		if (wasReading) _lock.ExitReadLock();
+		int readCount = _lock.RecursiveReadCount;
+		for (int i = 0; i < readCount; i++) _lock.ExitReadLock();
 
 		_lock.EnterWriteLock();
 		try {
@@ -834,7 +834,7 @@ public sealed class VoxelTree
 		}
 		finally {
 			_lock.ExitWriteLock();
-			if (wasReading) _lock.EnterReadLock();
+			for (int i = 0; i < readCount; i++) _lock.EnterReadLock();
 		}
 	}
 
@@ -844,8 +844,8 @@ public sealed class VoxelTree
 		int nLevel = Unsafe.Add(ref Unsafe.As<TreeArray<sbyte>, sbyte>(ref info.Level), _treeId);
 		if (nLevel < 0) return;
 
-		bool wasReading = t_visits != null;
-		if (wasReading) _lock.ExitReadLock();
+		int readCount = _lock.RecursiveReadCount;
+		for (int i = 0; i < readCount; i++) _lock.ExitReadLock();
 
 		_lock.EnterWriteLock();
 		try {
@@ -855,7 +855,7 @@ public sealed class VoxelTree
 		}
 		finally {
 			_lock.ExitWriteLock();
-			if (wasReading) _lock.EnterReadLock();
+			for (int i = 0; i < readCount; i++) _lock.EnterReadLock();
 		}
 	}
 
