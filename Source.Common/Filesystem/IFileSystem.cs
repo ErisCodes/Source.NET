@@ -245,7 +245,7 @@ public interface IFileSystem : IBaseFileSystem
 	/// <param name="path"></param>
 	/// <param name="pathID"></param>
 	/// <param name="addType"></param>
-	public void AddSearchPath(ReadOnlySpan<char> diskPath, ReadOnlySpan<char> pathID, SearchPathAdd addType = SearchPathAdd.ToTail, PathGroupName groupName = PathGroupName.Default);
+	public void AddSearchPath(ReadOnlySpan<char> diskPath, ReadOnlySpan<char> pathID, SearchPathAdd addType = SearchPathAdd.ToTail, PathGroupName groupName = PathGroupName.Default, bool workshop = false);
 	/// <summary>
 	/// Add a search path.
 	/// </summary>

@@ -6,6 +6,7 @@ using Source.Common;
 using Source.Common.DataCache;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.GarrysMod.Lua;
 using Source.Common.Mathematics;
 using Source.Common.Physics;
@@ -85,6 +86,18 @@ public static partial class LuaUtil
 		List<byte> decoded = [];
 		Bootil.String.Decode.Base64(System.Text.Encoding.Latin1.GetBytes(str), decoded);
 		lua.PushString(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(decoded));
+		return 1;
+	}
+
+	[LuaFunction]
+	static int KeyValuesToTable(ILuaInterface lua) {
+		LuaTable table = new(null, 0);
+		KeyValues kv = new("KeyValuesToTable");
+		kv.UsesEscapeSequences(g_Lua!.GetBool(2));
+		kv.LoadFromBuffer("util.KeyValuesToTable", g_Lua.CheckString(1));
+		LuaHelper.KeyValuesToTable(kv, table, g_Lua.GetBool(3));
+		table.Push();
+		table.UnReference();
 		return 1;
 	}
 

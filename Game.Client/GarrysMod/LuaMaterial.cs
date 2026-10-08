@@ -1,4 +1,5 @@
 using Source;
+using Source.Common.Formats.Keyvalues;
 using Source.Common.GarrysMod.Lua;
 using Source.Common.MaterialSystem;
 
@@ -201,8 +202,6 @@ public static partial class LuaMaterial
 		string parameters = lua.CheckStringOpt(2, "");
 		long start = Stopwatch.GetTimestamp();
 
-		Console.WriteLine($"Lua loading material {name}"); // todo remove me
-
 		IMaterial? material = null;
 		if (get.Resources() != null)
 			material = get.Resources()!.FindMaterial(name, parameters, true, false, false);
@@ -217,5 +216,114 @@ public static partial class LuaMaterial
 		LC_IMaterial.Push(material);
 		lua.PushNumber((Stopwatch.GetTimestamp() - start) / (double)Stopwatch.Frequency);
 		return 2;
+	}
+
+	struct CreatedMaterial
+	{
+		public InlineArray260<char> Name;
+		public IMaterial? Material;
+	}
+
+	static readonly List<CreatedMaterial> CreatedMaterials = [];
+
+	public static void Push(IMaterial? material) {
+		material?.IncrementReferenceCount();
+		LC_IMaterial.Push(material);
+	}
+
+	public static void TableToKeyValues(ILuaObject? table, KeyValues kv, ILuaObject visited) {
+		if (table == null || !table.isTable())
+			return;
+
+		visited.Push();
+		table.Push();
+		g_Lua!.GetTable(-2);
+		LuaType type = g_Lua.GetType(-1);
+		g_Lua.Pop(2);
+		if (type == LuaType.Bool) {
+			visited.UnReference();
+			g_Lua.Error("TableToKeyValues: attempt to serialize structure with cyclic reference");
+			return;
+		}
+
+		visited.Push();
+		table.Push();
+		g_Lua.PushBool(true);
+		g_Lua.SetTable(-3);
+		g_Lua.Pop(1);
+
+		table.Push();
+		g_Lua.PushNil();
+		while (g_Lua.Next(-2)) {
+			g_Lua.Push(-2);
+			string? key = g_Lua.GetString(-1);
+			g_Lua.Pop(1);
+			if (g_Lua.GetType(-1) == LuaType.Table) {
+				KeyValues sub = kv.CreateNewKey();
+				sub.SetName(key);
+				LuaObject subTable = new();
+				subTable.SetFromStack(-1);
+				TableToKeyValues(subTable, sub, visited);
+				subTable.UnReference();
+			}
+			else
+				kv.SetString(key, g_Lua.GetString(-1));
+			g_Lua.Pop(1);
+		}
+		g_Lua.Pop(1);
+
+		visited.Push();
+		table.Push();
+		g_Lua.PushNil();
+		g_Lua.SetTable(-3);
+		g_Lua.Pop(1);
+	}
+
+	[LuaGlobal]
+	static int CreateMaterial(ILuaInterface lua) {
+		string name = lua.CheckString(1);
+		string shader = lua.CheckString(2);
+		ILuaObject data = lua.GetObject(3);
+		if (!data.isNil() && !data.isTable()) {
+			lua.TypeError("table", 3);
+			return 0;
+		}
+
+		foreach (CreatedMaterial created in CreatedMaterials) {
+			if (strncmp(((ReadOnlySpan<char>)created.Name).SliceNullTerminatedString(), name, 260) == 0) {
+				Push(created.Material);
+				return 1;
+			}
+		}
+
+		KeyValues kv = new(shader);
+		LuaTable visited = new(null, 0);
+		TableToKeyValues(data, kv, visited);
+
+		string fileName = $"{name}.vmt";
+		IMaterial? material = materials.FindMaterial("!" + name, "Other textures", false, null);
+		if (material == null || material.IsErrorMaterial()) {
+			material = materials.CreateMaterial(fileName, kv);
+			if (material == null) {
+				visited.UnReference();
+				return 0;
+			}
+			material.DecrementReferenceCount();
+		}
+		else {
+			// todo: IMaterial.SetShaderAndParams
+			// material.SetShaderAndParams(kv);
+		}
+
+		CreatedMaterial entry = default;
+		strcpy(entry.Name, name);
+		entry.Material = material;
+		CreatedMaterials.Add(entry);
+		material.IncrementReferenceCount();
+		material.Refresh();
+		Push(material);
+
+		visited.UnReference();
+		return 1;
 	}
 }

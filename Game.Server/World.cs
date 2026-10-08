@@ -4,6 +4,7 @@ using Game.Shared;
 
 using Source.Common;
 using Source.Common.Commands;
+using Source.Common.Mathematics;
 using Source.Engine;
 
 using System.Numerics;
@@ -48,6 +49,31 @@ public class World : BaseEntity
 		ColdWorld = false;
 	}
 
+	public override bool KeyValue(ReadOnlySpan<char> keyName, ReadOnlySpan<char> value) {
+		if (keyName.Equals("skyname", StringComparison.Ordinal)) {
+			ConVarRef skyname = new("sv_skyname");
+			skyname.SetValue(value);
+		}
+		else if (keyName.Equals("newunit", StringComparison.Ordinal)) {
+			// if (atoi(value) != 0)
+			// 	Game_SetOneWayTransition();
+		}
+		else if (keyName.Equals("world_mins", StringComparison.Ordinal)) {
+			Vector3 vec = default;
+			UTIL_StringToVector(vec.Base(), value);
+			WorldMins = vec;
+		}
+		else if (keyName.Equals("world_maxs", StringComparison.Ordinal)) {
+			Vector3 vec = default;
+			UTIL_StringToVector(vec.Base(), value);
+			WorldMaxs = vec;
+		}
+		else
+			return base.KeyValue(keyName, value);
+
+		return true;
+	}
+
 	public override void Precache() {
 		g_WorldEntity = this;
 		g_fGameOver = false;
@@ -85,7 +111,7 @@ public class World : BaseEntity
 		g_pGameRules.Precache();
 		BaseTempEntity.PrecacheTempEnts();
 
-		for (int i = 0; i < g_DefaultLightstyles.Length; i++) 
+		for (int i = 0; i < g_DefaultLightstyles.Length; i++)
 			engine.LightStyle(i, GetDefaultLightstyleString(i));
 		// styles 32-62 are assigned by the light program for switchable lights
 
@@ -104,7 +130,7 @@ public class World : BaseEntity
 	}
 
 	public static ReadOnlySpan<char> GetDefaultLightstyleString(int styleIndex) => styleIndex < g_DefaultLightstyles.Length ? g_DefaultLightstyles[styleIndex] : "m";
-	static readonly string[] g_DefaultLightstyles =	[
+	static readonly string[] g_DefaultLightstyles = [
 		// 0 normal
 		"m",
 		// 1 FLICKER (first variety)

@@ -16,7 +16,22 @@ public static partial class LuaVGUI
 	// todo: CursorVisible
 	// todo: IsHoveringWorld
 	// todo: GetWorldPanel
-	// todo: FocusedHasParent
+	[LuaFunction]
+	static int FocusedHasParent(ILuaInterface lua) {
+		Panel? panel = Get_Panel(1);
+		if (panel == null)
+			return 0;
+
+		IPanel? focus = vguiInput.GetFocus();
+		if (focus != null && focus.HasParent(panel)) {
+			lua.PushBool(true);
+			return 1;
+		}
+
+		lua.PushBool(false);
+		return 1;
+	}
+
 	[LuaFunction]
 	static int GetKeyboardFocus(ILuaInterface lua) {
 		IPanel? focus = vguiInput.GetFocus();

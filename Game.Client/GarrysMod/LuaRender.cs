@@ -1,5 +1,9 @@
+using Source;
+using Source.Common.Bitmap;
 using Source.Common.GarrysMod.Lua;
 using Source.Common.MaterialSystem;
+
+using TextureFlags = Source.Common.TextureFlags;
 
 using System.Numerics;
 
@@ -11,6 +15,102 @@ public static partial class LuaRender
 	static readonly LuaLibrary LL_Factory_render = new("render");
 	static readonly IMaterialSystemHardwareConfig HardwareConfig = Singleton<IMaterialSystemHardwareConfig>();
 	static readonly TextureReference RenderTextureReference = new();
+
+	struct NamedRenderTarget
+	{
+		public InlineArray256<char> Name;
+		public ITexture? Texture;
+	}
+
+	static readonly List<NamedRenderTarget> NamedRenderTargets = [];
+
+	static ITexture? CreateNamedRenderTarget(ReadOnlySpan<char> name, int w, int h, RenderTargetSizeMode sizeMode, MaterialRenderTargetDepth depth, TextureFlags textureFlags, CreateRenderTargetFlags renderTargetFlags, bool unused, ImageFormat format) {
+		if (name.IsEmpty)
+			return null;
+
+		int index = -1;
+		for (int i = 0; i < NamedRenderTargets.Count; i++) {
+			NamedRenderTarget rt = NamedRenderTargets[i];
+			if (stricmp(((ReadOnlySpan<char>)rt.Name).SliceNullTerminatedString(), name) == 0) {
+				if (rt.Texture == null || rt.Texture.IsError()) {
+					index = i;
+					break;
+				}
+				return rt.Texture;
+			}
+		}
+
+		if (stricmp("_rt_ResolvedFullFrameDepth", name) == 0) {
+			Warning($"Warning! Creating an RT ({name}) with name of an existing texture!\n");
+			return materials.FindTexture("_rt_ResolvedFullFrameDepth", MaterialDefines.TEXTURE_GROUP_RENDER_TARGET, true, 0);
+		}
+
+		if ((textureFlags & TextureFlags.EnvMap) != 0) {
+			Warning($"Warning! Creating an RT ({name}) with TEXTUREFLAGS_ENVMAP! This will cause crashes! Bailing..\n");
+			return null;
+		}
+
+		if ((textureFlags & TextureFlags.Procedural) != 0) {
+			Warning($"Warning! Creating an RT ({name}) with TEXTUREFLAGS_PROCEDURAL! Not allowed.\n");
+			return null;
+		}
+
+		if (format == ImageFormat.Unknown)
+			format = materials.GetBackBufferFormat();
+
+		ITexture? texture = materials.CreateNamedRenderTargetTextureEx(name, w, h, sizeMode, format, depth, textureFlags, renderTargetFlags);
+		if (texture == null) {
+			Warning($"Warning! Failed to create render target {name}!\n");
+			return null;
+		}
+
+		NamedRenderTarget entry = default;
+		strcpy(entry.Name, name);
+		entry.Texture = texture;
+		if (index == -1)
+			NamedRenderTargets.Add(entry);
+		else
+			NamedRenderTargets[index] = entry;
+		return texture;
+	}
+
+	[LuaGlobal]
+	static int GetRenderTarget(ILuaInterface lua) {
+		ITexture? texture = CreateNamedRenderTarget(lua.CheckString(1), (int)lua.CheckNumber(2), (int)lua.CheckNumber(3), RenderTargetSizeMode.NoChange, MaterialRenderTargetDepth.Separate, TextureFlags.Trilinear | TextureFlags.NoMip, 0, true, ImageFormat.Unknown);
+		if (texture != null && !texture.IsError()) {
+			LuaTexture.Push(texture);
+			return 1;
+		}
+		return 0;
+	}
+
+	[LuaGlobal]
+	static int GetRenderTargetEx(ILuaInterface lua) {
+		float sizeMode = (int)lua.CheckNumber(4);
+		if (sizeMode <= 0)
+			sizeMode = 0;
+		if ((float)RenderTargetSizeMode.LiteralPicmip <= sizeMode)
+			sizeMode = (float)RenderTargetSizeMode.LiteralPicmip;
+
+		float depth = (int)lua.CheckNumber(5);
+		if (depth <= 0)
+			depth = 0;
+		if ((float)MaterialRenderTargetDepth.Only <= depth)
+			depth = (float)MaterialRenderTargetDepth.Only;
+
+		int format = (int)lua.CheckNumber(8);
+		if (format < (int)ImageFormat.Unknown || format >= (int)ImageFormat.Count) {
+			lua.Error("GetRenderTargetEx: Invalid image format\n");
+			return 0;
+		}
+
+		ITexture? texture = CreateNamedRenderTarget(lua.CheckString(1), (int)lua.CheckNumber(2), (int)lua.CheckNumber(3), (RenderTargetSizeMode)(uint)sizeMode, (MaterialRenderTargetDepth)(uint)depth, (TextureFlags)(int)lua.CheckNumber(6), (CreateRenderTargetFlags)(int)lua.CheckNumber(7), false, (ImageFormat)format);
+		if (texture != null && !texture.IsError()) {
+			LuaTexture.Push(texture);
+			return 1;
+		}
+		return 0;
+	}
 
 	// todo: DrawSprite
 	// todo: DrawQuadEasy
@@ -64,8 +164,36 @@ public static partial class LuaRender
 	// todo: GetRenderTarget
 	// todo: SetRenderTarget
 	// todo: SetRenderTargetEx
-	// todo: PushRenderTarget
-	// todo: PopRenderTarget
+	static int RenderTargetStack;
+
+	[LuaFunction]
+	static int PushRenderTarget(ILuaInterface lua) {
+		ITexture? texture = null;
+		if (lua.IsType(1, LuaType.Texture))
+			texture = (ITexture?)LuaTexture.LC_ITexture.Get(1);
+
+		using MatRenderContextPtr renderContext = new(materials);
+		if (lua.GetType(2) == LuaType.Number)
+			renderContext.PushRenderTargetAndViewport(texture, (int)lua.CheckNumber(2), (int)lua.CheckNumber(3), (int)lua.CheckNumber(4), (int)lua.CheckNumber(5));
+		else
+			renderContext.PushRenderTargetAndViewport(texture);
+
+		RenderTargetStack++;
+		return 0;
+	}
+
+	[LuaFunction]
+	static int PopRenderTarget(ILuaInterface lua) {
+		if (RenderTargetStack > 0) {
+			RenderTargetStack--;
+			using MatRenderContextPtr renderContext = new(materials);
+			renderContext.PopRenderTargetAndViewport();
+			return 0;
+		}
+
+		lua.ErrorFromLua("render.PopRenderTarget underflow\n");
+		return 0;
+	}
 	[LuaFunction]
 	static int GetScreenEffectTexture(ILuaInterface lua) {
 		int index = 0;
@@ -79,16 +207,44 @@ public static partial class LuaRender
 		}
 		return 0;
 	}
-	// todo: GetBloomTex0
-	// todo: GetBloomTex1
-	// todo: GetMoBlurTex0
-	// todo: GetMoBlurTex1
+	[LuaFunction]
+	static int GetBloomTex0(ILuaInterface lua) {
+		LuaTexture.Push(RenderTexture.GetBloomTex0());
+		return 1;
+	}
+
+	[LuaFunction]
+	static int GetBloomTex1(ILuaInterface lua) {
+		LuaTexture.Push(RenderTexture.GetBloomTex1());
+		return 1;
+	}
+
+	[LuaFunction]
+	static int GetMoBlurTex0(ILuaInterface lua) {
+		LuaTexture.Push(RenderTexture.GetMoBlurTex0());
+		return 1;
+	}
+
+	[LuaFunction]
+	static int GetMoBlurTex1(ILuaInterface lua) {
+		LuaTexture.Push(RenderTexture.GetMoBlurTex1());
+		return 1;
+	}
 	// todo: GetMorphTex0
 	// todo: GetMorphTex1
 	// todo: GetSmallTex0
 	// todo: GetSmallTex1
-	// todo: GetSuperFPTex
-	// todo: GetSuperFPTex2
+	[LuaFunction]
+	static int GetSuperFPTex(ILuaInterface lua) {
+		LuaTexture.Push(RenderTexture.GetSuperFPTex(null));
+		return 1;
+	}
+
+	[LuaFunction]
+	static int GetSuperFPTex2(ILuaInterface lua) {
+		LuaTexture.Push(RenderTexture.GetSuperFPTex2(null));
+		return 1;
+	}
 	// todo: SuppressEngineLighting
 	// todo: SetLocalModelLights
 	// todo: ResetModelLighting

@@ -94,6 +94,13 @@ public static partial class LuaPlayer
 	}
 
 	[LuaMethod]
+	static int Player__Alive(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+		g_Lua!.PushBool(player.IsAlive());
+		return 1;
+	}
+
+	[LuaMethod]
 	static int Player__GetActiveWeapon(ILuaInterface lua) {
 		BasePlayer player = Get_Player(1, false)!;
 		LuaEntity.Push_Entity(player.GetActiveWeapon());
