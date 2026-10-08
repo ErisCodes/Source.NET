@@ -148,7 +148,8 @@ public partial class CL(IServiceProvider services, Net Net,
 
 		bool sendPacket = true;
 
-		if (Net.Time < cl.NextCmdTime || !cl.NetChannel!.CanPacket())
+		if ((!cl.NetChannel!.IsLoopback() || Host.host_limitlocal.GetInt() != 0) &&
+			(Net.Time < cl.NextCmdTime || !cl.NetChannel!.CanPacket() || !finalTick))
 			sendPacket = false;
 
 		if (cl.IsActive()) {
