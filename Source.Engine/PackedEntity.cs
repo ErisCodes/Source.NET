@@ -89,12 +89,8 @@ public class PackedEntity : IPoolableObject
 			return false;
 
 		for (int i = 0; i < recipients.Length; i++) {
-			var a = recipients[i].Bits;
-			var b = Recipients[i].Bits;
-			for (int bit = 0; bit < a.Length; bit++) {
-				if (a[bit] != b[bit])
-					return false;
-			}
+			if (recipients[i].Bits != Recipients[i].Bits)
+				return false;
 		}
 
 		return true;

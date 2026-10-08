@@ -1,21 +1,18 @@
-﻿using System.Collections;
-
-namespace Source.Common.Engine;
+﻿namespace Source.Common.Engine;
 
 public class SendProxyRecipients
 {
 	public const int MAX_DATATABLE_PROXIES = 32;
 
-	public BitArray Bits;
+	public PlayerBitSet Bits;
 
-	public SendProxyRecipients() => Bits = new(Constants.ABSOLUTE_PLAYER_LIMIT);
-	public void SetAllRecipients() => Bits.SetAll(true);
-	public void ClearAllRecipients() => Bits.SetAll(false);
-	public void SetRecipient(int clientIndex) => Bits.Set(clientIndex, true);
-	public void ClearRecipient(int clientIndex) => Bits.Set(clientIndex, false);
-	public bool GetRecipient(int clientIndex) => Bits[clientIndex];
+	public void SetAllRecipients() => Bits.SetAll();
+	public void ClearAllRecipients() => Bits.ClearAll();
+	public void SetRecipient(int clientIndex) => Bits.Set(clientIndex);
+	public void ClearRecipient(int clientIndex) => Bits.Clear(clientIndex);
+	public bool GetRecipient(int clientIndex) => Bits.IsBitSet(clientIndex);
 	public void SetOnly(int clientIndex) {
-		Bits.SetAll(false);
-		Bits.Set(clientIndex, true);
+		Bits.ClearAll();
+		Bits.Set(clientIndex);
 	}
 }
