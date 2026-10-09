@@ -58,6 +58,7 @@ public partial class TestFieldsBase
 	public int Hidden => hidden;
 
 	[NetworkVar] public partial int Tracked { get; set; }
+	[NetworkVar] public partial Vector3 TrackedPosition { get; set; }
 
 	public readonly List<IFieldAccessor> Changes = [];
 	void NetworkStateChanged(IFieldAccessor field) => Changes.Add(field);
@@ -397,6 +398,18 @@ public class FieldAccessorTests
 	}
 
 	[Fact]
+	public void FieldOfNetworkVarPropertyMatchesGeneratedAccessor() {
+		TestFieldsBase obj = new() { Tracked = 3 };
+		IFieldAccessor viaField = FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.Tracked));
+		IFieldAccessor viaDerived = FIELD<TestFieldsDerived>.OF(nameof(TestFieldsBase.Tracked));
+
+		Assert.Equal(3, viaField.GetValue<int>(obj));
+		Assert.Equal(TestFieldsBase.NetworkVarFields.Tracked, viaField);
+		Assert.Equal(TestFieldsBase.NetworkVarFields.Tracked, viaDerived);
+		Assert.Equal(TestFieldsBase.NetworkVarFields.Tracked.GetHashCode(), viaField.GetHashCode());
+	}
+
+	[Fact]
 	public void SeparateAccessorsToSameFieldAreEqual() {
 		IFieldAccessor a = FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.Value));
 		IFieldAccessor b = FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.Value));
@@ -631,5 +644,16 @@ public class FieldAccessorTests
 		Assert.Equal(nameof(TestFieldsBase.Value), desc.FieldName);
 		Assert.True((desc.Flags & FieldTypeDescFlags.Key) != 0);
 		Assert.True((desc.Flags & FieldTypeDescFlags.Save) != 0);
+	}
+
+	[Fact]
+	public void NetworkVarVectorProperty() {
+		TestFieldsBase obj = new();
+
+		obj.TrackedPosition = new(1, 2, 3);
+		obj.TrackedPosition = new(1, 2, 3);
+		Assert.Single(obj.Changes);
+		Assert.Equal(new Vector3(1, 2, 3), TestFieldsBase.NetworkVarFields.TrackedPosition.GetValue<Vector3>(obj));
+		Assert.Equal(FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.TrackedPosition)), TestFieldsBase.NetworkVarFields.TrackedPosition);
 	}
 }
