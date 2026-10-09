@@ -75,12 +75,17 @@ namespace Source.CodeAnalysis.NetworkVars
 			List<string> conversions = new List<string>();
 			AddConversions(ctx.SemanticModel.Compilation, prop.Type, conversions);
 
+			string? inlineArrayElement = GetContainer(ctx.SemanticModel.Compilation, prop.Type, out ITypeSymbol? element, out _) == ContainerKind.InlineArray && element != null
+				? element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+				: null;
+
 			return new PropertyModel(
 				propertyName: prop.Name,
 				networkName: GetNetworkNameAttribute(prop) ?? prop.Name,
 				accessorBase: ScalarAccessorBase(ctx.SemanticModel.Compilation, prop.Type),
 				conversions: string.Join("\n", conversions),
 				typeDisplay: prop.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+				inlineArrayElement: inlineArrayElement,
 				@namespace: containingType.ContainingNamespace.IsGlobalNamespace
 					? null
 					: containingType.ContainingNamespace.ToDisplayString(),
@@ -153,7 +158,13 @@ namespace Source.CodeAnalysis.NetworkVars
 				sb.Append(indent).Append("public partial ").Append(t).Append(' ').Append(name).AppendLine(" {");
 				sb.Append(indent).Append("\tget => ").Append(backing).AppendLine(";");
 				sb.Append(indent).AppendLine("\tset {");
-				sb.Append(indent).Append("\t\tif (!global::System.Collections.Generic.EqualityComparer<").Append(t).Append(">.Default.Equals(").Append(backing).AppendLine(", value)) {");
+				if (p.InlineArrayElement == null)
+					sb.Append(indent).Append("\t\tif (!global::System.Collections.Generic.EqualityComparer<").Append(t).Append(">.Default.Equals(").Append(backing).AppendLine(", value)) {");
+				else {
+					string e = p.InlineArrayElement;
+					sb.Append(indent).Append("\t\tif (!global::System.MemoryExtensions.SequenceEqual((global::System.ReadOnlySpan<").Append(e).Append(">)").Append(backing)
+						.Append(", (global::System.ReadOnlySpan<").Append(e).Append(">)value, global::System.Collections.Generic.EqualityComparer<").Append(e).AppendLine(">.Default)) {");
+				}
 				sb.Append(indent).Append("\t\t\t").Append(backing).AppendLine(" = value;");
 				sb.Append(indent).Append("\t\t\tNetworkStateChanged(NetworkVarFields.").Append(name).AppendLine(");");
 				sb.Append(indent).AppendLine("\t\t}");
@@ -209,13 +220,14 @@ namespace Source.Common
 
 		private sealed class PropertyModel
 		{
-			public PropertyModel(string propertyName, string networkName, string accessorBase, string conversions, string typeDisplay, string? @namespace, string typeName,
+			public PropertyModel(string propertyName, string networkName, string accessorBase, string conversions, string typeDisplay, string? inlineArrayElement, string? @namespace, string typeName,
 				string typeFullyQualified, bool propertyIsPartial, bool typeIsPartial, bool unsupported, Location location) {
 				PropertyName = propertyName;
 				NetworkName = networkName;
 				AccessorBase = accessorBase;
 				Conversions = conversions;
 				TypeDisplay = typeDisplay;
+				InlineArrayElement = inlineArrayElement;
 				Namespace = @namespace;
 				TypeName = typeName;
 				TypeFullyQualified = typeFullyQualified;
@@ -230,6 +242,7 @@ namespace Source.Common
 			public string AccessorBase { get; }
 			public string Conversions { get; }
 			public string TypeDisplay { get; }
+			public string? InlineArrayElement { get; }
 			public string? Namespace { get; }
 			public string TypeName { get; }
 			public string TypeFullyQualified { get; }
