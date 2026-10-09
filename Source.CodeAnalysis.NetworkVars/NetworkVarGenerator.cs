@@ -178,6 +178,7 @@ namespace Source.CodeAnalysis.NetworkVars
 				sb.Append(indent).Append("\t\tpublic __").Append(p.PropertyName).Append("() : base(typeof(").Append(type.TypeFullyQualified).Append("), ")
 					.Append(Literal(p.PropertyName)).Append(", ").Append(Literal(p.NetworkName)).AppendLine(") { }");
 				sb.Append(indent).Append("\t\tpublic override ref ").Append(p.TypeDisplay).Append(" Ref(object o) => ref ((").Append(type.TypeFullyQualified).Append(")o).__nv_").Append(p.PropertyName).AppendLine(";");
+				sb.Append(indent).Append("\t\tpublic override string FieldKey => ").Append(Literal("S|" + type.TypeFullyQualified + "|" + p.PropertyName)).AppendLine(";");
 				sb.Append(indent).AppendLine("\t}");
 			}
 			sb.Append(indent).AppendLine("}");
