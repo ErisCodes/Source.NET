@@ -2702,6 +2702,7 @@ public partial class BaseEntity : IServerEntity
 	public bool DynamicModelSetBounds;
 	public bool DynamicModelPending;
 
+	static readonly IFieldAccessor ModelIndexField = FIELD.OF(nameof(ModelIndex));
 	public void SetModelIndex(int index) {
 		if (IVModelInfo.IsDynamicModelIndex(index) && !(GetBaseAnimating() != null && DynamicModelAllowed)) {
 			AssertMsg(false, "dynamic model support not enabled on server entity");
@@ -2717,6 +2718,7 @@ public partial class BaseEntity : IServerEntity
 			modelinfo.ReleaseDynamicModel(ModelIndex);
 			modelinfo.AddRefDynamicModel(index);
 			ModelIndex = index;
+			NetworkStateChanged(ModelIndexField);
 
 			DynamicModelSetBounds = false;
 
