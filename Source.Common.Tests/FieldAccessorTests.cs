@@ -70,6 +70,11 @@ public class TestFieldsDerived : TestFieldsBase
 	public int DerivedValue;
 }
 
+public sealed class TestKeylessAccessor() : FieldAccessor<int>(typeof(TestFieldsBase), nameof(TestFieldsBase.Value), nameof(TestFieldsBase.Value))
+{
+	public override ref int Ref(object instance) => ref ((TestFieldsBase)instance).Value;
+}
+
 public class FieldAccessorTests
 {
 	[Fact]
@@ -684,5 +689,187 @@ public class FieldAccessorTests
 		Assert.Single(obj.Changes);
 		Assert.Equal(new Vector3(1, 2, 3), TestFieldsBase.NetworkVarFields.TrackedPosition.GetValue<Vector3>(obj));
 		Assert.Equal(FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.TrackedPosition)), TestFieldsBase.NetworkVarFields.TrackedPosition);
+	}
+
+	[Fact]
+	public void ArrayAtIndexThroughInterface() {
+		TestFieldsBase obj = new();
+		obj.Values[1] = 8;
+		DynamicArrayAccessor array = FIELD<TestFieldsBase>.OF_ARRAY(nameof(TestFieldsBase.Values));
+
+		IFieldAccessor element = ((IFieldAccessorIndexable)array).AtIndex(1);
+
+		Assert.Same(array.AtIndex(1), element);
+		Assert.Equal(8, element.GetValue<int>(obj));
+	}
+
+	[Fact]
+	public void ScalarAtIndexReturnsItself() {
+		DynamicAccessor field = FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.Value));
+
+		Assert.Same(field, field.AtIndex(3));
+		Assert.Same(field, ((IFieldAccessorIndexable)field).AtIndex(3));
+	}
+
+	[Fact]
+	public void AccessorEqualsItself() {
+		DynamicAccessor field = FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.Value));
+
+		Assert.True(field.Equals(field));
+		Assert.False(field.Equals(null));
+		Assert.False(field.Equals(FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.Other))));
+	}
+
+	[Fact]
+	public void KeylessAccessorsCompareByReference() {
+		TestKeylessAccessor first = new(), second = new();
+
+		Assert.Null(first.FieldKey);
+		Assert.Equal(0, first.FieldKeyId);
+		Assert.Equal(first, first);
+		Assert.NotEqual(first, second);
+		Assert.NotEqual<DynamicAccessor>(first, FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.Value)));
+		Assert.NotEqual<DynamicAccessor>(FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.Value)), first);
+		Assert.Equal(RuntimeHelpers.GetHashCode(first), first.GetHashCode());
+
+		TestFieldsBase obj = new() { Value = 12 };
+		Assert.Equal(12, first.GetValue<int>(obj));
+	}
+
+	[Fact]
+	public void ArrayElementHasNoSpan() {
+		TestFieldsBase obj = new();
+		DynamicAccessor element = FIELD<TestFieldsBase>.OF_ARRAY(nameof(TestFieldsBase.Values)).AtIndex(0)!;
+
+		Assert.False(element.TryGetSpan<int>(obj, 1, out Span<int> span));
+		Assert.True(span.IsEmpty);
+	}
+
+	[Fact]
+	public void ListElementEmptySpans() {
+		List<int> list = [10, 20];
+		ListElementAccessor<int> element = new(0);
+
+		element.CopyTo(list, Span<int>.Empty);
+		element.CopyFrom(list, Span<int>.Empty);
+
+		Assert.Equal(0, list[0]);
+	}
+
+	[Fact]
+	public void InlineArrayCopiesWholeValue() {
+		TestFieldsBase obj = new();
+		IFieldAccessor field = FIELD<TestFieldsBase>.OF(nameof(TestFieldsBase.Values));
+		TestFieldsInt4 values = default;
+		values[0] = 1;
+		values[3] = 4;
+
+		field.CopyFrom(obj, [values]);
+		Assert.Equal([1, 0, 0, 4], ((ReadOnlySpan<int>)obj.Values).ToArray());
+
+		Span<TestFieldsInt4> target = new TestFieldsInt4[1];
+		field.CopyTo(obj, target);
+		Assert.Equal([1, 0, 0, 4], ((ReadOnlySpan<int>)target[0]).ToArray());
+	}
+
+	[Fact]
+	public void ArrayAccessorWholeValue() {
+		TestFieldsBase obj = new();
+		DynamicArrayAccessor array = FIELD<TestFieldsBase>.OF_ARRAY(nameof(TestFieldsBase.Values));
+		TestFieldsInt4 values = default;
+		values[2] = 9;
+
+		Assert.True(array.SetValue(obj, values));
+		Assert.Equal(9, obj.Values[2]);
+
+		TestFieldsInt4 read = array.GetValue<TestFieldsInt4>(obj);
+		Assert.Equal([0, 0, 9, 0], ((ReadOnlySpan<int>)read).ToArray());
+	}
+
+	[Fact]
+	public void SignedSourceConversions() {
+		Assert.Equal(-3, FieldConvert<sbyte, int>.Convert((sbyte)-3));
+		Assert.Equal(-300, FieldConvert<short, int>.Convert((short)-300));
+		Assert.Equal(-7L, FieldConvert<int, long>.Convert(-7));
+		Assert.Equal(-9, FieldConvert<long, int>.Convert(-9L));
+	}
+
+	[Fact]
+	public void UnsignedSourceConversions() {
+		Assert.Equal(5L, FieldConvert<uint, long>.Convert(5u));
+		Assert.Equal(6, FieldConvert<ulong, int>.Convert(6ul));
+		Assert.Equal(7, FieldConvert<nuint, int>.Convert((nuint)7));
+		Assert.Equal(2f, FieldConvert<uint, float>.Convert(2u));
+		Assert.Equal(3d, FieldConvert<ushort, double>.Convert((ushort)3));
+		Assert.True(FieldConvert<byte, bool>.Convert((byte)1));
+		Assert.False(FieldConvert<byte, bool>.Convert((byte)0));
+	}
+
+	[Fact]
+	public void FloatSourceConversions() {
+		Assert.True(FieldConvert<float, bool>.Convert(0.5f));
+		Assert.False(FieldConvert<double, bool>.Convert(0d));
+		Assert.Equal((sbyte)-4, FieldConvert<double, sbyte>.Convert(-4.7));
+		Assert.Equal((short)-500, FieldConvert<float, short>.Convert(-500.2f));
+		Assert.Equal(-6, FieldConvert<double, int>.Convert(-6.9));
+		Assert.Equal(1L << 40, FieldConvert<double, long>.Convert((double)(1L << 40)));
+		Assert.Equal((byte)200, FieldConvert<double, byte>.Convert(200.9));
+		Assert.Equal((ushort)60000, FieldConvert<float, ushort>.Convert(60000f));
+		Assert.Equal(4000000000u, FieldConvert<double, uint>.Convert(4000000000d));
+		Assert.Equal(1ul << 50, FieldConvert<double, ulong>.Convert((double)(1ul << 50)));
+		Assert.Equal(1.5f, FieldConvert<double, float>.Convert(1.5));
+		Assert.Equal(2.5, FieldConvert<float, double>.Convert(2.5f));
+	}
+
+	[Fact]
+	public void NumericKindClassification() {
+		Assert.Equal(NumericKind.Signed, NumericConvert.Classify(typeof(nint)));
+		Assert.Equal(NumericKind.Unsigned, NumericConvert.Classify(typeof(nuint)));
+		Assert.Equal(NumericKind.Unsigned, NumericConvert.Classify(typeof(char)));
+		Assert.Equal(NumericKind.Bool, NumericConvert.Classify(typeof(bool)));
+		Assert.Equal(NumericKind.Float, NumericConvert.Classify(typeof(float)));
+		Assert.Equal(NumericKind.None, NumericConvert.Classify(typeof(decimal)));
+		Assert.Equal(NumericKind.None, NumericConvert.Classify(typeof(string)));
+	}
+
+	[Fact]
+	public void NetworkArraySizeAttributeKeepsSize() {
+		Assert.Equal(5, new NetworkArraySizeAttribute(5).Size);
+	}
+
+	[Fact]
+	public void NetworkArrayMembers() {
+		NetworkArray<int> array = new(3);
+		int[] raw = array;
+
+		Assert.Same(array.Value, raw);
+		Assert.Same(array.Value, array.Base);
+		Assert.Equal(3, array.Count());
+	}
+
+	[Fact]
+	public void NetworkArrayHookSeesChanges() {
+		NetworkArray<int> array = new(3);
+		List<int> changed = [];
+		array.Hook((ref int value) => changed.Add(value));
+
+		array.Set(1, 5);
+		array.Set(1, 5);
+		Assert.Single(changed);
+		Assert.Equal(5, array[1]);
+
+		array.GetForModify(2) = 8;
+		Assert.Equal(2, changed.Count);
+		Assert.Equal(8, array.Get(2));
+	}
+
+	[Fact]
+	public void NetworkArrayWithoutHook() {
+		NetworkArray<int> array = new(2);
+
+		array.Set(0, 3);
+		array.GetForModify(1) = 4;
+
+		Assert.Equal([3, 4], array.Value);
 	}
 }
