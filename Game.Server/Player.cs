@@ -517,7 +517,7 @@ public partial class BasePlayer : BaseCombatCharacter
 	[NetworkName("m_hViewEntity")]
 	public EHANDLE ViewEntity = new();
 	[NetworkName("m_hViewModel")]
-	InlineArrayNewMaxViewmodels<Handle<BaseViewModel>> ViewModel = new();
+	protected InlineArrayNewMaxViewmodels<Handle<BaseViewModel>> ViewModel = new();
 	readonly List<Handle<BaseEntity>> SimulatedByThisPlayer = [];
 
 	public IServerVehicle? GetVehicle() => Vehicle.Get()?.GetServerVehicle();
@@ -1016,6 +1016,8 @@ public partial class BasePlayer : BaseCombatCharacter
 
 		InitHUD = true;
 
+		CreateViewModel();
+
 		// more todo
 
 		// GameRules.PlayerSpawn(this);
@@ -1026,6 +1028,23 @@ public partial class BasePlayer : BaseCombatCharacter
 		InitVCollision(GetAbsOrigin(), GetAbsVelocity());
 	}
 
+
+	public virtual void CreateViewModel(int index = 0) {
+		Assert(index >= 0 && index < MAX_VIEWMODELS);
+
+		if (GetViewModel(index) != null)
+			return;
+
+		BaseViewModel? vm = (BaseViewModel?)CreateEntityByName("viewmodel");
+		if (vm != null) {
+			vm.SetAbsOrigin(GetAbsOrigin());
+			vm.SetOwner(this);
+			vm.SetIndex(index);
+			Util.DispatchSpawn(vm);
+			vm.FollowEntity(this);
+			ViewModel[index].Set(vm);
+		}
+	}
 
 	public TimeUnit_t GetDeathTime() => DeathTime;
 

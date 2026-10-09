@@ -565,7 +565,7 @@ public partial class HL2MP_Player : HL2_Player
 		throw new NotImplementedException();
 	}
 
-	void CreateViewModel(int index = 0) {
+	public override void CreateViewModel(int index = 0) {
 		Assert(index >= 0 && index < MAX_VIEWMODELS);
 
 		if (GetViewModel(index) != null)
@@ -574,11 +574,11 @@ public partial class HL2MP_Player : HL2_Player
 		PredictedViewModel? vm = (PredictedViewModel?)CreateEntityByName("predicted_viewmodel");
 		if (vm != null) {
 			vm.SetAbsOrigin(GetAbsOrigin());
-			// vm.SetOwner(this);
-			// vm.SetIndex(index);
+			vm.SetOwner(this);
+			vm.SetIndex(index);
 			Util.DispatchSpawn(vm);
 			vm.FollowEntity(this, false);
-			// VieweModel.Set(index, vm);
+			ViewModel[index].Set(vm);
 		}
 	}
 

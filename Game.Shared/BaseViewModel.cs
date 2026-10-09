@@ -129,6 +129,19 @@ public partial class
 
 	public int ViewModelIndex() => _ViewModelIndex;
 
+	public override void Spawn() {
+		Precache();
+		CollisionProp().SetCollisionBounds(new(-8, -4, -2), new(8, 4, 2));
+		SetSolid(SolidType.None);
+	}
+
+	public void SetOwner(BaseEntity? entity) => Owner.Set(entity);
+
+	public void SetIndex(int index) {
+		_ViewModelIndex = index;
+		Assert(_ViewModelIndex < (1 << VIEWMODEL_INDEX_BITS));
+	}
+
 	public const int VIEWMODEL_ANIMATION_PARITY_BITS = 3;
 
 	public virtual void SendViewModelMatchingSequence(int sequence) {
