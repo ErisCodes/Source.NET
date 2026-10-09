@@ -12,9 +12,9 @@ public class ClientFrame : IPoolableObject
 	public int LastEntity;
 	public long TickCount;
 
-	public MaxEdictsBitVec TransmitEntity;
-	public MaxEdictsBitVec FromBaseline;
-	public MaxEdictsBitVec TransmitAlways;
+	public MaxEdictsBitSet TransmitEntity;
+	public MaxEdictsBitSet FromBaseline;
+	public MaxEdictsBitSet TransmitAlways;
 	public ClientFrame? Next;
 
 	public FrameSnapshot? Snapshot;
@@ -191,8 +191,5 @@ public class ClientFrameManager
 
 	public ClientFrame AllocateFrame() => ClientFramePool.Alloc();
 
-	public void FreeFrame(ClientFrame frame) {
-		if (ClientFramePool.IsMemoryPoolAllocated(frame))
-			ClientFramePool.Free(frame);
-	}
+	public void FreeFrame(ClientFrame frame) => ClientFramePool.Free(frame);
 }

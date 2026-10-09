@@ -660,13 +660,9 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 		throw new NotImplementedException();
 	}
 
-	public IGMODDataTable GMOD_CreateDataTable(GMOD_CreateDataTableFn fnCallback) {
-		throw new NotImplementedException();
-	}
+	public IGMODDataTable GMOD_CreateDataTable(GMODDataTableCallbackFn fnCallback) => new GMODDataTable(fnCallback);
 
-	public void GMOD_DestroyDataTable(IGMODDataTable dataTable) {
-		throw new NotImplementedException();
-	}
+	public void GMOD_DestroyDataTable(IGMODDataTable dataTable) { }
 
 	public MDLHandle_t GMOD_LoadModel(ReadOnlySpan<char> path) {
 		throw new NotImplementedException();

@@ -490,16 +490,16 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 
 	public int GetEntityCount() => sv.NumEdicts - sv.FreeEdicts;
 
-	public ref readonly MaxEdictsBitVec GetEntityTransmitBitsForClient(int iClientIndex) {
+	public ref readonly MaxEdictsBitSet GetEntityTransmitBitsForClient(int iClientIndex) {
 		if (iClientIndex < 0 || iClientIndex >= sv.GetClientCount()) {
 			Assert(false);
-			return ref Unsafe.NullRef<MaxEdictsBitVec>();
+			return ref Unsafe.NullRef<MaxEdictsBitSet>();
 		}
 
 		GameClient client = sv.Client(iClientIndex);
 		ClientFrame? deltaFrame = client.FrameManager.GetClientFrame(client.DeltaTick);
 		if (deltaFrame == null)
-			return ref Unsafe.NullRef<MaxEdictsBitVec>();
+			return ref Unsafe.NullRef<MaxEdictsBitSet>();
 
 		return ref deltaFrame.TransmitEntity;
 	}
@@ -727,7 +727,7 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 		s_MsgData.Reset(); // clear message data
 	}
 
-	public void Message_DetermineMulticastRecipients(bool usepas, in Vector3 origin, ref AbsolutePlayerLimitBitVec playerbits) {
+	public void Message_DetermineMulticastRecipients(bool usepas, in Vector3 origin, ref PlayerBitSet playerbits) {
 		int cluster = CM.LeafCluster(CM.PointLeafnum(origin));
 		byte[] pvs = new byte[BSPFileCommon.MAX_MAP_LEAFS / 8];
 		int visflag = usepas ? CM.DVIS_PAS : CM.DVIS_PVS;
@@ -1090,13 +1090,9 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 		throw new NotImplementedException();
 	}
 
-	public IGMODDataTable GMOD_CreateDataTable() {
-		throw new NotImplementedException();
-	}
+	public IGMODDataTable GMOD_CreateDataTable() => new GMODDataTable(null);
 
-	public void GMOD_DestroyDataTable(IGMODDataTable dataTable) {
-		throw new NotImplementedException();
-	}
+	public void GMOD_DestroyDataTable(IGMODDataTable dataTable) { }
 
 	public ReadOnlySpan<char> GMOD_GetServerAddress() {
 		throw new NotImplementedException();

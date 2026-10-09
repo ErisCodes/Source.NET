@@ -94,18 +94,18 @@ public class VoiceStatus
 	int ServerModEnable;             // What we've sent to the server about our "voice_modenable" cvar.
 
 	IPanel? ParentPanel;
-	PlayerBitVec VoicePlayers;     // Who is currently talking. Indexed by client index.
+	PlayerBitSet VoicePlayers;     // Who is currently talking. Indexed by client index.
 
 	// This is the gamerules-defined list of players that you can hear. It is based on what teams people are on
 	// and is totally separate from the ban list. Indexed by client index.
-	PlayerBitVec AudiblePlayers;
+	PlayerBitSet AudiblePlayers;
 
 	// Players who have spoken at least once in the game so far
-	PlayerBitVec VoiceEnabledPlayers;
+	PlayerBitSet VoiceEnabledPlayers;
 
 	// This is who the server THINKS we have banned (it can become incorrect when a new player arrives on the server).
 	// It is checked periodically, and the server is told to squelch or unsquelch the appropriate players.
-	PlayerBitVec ServerBannedPlayers;
+	PlayerBitSet ServerBannedPlayers;
 
 	IVoiceStatusHelper? Helper;     // Each mod provides an implementation of this.
 
@@ -211,7 +211,7 @@ public class VoiceStatus
 		using MatRenderContextPtr renderContext = new(materials);
 
 		for (int i = 0; i < VOICE_MAX_PLAYERS; i++) {
-			if (!VoicePlayers[i])
+			if (!VoicePlayers.IsBitSet(i))
 				continue;
 
 			C_BaseEntity? client = cl_entitylist.GetEnt(i + 1);
@@ -300,11 +300,11 @@ public class VoiceStatus
 				return;
 
 			if (talking) {
-				VoicePlayers[iClient] = true;
-				VoiceEnabledPlayers[iClient] = true;
+				VoicePlayers.Set(iClient, true);
+				VoiceEnabledPlayers.Set(iClient, true);
 			}
 			else
-				VoicePlayers[iClient] = false;
+				VoicePlayers.Set(iClient, false);
 		}
 	}
 
@@ -345,7 +345,7 @@ public class VoiceStatus
 				if (BanMgr.GetPlayerBan(pi.GUID))
 					banMask |= 1u << (int)i;
 
-				if (ServerBannedPlayers[playerIndex])
+				if (ServerBannedPlayers.IsBitSet(playerIndex))
 					serverBanMask |= 1u << (int)i;
 			}
 
@@ -374,13 +374,13 @@ public class VoiceStatus
 	public void HandleVoiceMaskMsg(bf_read msg) {
 		uint dw;
 		for (dw = 0; dw < VOICE_MAX_PLAYERS_DW; dw++) {
-			AudiblePlayers.SetDWord((int)dw, (uint)msg.ReadLong());
-			ServerBannedPlayers.SetDWord((int)dw, (uint)msg.ReadLong());
+			AudiblePlayers.SetWord((int)dw, (uint)msg.ReadLong());
+			ServerBannedPlayers.SetWord((int)dw, (uint)msg.ReadLong());
 
 			if (voice_clientdebug.GetInt() != 0) {
 				Msg("CVoiceStatus::HandleVoiceMaskMsg\n");
-				Msg($"    - m_AudiblePlayers[{dw}] = {AudiblePlayers.GetDWord((int)dw)}\n");
-				Msg($"    - m_ServerBannedPlayers[{dw}] = {ServerBannedPlayers.GetDWord((int)dw)}\n");
+				Msg($"    - m_AudiblePlayers[{dw}] = {AudiblePlayers.GetWord((int)dw)}\n");
+				Msg($"    - m_ServerBannedPlayers[{dw}] = {ServerBannedPlayers.GetWord((int)dw)}\n");
 			}
 		}
 
@@ -424,12 +424,12 @@ public class VoiceStatus
 
 	// returns false if the player can't hear the other client due to game rules (eg. the other team)
 	public bool IsPlayerAudible(int player) {
-		return AudiblePlayers[player - 1];
+		return AudiblePlayers.IsBitSet(player - 1);
 	}
 
 	// returns true if the player is currently speaking
 	public bool IsPlayerSpeaking(int playerIndex) {
-		return VoicePlayers[playerIndex - 1];
+		return VoicePlayers.IsBitSet(playerIndex - 1);
 	}
 
 	// returns true if the local player is attempting to speak

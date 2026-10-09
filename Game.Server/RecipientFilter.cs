@@ -66,7 +66,7 @@ public class RecipientFilter : IRecipientFilter
 			AddRecipient(player);
 		}
 	}
-	public void AddPlayersFromBitMask(ref AbsolutePlayerLimitBitVec playerbits) {
+	public void AddPlayersFromBitMask(ref PlayerBitSet playerbits) {
 		int index = playerbits.FindNextSetBit(0);
 
 		while (index > -1) {
@@ -81,7 +81,7 @@ public class RecipientFilter : IRecipientFilter
 		if (gpGlobals.MaxClients == 1)
 			AddAllPlayers();
 		else {
-			AbsolutePlayerLimitBitVec playerbits = default;
+			PlayerBitSet playerbits = default;
 			engine.Message_DetermineMulticastRecipients(false, origin, ref playerbits);
 			AddPlayersFromBitMask(ref playerbits);
 		}
@@ -91,7 +91,7 @@ public class RecipientFilter : IRecipientFilter
 		if (gpGlobals.MaxClients == 1)
 			AddAllPlayers();
 		else {
-			AbsolutePlayerLimitBitVec playerbits = default;
+			PlayerBitSet playerbits = default;
 			engine.Message_DetermineMulticastRecipients(true, origin, ref playerbits);
 			AddPlayersFromBitMask(ref playerbits);
 		}

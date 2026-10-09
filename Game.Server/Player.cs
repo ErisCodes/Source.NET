@@ -1421,7 +1421,7 @@ public partial class BasePlayer : BaseCombatCharacter
 		return base.ShouldTransmit(info);
 	}
 
-	public virtual bool WantsLagCompensationOnEntity(BaseEntity entity, in UserCmd cmd, ref readonly MaxEdictsBitVec entityTransmitBits) {
+	public virtual bool WantsLagCompensationOnEntity(BaseEntity entity, in UserCmd cmd, ref readonly MaxEdictsBitSet entityTransmitBits) {
 		if (!Unsafe.IsNullRef(in entityTransmitBits) && !entityTransmitBits.IsBitSet(entity.EntIndex()))
 			return false;
 

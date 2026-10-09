@@ -57,6 +57,10 @@ public class GameUI(IEngineClient engine) : IGameUI
 	public void OnGameUIActivated() {
 		ActivatedUI = true;
 		staticPanel.SetVisible(true);
+
+		if (engine.GetMaxClients() <= 1)
+			engine.ClientCmd_Unrestricted("setpause");
+
 		staticPanel.OnGameUIActivated();
 	}
 

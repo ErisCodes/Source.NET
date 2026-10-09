@@ -151,7 +151,7 @@ public class WorldRenderList : IWorldRenderList
 	public readonly List<LeafIndex_t> VisibleLeaves = [];
 	public readonly List<LeafFogVolume_t> VisibleLeafFogVolumes = [];
 
-	public VarBitVec VisitedSurfs = new();
+	public VarBitSet VisitedSurfs = new();
 	public bool SkyVisible;
 	int Refs = 1;
 
@@ -335,9 +335,9 @@ public static class GLRSurf
 	public static void Surf_ComputeCentroid(SurfaceHandle_t surfID, out Vector3 vecCentroid) => throw new NotImplementedException();
 	public static int SortInfoToLightmapPage(int sortID) => throw new NotImplementedException();
 	public static IWorldRenderList AllocWorldRenderList() => WorldRenderList.FindOrCreateList(host_state!.WorldBrush!.NumSurfaces);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static bool VisitSurface(ref VarBitVec visitedSurfs, SurfaceHandle_t surfID) => !visitedSurfs.TestAndSet(surfID);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static void MarkSurfaceVisited(ref VarBitVec visitedSurfs, SurfaceHandle_t surfID) => visitedSurfs.Set(surfID);
-	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static bool VisitedSurface(ref VarBitVec visitedSurfs, int index) => visitedSurfs.IsBitSet(index);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static bool VisitSurface(ref VarBitSet visitedSurfs, SurfaceHandle_t surfID) => !visitedSurfs.TestAndSet(surfID);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static void MarkSurfaceVisited(ref VarBitSet visitedSurfs, SurfaceHandle_t surfID) => visitedSurfs.Set(surfID);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static bool VisitedSurface(ref VarBitSet visitedSurfs, int index) => visitedSurfs.IsBitSet(index);
 
 	public static void R_DrawTopView(bool enable) => throw new NotImplementedException();
 	public static void R_TopViewBounds(in Vector2 mins, in Vector2 maxs) => throw new NotImplementedException();
@@ -1026,7 +1026,7 @@ public static class GLRSurf
 		if (leaf.DispCount == 0)
 			return;
 
-		ref VarBitVec visitedSurfs = ref renderList.VisitedSurfs;
+		ref VarBitSet visitedSurfs = ref renderList.VisitedSurfs;
 		for (int i = 0; i < leaf.DispCount; i++) {
 			IDispInfo dispInfo = DispInfo.MLeaf_Disaplcement(leaf, i)!;
 
@@ -1067,7 +1067,7 @@ public static class GLRSurf
 		int i;
 		int surfaceCount = pleaf.NumMarkNodeSurfaces;
 		Span<SurfaceHandle_t> pSurfID = host_state.WorldBrush!.MarkSurfaces.AsSpan(pleaf.FirstMarkSurface);
-		ref VarBitVec visitedSurfs = ref renderList.VisitedSurfs;
+		ref VarBitSet visitedSurfs = ref renderList.VisitedSurfs;
 		for (i = 0; i < surfaceCount; ++i) {
 			SurfaceHandle_t surfID = pSurfID[i];
 			ref BSPMSurface2 surface = ref ModelLoader.SurfaceHandleFromIndex(surfID);
@@ -1142,7 +1142,7 @@ public static class GLRSurf
 			SurfaceHandle_t surfID = node.FirstSurface;
 			int i = ModelLoader.MSurf_Index(ref ModelLoader.SurfaceHandleFromIndex(surfID));
 			int lastSurface = i + node.NumSurfaces;
-			ref VarBitVec visitedSurfs = ref renderList.VisitedSurfs;
+			ref VarBitSet visitedSurfs = ref renderList.VisitedSurfs;
 			for (; i < lastSurface; ++i, ++surfID) {
 				if (!VisitedSurface(ref visitedSurfs, i))
 					continue;

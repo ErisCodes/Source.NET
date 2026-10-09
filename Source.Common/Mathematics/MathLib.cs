@@ -1200,6 +1200,14 @@ public static class MathLib
 		QuaternionSlerpNoAlign(p, q2, t, out qt);
 	}
 
+	public static float QuaternionAngleDiff(in Quaternion p, in Quaternion q) {
+		Quaternion qInv = Quaternion.Conjugate(q);
+		QuaternionMult(p, qInv, out Quaternion diff);
+
+		float sinang = MathF.Min(1.0f, MathF.Sqrt(diff.X * diff.X + diff.Y * diff.Y + diff.Z * diff.Z));
+		return RAD2DEG(2 * MathF.Asin(sinang));
+	}
+
 	public static void QuaternionSlerpNoAlign(in Quaternion p, in Quaternion q, float t, out Quaternion qt) {
 		qt = default;
 		float cosom = p.X * q.X + p.Y * q.Y + p.Z * q.Z + p.W * q.W;
@@ -2803,6 +2811,17 @@ public static class MathLib
 			angle += 360;
 
 		return angle;
+	}
+
+	public static float AngleDistance(float next, float cur) {
+		float delta = next - cur;
+
+		if (delta < -180)
+			delta += 360;
+		else if (delta > 180)
+			delta -= 360;
+
+		return delta;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)] public static float anglemod(float a) => (360f / 65536) * ((int)(a * (65536f / 360.0f)) & 65535);

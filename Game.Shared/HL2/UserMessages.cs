@@ -34,7 +34,11 @@ public partial class UserMessages
 		Register("SWEPCmd", -1);
 		Register("AmmoPickup", -1);
 		Register("WeaponPickup", -1);
-		Register("NetworkedVar", -1);
+#if CLIENT_DLL
+		Game.Client.GarrysMod.LuaNetworkedVars.RegisterUserMessages(this);
+#else
+		Game.Server.GarrysMod.LuaNetworkedVars.RegisterUserMessages(this);
+#endif
 		Register("BreakModel", -1);
 		Register("CheapBreakModel", -1);
 	}

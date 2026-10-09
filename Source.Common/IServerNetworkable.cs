@@ -22,8 +22,8 @@ public class CheckTransmitInfo {
 	public readonly byte[] PVS = new byte[(((BSPFileCommon.MAX_MAP_CLUSTERS + (8 - 1)) / 8) * 8) / 8];
 	public int PVSSize;
 
-	public MaxEdictsBitVec TransmitEdict;  // THESE ARE POINTERS IN C++: FIGURE THIS OUT!!!
-	public MaxEdictsBitVec TransmitAlways; // THESE ARE POINTERS IN C++: FIGURE THIS OUT!!!
+	public MaxEdictsBitSet TransmitEdict;  // THESE ARE POINTERS IN C++: FIGURE THIS OUT!!!
+	public MaxEdictsBitSet TransmitAlways; // THESE ARE POINTERS IN C++: FIGURE THIS OUT!!!
 
 	public int AreasNetworked;
 	public InlineArrayMaxWorldAreas<int> Areas;

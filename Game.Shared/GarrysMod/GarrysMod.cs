@@ -267,9 +267,15 @@ public class GarrysMod : IGarrysMod
 			Msg("Clientside Lua startup!\n");
 			enginevgui.UpdateCustomProgressBar(0.95f, "Starting Lua...");
 #endif
-			// if (g_LuaNetworkedVars != null)
-			// 	Error("g_LuaNetworkedVars");
-			// g_LuaNetworkedVars = new LuaNetworkedVars();
+#if CLIENT_DLL
+			if (LuaNetworkedVars.g_LuaNetworkedVars != null)
+				Error("g_LuaNetworkedVars");
+			LuaNetworkedVars.g_LuaNetworkedVars = new LuaNetworkedVars();
+#else
+			if (Game.Server.GarrysMod.LuaNetworkedVars.g_LuaNetworkedVars != null)
+				Error("g_LuaNetworkedVars");
+			Game.Server.GarrysMod.LuaNetworkedVars.g_LuaNetworkedVars = new Game.Server.GarrysMod.LuaNetworkedVars();
+#endif
 			if (g_Lua != null)
 				Error("CLuaManager::Startup Lua already exsits?\n");
 
@@ -379,10 +385,15 @@ public class GarrysMod : IGarrysMod
 #endif
 			get.LuaShared()!.CloseLuaInterface(g_Lua!);
 			g_Lua = null;
-			// if (g_LuaNetworkedVars == null)
-			// 	Error("!g_LuaNetworkedVars");
-			// todo: free every entry of g_LuaNetworkedVars
-			// g_LuaNetworkedVars = null;
+#if CLIENT_DLL
+			if (LuaNetworkedVars.g_LuaNetworkedVars == null)
+				Error("!g_LuaNetworkedVars");
+			LuaNetworkedVars.g_LuaNetworkedVars = null;
+#else
+			if (Game.Server.GarrysMod.LuaNetworkedVars.g_LuaNetworkedVars == null)
+				Error("!g_LuaNetworkedVars");
+			Game.Server.GarrysMod.LuaNetworkedVars.g_LuaNetworkedVars = null;
+#endif
 		}
 	}
 
@@ -468,12 +479,11 @@ public class GarrysMod : IGarrysMod
 		if (g_Lua != null) {
 			// CheckForFilesystemChanges();
 			g_Lua.Cycle();
-			// if (g_LuaNetworkedVars != null)
-			// 	g_LuaNetworkedVars.Cycle();
 #if CLIENT_DLL
 			LuaTimer.Cycle();
 			LuaFileLibrary.AsyncCycle();
 #else
+			Game.Server.GarrysMod.LuaNetworkedVars.g_LuaNetworkedVars?.Cycle();
 			Game.Server.GarrysMod.LuaTimer.Cycle();
 			Game.Server.GarrysMod.LuaFileLibrary.AsyncCycle();
 #endif

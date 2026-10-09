@@ -3200,7 +3200,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 		SetCustomInterruptCondition((int)SCOND_t.COND_NPC_FREEZE);
 
-		CustomInterruptConditions.And(Conditions, out AI_ScheduleBits testBits);
+		AI_ScheduleBits testBits = CustomInterruptConditions.And(Conditions);
 
 		if (!testBits.IsAllClear()) {
 			if (developer.GetInt() != 0) {
@@ -4710,7 +4710,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 
 	public void RemoveIgnoredConditions() {
 		ConditionsPreIgnore = Conditions;
-		Conditions.And(InverseIgnoreConditions, out Conditions);
+		Conditions = Conditions.And(InverseIgnoreConditions);
 
 		if (NPCState == NPCState.Script && Cine.Get() != null)
 			Cine.Get()!.RemoveIgnoredConditions();

@@ -247,7 +247,7 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 #if GMOD_DLL
 		// TODO: GarrysMod::StringTable::Create
 		Game.Server.GarrysMod.NetworkString.Create();
-		// TODO: NetworkVarNames::Create
+		Game.Server.GarrysMod.NetworkVarNames.Create();
 		Game.Server.GarrysMod.GModDataPack.DataPack().Initialize();
 
 		StringTableBits.SV_SetupNetworkStringTableBits();
@@ -425,7 +425,7 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 		GameRulesRegister.ResetNetworkStringTables_GameRules();
 #if GMOD_DLL
 		Game.Server.GarrysMod.NetworkString.Reset();
-		// todo: NetworkVarNames::Reset
+		Game.Server.GarrysMod.NetworkVarNames.Reset();
 		Game.Server.GarrysMod.GModDataPack.DataPack().Reset();
 #endif
 	}

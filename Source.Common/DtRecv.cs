@@ -506,6 +506,9 @@ public class RecvDecoder
 
 public class SendTablePrecalc
 {
+#if GMOD_DLL
+	public SendProp? GMODTableProp;
+#endif
 	public SendTablePrecalc() {
 
 	}
@@ -531,6 +534,9 @@ public class SendTablePrecalc
 
 		Props.Clear(); 
 		Props.AddRange(bhs.Props[..bhs.NumProps]);
+#if GMOD_DLL
+		GMODTableProp = Props.FirstOrDefault(static p => p.Type == SendPropType.GModTable);
+#endif
 
 		DataTableProps.Clear(); DataTableProps.AddRange(bhs.DataTableProps[..bhs.NumDataTableProps]);
 		PropProxyIndices.Clear(); PropProxyIndices.AddRange(bhs.PropProxyIndices[..bhs.NumProps]);

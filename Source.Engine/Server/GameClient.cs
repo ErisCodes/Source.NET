@@ -40,8 +40,8 @@ public class GameClient : BaseClient
 		IsInReplayMode = false;
 	}
 	public bool VoiceLoopback;
-	public AbsolutePlayerLimitBitVec VoiceStreams;
-	public AbsolutePlayerLimitBitVec VoiceProximity;
+	public PlayerBitSet VoiceStreams;
+	public PlayerBitSet VoiceProximity;
 	public int LastMovementTick;
 	public int SoundSequence;
 	public Edict Edict = null!;
@@ -52,7 +52,7 @@ public class GameClient : BaseClient
 	public readonly CheckTransmitInfo PackInfo = new();
 	public bool IsInReplayMode;
 	public readonly CheckTransmitInfo PrevPackInfo = new();
-	public MaxEdictsBitVec PrevTransmitEdict;
+	public MaxEdictsBitSet PrevTransmitEdict;
 
 	protected override bool ProcessClientInfo(CLC_ClientInfo msg) {
 		base.ProcessClientInfo(msg);

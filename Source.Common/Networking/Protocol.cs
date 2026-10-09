@@ -244,6 +244,8 @@ public static class Protocol
 	public const string DOWNLOADABLE_FILE_TABLENAME = "downloadables";
 	public const string DYNAMIC_MODELS_TABLENAME = "DynamicModels";
 #if GMOD_DLL
+	public const string NETWORKSTRING_TABLENAME = "networkstring";
+	public const string NETWORKVARS_TABLENAME = "networkvars";
 	public const string CLIENT_LUA_FILES_TABLENAME = "client_lua_files";
 #endif
 

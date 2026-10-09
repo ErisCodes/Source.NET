@@ -818,7 +818,7 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 	FrameSnapshot? LastSnapshot; // todo? ^
 	public FrameSnapshot? Baseline;
 	public int BaselineUpdateTick;
-	public MaxEdictsBitVec BaselinesSent;
+	public MaxEdictsBitSet BaselinesSent;
 	public int BaselineUsed;
 
 	public int ForceWaitForTick;

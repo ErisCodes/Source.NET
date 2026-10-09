@@ -129,6 +129,27 @@ public class World : BaseEntity
 		g_iszFuncBrushClassname = "func_brush";
 	}
 
+	public override bool KeyValue(ReadOnlySpan<char> keyName, ReadOnlySpan<char> value) {
+		if (FStrEq(keyName, "skyname")) {
+			ConVarRef skyname = new("sv_skyname");
+			skyname.SetValue(value);
+		}
+		else if (FStrEq(keyName, "world_mins")) {
+			Vector3 vec = default;
+			UTIL_StringToVector(vec.Base(), value);
+			WorldMins = vec;
+		}
+		else if (FStrEq(keyName, "world_maxs")) {
+			Vector3 vec = default;
+			UTIL_StringToVector(vec.Base(), value);
+			WorldMaxs = vec;
+		}
+		else
+			return base.KeyValue(keyName, value);
+
+		return true;
+	}
+
 	public static ReadOnlySpan<char> GetDefaultLightstyleString(int styleIndex) => styleIndex < g_DefaultLightstyles.Length ? g_DefaultLightstyles[styleIndex] : "m";
 	static readonly string[] g_DefaultLightstyles = [
 		// 0 normal

@@ -14,6 +14,9 @@ public class PackedEntity : IPoolableObject
 
 	public int EntityIndex;
 	public int ReferenceCount;
+#if GMOD_DLL
+	public GMODDataTable? GMODDataTable;
+#endif
 
 	readonly List<SendProxyRecipients> Recipients = [];
 	byte[]? Data;
@@ -26,6 +29,9 @@ public class PackedEntity : IPoolableObject
 	public void Reset() {
 		EntityIndex = 0;
 		ReferenceCount = 0;
+#if GMOD_DLL
+		GMODDataTable = null;
+#endif
 		Recipients.Clear();
 		Data = null;
 		Bits = 0;
@@ -89,12 +95,8 @@ public class PackedEntity : IPoolableObject
 			return false;
 
 		for (int i = 0; i < recipients.Length; i++) {
-			var a = recipients[i].Bits;
-			var b = Recipients[i].Bits;
-			for (int bit = 0; bit < a.Length; bit++) {
-				if (a[bit] != b[bit])
-					return false;
-			}
+			if (recipients[i].Bits != Recipients[i].Bits)
+				return false;
 		}
 
 		return true;

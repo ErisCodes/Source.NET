@@ -21,7 +21,7 @@ public static class HandleExts {
 	/// <typeparam name="T"></typeparam>
 	/// <param name="handle"></param>
 	/// <param name="entity"></param>
-	public static void Set<T>(this Handle<T> handle, Handle<T> entity) where T : IHandleEntity {
+	public static void Set<T>(ref this Handle<T> handle, Handle<T> entity) where T : IHandleEntity {
 		handle.Index = entity.Index;
 	}
 }

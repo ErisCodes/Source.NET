@@ -199,6 +199,16 @@ public static class EngineSendTable
 			if (prop == (uint)checkProps[i]) {
 				SendProp p = precalc.GetProp((int)prop)!;
 				bitsWriter.WritePropIndex((int)prop);
+#if GMOD_DLL
+				if (p.Type == SendPropType.GModTable) {
+					GMODDataTable? dt = GMODDataTable.s_CurrentTable;
+					int referenceTick = GMODDataTable.s_ReferenceTick;
+					if (dt == null)
+						Error("SendTable_WritePropList: dt is null???");
+					dt!.WriteProps(inputBuf, bitsWriter.GetBitBuf(), referenceTick);
+				}
+				else
+#endif
 				bitsReader.CopyPropData(bitsWriter.GetBitBuf(), p);
 				prop = bitsReader.ReadNextPropIndex();
 			}
@@ -399,13 +409,13 @@ class PropCullStack : DatatableStack
 		if (NewStateProxies == null || curChild.GetDataTableProxyIndex() >= NumNewStateProxies)
 			Error($"PropCullStack::CallPropProxy - invalid new state proxy index {curChild.GetDataTableProxyIndex()} (num new state proxies: {NumNewStateProxies})");
 
-		bool cur = NewStateProxies[curChild.GetDataTableProxyIndex()].Bits.Get(Client);
+		bool cur = NewStateProxies[curChild.GetDataTableProxyIndex()].Bits.IsBitSet(Client);
 
 		if (OldStateProxies != null) {
 			if (curChild.GetDataTableProxyIndex() >= NumOldStateProxies)
 				Error($"PropCullStack::CallPropProxy - invalid old state proxy index {curChild.GetDataTableProxyIndex()} (num old state proxies: {NumOldStateProxies})");
 
-			bool prev = OldStateProxies[curChild.GetDataTableProxyIndex()].Bits.Get(Client);
+			bool prev = OldStateProxies[curChild.GetDataTableProxyIndex()].Bits.IsBitSet(Client);
 			if (prev != cur) {
 				if (prev)
 					return null;

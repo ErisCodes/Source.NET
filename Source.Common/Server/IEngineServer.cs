@@ -110,7 +110,7 @@ public interface IEngineServer
 	void StaticDecal(in Vector3 originInEntitySpace, int decalIndex, int entityIndex, int modelIndex, bool lowpriority);
 
 	// Given the current PVS(or PAS) and origin, determine which players should hear/receive the message
-	void Message_DetermineMulticastRecipients(bool usepas, in Vector3 origin, ref AbsolutePlayerLimitBitVec playerbits);
+	void Message_DetermineMulticastRecipients(bool usepas, in Vector3 origin, ref PlayerBitSet playerbits);
 
 	// Begin a message from a server side entity to its client side counterpart (func_breakable glass, e.g.)
 	bf_write? EntityMessageBegin(int ent_index, ServerClass ent_class, bool reliable);
@@ -221,7 +221,7 @@ public interface IEngineServer
 	// Also, this will return NULL if the client doesn't exist or if this client hasn't acked any frames yet.
 	// 
 	// iClientIndex is the CLIENT index, so if you use pPlayer->entindex(), subtract 1.
-	ref readonly MaxEdictsBitVec GetEntityTransmitBitsForClient(int iClientIndex);
+	ref readonly MaxEdictsBitSet GetEntityTransmitBitsForClient(int iClientIndex);
 
 	// Is the game paused?
 	bool IsPaused();
