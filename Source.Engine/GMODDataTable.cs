@@ -319,7 +319,7 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 		GMODVariantType.Int => a.Int == b.Int,
 		GMODVariantType.Bool => (a.Int != 0) == (b.Int != 0),
 		GMODVariantType.Vector or GMODVariantType.Angle => a.Vec.X == b.Vec.X && a.Vec.Y == b.Vec.Y && a.Vec.Z == b.Vec.Z,
-		GMODVariantType.String => a.StringLength == b.StringLength && string.Equals(a.String, b.String, StringComparison.Ordinal),
+		GMODVariantType.String => a.StringLength == b.StringLength && a.StringBytes.AsSpan().SequenceEqual(b.StringBytes),
 		GMODVariantType.Entity => a.Int == b.Int,
 		_ => true
 	};
@@ -381,18 +381,21 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 	static bool E_Compare(bf_read a, bf_read b) => a.ReadUBitLong(Constants.NUM_NETWORKED_EHANDLE_BITS) != b.ReadUBitLong(Constants.NUM_NETWORKED_EHANDLE_BITS);
 
 	static void S_Write(bf_write buf, in GMODVariant v) {
-		string str = v.Type == GMODVariantType.Entity ? "" : v.ToString();
-		byte[] bytes = Encoding.UTF8.GetBytes(str);
+		Span<byte> formatted = stackalloc byte[GMODVariant.MAX_STRING_LENGTH];
+		ReadOnlySpan<byte> bytes = v.Type switch {
+			GMODVariantType.String => v.StringBytes,
+			GMODVariantType.Entity => default,
+			_ => formatted[..Encoding.ASCII.GetBytes(v.ToString(), formatted)]
+		};
 		int len = bytes.Length < 0x200 ? bytes.Length : 0x1FF;
 		buf.WriteUBitLong((uint)len, STRING_LENGTH_BITS);
-		buf.WriteBytes(bytes.AsSpan(0, len));
+		buf.WriteBytes(bytes[..len]);
 	}
 	static void S_Read(bf_read buf, ref GMODVariant v) {
 		int len = (int)buf.ReadUBitLong(STRING_LENGTH_BITS);
 		Span<byte> bytes = stackalloc byte[len];
 		buf.ReadBytes(bytes);
-		int nul = bytes.IndexOf((byte)0);
-		v.SetString(Encoding.UTF8.GetString(nul >= 0 ? bytes[..nul] : bytes));
+		v.SetString(bytes);
 	}
 	static void S_Skip(bf_read buf) => buf.SeekRelative((int)buf.ReadUBitLong(STRING_LENGTH_BITS) * 8);
 	static bool S_Compare(bf_read a, bf_read b) {

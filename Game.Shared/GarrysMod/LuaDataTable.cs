@@ -70,7 +70,7 @@ public static partial class LuaDataTable
 					variant.SetFloat((float)g_Lua.GetNumber(stackPos));
 				break;
 			case LuaType.String:
-				variant.SetString(g_Lua.GetString(stackPos));
+				variant.SetString(g_Lua.GetStringBytes(stackPos));
 				break;
 			case LuaType.Entity:
 				BaseEntity? ent = LuaEntity.Get_Entity(stackPos, true);
@@ -110,12 +110,19 @@ public static partial class LuaDataTable
 				LuaEntity.Push_Entity(LuaEntity.GetEntityFromHandle((uint)variant.Int));
 				break;
 			case GMODVariantType.String:
-				g_Lua!.PushString(variant.String);
+				g_Lua!.PushString(variant.StringBytes);
 				break;
 			default:
 				g_Lua!.PushNil();
 				break;
 		}
+	}
+
+	static void PushVariantString(in GMODVariant variant) {
+		if (variant.Type == GMODVariantType.String)
+			g_Lua!.PushString(variant.StringBytes);
+		else
+			g_Lua!.PushString(variant.ToString());
 	}
 
 	static bool VariantsEqual(in GMODVariant a, in GMODVariant b) {
@@ -126,7 +133,7 @@ public static partial class LuaDataTable
 			GMODVariantType.Int or GMODVariantType.Entity => a.Int == b.Int,
 			GMODVariantType.Bool => (a.Int != 0) == (b.Int != 0),
 			GMODVariantType.Vector or GMODVariantType.Angle => a.Vec.X == b.Vec.X && a.Vec.Y == b.Vec.Y && a.Vec.Z == b.Vec.Z,
-			GMODVariantType.String => a.StringLength == b.StringLength && string.Equals(a.String, b.String, StringComparison.Ordinal),
+			GMODVariantType.String => a.StringLength == b.StringLength && a.StringBytes.AsSpan().SequenceEqual(b.StringBytes),
 			_ => true
 		};
 	}
@@ -532,7 +539,7 @@ public static partial class LuaDataTable
 	[LuaMethod("GetNetworked2String")]
 	static int Entity__GetNetworked2String(ILuaInterface lua) {
 		if (GetNetworked2(out GMODVariant value, out _))
-			g_Lua!.PushString(value.ToString());
+			PushVariantString(value);
 		return 1;
 	}
 
@@ -542,7 +549,7 @@ public static partial class LuaDataTable
 	[LuaGlobal]
 	static int GetGlobal2String(ILuaInterface lua) {
 		if (GetGlobal2(out GMODVariant value, out _))
-			g_Lua!.PushString(value.ToString());
+			PushVariantString(value);
 		return 1;
 	}
 
@@ -695,7 +702,8 @@ public static partial class LuaDataTable
 					break;
 				case GMODVariantType.String:
 					entry.SetMember("type", "String");
-					entry.SetMember("value", value.ToString());
+					g_Lua!.PushString(value.StringBytes);
+					entry.SetMember("value");
 					break;
 			}
 			result.SetMember(name, entry);

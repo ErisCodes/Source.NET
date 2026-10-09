@@ -31,7 +31,7 @@ public struct GMODVariant
 	[FieldOffset(4)] public Vector3 Vec;
 	[FieldOffset(4)] public QAngle Ang;
 	[FieldOffset(4)] public ushort StringLength;
-	[FieldOffset(16)] public string? String;
+	[FieldOffset(16)] public byte[]? StringBytes;
 
 	public readonly bool IsIntLike => Type is GMODVariantType.Int or GMODVariantType.Bool or GMODVariantType.Entity;
 	public readonly bool IsFloatLike => Type is GMODVariantType.Float or GMODVariantType.Vector or GMODVariantType.Angle;
@@ -39,62 +39,64 @@ public struct GMODVariant
 	public void SetFloat(float value) {
 		Type = GMODVariantType.Float;
 		Vec = new(value, 0, 0);
-		String = null;
+		StringBytes = null;
 	}
 
 	public void SetInt(int value) {
 		Type = GMODVariantType.Int;
 		Vec = default;
 		Int = value;
-		String = null;
+		StringBytes = null;
 	}
 
 	public void SetBool(bool value) {
 		Type = GMODVariantType.Bool;
 		Vec = default;
 		Int = value ? 1 : 0;
-		String = null;
+		StringBytes = null;
 	}
 
 	public void SetVector(in Vector3 value) {
 		Type = GMODVariantType.Vector;
 		Vec = value;
-		String = null;
+		StringBytes = null;
 	}
 
 	public void SetAngle(in QAngle value) {
 		Type = GMODVariantType.Angle;
 		Ang = value;
-		String = null;
+		StringBytes = null;
 	}
 
 	public void SetEntity(int handle) {
 		Type = GMODVariantType.Entity;
 		Vec = default;
 		Int = handle;
-		String = null;
+		StringBytes = null;
 	}
 
-	public void SetString(ReadOnlySpan<char> value) {
-		value = value.SliceNullTerminatedString();
-		int bytes = Encoding.UTF8.GetByteCount(value);
-		if (bytes + 1 > MAX_STRING_LENGTH) {
-			byte[] buffer = new byte[bytes];
-			Encoding.UTF8.GetBytes(value, buffer);
-			String = Encoding.UTF8.GetString(buffer, 0, MAX_STRING_LENGTH - 1);
-			StringLength = MAX_STRING_LENGTH;
-		}
-		else {
-			String = new string(value);
-			StringLength = (ushort)(bytes + 1);
-		}
+	public void SetString(ReadOnlySpan<byte> value) {
+		int nul = value.IndexOf((byte)0);
+		if (nul >= 0)
+			value = value[..nul];
+		if (value.Length > MAX_STRING_LENGTH - 1)
+			value = value[..(MAX_STRING_LENGTH - 1)];
 		Type = GMODVariantType.String;
+		Vec = default;
+		StringBytes = value.ToArray();
+		StringLength = (ushort)(value.Length + 1);
+	}
+
+	readonly ReadOnlySpan<char> StringAsChars(Span<char> buffer) {
+		ReadOnlySpan<byte> bytes = StringBytes;
+		Encoding.Latin1.GetChars(bytes, buffer);
+		return buffer[..bytes.Length];
 	}
 
 	public void Clear() {
 		Type = GMODVariantType.NIL;
 		Vec = default;
-		String = null;
+		StringBytes = null;
 	}
 
 	public readonly int ToInt() {
@@ -103,7 +105,7 @@ public struct GMODVariant
 		if (IsFloatLike)
 			return (int)Float;
 		if (Type == GMODVariantType.String)
-			return atoi(String);
+			return atoi(StringAsChars(stackalloc char[MAX_STRING_LENGTH]));
 		return 0;
 	}
 
@@ -113,7 +115,7 @@ public struct GMODVariant
 		if (IsFloatLike)
 			return Float;
 		if (Type == GMODVariantType.String)
-			return (float)atof(String);
+			return (float)atof(StringAsChars(stackalloc char[MAX_STRING_LENGTH]));
 		return 0;
 	}
 
@@ -123,9 +125,10 @@ public struct GMODVariant
 		if (IsFloatLike)
 			return Float != 0 || float.IsNaN(Float);
 		if (Type == GMODVariantType.String) {
-			if (string.IsNullOrEmpty(String) || String.Equals("false", StringComparison.OrdinalIgnoreCase))
+			ReadOnlySpan<byte> bytes = StringBytes;
+			if (bytes.IsEmpty || Ascii.EqualsIgnoreCase(bytes, "false"u8))
 				return false;
-			return atoi(String) != 0;
+			return atoi(StringAsChars(stackalloc char[MAX_STRING_LENGTH])) != 0;
 		}
 		return false;
 	}
@@ -139,7 +142,7 @@ public struct GMODVariant
 			return Vec;
 		if (Type == GMODVariantType.String) {
 			Span<float> values = stackalloc float[3];
-			if (ScanFloats(String, values) == 3)
+			if (ScanFloats(StringAsChars(stackalloc char[MAX_STRING_LENGTH]), values) == 3)
 				return new(values[0], values[1], values[2]);
 		}
 		return default;
@@ -156,7 +159,7 @@ public struct GMODVariant
 		if (IsFloatLike)
 			return (int)Float;
 		if (Type == GMODVariantType.String)
-			return atoi(String);
+			return atoi(StringAsChars(stackalloc char[MAX_STRING_LENGTH]));
 		return 0;
 	}
 
@@ -165,7 +168,7 @@ public struct GMODVariant
 		GMODVariantType.Int or GMODVariantType.Entity => Int.ToString(),
 		GMODVariantType.Bool => Int != 0 ? "true" : "false",
 		GMODVariantType.Vector or GMODVariantType.Angle => $"{FormatG(Vec.X)} {FormatG(Vec.Y)} {FormatG(Vec.Z)}",
-		GMODVariantType.String => String ?? "",
+		GMODVariantType.String => StringBytes == null ? "" : Encoding.UTF8.GetString(StringBytes),
 		_ => ""
 	};
 }
