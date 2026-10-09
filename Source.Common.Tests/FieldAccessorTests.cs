@@ -58,6 +58,7 @@ public partial class TestFieldsBase
 	public int Hidden => hidden;
 
 	[NetworkVar] public partial int Tracked { get; set; }
+	[NetworkVar] public partial TestFieldsInt4 TrackedValues { get; set; }
 	[NetworkVar] public partial Vector3 TrackedPosition { get; set; }
 
 	public readonly List<IFieldAccessor> Changes = [];
@@ -644,6 +645,34 @@ public class FieldAccessorTests
 		Assert.Equal(nameof(TestFieldsBase.Value), desc.FieldName);
 		Assert.True((desc.Flags & FieldTypeDescFlags.Key) != 0);
 		Assert.True((desc.Flags & FieldTypeDescFlags.Save) != 0);
+	}
+
+	[Fact]
+	public void NetworkVarInlineArrayProperty() {
+		TestFieldsBase obj = new();
+		TestFieldsInt4 values = default;
+		values[1] = 3;
+
+		obj.TrackedValues = values;
+		obj.TrackedValues = values;
+		Assert.Single(obj.Changes);
+		Assert.Same(TestFieldsBase.NetworkVarFields.TrackedValues, obj.Changes[0]);
+
+		values[3] = 1;
+		obj.TrackedValues = values;
+		Assert.Equal(2, obj.Changes.Count);
+		obj.Changes.Clear();
+		values[3] = 0;
+		obj.TrackedValues = values;
+		Assert.Single(obj.Changes);
+
+		Span<int> target = stackalloc int[4];
+		TestFieldsBase.NetworkVarFields.TrackedValues.CopyTo(obj, target);
+		Assert.Equal([0, 3, 0, 0], target.ToArray());
+
+		TestFieldsBase.NetworkVarFields.TrackedValues.CopyFrom(obj, [7]);
+		TestFieldsInt4 copied = obj.TrackedValues;
+		Assert.Equal([7, 0, 0, 0], ((ReadOnlySpan<int>)copied).ToArray());
 	}
 
 	[Fact]
