@@ -361,7 +361,7 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 	}
 
 	static void E_Write(bf_write buf, in GMODVariant v) {
-		int h = v.IsIntLike ? v.Int : v.IsFloatLike ? (int)v.Float : v.Type == GMODVariantType.String ? atoi(v.String) : 0;
+		int h = v.ToInt();
 		uint encoded = (uint)((h & 0x3FFF) | ((h >> 1) & 0x7FE000));
 		buf.WriteUBitLong(encoded, Constants.NUM_NETWORKED_EHANDLE_BITS);
 	}
