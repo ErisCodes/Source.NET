@@ -1,7 +1,11 @@
-using Steamworks;
+/*
+	This file is a bit of a mess. It was an attempt at implementing a C# version of C-style formatting methods.
+	However, I think it's kind of lost the plot
 
-using System;
-using System.Formats.Asn1;
+	I have some ideas to rework it, I am particularly interested in sprintf/sscanf functions that use https://github.com/FiniteReality/VariadicGenerics
+	for their arguments instead, along with not trying to reinvent the wheel and read actual C stdlib implementations.
+*/
+
 using System.Globalization;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -518,6 +522,8 @@ public static class CFormatting
 
 	public static double atof(ReadOnlySpan<char> str) => strtod(str, out _);
 
+	// TODO: I really don't like these... we need to really give sprintf and other
+	// similar functions some love.
 	public static string FormatFixed(double value, int precision) {
 		long bits = BitConverter.DoubleToInt64Bits(value);
 		bool negative = bits < 0;
@@ -554,6 +560,69 @@ public static class CFormatting
 
 		string result = precision > 0 ? $"{digits[..^precision]}.{digits[^precision..]}" : digits;
 		return negative ? "-" + result : result;
+	}
+
+	public static string FormatG(double value, int precision = 6) {
+		long bits = BitConverter.DoubleToInt64Bits(value);
+		bool negative = bits < 0;
+		long fraction = bits & 0xFFFFFFFFFFFFFL;
+		int exponent = (int)((bits >> 52) & 0x7FF);
+
+		if (exponent == 0x7FF)
+			return FormatFixed(value, 0);
+
+		if (precision == 0)
+			precision = 1;
+
+		if (exponent == 0 && fraction == 0)
+			return negative ? "-0" : "0";
+
+		BigInteger num = exponent == 0 ? fraction : fraction | (1L << 52);
+		BigInteger den = BigInteger.One;
+		int shift = (exponent == 0 ? 1 : exponent) - 1075;
+		if (shift >= 0)
+			num <<= shift;
+		else
+			den <<= -shift;
+
+		int exp10 = (int)Math.Floor(BigInteger.Log10(num) - BigInteger.Log10(den));
+		if (exp10 >= 0 ? num < den * BigInteger.Pow(10, exp10) : num * BigInteger.Pow(10, -exp10) < den)
+			exp10--;
+		else if (exp10 + 1 >= 0 ? num >= den * BigInteger.Pow(10, exp10 + 1) : num * BigInteger.Pow(10, -(exp10 + 1)) >= den)
+			exp10++;
+
+		int scale = precision - 1 - exp10;
+		BigInteger sn = scale >= 0 ? num * BigInteger.Pow(10, scale) : num;
+		BigInteger sd = scale >= 0 ? den : den * BigInteger.Pow(10, -scale);
+		BigInteger digits = BigInteger.DivRem(sn, sd, out BigInteger rem);
+
+		int cmp = (rem << 1).CompareTo(sd);
+		if (cmp > 0 || (cmp == 0 && !digits.IsEven))
+			digits += 1;
+
+		if (digits >= BigInteger.Pow(10, precision)) {
+			digits /= 10;
+			exp10++;
+		}
+
+		string d = digits.ToString(CultureInfo.InvariantCulture);
+		string result;
+		if (exp10 < -4 || exp10 >= precision) {
+			string mant = d.Length > 1 ? $"{d[0]}.{d[1..]}".TrimEnd('0').TrimEnd('.') : d;
+			int absExp = Math.Abs(exp10);
+			result = $"{mant}e{(exp10 < 0 ? '-' : '+')}{(absExp < 10 ? "0" : "")}{absExp}";
+		}
+		else if (exp10 >= 0) {
+			string whole = d[..(exp10 + 1)];
+			string frac = d[(exp10 + 1)..].TrimEnd('0');
+			result = frac.Length > 0 ? $"{whole}.{frac}" : whole;
+		}
+		else {
+			string frac = (new string('0', -exp10 - 1) + d).TrimEnd('0');
+			result = $"0.{frac}";
+		}
+
+		return negative ? $"-{result}" : result;
 	}
 
 	public static int ScanFloats(ReadOnlySpan<char> str, Span<float> values) {

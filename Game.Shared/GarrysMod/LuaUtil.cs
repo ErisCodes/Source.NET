@@ -116,7 +116,7 @@ public static partial class LuaUtil
 	}
 #endif
 
-	public static void SetTableFromTrace(ref Trace tr, ILuaObject table) {
+	public static void SetTableFromTrace<T>(ref Trace tr, T table) where T : ILuaObject {
 		table.SetMember("Hit", tr.DidHit());
 		table.SetMember("HitWorld", tr.DidHitWorld());
 		table.SetMember("HitNonWorld", tr.DidHitNonWorldEntity());
@@ -175,7 +175,7 @@ public static partial class LuaUtil
 		table.SetMemberVector("Normal", normal);
 	}
 
-	public static void PushTableFromTrace(ref Trace tr, ILuaObject? table) {
+	public static void PushTableFromTrace<T>(ref Trace tr, T? table) where T : ILuaObject {
 		if (table != null && table.isTable()) {
 			SetTableFromTrace(ref tr, table);
 			table.Push();

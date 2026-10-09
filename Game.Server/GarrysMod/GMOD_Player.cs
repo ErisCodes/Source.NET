@@ -57,6 +57,7 @@ public partial class GMOD_Player : HL2MP_Player
 
 	public override void InitialSpawn() {
 		base.InitialSpawn();
+		LuaNetworkedVars.g_LuaNetworkedVars!.PlayerInsert(this);
 	}
 
 	public override BaseEntity EntSelectSpawnPoint() {
