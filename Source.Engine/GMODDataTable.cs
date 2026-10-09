@@ -28,8 +28,9 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 	{
 		public int Tick;
 		public GMODVariant Value;
-		public int Order;
 	}
+
+	readonly List<(ushort Key, Entry Entry)> NodeOrder = [];
 
 	[ThreadStatic] public static GMODDataTable? s_CurrentTable;
 	[ThreadStatic] public static int s_TargetTick;
@@ -41,7 +42,6 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 	readonly SortedList<ushort, Entry> Entries = [];
 	readonly Dictionary<string, GMODVariant> Locals = new(StringComparer.OrdinalIgnoreCase);
 	bool FullUpdate = true;
-	int NextOrder;
 
 	public int GetKey(int it) => Entries.Keys[it];
 	public ref readonly GMODVariant GetValue(int it) => ref Entries.Values[it].Value;
@@ -58,10 +58,15 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 
 	Entry FindOrInsert(ushort key) {
 		if (!Entries.TryGetValue(key, out Entry? entry)) {
-			entry = new() { Order = NextOrder++ };
+			entry = new();
 			Entries.Add(key, entry);
+			NodeOrder.Add((key, entry));
 		}
 		return entry;
+	}
+	void RemoveAllEntries() {
+		Entries.Clear();
+		NodeOrder.Clear();
 	}
 
 	public void Set(int key, in GMODVariant value) => FindOrInsert((ushort)key).Value = value;
@@ -79,13 +84,13 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 	public void SetLocal(ReadOnlySpan<char> name, in GMODVariant value) => Locals[new string(name)] = value;
 
 	public void ClearLocal(ReadOnlySpan<char> name) {
-		if (name == null)
+		if (name.IsEmpty)
 			return;
 		Locals.GetAlternateLookup<ReadOnlySpan<char>>().Remove(name);
 	}
 
 	public void Clear() {
-		Entries.Clear();
+		RemoveAllEntries();
 		Locals.Clear();
 	}
 
@@ -109,7 +114,7 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 	public void Decode(object? entity, bf_read buf) {
 		int count = (int)buf.ReadUBitLong(ENTRIES_BITS);
 		if (buf.ReadOneBit() != 0)
-			Entries.Clear();
+			RemoveAllEntries();
 
 		for (int i = 0; i < count; i++) {
 			ushort key = (ushort)buf.ReadUBitLong(KEY_BITS);
@@ -278,10 +283,9 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 	}
 
 	public void CopyFrom(object? destEntity, object? srcEntity, GMODDataTable src) {
-		foreach (KeyValuePair<ushort, Entry> pair in src.Entries.OrderBy(x => x.Value.Order)) {
-			ushort key = pair.Key;
-			int srcTick = pair.Value.Tick;
-			GMODVariant value = pair.Value.Value;
+		foreach ((ushort key, Entry srcEntry) in src.NodeOrder) {
+			int srcTick = srcEntry.Tick;
+			ref GMODVariant value = ref srcEntry.Value;
 
 			if (value.Type == GMODVariantType.Entity) {
 				int handle = value.Int;
