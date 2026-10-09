@@ -728,6 +728,103 @@ public partial class BasePlayer : BaseCombatCharacter
 	public AnonymousSafeFieldPointer<UserCmd> CurrentCommand;
 	public int CurrentCommandNumber() => CurrentCommand.Get().CommandNumber;
 
+	public static bool gEvilImpulse101;
+
+	public virtual bool BumpWeapon(BaseCombatWeapon weapon) {
+		BaseCombatCharacter? owner = weapon.GetOwner();
+
+		if (!IsAllowedToPickupWeapons())
+			return false;
+
+		if (owner != null || !Weapon_CanUse(weapon) || !g_pGameRules.CanHavePlayerItem(this, weapon)) {
+			if (gEvilImpulse101)
+				Util.Remove(weapon);
+			return false;
+		}
+
+		if (hl2_episodic.GetBool()) {
+			if (!Util.ItemCanBeTouchedByPlayer(weapon, this) && !gEvilImpulse101)
+				return false;
+		}
+		else {
+			if (weapon.FVisible(this, Mask.Solid) == false && (GetFlags() & EntityFlags.NoTarget) == 0)
+				return false;
+		}
+
+		if (Weapon_OwnsThisType(weapon.GetClassname(), weapon.GetSubType()) != null) {
+			if (Weapon_EquipAmmoOnly(weapon)) {
+				if (weapon.HasPrimaryAmmo())
+					return false;
+
+				Util.Remove(weapon);
+				return true;
+			}
+			else
+				return false;
+		}
+		else {
+			weapon.CheckRespawn();
+
+			weapon.AddSolidFlags(SolidFlags.NotSolid);
+			weapon.AddEffects(EntityEffects.NoDraw);
+
+			Weapon_Equip(weapon);
+			if (IsInAVehicle())
+				weapon.Holster();
+			else {
+#if HL2_DLL
+				if (!Game.Shared.GarrysMod.WeaponPhysCannon.PlayerHasMegaPhysCannon()) {
+					if (weapon.UsesClipsForAmmo1())
+						weapon.iClip1 = weapon.GetMaxClip1();
+
+					Weapon_Switch(weapon);
+				}
+#endif
+			}
+			return true;
+		}
+	}
+
+	public override bool Weapon_CanUse(BaseCombatWeapon weapon) => true;
+
+	public override void Weapon_Equip(BaseCombatWeapon weapon) {
+		base.Weapon_Equip(weapon);
+
+		bool shouldSwitch = g_pGameRules.FShouldSwitchWeapon(this, weapon);
+
+		if (shouldSwitch)
+			Weapon_Switch(weapon);
+	}
+
+	public bool HasAnyAmmoOfType(int ammoIndex) {
+		if (ammoIndex < 0)
+			return false;
+
+		if (GetAmmoCount(ammoIndex) != 0)
+			return true;
+
+		BaseCombatWeapon? weapon;
+
+		for (int i = 0; i < MAX_WEAPONS; i++) {
+			weapon = GetWeapon(i);
+
+			if (weapon == null)
+				continue;
+
+			if (weapon.UsesClipsForAmmo1() && weapon.PrimaryAmmoType == ammoIndex) {
+				if (weapon.HasPrimaryAmmo())
+					return true;
+			}
+
+			if (weapon.UsesClipsForAmmo2() && weapon.SecondaryAmmoType == ammoIndex) {
+				if (weapon.HasSecondaryAmmo())
+					return true;
+			}
+		}
+
+		return false;
+	}
+
 	public BaseEntity? GiveNamedItem(ReadOnlySpan<char> name, int subType = 0) {
 		if (Weapon_OwnsThisType(name, subType) != null)
 			return null;

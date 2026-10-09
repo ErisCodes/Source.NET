@@ -26,6 +26,8 @@ using FIELD = Source.FIELD<WeaponPhysCannon>;
 [NetworkName("CWeaponPhysCannon")]
 public class WeaponPhysCannon : BaseHL2MPCombatWeapon
 {
+	public static bool PlayerHasMegaPhysCannon() => false;
+
 
 	public enum EffectState_t
 	{

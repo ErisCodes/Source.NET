@@ -488,8 +488,38 @@ public partial class HL2MP_Player : HL2_Player
 		SetCycle(0);
 	}
 
-	bool BumpWeapon(BaseCombatWeapon weapon) {
-		throw new NotImplementedException();
+	public override bool BumpWeapon(BaseCombatWeapon weapon) {
+		BaseCombatCharacter? owner = weapon.GetOwner();
+
+		if (!IsAllowedToPickupWeapons())
+			return false;
+
+		if (owner != null || !Weapon_CanUse(weapon) || !g_pGameRules.CanHavePlayerItem(this, weapon)) {
+			if (gEvilImpulse101)
+				Util.Remove(weapon);
+			return false;
+		}
+
+		if (!weapon.FVisible(this, Source.Common.Formats.BSP.Mask.Solid) && (GetFlags() & EntityFlags.NoTarget) == 0)
+			return false;
+
+		bool ownsWeaponAlready = Weapon_OwnsThisType(weapon.GetClassname(), weapon.GetSubType()) != null;
+
+		if (ownsWeaponAlready == true) {
+			if (Weapon_EquipAmmoOnly(weapon)) {
+				weapon.CheckRespawn();
+
+				Util.Remove(weapon);
+				return true;
+			}
+			else
+				return false;
+		}
+
+		weapon.CheckRespawn();
+		Weapon_Equip(weapon);
+
+		return true;
 	}
 
 	public override void ChangeTeam(int team, bool autoTeam = false, bool silent = false, bool autoBalance = false) {

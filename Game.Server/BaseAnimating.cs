@@ -329,6 +329,10 @@ public class BaseAnimating : BaseEntity
 	public void SetPlaybackRate(TimeUnit_t rate) => PlaybackRate = rate;
 
 	public bool IsSequenceFinished() => SequenceFinished;
+	public bool IsDissolving() => (GetFlags() & EntityFlags.Dissolving) != 0;
+
+	public virtual void SetLightingOriginRelative(BaseEntity? lightingOriginRelative) => LightingOriginRelative.Set(lightingOriginRelative);
+	public BaseEntity? GetLightingOriginRelative() => LightingOriginRelative.Get();
 
 	public bool IsModelScaleFractional() => ModelScale < 1.0f;
 	public bool IsModelScaled() => ModelScale > 1.0f + FLT_EPSILON || ModelScale < 1.0f - FLT_EPSILON;

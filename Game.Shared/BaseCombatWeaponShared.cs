@@ -1227,6 +1227,70 @@ public partial class
 
 
 
+	public const int SF_WEAPON_START_CONSTRAINED = 1 << 0;
+	public const int SF_WEAPON_NO_PLAYER_PICKUP = 1 << 1;
+	public const int SF_WEAPON_NO_PHYSCANNON_PUNT = 1 << 2;
+
+	public virtual void OnPickedUp(BaseCombatCharacter newOwner) {
+#if !CLIENT_DLL
+		RemoveEffects(EntityEffects.ItemBlink);
+
+		if (newOwner.IsPlayer()) {
+			OnPlayerPickup.FireOutput(newOwner, this);
+
+			RecipientFilter filter = new();
+			for (int i = 1; i <= gpGlobals.MaxClients; ++i) {
+				BasePlayer? player = Util.PlayerByIndex(i);
+				if (player != null && !player.IsAlive() && player.GetObserverMode() == Shared.ObserverMode.InEye)
+					filter.AddRecipient(player);
+			}
+			if (filter.GetRecipientCount() != 0)
+				EmitSound(filter, newOwner.EntIndex(), "Player.PickupWeapon", in Unsafe.NullRef<Vector3>(), 0, out _);
+
+			SetName((string?)null);
+		}
+		else
+			OnNPCPickup.FireOutput(newOwner, this);
+
+		Removable = false;
+#endif
+	}
+
+	public void GiveTo(BaseEntity other) => DefaultTouch(other);
+
+	public void DefaultTouch(BaseEntity? other) {
+#if !CLIENT_DLL
+		if (IsDissolving())
+			return;
+
+		BasePlayer? player = ToBasePlayer(other);
+		if (player == null)
+			return;
+
+		if (Util.ItemCanBeTouchedByPlayer(this, player))
+			OnCacheInteraction.FireOutput(other, this);
+
+		if (HasSpawnFlags(SF_WEAPON_NO_PLAYER_PICKUP))
+			return;
+
+		if (player.BumpWeapon(this))
+			OnPickedUp(player);
+#endif
+	}
+
+	public void SetPickupTouch() {
+#if !CLIENT_DLL
+		SetTouch(DefaultTouch);
+
+		if (gpGlobals.MaxClients > 1) {
+			if (HasSpawnFlags(BasePlayer.SF_NORESPAWN)) {
+				SetThink(SUB_Remove);
+				SetNextThink(gpGlobals.CurTime + 30.0f);
+			}
+		}
+#endif
+	}
+
 	public virtual void Equip(BaseCombatCharacter owner) {
 		SetAbsVelocity(vec3_origin);
 		RemoveSolidFlags(SolidFlags.Trigger);
@@ -1290,17 +1354,17 @@ public partial class
 			SetModel(GetWorldModel());
 
 #if !CLIENT_DLL // todo
-		// FallInit();
-		// SetCollisionGroup(COLLISION_GROUP_WEAPON);
-		// m_takedamage = DAMAGE_EVENTS_ONLY;
+		FallInit();
+		SetCollisionGroup(Source.CollisionGroup.Weapon);
+		m_takedamage = (byte)Damage.EventsOnly;
 
-		// SetBlocksLOS(false);
+		SetBlocksLOS(false);
 
 		// Default to non-removeable, because we don't want the
 		// game_weapon_manager entity to remove weapons that have
 		// been hand-placed by level designers. We only want to remove
 		// weapons that have been dropped by NPC's.
-		// SetRemoveable(false);
+		Removable = false;
 #endif
 
 		// Bloat the box for player pickup
