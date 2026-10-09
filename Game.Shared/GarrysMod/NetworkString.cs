@@ -26,7 +26,7 @@ public static class NetworkString
 		if (id <= 0 || pStringTable == null)
 			return null;
 		ReadOnlySpan<char> str = pStringTable.GetString(id);
-		return str == null ? null : new(str);
+		return str.IsEmpty ? null : new(str);
 	}
 
 	public static int Get(ReadOnlySpan<char> name) {

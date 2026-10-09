@@ -199,6 +199,16 @@ public static class EngineSendTable
 			if (prop == (uint)checkProps[i]) {
 				SendProp p = precalc.GetProp((int)prop)!;
 				bitsWriter.WritePropIndex((int)prop);
+#if GMOD_DLL
+				if (p.Type == SendPropType.GModTable) {
+					GMODDataTable? dt = GMODDataTable.s_CurrentTable;
+					int referenceTick = GMODDataTable.s_ReferenceTick;
+					if (dt == null)
+						Error("SendTable_WritePropList: dt is null???");
+					dt!.WriteProps(inputBuf, bitsWriter.GetBitBuf(), referenceTick);
+				}
+				else
+#endif
 				bitsReader.CopyPropData(bitsWriter.GetBitBuf(), p);
 				prop = bitsReader.ReadNextPropIndex();
 			}

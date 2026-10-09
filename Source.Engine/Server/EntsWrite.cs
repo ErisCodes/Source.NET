@@ -190,11 +190,21 @@ static class EntsWrite
 		}
 
 		if (nCheckProps > 0) {
+#if GMOD_DLL
+			GMODDataTable.s_CurrentTable = u.NewPack.GMODDataTable;
+			GMODDataTable.s_ReferenceTick = u.FromSnapshot.TickCount;
+			GMODDataTable.s_TargetTick = u.ToSnapshot.TickCount;
+#endif
 			WriteDeltaHeader(u, u.NewEntity, DeltaEncodingFlags.Zero);
 
 			WritePropsFromPackedEntity(u, checkProps, nCheckProps);
 
 			u.UpdateType = UpdateType.DeltaEnt;
+#if GMOD_DLL
+			GMODDataTable.s_CurrentTable = null;
+			GMODDataTable.s_ReferenceTick = 0;
+			GMODDataTable.s_TargetTick = 0;
+#endif
 		}
 		else
 			u.UpdateType = UpdateType.PreserveEnt;
@@ -251,7 +261,17 @@ static class EntsWrite
 			nToBits = u.NewPack.GetNumBits();
 		}
 
+#if GMOD_DLL
+		GMODDataTable.s_CurrentTable = u.NewPack.GMODDataTable;
+		GMODDataTable.s_ReferenceTick = u.Baseline != null ? u.Baseline.TickCount : 0;
+		GMODDataTable.s_TargetTick = u.ToSnapshot.TickCount;
+#endif
 		u.FullProps += WriteAllDeltaProps(entryClass.Table, fromData!, nFromBits, toData!, nToBits, u.NewPack.EntityIndex, u.Buffer);
+#if GMOD_DLL
+		GMODDataTable.s_CurrentTable = null;
+		GMODDataTable.s_ReferenceTick = 0;
+		GMODDataTable.s_TargetTick = 0;
+#endif
 
 		if (u.NewEntity == u.OldEntity)
 			u.NextOldEntity();
