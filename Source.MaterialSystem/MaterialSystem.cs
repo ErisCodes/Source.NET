@@ -310,7 +310,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 			}
 		}
 		else if (resetTextureFilter) {
-			// TextureSystem.ResetTextureFilteringState();
+			TextureSystem.ResetTextureFilteringState();
 		}
 
 		// Recompute all state snapshots
