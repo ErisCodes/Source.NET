@@ -34,6 +34,25 @@ public static class FieldAccessorRegistry
 	}
 }
 
+public static class FieldKeyRegistry
+{
+	static readonly Lock RegistryLock = new();
+	static readonly Dictionary<string, int> Ids = [];
+
+	public static int GetId(string? key) {
+		if (key == null)
+			return 0;
+
+		lock (RegistryLock) {
+			if (!Ids.TryGetValue(key, out int id)) {
+				id = Ids.Count + 1;
+				Ids.Add(key, id);
+			}
+			return id;
+		}
+	}
+}
+
 public abstract class FieldAccessor<TField> : DynamicAccessor
 {
 	protected FieldAccessor(Type targetType, string name, string networkName) : base(targetType, typeof(TField), name, networkName) { }

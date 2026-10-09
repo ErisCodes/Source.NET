@@ -58,6 +58,8 @@ namespace Source.Common
 			BaseArrayAccessor = baseArray;
 			Index = Math.Abs(index);
 			IsAVectorElement = isVectorElem;
+			FieldKeyId = baseArray.FieldKeyId;
+			FieldIndex = Index;
 		}
 
 		public override T GetValue<T>(object instance) => BaseArrayAccessor.GetElement<T>(instance, Index);
@@ -133,10 +135,30 @@ namespace Source.Common
 			TargetType = targetType;
 			StoringType = storingType;
 			this.networkName = networkName;
+			FieldKeyId = FieldKeyRegistry.GetId(FieldKey);
 		}
 
 		public abstract T GetValue<T>(object instance);
 		public abstract bool SetValue<T>(object instance, in T value);
+
+		public virtual string? FieldKey => null;
+
+		public int FieldKeyId { get; protected set; }
+		public int FieldIndex { get; protected set; } = -1;
+
+		public override bool Equals(object? obj) {
+			if (ReferenceEquals(this, obj))
+				return true;
+
+			return obj is DynamicAccessor other && FieldKeyId != 0 && FieldKeyId == other.FieldKeyId && FieldIndex == other.FieldIndex;
+		}
+
+		public override int GetHashCode() {
+			if (FieldKeyId == 0)
+				return System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
+
+			return HashCode.Combine(FieldKeyId, FieldIndex);
+		}
 
 		public virtual bool TryGetSpan<T>(object instance, int count, out Span<T> span) {
 			span = default;

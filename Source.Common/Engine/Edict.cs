@@ -128,7 +128,7 @@ public class BaseEdict
 
 			// Now add this offset to our list of changed variables.		
 			for (ushort i = 0; i < p.NumChangeFields; i++)
-				if (p.ChangedFields[i] == field)
+				if (Equals(p.ChangedFields[i], field))
 					return;
 
 			if (p.NumChangeFields == MAX_CHANGE_OFFSETS) {

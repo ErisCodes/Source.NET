@@ -139,6 +139,7 @@ namespace Source.CodeAnalysis.NetworkVars
 				.Append(Literal(accessorName)).Append(", ").Append(Literal(networkName)).AppendLine(") { }");
 			body.Append("\t\t\tpublic static ref ").Append(field).Append(" RefOf(object o) => ref ").Append(path.Expression).AppendLine(";");
 			body.Append("\t\t\tpublic override ref ").Append(field).AppendLine(" Ref(object o) => ref RefOf(o);");
+			body.Append("\t\t\tpublic override string FieldKey => ").Append(Literal(FieldKey("S", path, owner, expression))).AppendLine(";");
 			foreach (string accessor in path.Accessors)
 				body.Append("\t\t\t").AppendLine(accessor);
 			body.AppendLine("\t\t}");
@@ -191,6 +192,7 @@ namespace Source.CodeAnalysis.NetworkVars
 				.Append(Literal(expression)).Append(", ").Append(Literal(networkName)).Append(", ").Append(Literal(elementFormat)).Append(", ")
 				.Append(listFlag ? "listMax" : length.ToString(CultureInfo.InvariantCulture)).Append(", ").Append(listFlag ? "true" : "false").AppendLine(") { }");
 			body.Append("\t\t\tpublic override ref ").Append(storing).Append(" Ref(object o) => ref ").Append(path.Expression).AppendLine(";");
+			body.Append("\t\t\tpublic override string FieldKey => ").Append(Literal(FieldKey("A", path, owner, expression))).AppendLine(";");
 			body.Append("\t\t\tpublic override ref ").Append(elementDisplay).Append(" ElementRef(object o, int index) => ref ")
 				.Append(IndexExpression(kind, path.Type, element, path.Expression, "index")).AppendLine(";");
 			foreach (string accessor in path.Accessors)
@@ -287,6 +289,8 @@ namespace Source.CodeAnalysis.NetworkVars
 			}
 
 			string? networkName = GetNetworkNameAttribute(member);
+			if (path.RootDeclaring == null)
+				path.RootDeclaring = declaring;
 			path.Parts.Add(NamePart.Member(networkName ?? member.Name, networkName != null));
 			path.LastMember = member;
 			return memberType;
@@ -519,6 +523,9 @@ namespace Source.CodeAnalysis.NetworkVars
 
 		private static string Display(ITypeSymbol type) => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
+		private static string FieldKey(string kind, ResolvedPath path, INamedTypeSymbol owner, string expression)
+			=> kind + "|" + Display(path.RootDeclaring ?? owner) + "|" + expression;
+
 		private static string Literal(string value) => SymbolDisplay.FormatLiteral(value, true);
 
 		private static string Identifier(string name) => SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None ? "@" + name : name;
@@ -624,6 +631,7 @@ namespace Source.CodeAnalysis.NetworkVars
 			public string Expression = "";
 			public ITypeSymbol Type = null!;
 			public ISymbol? LastMember;
+			public INamedTypeSymbol? RootDeclaring;
 			public readonly List<NamePart> Parts = new List<NamePart>();
 			public readonly List<string> Accessors = new List<string>();
 		}
