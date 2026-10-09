@@ -18,6 +18,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Source.Common\Source.Common.csproj" />
 		<ProjectReference Include="..\Source.CodeAnalysis.BitVec\Source.CodeAnalysis.BitVec.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+		<ProjectReference Include="..\Source.CodeAnalysis.NetworkVars\Source.CodeAnalysis.NetworkVars.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
 	</ItemGroup>
 
 	<ItemGroup>
