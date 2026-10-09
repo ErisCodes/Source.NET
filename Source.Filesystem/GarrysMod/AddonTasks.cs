@@ -364,7 +364,6 @@ public static class AddonTasks
 		public override void Cycle() {
 			if (!Files!.IsDone()) {
 				AddonSystem.Notify()?.SubscriptionsProgress((int)Files.Received, (int)SteamUGC.GetNumSubscribedItems());
-				return;
 			}
 
 			if (!Files.Succeeded)
