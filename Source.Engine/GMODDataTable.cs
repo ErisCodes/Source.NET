@@ -3,6 +3,8 @@ using Source.Common.Bitbuffers;
 using Source.Common.GarrysMod;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Source.Engine;
@@ -67,14 +69,13 @@ public class GMODDataTable(GMODDataTableCallbackFn? callback) : IGMODDataTable
 	public bool HasKey(int key) => Entries.ContainsKey((ushort)key);
 
 	public ref readonly GMODVariant GetLocal(ReadOnlySpan<char> name) {
-		s_NullLocal = default;
-		if (name == null)
+		if (name.IsEmpty)
 			return ref s_NullLocal;
-		if (Locals.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(name, out GMODVariant value))
-			s_NullLocal = value;
-		return ref s_NullLocal;
+		ref GMODVariant value = ref CollectionsMarshal.GetValueRefOrNullRef(Locals.GetAlternateLookup<ReadOnlySpan<char>>(), name);
+		if (Unsafe.IsNullRef(ref value))
+			return ref s_NullLocal;
+		return ref value;
 	}
-
 	public void SetLocal(ReadOnlySpan<char> name, in GMODVariant value) => Locals[new string(name)] = value;
 
 	public void ClearLocal(ReadOnlySpan<char> name) {
