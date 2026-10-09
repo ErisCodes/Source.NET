@@ -12,6 +12,10 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
         configuration: [Debug, Release]
+        include:
+          - os: ubuntu-latest
+            configuration: Release
+            coverage: true
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -26,4 +30,17 @@ jobs:
         run: dotnet build Source.NET.slnx -c ${{ matrix.configuration }}
 
       - name: Test
-        run: dotnet test --project Source.Common.Tests/Source.Common.Tests.csproj -c ${{ matrix.configuration }} --no-build
+        run: dotnet test --project Source.Common.Tests/Source.Common.Tests.csproj -c ${{ matrix.configuration }} --no-build ${{ matrix.coverage && '--coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --coverage-settings Source.Common.Tests/coverage.settings.xml --results-directory TestResults' || '' }}
+
+      - name: Coverage report
+        if: matrix.coverage
+        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        with:
+          reports: TestResults/coverage.cobertura.xml
+          targetdir: CoverageReport
+          reporttypes: MarkdownSummaryGithub
+
+      - name: Coverage summary
+        if: matrix.coverage
+        shell: bash
+        run: cat CoverageReport/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
