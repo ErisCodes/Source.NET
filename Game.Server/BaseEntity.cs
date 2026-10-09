@@ -1890,6 +1890,9 @@ public partial class BaseEntity : IServerEntity
 		DebugOverlay.EntityTextAtPosition(origin, text_offset, text, duration, r, g, b, a);
 	}
 
+	public virtual void DrawDebugGeometryOverlays() {
+		// todo	
+	}
 	public virtual int DrawDebugTextOverlays() {
 		int offset = 1;
 		if ((DebugOverlays & DebugOverlayBits.Text) != 0) {
