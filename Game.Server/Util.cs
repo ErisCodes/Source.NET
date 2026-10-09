@@ -247,6 +247,31 @@ public static partial class Util
 		return 1;
 	}
 
+	public static bool ItemCanBeTouchedByPlayer(BaseEntity? item, BasePlayer? player) {
+		if (item == null || player == null)
+			return false;
+
+		if (player.IsInAVehicle())
+			return true;
+
+		Vector3 vecStartPos;
+		Source.Common.Physics.IPhysicsObject? physObj = item.VPhysicsGetObject();
+		if (physObj != null)
+			physObj.GetPosition(out vecStartPos, out _);
+		else
+			vecStartPos = item.CollisionProp().WorldSpaceCenter();
+
+		Vector3 vecEndPos = player.EyePosition();
+
+		TraceFilterSkipTwoEntities filter = new(player, item, Source.CollisionGroup.PlayerMovement);
+		TraceLine(vecStartPos, vecEndPos, Mask.Solid, ref filter, out Trace tr);
+
+		if (tr.Fraction < 1.0f)
+			return false;
+
+		return true;
+	}
+
 	public static void EmitAmbientSound(int entindex, in Vector3 vecOrigin, ReadOnlySpan<char> samp, float vol, Source.Common.Audio.SoundLevel soundlevel, int fFlags, int pitch, TimeUnit_t soundtime = 0.0f) => EmitAmbientSound(entindex, vecOrigin, samp, vol, soundlevel, fFlags, pitch, soundtime, out _);
 
 	public static void EmitAmbientSound(int entindex, in Vector3 vecOrigin, ReadOnlySpan<char> samp, float vol, Source.Common.Audio.SoundLevel soundlevel, int fFlags, int pitch, TimeUnit_t soundtime, out TimeUnit_t duration) {

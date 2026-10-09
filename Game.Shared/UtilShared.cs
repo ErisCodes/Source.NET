@@ -498,6 +498,35 @@ public struct TraceFilterEntity(BaseEntity entity, CollisionGroup collisionGroup
 	}
 }
 
+public struct TraceFilterSkipTwoEntities(IHandleEntity? passentity, IHandleEntity? passentity2, CollisionGroup collisionGroup) : ITraceFilter
+{
+	public TraceFilterSimple Simple = new(passentity, collisionGroup);
+	public IHandleEntity? PassEnt2 = passentity2;
+
+	public bool ShouldHitEntity(IHandleEntity handleEntity, Contents contentsMask) {
+		if (!PassServerEntityFilter(handleEntity, PassEnt2))
+			return false;
+
+		return Simple.ShouldHitEntity(handleEntity, contentsMask);
+	}
+}
+
+#if !CLIENT_DLL
+public struct TraceFilterLOS(IHandleEntity? handleEntity, CollisionGroup collisionGroup, IHandleEntity? handleEntity2 = null) : ITraceFilter
+{
+	public TraceFilterSkipTwoEntities SkipTwo = new(handleEntity, handleEntity2, collisionGroup);
+
+	public bool ShouldHitEntity(IHandleEntity handleEntity, Contents contentsMask) {
+		BaseEntity? entity = EntityFromEntityHandle(handleEntity);
+
+		if (!entity!.BlocksLOS())
+			return false;
+
+		return SkipTwo.Simple.ShouldHitEntity(handleEntity, contentsMask);
+	}
+}
+#endif
+
 public struct TraceFilterNoNPCsOrPlayer(IHandleEntity? passentity, CollisionGroup collisionGroup) : ITraceFilter
 {
 	TraceFilterSimple Inner = new(passentity, collisionGroup);
