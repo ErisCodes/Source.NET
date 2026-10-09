@@ -115,6 +115,8 @@ public partial class BaseCombatCharacter : BaseFlex
 		return false;
 	}
 
+	public override bool IsBaseCombatCharacter() => true;
+
 	public virtual BaseEntity? GetVehicleEntity() => null;
 
 	public virtual bool IsInAVehicle() => false;
