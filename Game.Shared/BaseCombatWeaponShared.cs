@@ -1174,8 +1174,34 @@ public partial class
 	public override void Precache() {
 		PrimaryAmmoType = SecondaryAmmoType = -1;
 		if (WeaponParse.ReadWeaponDataFromFileForSlot(filesystem, GetClassname(), out WeaponFileInfoHandle)) {
+			if (GetWpnData().Ammo1[0] != '\0') {
+				PrimaryAmmoType = GetAmmoDef().Index(GetWpnData().Ammo1);
+				if (PrimaryAmmoType == -1)
+					Msg($"ERROR: Weapon ({GetClassname()}) using undefined primary ammo type ({GetWpnData().Ammo1.AsSpan().SliceNullTerminatedString()})\n");
+			}
+			if (GetWpnData().Ammo2[0] != '\0') {
+				SecondaryAmmoType = GetAmmoDef().Index(GetWpnData().Ammo2);
+				if (SecondaryAmmoType == -1)
+					Msg($"ERROR: Weapon ({GetClassname()}) using undefined secondary ammo type ({GetWpnData().Ammo2.AsSpan().SliceNullTerminatedString()})\n");
+			}
+#if CLIENT_DLL
+			gWR.LoadWeaponSprites(GetWeaponFileInfoHandle());
+#endif
+			iViewModelIndex = 0;
+			WorldModelIndex = 0;
+			if (!GetViewModel().IsEmpty)
+				iViewModelIndex = PrecacheModel(GetViewModel());
+			if (!GetWorldModel().IsEmpty)
+				WorldModelIndex = PrecacheModel(GetWorldModel());
 
+			for (int i = 0; i < (int)Shared.WeaponSound.Num; ++i) {
+				ReadOnlySpan<char> shootsound = GetShootSound(i);
+				if (!shootsound.IsEmpty)
+					PrecacheScriptSound(shootsound);
+			}
 		}
+		else
+			Warning($"Error reading weapon data file for: {GetClassname()}\n");
 	}
 
 	TimeUnit_t NextEmptySoundTime;
