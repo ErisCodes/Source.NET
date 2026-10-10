@@ -352,18 +352,39 @@ public class HL2_Player : BaseMultiplayerPlayer
 		throw new NotImplementedException();
 	}
 
-	int GiveAmmo(int count, int ammoIndex, bool suppressSound) {
-		throw new NotImplementedException();
+	public override int GiveAmmo(int count, int ammoIndex, bool suppressSound = false) {
+		if (ammoIndex < 0)
+			return 0;
+
+		bool checkAutoSwitch = false;
+		if (!HasAnyAmmoOfType(ammoIndex))
+			checkAutoSwitch = true;
+
+		int add = base.GiveAmmo(count, ammoIndex, suppressSound);
+
+		if (checkAutoSwitch) {
+			BaseCombatWeapon? weapon = g_pGameRules.GetNextBestWeapon(this, GetActiveWeapon());
+
+			if (weapon != null && weapon.PrimaryAmmoType == ammoIndex)
+				SwitchToNextBestWeapon(GetActiveWeapon()!);
+		}
+
+		return add;
 	}
 
-	bool Weapon_CanUse(BaseCombatWeapon weapon) {
-		throw new NotImplementedException();
+	public override bool Weapon_CanUse(BaseCombatWeapon weapon) {
+		return base.Weapon_CanUse(weapon);
 	}
 
-	public override void Weapon_Equip(BaseCombatWeapon weapon) { }
+	public override void Weapon_Equip(BaseCombatWeapon weapon) {
+		if (GetActiveWeapon() == null)
+			HL2Local.WeaponLowered = false;
 
-	bool BumpWeapon(BaseCombatWeapon weapon) {
-		throw new NotImplementedException();
+		base.Weapon_Equip(weapon);
+	}
+
+	public override bool BumpWeapon(BaseCombatWeapon weapon) {
+		return base.BumpWeapon(weapon);
 	}
 
 	bool ClientCommand(in TokenizedCommand args) {

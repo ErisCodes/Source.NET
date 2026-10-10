@@ -115,6 +115,8 @@ public partial class BaseCombatCharacter : BaseFlex
 		return false;
 	}
 
+	public override bool IsBaseCombatCharacter() => true;
+
 	public virtual BaseEntity? GetVehicleEntity() => null;
 
 	public virtual bool IsInAVehicle() => false;
@@ -283,7 +285,159 @@ public partial class BaseCombatCharacter : BaseFlex
 	}
 
 	public BaseCombatWeapon? Weapon_Create(ReadOnlySpan<char> weaponName) => throw new NotImplementedException();
-	public virtual void Weapon_Equip(BaseCombatWeapon weapon) => throw new NotImplementedException();
+	public virtual void Weapon_Equip(BaseCombatWeapon weapon) {
+		for (int i = 0; i < MAX_WEAPONS; i++) {
+			if (MyWeapons[i].Get() == null) {
+				MyWeapons[i].Set(weapon);
+				break;
+			}
+		}
+
+		weapon.ChangeTeam(GetTeamNumber());
+
+		if (weapon.GetMaxClip1() == -1)
+			GiveAmmo(weapon.GetDefaultClip1(), weapon.PrimaryAmmoType);
+		else if (weapon.GetDefaultClip1() > weapon.GetMaxClip1()) {
+			weapon.iClip1 = weapon.GetMaxClip1();
+			GiveAmmo(weapon.GetDefaultClip1() - weapon.GetMaxClip1(), weapon.PrimaryAmmoType);
+		}
+
+		if (weapon.GetMaxClip2() == -1)
+			GiveAmmo(weapon.GetDefaultClip2(), weapon.SecondaryAmmoType);
+		else if (weapon.GetDefaultClip2() > weapon.GetMaxClip2()) {
+			weapon.iClip2 = weapon.GetMaxClip2();
+			GiveAmmo(weapon.GetDefaultClip2() - weapon.GetMaxClip2(), weapon.SecondaryAmmoType);
+		}
+
+		weapon.Equip(this);
+
+		if (IsPlayer() == false) {
+			if (ActiveWeapon.Get() != null) {
+				ActiveWeapon.Get()!.Holster();
+				ActiveWeapon.Get()!.AddEffects(EntityEffects.NoDraw);
+			}
+			SetActiveWeapon(weapon);
+			ActiveWeapon.Get()!.RemoveEffects(EntityEffects.NoDraw);
+		}
+
+		if (IsPlayer() == false) {
+			if (HasSpawnFlags(AI_BaseNPCGlobals.SF_NPC_LONG_RANGE)) {
+				ActiveWeapon.Get()!.MaxRange1 = 999999999;
+				ActiveWeapon.Get()!.MaxRange2 = 999999999;
+			}
+		}
+
+		WeaponProficiency proficiency;
+		proficiency = CalcWeaponProficiency(weapon);
+
+		if (BaseCombatWeapon.weapon_showproficiency.GetBool())
+			Msg($"{GetClassname()} equipped with {weapon.GetClassname()}, proficiency is {GetWeaponProficiencyName(proficiency)}\n");
+
+		SetCurrentWeaponProficiency(proficiency);
+
+		weapon.SetLightingOriginRelative(GetLightingOriginRelative());
+	}
+
+	public bool Weapon_EquipAmmoOnly(BaseCombatWeapon weapon) {
+		for (int i = 0; i < MAX_WEAPONS; i++) {
+			if (MyWeapons[i].Get() != null && FClassnameIs(MyWeapons[i].Get(), weapon.GetClassname())) {
+				int primaryGiven = (weapon.UsesClipsForAmmo1()) ? weapon.iClip1 : weapon.GetPrimaryAmmoCount();
+				int secondaryGiven = (weapon.UsesClipsForAmmo2()) ? weapon.iClip2 : weapon.GetSecondaryAmmoCount();
+
+				int takenPrimary = GiveAmmo(primaryGiven, weapon.PrimaryAmmoType);
+				int takenSecondary = GiveAmmo(secondaryGiven, weapon.SecondaryAmmoType);
+
+				if (weapon.UsesClipsForAmmo1())
+					weapon.iClip1 -= takenPrimary;
+				else
+					weapon.SetPrimaryAmmoCount(weapon.GetPrimaryAmmoCount() - takenPrimary);
+
+				if (weapon.UsesClipsForAmmo2())
+					weapon.iClip2 -= takenSecondary;
+				else
+					weapon.SetSecondaryAmmoCount(weapon.GetSecondaryAmmoCount() - takenSecondary);
+
+				if (takenPrimary > 0 || takenSecondary > 0)
+					return true;
+
+				return false;
+			}
+		}
+
+		return false;
+	}
+
+	public virtual bool Weapon_CanUse(BaseCombatWeapon weapon) {
+		ReadOnlySpan<BaseCombatWeapon.ActTable> table = weapon.ActivityList();
+
+		if (table.Length < 1)
+			return false;
+
+		for (int i = 0; i < table.Length; i++) {
+			if (table[i].Required) {
+				Activity translatedActivity = NPC_TranslateActivity(table[i].WeaponAct);
+
+				if (SelectWeightedSequence(translatedActivity) == StudioHdr.ACTIVITY_NOT_AVAILABLE)
+					return false;
+			}
+		}
+
+		return true;
+	}
+
+	public virtual int GiveAmmo(int count, int ammoIndex, bool suppressSound = false) {
+		if (count <= 0)
+			return 0;
+
+		if (!g_pGameRules.CanHaveAmmo(this, ammoIndex))
+			return 0;
+
+		if (ammoIndex < 0 || ammoIndex >= MAX_AMMO_SLOTS)
+			return 0;
+
+		int max = GetAmmoDef().MaxCarry(ammoIndex);
+		int add = Math.Min(count, max - Ammo[ammoIndex]);
+		if (add < 1)
+			return 0;
+
+		if (!suppressSound)
+			EmitSound("BaseCombatCharacter.AmmoPickup");
+
+		Ammo.Set(ammoIndex, Ammo[ammoIndex] + add);
+
+		return add;
+	}
+
+	public int GiveAmmo(int count, ReadOnlySpan<char> name, bool suppressSound = false) {
+		int ammoType = GetAmmoDef().Index(name);
+		if (ammoType == -1) {
+			Msg($"ERROR: Attempting to give unknown ammo type ({name})\n");
+			return 0;
+		}
+		return GiveAmmo(count, ammoType, suppressSound);
+	}
+
+	public void SetActiveWeapon(BaseCombatWeapon? newWeapon) {
+		BaseCombatWeapon? oldWeapon = ActiveWeapon.Get();
+		if (newWeapon != oldWeapon) {
+			ActiveWeapon.Set(newWeapon);
+			OnChangeActiveWeapon(oldWeapon, newWeapon);
+		}
+	}
+
+	public virtual void OnChangeActiveWeapon(BaseCombatWeapon? oldWeapon, BaseCombatWeapon? newWeapon) { }
+
+	public bool PreventWeaponPickup;
+	public bool IsAllowedToPickupWeapons() => !PreventWeaponPickup;
+
+	public void SetCurrentWeaponProficiency(WeaponProficiency proficiency) => CurrentWeaponProficiency = proficiency;
+	public virtual WeaponProficiency CalcWeaponProficiency(BaseCombatWeapon? weapon) => WeaponProficiency.Average;
+
+	public override void SetLightingOriginRelative(BaseEntity? lightingOrigin) {
+		base.SetLightingOriginRelative(lightingOrigin);
+		if (GetActiveWeapon() != null)
+			GetActiveWeapon()!.SetLightingOriginRelative(lightingOrigin);
+	}
 
 	public int WeaponCount() => MAX_WEAPONS;
 	public BaseCombatWeapon? GetWeapon(int i) => MyWeapons[i].Get();

@@ -18,14 +18,14 @@ using FIELD_RD = FIELD<HL2MPRagdoll>;
 public partial class HL2MP_Player : HL2_Player
 {
 	public static readonly SendTable DT_HL2MPLocalPlayerExclusive = new(nameof(DT_HL2MPLocalPlayerExclusive), [
-		SendPropVector(NetworkVarFields.Origin, 0, PropFlags.NoScale|PropFlags.ChangesOften, 0.0f, Constants.HIGH_DEFAULT),
+		SendPropVector(BaseEntity.NetworkVarFields.Origin, 0, PropFlags.NoScale|PropFlags.ChangesOften, 0.0f, Constants.HIGH_DEFAULT),
 
 		SendPropFloat(FIELD.OF_VECTORELEM(nameof(AngEyeAngles), 0), 11, PropFlags.ChangesOften | PropFlags.RoundDown, 0, 360f ),
 		SendPropAngle(FIELD.OF_VECTORELEM(nameof(AngEyeAngles), 1), 11, PropFlags.ChangesOften | PropFlags.RoundDown, 0, 360f ),
 	]);
 
 	public static readonly SendTable DT_HL2MPNonLocalPlayerExclusive = new(nameof(DT_HL2MPNonLocalPlayerExclusive), [
-		SendPropVector(NetworkVarFields.Origin, 0, PropFlags.CoordMPLowPrecision|PropFlags.ChangesOften, 0.0f, Constants.HIGH_DEFAULT),
+		SendPropVector(BaseEntity.NetworkVarFields.Origin, 0, PropFlags.CoordMPLowPrecision|PropFlags.ChangesOften, 0.0f, Constants.HIGH_DEFAULT),
 
 		SendPropFloat(FIELD.OF_VECTORELEM(nameof(AngEyeAngles), 0), 11, PropFlags.ChangesOften | PropFlags.RoundDown, 0, 360f),
 		SendPropAngle(FIELD.OF_VECTORELEM(nameof(AngEyeAngles), 1), 11, PropFlags.ChangesOften | PropFlags.RoundDown, 0, 360f),
@@ -488,8 +488,38 @@ public partial class HL2MP_Player : HL2_Player
 		SetCycle(0);
 	}
 
-	bool BumpWeapon(BaseCombatWeapon weapon) {
-		throw new NotImplementedException();
+	public override bool BumpWeapon(BaseCombatWeapon weapon) {
+		BaseCombatCharacter? owner = weapon.GetOwner();
+
+		if (!IsAllowedToPickupWeapons())
+			return false;
+
+		if (owner != null || !Weapon_CanUse(weapon) || !g_pGameRules.CanHavePlayerItem(this, weapon)) {
+			if (gEvilImpulse101)
+				Util.Remove(weapon);
+			return false;
+		}
+
+		if (!weapon.FVisible(this, Source.Common.Formats.BSP.Mask.Solid) && (GetFlags() & EntityFlags.NoTarget) == 0)
+			return false;
+
+		bool ownsWeaponAlready = Weapon_OwnsThisType(weapon.GetClassname(), weapon.GetSubType()) != null;
+
+		if (ownsWeaponAlready == true) {
+			if (Weapon_EquipAmmoOnly(weapon)) {
+				weapon.CheckRespawn();
+
+				Util.Remove(weapon);
+				return true;
+			}
+			else
+				return false;
+		}
+
+		weapon.CheckRespawn();
+		Weapon_Equip(weapon);
+
+		return true;
 	}
 
 	public override void ChangeTeam(int team, bool autoTeam = false, bool silent = false, bool autoBalance = false) {
@@ -535,7 +565,7 @@ public partial class HL2MP_Player : HL2_Player
 		throw new NotImplementedException();
 	}
 
-	void CreateViewModel(int index = 0) {
+	public override void CreateViewModel(int index = 0) {
 		Assert(index >= 0 && index < MAX_VIEWMODELS);
 
 		if (GetViewModel(index) != null)
@@ -544,11 +574,11 @@ public partial class HL2MP_Player : HL2_Player
 		PredictedViewModel? vm = (PredictedViewModel?)CreateEntityByName("predicted_viewmodel");
 		if (vm != null) {
 			vm.SetAbsOrigin(GetAbsOrigin());
-			// vm.SetOwner(this);
-			// vm.SetIndex(index);
+			vm.SetOwner(this);
+			vm.SetIndex(index);
 			Util.DispatchSpawn(vm);
 			vm.FollowEntity(this, false);
-			// VieweModel.Set(index, vm);
+			ViewModel[index].Set(vm);
 		}
 	}
 

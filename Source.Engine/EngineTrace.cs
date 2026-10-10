@@ -31,6 +31,23 @@ public struct EntityListAlongRay : IPartitionEnumerator
 	}
 }
 
+public ref struct EnumerationFilter<IEE> : IPartitionEnumerator where IEE : IEntityEnumerator, allows ref struct
+{
+	public IEE Enumerator;
+
+	public EnumerationFilter(IEE enumerator) => Enumerator = enumerator;
+
+	public IterationRetval EnumElement(IHandleEntity? handleEntity) {
+		if (StaticPropMgr().IsStaticProp(handleEntity!))
+			return IterationRetval.Continue;
+
+		if (!Enumerator.EnumEntity(handleEntity))
+			return IterationRetval.Stop;
+
+		return IterationRetval.Continue;
+	}
+}
+
 public abstract class EngineTrace : IEngineTrace
 {
 	public abstract ICollideable? GetWorldCollideable();
@@ -326,11 +343,19 @@ public abstract class EngineTrace : IEngineTrace
 
 
 	public void EnumerateEntities<IEE>(in Ray ray, bool triggers, scoped ref IEE enumerator) where IEE : IEntityEnumerator, allows ref struct {
-		throw new NotImplementedException();
+		int mask = !triggers ? SpatialPartitionMask() : SpatialPartitionTriggerMask();
+
+		if (mask != 0) {
+			EnumerationFilter<IEE> filter = new(enumerator);
+			SpatialPartition().EnumerateElementsAlongRay(mask, ray, false, ref filter);
+			enumerator = filter.Enumerator;
+		}
 	}
 
 	public void EnumerateEntities<IEE>(in Vector3 absMins, in Vector3 absMaxs, scoped ref IEE enumerator) where IEE : IEntityEnumerator, allows ref struct {
-		throw new NotImplementedException();
+		EnumerationFilter<IEE> filter = new(enumerator);
+		SpatialPartition().EnumerateElementsInBox(SpatialPartitionMask(), absMins, absMaxs, false, ref filter);
+		enumerator = filter.Enumerator;
 	}
 
 	public void GetBrushesInAABB(in Vector3 mins, in Vector3 maxs, List<int> output, Contents contentsMask = (Contents)(-1)) {
