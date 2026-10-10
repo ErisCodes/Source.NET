@@ -231,6 +231,11 @@ public interface ISurface
 	void PushFullscreenViewport();
 	ReadOnlySpan<char> GetFontName(IFont font);
 	ReadOnlySpan<char> GetFontFamilyName(IFont font);
+#if GMOD_DLL
+	void DrawGetColor(out Color color);
+	void DrawGetTextColor(out Color color);
+	void DrawGetTranslate(out int x, out int y);
+#endif
 }
 
 public interface IMatSystemSurface : ISurface

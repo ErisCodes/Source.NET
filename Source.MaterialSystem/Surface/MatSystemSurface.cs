@@ -2108,6 +2108,16 @@ public class MatSystemSurface : IMatSystemSurface
 		clippingDisabled = !scissorRect.Scissor;
 	}
 
+#if GMOD_DLL
+	public void DrawGetColor(out Color color) => color = DrawColor;
+	public void DrawGetTextColor(out Color color) => color = DrawTextColor;
+
+	public void DrawGetTranslate(out int x, out int y) {
+		x = TranslateX;
+		y = TranslateY;
+	}
+#endif
+
 	public void PushFullscreenViewport() {
 		using MatRenderContextPtr renderContext = new(materials);
 
