@@ -11,6 +11,7 @@ using Game.Shared;
 
 using Source;
 using Source.Common;
+using Source.Common.Engine;
 using Source.Common.Mathematics;
 
 using System;
@@ -270,8 +271,44 @@ public partial class
 #if CLIENT_DLL
 		SetModel(modelname);
 #else
+		string? str = modelname.IsEmpty ? null : new string(modelname);
 
+		if (str != VMName) {
+			VMName = str;
+			SetModel(VMName);
+		}
 #endif
 	}
+
+#if !CLIENT_DLL
+	string? VMName;
+
+	public override EdictFlags UpdateTransmitState() {
+		if (IsEffectActive(EntityEffects.NoDraw))
+			return SetTransmitState(EdictFlags.DontSend);
+
+		return SetTransmitState(EdictFlags.FullCheck);
+	}
+
+	public override EdictFlags ShouldTransmit(CheckTransmitInfo info) {
+		BasePlayer? owner = ToBasePlayer(Owner.Get());
+
+		if (owner != null && owner.Edict() == info.ClientEnt)
+			return EdictFlags.Always;
+
+		BaseEntity? recipientEntity = Instance(info.ClientEnt);
+
+		if (recipientEntity!.IsPlayer()) {
+			BasePlayer player = (BasePlayer)recipientEntity;
+			if (player.IsHLTV())
+				return EdictFlags.PVSCheck;
+
+			if ((player.GetObserverMode() == Shared.ObserverMode.InEye) && (player.GetObserverTarget() == owner))
+				return EdictFlags.Always;
+		}
+
+		return EdictFlags.DontSend;
+	}
+#endif
 }
 #endif
