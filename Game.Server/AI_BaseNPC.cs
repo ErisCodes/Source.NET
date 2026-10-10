@@ -18,6 +18,7 @@ using System.Runtime.CompilerServices;
 namespace Game.Server;
 
 using FIELD = FIELD<AI_BaseNPC>;
+using DEFINE = DEFINE<AI_BaseNPC>;
 
 /// <summary>
 /// bits_MEMORY_* analogs
@@ -278,6 +279,11 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		SendPropBool(FIELD.OF(nameof(ImportantRagdoll))),
 	]);
 	public static readonly new ServerClass ServerClass = new ServerClass(DT_AI_BaseNPC);
+
+	public static readonly new DataMap DataDesc = new(typeof(AI_BaseNPC), BaseEntity.DataDesc, [
+		DEFINE.KEYFIELD(nameof(SpawnEquipment), FieldType.String, "additionalequipment"),
+	]);
+	public override DataMap? GetDataDescMap() => DataDesc;
 
 	[NetworkName("m_bPerformAvoidance")]
 	public bool PerformAvoidance;
