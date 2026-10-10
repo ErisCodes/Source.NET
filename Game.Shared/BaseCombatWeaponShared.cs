@@ -1303,6 +1303,13 @@ public partial class
 
 		NextPrimaryAttack = gpGlobals.CurTime;
 		NextSecondaryAttack = gpGlobals.CurTime;
+#if !CLIENT_DLL
+		SetTouch(null);
+#endif
+		SetThink(null);
+#if !CLIENT_DLL
+		VPhysicsDestroyObject();
+#endif
 
 		if (owner.IsPlayer())
 			SetModel(GetViewModel());
