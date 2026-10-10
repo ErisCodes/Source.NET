@@ -253,6 +253,16 @@ public partial class
 
 
 	public virtual bool CanBePickedUpByNPCs() => true;
+
+	TimeUnit_t UnlockTime;
+	readonly EHANDLE Locker = new();
+
+	public void Lock(TimeUnit_t lockTime, BaseEntity? locker) {
+		UnlockTime = gpGlobals.CurTime + lockTime;
+		Locker.Set(locker);
+	}
+
+	public bool IsLocked(BaseEntity? asker) => UnlockTime > gpGlobals.CurTime && Locker.Get() != asker;
 	public struct ActTable
 	{
 		public Activity BaseAct;

@@ -4651,10 +4651,30 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		if (PendingWeapon != null)
 			return true;
 
-		if (ShouldLookForBetterWeapon())
-			throw new NotImplementedException();
+		if (ShouldLookForBetterWeapon()) {
+			if (GetActiveWeapon() != null)
+				NextWeaponSearchTime = gpGlobals.CurTime + 2;
+			else {
+				if (IsInPlayerSquad())
+					NextWeaponSearchTime = gpGlobals.CurTime + 1;
+				else
+					NextWeaponSearchTime = gpGlobals.CurTime + 2;
+			}
+
+			if (Weapon_FindUsable(WEAPON_SEARCH_DELTA) != null)
+				return true;
+		}
 
 		return false;
+	}
+
+	public static readonly Vector3 WEAPON_SEARCH_DELTA = new(540, 540, 100);
+
+	public bool IsInPlayerSquad() {
+		if (Squad == null)
+			return false;
+
+		throw new NotImplementedException();
 	}
 
 	public BaseEntity? GetTarget() => TargetEnt.Get();

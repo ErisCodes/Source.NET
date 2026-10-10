@@ -345,6 +345,93 @@ public partial class BaseCombatCharacter : BaseFlex
 		return entity;
 	}
 
+	public bool Weapon_IsOnGround(BaseCombatWeapon weapon) {
+		if (weapon.IsConstrained())
+			return false;
+
+		if (MathF.Abs(weapon.WorldSpaceCenter().Z - GetAbsOrigin().Z) >= 12.0f)
+			return false;
+
+		return true;
+	}
+
+	public BaseEntity? Weapon_FindUsable(in Vector3 range) {
+		bool conservative = false;
+
+#if HL2_DLL
+		if (hl2_episodic.GetBool() && GetActiveWeapon() == null) {
+			if (Classify() != Class_T.PlayerAllyVital)
+				conservative = true;
+		}
+#endif
+
+		Span<BaseCombatWeapon?> weaponList = new BaseCombatWeapon?[64];
+		BaseCombatWeapon? bestWeapon = null;
+
+		Vector3 mins = GetAbsOrigin() - range;
+		Vector3 maxs = GetAbsOrigin() + range;
+		int listCount = BaseCombatWeapon.GetAvailableWeaponsInBox(weaponList, mins, maxs);
+
+		float bestDist = 1e6f;
+
+		for (int i = 0; i < listCount; i++) {
+			BaseCombatWeapon weapon = weaponList[i]!;
+			weapon.GetVelocity(out Vector3 velocity, out _);
+
+			if (weapon.CanBePickedUpByNPCs() == false)
+				continue;
+
+			if (velocity.LengthSquared() > 1 || !Weapon_CanUse(weapon))
+				continue;
+
+			if (weapon.IsLocked(this))
+				continue;
+
+			if (GetActiveWeapon() != null) {
+				if (GetActiveWeapon()!.GetClassname().Equals(weapon.GetClassname(), StringComparison.Ordinal))
+					continue;
+
+				if (FClassnameIs(weapon, "weapon_pistol"))
+					continue;
+			}
+
+			float curDist = (weapon.GetLocalOrigin() - GetLocalOrigin()).Length();
+
+			if (weapon.HasSpawnFlags(BaseCombatWeapon.SF_WEAPON_NO_PLAYER_PICKUP))
+				curDist *= 0.5f;
+
+			if (bestWeapon != null) {
+				if (FClassnameIs(weapon, "weapon_ar2"))
+					curDist *= 0.5f;
+
+				if ((weapon.CapabilitiesGet() & (Capability.WeaponRangeAttack1 | Capability.WeaponRangeAttack2)) == 0)
+					continue;
+				else if (curDist > bestDist)
+					continue;
+			}
+
+			if (Weapon_IsOnGround(weapon)) {
+				Vector3 aboveWeapon = weapon.GetAbsOrigin();
+				TraceFilterSimple filter = new(weapon, Source.CollisionGroup.None);
+				Util.TraceEntity(this, aboveWeapon, aboveWeapon + new Vector3(0, 0, 1), Mask.Solid, ref filter, out Trace tr);
+
+				if (tr.StartSolid || (tr.Fraction < 1.0))
+					continue;
+			}
+			else if (conservative)
+				continue;
+
+			if (FVisible(weapon)) {
+				bestDist = curDist;
+				bestWeapon = weapon;
+			}
+		}
+
+		bestWeapon?.Lock(2.0, this);
+
+		return bestWeapon;
+	}
+
 	public BaseCombatWeapon? Weapon_Create(ReadOnlySpan<char> weaponName) {
 		BaseCombatWeapon? weapon = (BaseCombatWeapon?)Create(weaponName, GetLocalOrigin(), GetLocalAngles(), this);
 
