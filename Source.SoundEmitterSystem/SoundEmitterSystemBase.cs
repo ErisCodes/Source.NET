@@ -96,6 +96,8 @@ public class SoundEmitterSystemBase : ISoundEmitterSystemBase
 		Sounds.AddAfter(oldNode, newNode);
 		Sounds.Remove(oldNode);
 		SoundToHandle.Remove(oldNode);
+
+		SoundEntryLookup[newNode.Value] = newNode;
 		HandleToSound[handle] = newNode;
 		SoundToHandle[newNode] = handle;
 	}
@@ -870,6 +872,7 @@ public class SoundEmitterSystemBase : ISoundEmitterSystemBase
 		SoundKeyValues.Clear();
 
 		Sounds.Clear();
+		SoundEntryLookup.Clear();
 		HandleToSound.Clear();
 		CurrentHandle = 0;
 
@@ -962,6 +965,7 @@ public class SoundEmitterSystemBase : ISoundEmitterSystemBase
 		entry.Name = newname;
 		// Re-insert in new spot
 		Sounds.AddLast(entryNode);
+		SoundEntryLookup[entry] = entryNode;
 
 		// Mark associated script as dirty
 		SoundKeyValues.AsSpan()[entry.ScriptFileIndex].Dirty = true;
