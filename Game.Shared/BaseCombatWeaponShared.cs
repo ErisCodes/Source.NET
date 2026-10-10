@@ -1125,7 +1125,36 @@ public partial class
 		Assert(vm.ViewModelIndex() == nViewModelIndex);
 		vm.SendViewModelMatchingSequence(sequence);
 	}
-	public virtual void SetActivity(Activity act, float duration) => throw new NotImplementedException();
+	public virtual void SetActivity(Activity act, float duration) {
+#if !CLIENT_DLL && (HL2MP || PORTAL)
+		if (GetOwner() != null && GetOwner()!.IsPlayer())
+			SetModel(GetWorldModel());
+#endif
+
+		int sequence = SelectWeightedSequence(act);
+
+		if (sequence == StudioHdr.ACTIVITY_NOT_AVAILABLE)
+			sequence = SelectWeightedSequence(Activity.ACT_VM_IDLE);
+
+#if !CLIENT_DLL && (HL2MP || PORTAL)
+		if (GetOwner() != null && GetOwner()!.IsPlayer())
+			SetModel(GetViewModel());
+#endif
+
+		if (sequence != StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+			SetSequence(sequence);
+			SetActivity(act);
+			SetCycle(0);
+			ResetSequenceInfo();
+
+			if (duration > 0) {
+				TimeUnit_t playbackRate = SequenceDuration(sequence) / duration;
+				SetPlaybackRate(Math.Min(playbackRate, 12.0));
+			}
+			else
+				SetPlaybackRate(1.0);
+		}
+	}
 	public void SetActivity(Activity activity) => Activity = activity;
 	public bool SendWeaponAnim(Activity act) {
 		return SetIdealActivity((Activity)act);
