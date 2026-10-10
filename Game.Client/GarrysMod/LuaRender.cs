@@ -128,7 +128,12 @@ public static partial class LuaRender
 	// todo: SetMaterial
 	// todo: SetLightmapTexture
 	// todo: GetLightColor
-	// todo: GetAmbientLightColor
+	[LuaFunction]
+	static int GetAmbientLightColor(ILuaInterface lua) {
+		engine.GetAmbientLightColor(out Vector3 color);
+		LuaVector.Push_Vector(color);
+		return 1;
+	}
 	// todo: ComputeDynamicLighting
 	// todo: ComputeLighting
 	// todo: GetSurfaceColor
@@ -165,9 +170,42 @@ public static partial class LuaRender
 	// todo: GetRefractTexture
 	// todo: UpdatePowerOfTwoTexture
 	// todo: GetPowerOfTwoTexture
-	// todo: GetRenderTarget
-	// todo: SetRenderTarget
-	// todo: SetRenderTargetEx
+	[LuaFunction("GetRenderTarget")]
+	static int GetCurrentRenderTarget(ILuaInterface lua) {
+		using MatRenderContextPtr renderContext = new(materials);
+		ITexture? texture = renderContext.GetRenderTarget();
+		if (texture == null)
+			return 0;
+		LuaTexture.Push(texture);
+		return 1;
+	}
+
+	[LuaFunction]
+	static int SetRenderTarget(ILuaInterface lua) {
+		ITexture? texture = null;
+		if (lua.IsType(1, LuaType.Texture))
+			texture = (ITexture?)LuaTexture.LC_ITexture.Get(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.Flush(false);
+		renderContext.SetRenderTarget(texture);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetRenderTargetEx(ILuaInterface lua) {
+		int id = (int)(uint)lua.CheckNumber(1);
+		if (id < 0)
+			id = 0;
+		else if (id > 4)
+			id = 4;
+		ITexture? texture = null;
+		if (lua.IsType(2, LuaType.Texture))
+			texture = (ITexture?)LuaTexture.LC_ITexture.Get(2);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.Flush(false);
+		renderContext.SetRenderTargetEx(id, texture);
+		return 0;
+	}
 	static int RenderTargetStack;
 
 	[LuaFunction]
@@ -256,7 +294,13 @@ public static partial class LuaRender
 	// todo: ResetModelLighting
 	// todo: SetModelLighting
 	// todo: SetAmbientLight
-	// todo: SetLightingOrigin
+	[LuaFunction]
+	static int SetLightingOrigin(ILuaInterface lua) {
+		ref Vector3 origin = ref LuaVector.Get_Vector(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetLightingOrigin(origin);
+		return 0;
+	}
 	[LuaFunction]
 	static void SetColorModulation([LuaGet] float r, [LuaGet] float g, [LuaGet] float b) {
 		ReadOnlySpan<float> color = [r, g, b];
@@ -472,53 +516,320 @@ public static partial class LuaRender
 		return 0;
 	}
 
-	// todo: SetViewPort
+	[LuaFunction]
+	static int SetViewPort(ILuaInterface lua) {
+		double x = lua.CheckNumber(1);
+		double y = lua.CheckNumber(2);
+		double w = lua.CheckNumber(3);
+		double h = lua.CheckNumber(4);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.Viewport((int)x, (int)y, (int)w, (int)h);
+		return 0;
+	}
 	// todo: Clear
 	// todo: ClearDepth
 	// todo: RenderView
 	// todo: GetViewSetup
 	// todo: RenderHUD
 	// todo: CopyRenderTargetToTexture
-	// todo: PushCustomClipPlane
-	// todo: PopCustomClipPlane
-	// todo: EnableClipping
-	// todo: SetStencilEnable
-	// todo: SetStencilFailOperation
-	// todo: SetStencilZFailOperation
-	// todo: SetStencilPassOperation
-	// todo: SetStencilCompareFunction
-	// todo: SetStencilReferenceValue
-	// todo: SetStencilTestMask
-	// todo: SetStencilWriteMask
-	// todo: ClearStencilBufferRectangle
-	// todo: ClearStencil
-	// todo: ClearBuffersObeyStencil
-	// todo: PerformFullScreenStencilOperation
-	// todo: FogMode
-	// todo: FogStart
-	// todo: FogEnd
-	// todo: SetFogZ
-	// todo: GetFogMode
-	// todo: FogColor
-	// todo: GetFogColor
-	// todo: GetFogDistances
+	static int CustomClipPlaneCount;
+
+	[LuaFunction]
+	static int PushCustomClipPlane(ILuaInterface lua) {
+		ref Vector3 normal = ref LuaVector.Get_Vector(1);
+		double distance = lua.CheckNumber(2);
+		Span<float> plane = [normal.X, normal.Y, normal.Z, (float)distance];
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.PushCustomClipPlane(plane);
+		CustomClipPlaneCount++;
+		return 0;
+	}
+
+	[LuaFunction]
+	static int PopCustomClipPlane(ILuaInterface lua) {
+		if (CustomClipPlaneCount < 1) {
+			lua.ErrorFromLua("render.PopCustomClipPlane underflow\n");
+			return 0;
+		}
+		CustomClipPlaneCount--;
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.PopCustomClipPlane();
+		return 0;
+	}
+
+	[LuaFunction]
+	static int EnableClipping(ILuaInterface lua) {
+		bool enable = lua.GetBool(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		lua.PushBool(renderContext.EnableClipping(enable));
+		return 1;
+	}
+	[LuaFunction]
+	static int SetStencilEnable(ILuaInterface lua) {
+		bool enable = lua.GetBool(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetStencilEnable(enable);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetStencilFailOperation(ILuaInterface lua) {
+		double op = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetStencilFailOperation((StencilOperation)(int)op);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetStencilZFailOperation(ILuaInterface lua) {
+		double op = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetStencilZFailOperation((StencilOperation)(int)op);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetStencilPassOperation(ILuaInterface lua) {
+		double op = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetStencilPassOperation((StencilOperation)(int)op);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetStencilCompareFunction(ILuaInterface lua) {
+		double cmp = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetStencilCompareFunction((StencilComparisonFunction)(int)cmp);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetStencilReferenceValue(ILuaInterface lua) {
+		double reference = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetStencilReferenceValue((int)reference);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetStencilTestMask(ILuaInterface lua) {
+		double mask = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetStencilTestMask((uint)(int)mask);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetStencilWriteMask(ILuaInterface lua) {
+		double mask = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetStencilWriteMask((uint)(int)mask);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int ClearStencilBufferRectangle(ILuaInterface lua) {
+		double xmin = lua.CheckNumber(1);
+		double ymin = lua.CheckNumber(2);
+		double xmax = lua.CheckNumber(3);
+		double ymax = lua.CheckNumber(4);
+		double value = lua.CheckNumber(5);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.ClearStencilBufferRectangle((int)xmin, (int)ymin, (int)xmax, (int)ymax, (int)value);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int ClearStencil(ILuaInterface lua) {
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.ClearBuffers(false, false, true);
+		return 0;
+	}
+	[LuaFunction]
+	static int ClearBuffersObeyStencil(ILuaInterface lua) {
+		double r = lua.CheckNumber(1);
+		double g = lua.CheckNumber(2);
+		double b = lua.CheckNumber(3);
+		double a = lua.CheckNumber(4);
+		bool depth = lua.GetBool(5);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.ClearColor3ub((byte)(int)r, (byte)(int)g, (byte)(int)b);
+		renderContext.ClearColor4ub((byte)(int)r, (byte)(int)g, (byte)(int)b, (byte)(int)a);
+		renderContext.ClearBuffersObeyStencil(true, depth);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int PerformFullScreenStencilOperation(ILuaInterface lua) {
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.PerformFullScreenStencilOperation();
+		return 0;
+	}
+
+	[LuaFunction]
+	static int FogMode(ILuaInterface lua) {
+		double mode = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.FogMode((MaterialFogMode)(int)mode);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int FogStart(ILuaInterface lua) {
+		double start = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.FogStart((float)start);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int FogEnd(ILuaInterface lua) {
+		double end = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.FogEnd((float)end);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetFogZ(ILuaInterface lua) {
+		double fogZ = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetFogZ((float)fogZ);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int GetFogMode(ILuaInterface lua) {
+		using MatRenderContextPtr renderContext = new(materials);
+		lua.PushNumber((int)renderContext.GetFogMode());
+		return 1;
+	}
+
+	[LuaFunction]
+	static int FogColor(ILuaInterface lua) {
+		double r = lua.CheckNumber(1);
+		double g = lua.CheckNumber(2);
+		double b = lua.CheckNumber(3);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.FogColor3ub((byte)(int)r, (byte)(int)g, (byte)(int)b);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int GetFogColor(ILuaInterface lua) {
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.GetFogColor(out Color rgb);
+		lua.PushNumber(rgb.R);
+		lua.PushNumber(rgb.G);
+		lua.PushNumber(rgb.B);
+		return 3;
+	}
+
+	[LuaFunction]
+	static int GetFogDistances(ILuaInterface lua) {
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.GetFogDistances(out float start, out float end, out float fogZ);
+		lua.PushNumber(start);
+		lua.PushNumber(end);
+		lua.PushNumber(fogZ);
+		return 3;
+	}
+
 	// todo: GetFogMaxDensity
 	// todo: FogMaxDensity
-	// todo: CullMode
-	// todo: SetScissorRect
-	// todo: ResetToneMappingScale
-	// todo: SetGoalToneMappingScale
-	// todo: TurnOnToneMapping
-	// todo: SetToneMappingScaleLinear
-	// todo: GetToneMappingScaleLinear
+
+	[LuaFunction]
+	static int CullMode(ILuaInterface lua) {
+		float mode = (int)lua.CheckNumber(1);
+		if (mode <= 0)
+			mode = 0;
+		if (2 <= mode)
+			mode = 2;
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.CullMode((MaterialCullMode)(int)mode);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int ResetToneMappingScale(ILuaInterface lua) {
+		double scale = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.ResetToneMappingScale((float)scale);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetGoalToneMappingScale(ILuaInterface lua) {
+		double scale = lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetGoalToneMappingScale((float)scale);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int TurnOnToneMapping(ILuaInterface lua) {
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.TurnOnToneMapping();
+		return 0;
+	}
+
+	[LuaFunction]
+	static int SetToneMappingScaleLinear(ILuaInterface lua) {
+		ref Vector3 scale = ref LuaVector.Get_Vector(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetToneMappingScaleLinear(scale);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int GetToneMappingScaleLinear(ILuaInterface lua) {
+		using MatRenderContextPtr renderContext = new(materials);
+		LuaVector.Push_Vector(renderContext.GetToneMappingScaleLinear());
+		return 1;
+	}
+
 	// todo: CapturePixels
 	// todo: ReadPixel
-	// todo: OverrideDepthEnable
-	// todo: OverrideAlphaWriteEnable
-	// todo: OverrideColorWriteEnable
+
+	[LuaFunction]
+	static int OverrideDepthEnable(ILuaInterface lua) {
+		bool enable = lua.GetBool(1);
+		bool depthEnable = lua.GetBool(2);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.OverrideDepthEnable(enable, depthEnable);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int OverrideAlphaWriteEnable(ILuaInterface lua) {
+		bool enable = lua.GetBool(1);
+		bool alphaWriteEnable = lua.GetBool(2);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.OverrideAlphaWriteEnable(enable, alphaWriteEnable);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int OverrideColorWriteEnable(ILuaInterface lua) {
+		bool enable = lua.GetBool(1);
+		bool colorWriteEnable = lua.GetBool(2);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.OverrideColorWriteEnable(enable, colorWriteEnable);
+		return 0;
+	}
+
 	// todo: OverrideBlend
 	// todo: OverrideBlendFunc
-	// todo: DepthRange
+
+	[LuaFunction]
+	static int DepthRange(ILuaInterface lua) {
+		double zNear = lua.CheckNumber(1);
+		double zFar = lua.CheckNumber(2);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.DepthRange((float)zNear, (float)zFar);
+		return 0;
+	}
 	// todo: MaterialOverride
 	// todo: MaterialOverrideByIndex
 	// todo: DrawSphere
@@ -535,7 +846,17 @@ public static partial class LuaRender
 	// todo: WorldMaterialOverride
 	// todo: BrushMaterialOverride
 	// todo: ModelMaterialOverride
-	// todo: SetLightingMode
+	[LuaFunction]
+	static int SetLightingMode(ILuaInterface lua) {
+		int mode = (int)lua.CheckNumber(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		if (mode < 0)
+			mode = 0;
+		else if (mode > 2)
+			mode = 2;
+		renderContext.SetIntRenderingParameter(0, mode);
+		return 0;
+	}
 	// todo: Capture
 	static readonly List<int> FilterMinStack = [0];
 	static readonly List<int> FilterMagStack = [0];
@@ -610,8 +931,26 @@ public static partial class LuaRender
 		return 0;
 	}
 	// todo: RedownloadAllLightmaps
-	// todo: SetWriteDepthToDestAlpha
+	[LuaFunction]
+	static int SetWriteDepthToDestAlpha(ILuaInterface lua) {
+		bool enable = lua.GetBool(1);
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetIntRenderingParameter(10, enable ? 1 : 0);
+		return 0;
+	}
 	// todo: RenderFlashlights
-	// todo: ComputePixelDiameterOfSphere
-	// todo: IsTakingScreenshot
+	[LuaFunction]
+	static int ComputePixelDiameterOfSphere(ILuaInterface lua) {
+		ref Vector3 origin = ref LuaVector.Get_Vector(1);
+		double radius = lua.CheckNumber(2);
+		using MatRenderContextPtr renderContext = new(materials);
+		lua.PushNumber(renderContext.ComputePixelDiameterOfSphere(origin, (float)radius));
+		return 1;
+	}
+
+	[LuaFunction]
+	static int IsTakingScreenshot(ILuaInterface lua) {
+		lua.PushBool(engine.IsTakingScreenshot());
+		return 1;
+	}
 }
