@@ -345,7 +345,11 @@ public partial class BaseCombatCharacter : BaseFlex
 		return entity;
 	}
 
-	public BaseCombatWeapon? Weapon_Create(ReadOnlySpan<char> weaponName) => throw new NotImplementedException();
+	public BaseCombatWeapon? Weapon_Create(ReadOnlySpan<char> weaponName) {
+		BaseCombatWeapon? weapon = (BaseCombatWeapon?)Create(weaponName, GetLocalOrigin(), GetLocalAngles(), this);
+
+		return weapon;
+	}
 	public virtual void Weapon_Equip(BaseCombatWeapon weapon) {
 		for (int i = 0; i < MAX_WEAPONS; i++) {
 			if (MyWeapons[i].Get() == null) {
