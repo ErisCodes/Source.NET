@@ -6,6 +6,8 @@ using Source.Common.Commands;
 using Source.Common.Formats.BSP;
 using Source.Common.Physics;
 
+using System.Numerics;
+
 namespace Game.Server;
 
 using DEFINE = Source.DEFINE<BaseCombatWeapon>;
@@ -24,6 +26,48 @@ public partial class BaseCombatWeapon : BaseAnimating
 		DEFINE.OUTPUT(nameof(OnCacheInteraction), "OnCacheInteraction", eventFuncs),
 	]);
 	public override DataMap? GetDataDescMap() => DataDesc;
+
+	public BaseCombatWeapon() {
+		OnBaseCombatWeaponCreated(this);
+	}
+
+	public override void UpdateOnRemove() {
+		OnBaseCombatWeaponDestroyed(this);
+		base.UpdateOnRemove();
+	}
+
+	public class WeaponList(ReadOnlySpan<char> name) : AutoGameSystem(name)
+	{
+		public readonly List<BaseCombatWeapon> List = [];
+
+		public override void LevelShutdownPostEntity() => List.Clear();
+
+		public void AddWeapon(BaseCombatWeapon weapon) => List.Add(weapon);
+		public void RemoveWeapon(BaseCombatWeapon weapon) => List.Remove(weapon);
+	}
+
+	public static readonly WeaponList g_WeaponList = new("CWeaponList");
+
+	static void OnBaseCombatWeaponCreated(BaseCombatWeapon weapon) => g_WeaponList.AddWeapon(weapon);
+	static void OnBaseCombatWeaponDestroyed(BaseCombatWeapon weapon) => g_WeaponList.RemoveWeapon(weapon);
+
+	public static int GetAvailableWeaponsInBox(Span<BaseCombatWeapon?> list, in Vector3 mins, in Vector3 maxs) {
+		int count = 0;
+		foreach (BaseCombatWeapon weapon in g_WeaponList.List) {
+			if (weapon.GetOwner() == null) {
+				if (CollisionUtils.IsPointInBox(weapon.GetAbsOrigin(), mins, maxs)) {
+					if (count < list.Length) {
+						list[count] = weapon;
+						count++;
+					}
+				}
+			}
+		}
+
+		return count;
+	}
+
+	public bool IsConstrained() => false;
 
 	public override bool IsWeapon() => true;
 	public override GarrysMod.LuaClass Lua_GetLuaClass() => GarrysMod.LuaEntity.LC_Weapon;
