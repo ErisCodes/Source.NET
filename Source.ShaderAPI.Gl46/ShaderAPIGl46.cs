@@ -125,7 +125,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	DeviceState DeviceState = DeviceState.OK;
 
-	public void ClearBuffers(bool clearColor, bool clearDepth, bool clearStencil, int renderTargetWidth = -1, int renderTargetHeight = -1) {
+	public unsafe void ClearBuffers(bool clearColor, bool clearDepth, bool clearStencil, int renderTargetWidth = -1, int renderTargetHeight = -1) {
 		if (IsDeactivated())
 			return;
 
@@ -145,18 +145,31 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			glStencilMask(0xFF);
 
 		if (flags != 0) {
+			bool* colorMask = stackalloc bool[4];
+			glGetBooleanv(GL_COLOR_WRITEMASK, colorMask);
+			bool scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
+			if (clearColor)
+				glColorMask(true, true, true, true);
+
 			bool renderTargetMatchesViewport =
 				(renderTargetWidth == -1 && renderTargetHeight == -1) ||
 				(renderTargetWidth == Viewport.Width && renderTargetHeight == Viewport.Height);
 
-			if (renderTargetMatchesViewport)
+			if (renderTargetMatchesViewport) {
+				glDisable(GL_SCISSOR_TEST);
 				glClear(flags);
+			}
 			else {
 				glEnable(GL_SCISSOR_TEST);
 				glScissor(Viewport.X, renderTargetHeight - (Viewport.Y + Viewport.Height), Viewport.Width, Viewport.Height);
 				glClear(flags);
 				glDisable(GL_SCISSOR_TEST);
 			}
+
+			if (scissorWasEnabled)
+				glEnable(GL_SCISSOR_TEST);
+			if (clearColor)
+				glColorMask(colorMask[0], colorMask[1], colorMask[2], colorMask[3]);
 		}
 	}
 
@@ -2984,8 +2997,9 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	public int GetIntRenderingParameter(RenderParamInt parm) => GetIntRenderingParameter((int)parm);
 
 	public int GetIntRenderingParameter(int parmNumber) {
-		// throw new NotImplementedException();
-		return 0;// todo
+		if (parmNumber < 20)
+			return IntRenderingParameters[parmNumber];
+		return 0;
 	}
 
 	public void SetPixelShaderStateAmbientLightCube(int reg, bool forceToBlack) {
@@ -3251,8 +3265,35 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
-	public void ReadPixels(int x, int y, int width, int height, Span<byte> data, ImageFormat dstFormat) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	public unsafe void ReadPixels(int x, int y, int width, int height, Span<byte> data, ImageFormat dstFormat) {
+		FlushBufferedPrimitives();
+
+		int srcHeight;
+		if (UsingTextureRenderTarget)
+			srcHeight = ViewportMaxHeight;
+		else
+			GetBackBufferDimensions(out _, out srcHeight);
+
+		int pitch = width * 4;
+		byte[] bits = new byte[pitch * height];
+
+		int prevRead, drawFBO;
+		glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
+		glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFBO);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, (uint)drawFBO);
+		glPixelStorei(GL_PACK_ALIGNMENT, 1);
+		fixed (byte* p = bits)
+			glReadPixels(x, srcHeight - (y + height), width, height, GL_BGRA, GL_UNSIGNED_BYTE, p);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, (uint)prevRead);
+
+		byte[] flipped = new byte[pitch * height];
+		for (int row = 0; row < height; row++)
+			bits.AsSpan((height - 1 - row) * pitch, pitch).CopyTo(flipped.AsSpan(row * pitch, pitch));
+
+		if (dstFormat == ImageFormat.BGRA8888)
+			flipped.AsSpan(0, Math.Min(flipped.Length, data.Length)).CopyTo(data);
+		else
+			ImageLoader.ConvertImageFormat(flipped, ImageFormat.BGRA8888, data, dstFormat, width, height);
 	}
 
 	public void ReadPixels(ref System.Drawing.Rectangle srcRect, ref System.Drawing.Rectangle dstRect, Span<byte> data, ImageFormat dstFormat, int dstStride) {
@@ -3448,7 +3489,9 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public float GetFloatRenderingParameter(int parmNumber) {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		if (parmNumber < 20)
+			return FloatRenderingParameters[parmNumber];
+		return 0.0f;
 	}
 
 	public ref readonly LightDesc GetLight(int lightNum) {
@@ -3480,7 +3523,9 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public Vector3 GetVectorRenderingParameter(int parmNumber) {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		if (parmNumber < 20)
+			return VectorRenderingParameters[parmNumber];
+		return new(0, 0, 0);
 	}
 
 	public ref MeshBuilder GetVertexModifyBuilder() {
@@ -3547,12 +3592,18 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
 	}
 
+	InlineArray20<int> IntRenderingParameters;
+	InlineArray20<float> FloatRenderingParameters;
+	InlineArray20<Vector3> VectorRenderingParameters;
+
 	public void SetFloatRenderingParameter(int parmNumber, float value) {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		if (parmNumber < 20)
+			FloatRenderingParameters[parmNumber] = value;
 	}
 
 	public void SetIntRenderingParameter(int parmNumber, int value) {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		if (parmNumber < 20)
+			IntRenderingParameters[parmNumber] = value;
 	}
 
 	public void SetIntegerPixelShaderConstant(int var, ReadOnlySpan<int> vec, bool force = false ) {
@@ -3576,7 +3627,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void SetVectorRenderingParameter(int parmNumber, in Vector3 value) {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		if (parmNumber < 20)
+			VectorRenderingParameters[parmNumber] = value;
 	}
 
 	public void Translate(float x, float y, float z) {

@@ -3700,6 +3700,57 @@ public static class MathLib
 		output += b;
 		output += c;
 	}
+
+	public static float FLerp(float f1, float f2, float i1, float i2, float x) => f1 + (f2 - f1) * (x - i1) / (i2 - i1);
+
+	public static bool SolveInverseQuadratic(float x1, float y1, float x2, float y2, float x3, float y3, out float a, out float b, out float c) {
+		a = b = c = 0;
+		float det = (x1 - x2) * (x1 - x3) * (x2 - x3);
+
+		if (det == 0.0f)
+			return false;
+
+		a = (x3 * (-y1 + y2) + x2 * (y1 - y3) + x1 * (-y2 + y3)) / det;
+		b = (x3 * x3 * (y1 - y2) + x1 * x1 * (y2 - y3) + x2 * x2 * (-y1 + y3)) / det;
+		c = (x1 * x3 * (-x1 + x3) * y2 + x2 * x2 * (x3 * y1 - x1 * y3) + x2 * (-(x3 * x3 * y1) + x1 * x1 * y3)) / det;
+		return true;
+	}
+
+	public static bool SolveInverseQuadraticMonotonic(float x1, float y1, float x2, float y2, float x3, float y3, ref float a, ref float b, ref float c) {
+		if (x1 > x2) {
+			(x1, x2) = (x2, x1);
+			(y1, y2) = (y2, y1);
+		}
+		if (x2 > x3) {
+			(x2, x3) = (x3, x2);
+			(y2, y3) = (y3, y2);
+		}
+		if (x1 > x2) {
+			(x1, x2) = (x2, x1);
+			(y1, y2) = (y2, y1);
+		}
+
+		for (int factor = 0; factor <= 100.0; factor += 5) {
+			float blendToLinearFactor = factor / 100.0f;
+			float tempy2 = (1 - blendToLinearFactor) * y2 + blendToLinearFactor * FLerp(y1, y3, x1, x3, x2);
+			if (!SolveInverseQuadratic(x1, y1, x2, tempy2, x3, y3, out a, out b, out c))
+				return false;
+			float derivative = 2.0f * a + b;
+			if ((y1 < y2) && (y2 < y3)) {
+				if (derivative >= 0.0)
+					return true;
+			}
+			else {
+				if ((y1 > y2) && (y2 > y3)) {
+					if (derivative <= 0.0)
+						return true;
+				}
+				else
+					return true;
+			}
+		}
+		return true;
+	}
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 16, Size = sizeof(float) * 4 * 3)]

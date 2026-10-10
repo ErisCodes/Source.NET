@@ -234,6 +234,82 @@ public static partial class LuaEntity
 	}
 
 	[LuaMethod]
+	static int Entity__LookupAttachment(ILuaInterface lua) {
+		BaseEntity ent = Get_Entity(1, false)!;
+		BaseAnimating? animating = ent.GetBaseAnimating();
+		if (animating != null && !ent.IsMarkedForDeletion()) {
+			lua.PushNumber(animating.LookupAttachment(lua.CheckString(2)));
+			return 1;
+		}
+		lua.PushNumber(0);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Entity__SelectWeightedSequence(ILuaInterface lua) {
+		BaseEntity ent = Get_Entity(1, false)!;
+		BaseAnimating? animating = ent.GetBaseAnimating();
+		if (animating == null || IsEntityRemoving(ent, false))
+			return 0;
+
+		if ((uint)(int)lua.CheckNumber(2) > int.MaxValue)
+			lua.ArgError(2, "invalid act");
+
+		lua.PushNumber(animating.SelectWeightedSequence((Activity)(int)lua.CheckNumber(2)));
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Entity__GetModel(ILuaInterface lua) {
+		BaseEntity ent = Get_Entity(1, false)!;
+		if (ent.IsWeapon() && ent is BaseCombatWeapon weapon) {
+			string worldModel = new string(weapon.GetWorldModel()).ToLowerInvariant();
+			lua.PushString(worldModel);
+			return 1;
+		}
+
+#if CLIENT_DLL
+		ReadOnlySpan<char> name = ent.GetModelName();
+		if (name.IsEmpty) {
+			Model? model = ent.GetModel();
+			if (model != null)
+				name = modelinfo.GetModelName(model);
+		}
+
+		if (name.IsEmpty) {
+			C_BaseAnimating? animating = ent.GetBaseAnimating();
+			if (animating != null && !ent.IsMarkedForDeletion()) {
+				StudioHdr? hdr = animating.GetModelPtr();
+				if (hdr != null) {
+					string path = $"models/{hdr.Name()}".Replace('\\', '/');
+					name = path;
+				}
+			}
+		}
+
+		if (name.IsEmpty)
+			return 0;
+#else
+		ReadOnlySpan<char> name = ent.GetModelName();
+		if (name.IsEmpty)
+			return 0;
+#endif
+		lua.PushString(new string(name).ToLowerInvariant());
+		return 1;
+	}
+
+#if CLIENT_DLL
+	[LuaMethod]
+	static int Entity__GetRenderBounds(ILuaInterface lua) {
+		BaseEntity ent = Get_Entity(1, false)!;
+		ent.GetRenderBounds(out Vector3 mins, out Vector3 maxs);
+		LuaVector.Push_Vector(mins);
+		LuaVector.Push_Vector(maxs);
+		return 2;
+	}
+#endif
+
+	[LuaMethod]
 	static int Entity__NearestPoint(ILuaInterface lua) {
 		BaseEntity ent = Get_Entity(1, false)!;
 		ref Vector3 point = ref LuaVector.Get_Vector(2);
