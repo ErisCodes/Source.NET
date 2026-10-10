@@ -4862,7 +4862,7 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 					if (((EntityEffects)Effects & EntityEffects.NoShadow) != 0)
 						weapon.AddEffects(EntityEffects.NoShadow);
 
-					base.Weapon_Equip(weapon);
+					Weapon_Equip(weapon);
 				}
 			}
 		}
