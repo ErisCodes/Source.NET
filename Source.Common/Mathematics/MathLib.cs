@@ -3701,8 +3701,6 @@ public static class MathLib
 		output += c;
 	}
 
-	public static float FLerp(float f1, float f2, float i1, float i2, float x) => f1 + (f2 - f1) * (x - i1) / (i2 - i1);
-
 	public static bool SolveInverseQuadratic(float x1, float y1, float x2, float y2, float x3, float y3, out float a, out float b, out float c) {
 		a = b = c = 0;
 		float det = (x1 - x2) * (x1 - x3) * (x2 - x3);
@@ -3732,7 +3730,7 @@ public static class MathLib
 
 		for (int factor = 0; factor <= 100.0; factor += 5) {
 			float blendToLinearFactor = factor / 100.0f;
-			float tempy2 = (1 - blendToLinearFactor) * y2 + blendToLinearFactor * FLerp(y1, y3, x1, x3, x2);
+			float tempy2 = (1 - blendToLinearFactor) * y2 + blendToLinearFactor * Lerp(y1, y3, x1, x3, x2);
 			if (!SolveInverseQuadratic(x1, y1, x2, tempy2, x3, y3, out a, out b, out c))
 				return false;
 			float derivative = 2.0f * a + b;
