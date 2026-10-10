@@ -75,12 +75,14 @@ public class SoundEmitterSystemBase : ISoundEmitterSystemBase
 	readonly Dictionary<UtlSymId_t, Gender> m_ActorGenders = new(SymbolStringComparer_OrdinalIgnoreCase.Instance);
 
 	readonly LinkedList<SoundEntry> Sounds = new();
+	readonly Dictionary<SoundEntry, LinkedListNode<SoundEntry>> SoundEntryLookup = new();
 	readonly Dictionary<int, LinkedListNode<SoundEntry>> HandleToSound = [];
 	readonly Dictionary<LinkedListNode<SoundEntry>, int> SoundToHandle = [];
 
 	int CurrentHandle;
 	int Sounds_AllocHandle(LinkedListNode<SoundEntry> node) {
 		Sounds.AddLast(node);
+		SoundEntryLookup[node.Value] = node;
 		int handle = Interlocked.Increment(ref CurrentHandle);
 		HandleToSound[handle] = node;
 		SoundToHandle[node] = handle;
@@ -143,8 +145,7 @@ public class SoundEmitterSystemBase : ISoundEmitterSystemBase
 		newEntry.ScriptFileIndex = i;
 		newEntry.SoundParams.CopyFrom(parms);
 
-		LinkedListNode<SoundEntry>? tryFindingDuplicate = Sounds.Find(newEntry);
-		if (tryFindingDuplicate != null)
+		if (SoundEntryLookup.TryGetValue(newEntry, out LinkedListNode<SoundEntry>? tryFindingDuplicate))
 			Sounds_ReplaceKey(SoundToHandle[tryFindingDuplicate], entryNode);
 		else
 			Sounds_AllocHandle(entryNode);
@@ -495,8 +496,8 @@ public class SoundEmitterSystemBase : ISoundEmitterSystemBase
 
 		SoundEntry search = default;
 		search.Name = name;
-		var node = Sounds.Find(search);
-		if (node == null) return -1;
+		if (!SoundEntryLookup.TryGetValue(search, out var node))
+			return -1;
 		return SoundToHandle[node];
 	}
 
@@ -728,8 +729,7 @@ public class SoundEmitterSystemBase : ISoundEmitterSystemBase
 					bool isDuplicate;
 					int lookup = -1;
 					{
-						var lookupEntry = Sounds.Find(entry);
-						if (lookupEntry != null) {
+						if (SoundEntryLookup.TryGetValue(entry, out var lookupEntry)) {
 							isDuplicate = true;
 							lookup = SoundToHandle[lookupEntry];
 						}
