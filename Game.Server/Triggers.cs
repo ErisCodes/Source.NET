@@ -219,6 +219,22 @@ public class BaseTrigger : BaseToggle
 		}
 	}
 
+	public override int DrawDebugTextOverlays() {
+		int text_offset = base.DrawDebugTextOverlays();
+
+		if ((DebugOverlays & DebugOverlayBits.Text) != 0) {
+			Span<char> tempstr = stackalloc char[255];
+			if (IsSolidFlagSet(SolidFlags.Trigger))
+				strcpy(tempstr, "State: Enabled");
+			else
+				strcpy(tempstr, "State: Disabled");
+			EntityText(text_offset, tempstr, 0);
+			text_offset++;
+		}
+
+		return text_offset;
+	}
+
 	//------------------------------------------------------------------------------
 	// Purpose :
 	//------------------------------------------------------------------------------

@@ -279,6 +279,17 @@ public class GarrysMod : IGarrysMod
 			if (g_Lua != null)
 				Error("CLuaManager::Startup Lua already exsits?\n");
 
+			if (commandLine.FindParm("-nolua") != 0) {
+				g_Lua = new Source.Common.GarrysMod.Lua.LuaNullInterface();
+				g_Lua.SetPathID(LuaPathID);
+#if CLIENT_DLL
+				g_Lua.SetType(0);
+#else
+				g_Lua.SetType(1);
+#endif
+				return;
+			}
+
 #if CLIENT_DLL
 			g_Lua = get.LuaShared()!.CreateLuaInterface(Realm.Client, false);
 			g_Lua.Init(LuaGameCallback.g_LuaCallback, Singleton<ICommandLine>().CheckParm("-withjit"));

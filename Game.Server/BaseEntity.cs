@@ -1890,6 +1890,9 @@ public partial class BaseEntity : IServerEntity
 		DebugOverlay.EntityTextAtPosition(origin, text_offset, text, duration, r, g, b, a);
 	}
 
+	public virtual void DrawDebugGeometryOverlays() {
+		// todo	
+	}
 	public virtual int DrawDebugTextOverlays() {
 		int offset = 1;
 		if ((DebugOverlays & DebugOverlayBits.Text) != 0) {
@@ -2702,6 +2705,7 @@ public partial class BaseEntity : IServerEntity
 	public bool DynamicModelSetBounds;
 	public bool DynamicModelPending;
 
+	static readonly IFieldAccessor ModelIndexField = FIELD.OF(nameof(ModelIndex));
 	public void SetModelIndex(int index) {
 		if (IVModelInfo.IsDynamicModelIndex(index) && !(GetBaseAnimating() != null && DynamicModelAllowed)) {
 			AssertMsg(false, "dynamic model support not enabled on server entity");
@@ -2717,6 +2721,7 @@ public partial class BaseEntity : IServerEntity
 			modelinfo.ReleaseDynamicModel(ModelIndex);
 			modelinfo.AddRefDynamicModel(index);
 			ModelIndex = index;
+			NetworkStateChanged(ModelIndexField);
 
 			DynamicModelSetBounds = false;
 
@@ -3178,7 +3183,42 @@ public partial class BaseEntity : IServerEntity
 	}
 	public bool IsWorld() => EntIndex() == 0;
 
-	public virtual bool FVisible(BaseEntity entity) => throw new NotImplementedException();
+	public virtual bool FVisible(BaseEntity entity, Mask traceMask = Mask.BlockLOS) {
+		if ((entity.GetFlags() & EntityFlags.NoTarget) != 0)
+			return false;
+
+		Vector3 vecLookerOrigin = EyePosition();
+		Vector3 vecTargetOrigin = entity.EyePosition();
+
+		Trace tr;
+		if (AI_BaseNPCGlobals.ai_LOS_mode.GetBool())
+			Util.TraceLine(vecLookerOrigin, vecTargetOrigin, traceMask, this, Source.CollisionGroup.None, out tr);
+		else {
+			if (traceMask == Mask.BlockLOS)
+				traceMask = Mask.BlockLOSAndNPCs;
+
+			if (IsPlayer())
+				traceMask &= ~(Mask)Contents.BlockLOS;
+
+			TraceFilterLOS traceFilter = new(this, Source.CollisionGroup.None, entity);
+			Util.TraceLine(vecLookerOrigin, vecTargetOrigin, traceMask, ref traceFilter, out tr);
+		}
+
+		if (tr.Fraction != 1.0 || tr.StartSolid) {
+			if (tr.Ent == entity)
+				return true;
+
+			if (entity.IsPlayer()) {
+				BasePlayer player = (BasePlayer)entity;
+				if (tr.Ent == player.GetVehicleEntity())
+					return true;
+			}
+
+			return false;
+		}
+
+		return true;
+	}
 
 	public virtual void GetVectors(out Vector3 forward, out Vector3 right, out Vector3 up) {
 		ref readonly Matrix3x4 entityToWorld = ref EntityToWorldTransform();

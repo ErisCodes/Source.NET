@@ -211,7 +211,22 @@ GameRules
 	public override bool IsDeathmatch() => true;
 	public override bool IsCoOp() => false;
 	public override bool FShouldSwitchWeapon(BasePlayer player, BaseCombatWeapon? weapon) {
-		throw new NotImplementedException();
+		if (!player.Weapon_CanSwitchTo(weapon!))
+			return false;
+
+		if (player.GetActiveWeapon() == null)
+			return true;
+
+		if (!weapon!.AllowsAutoSwitchTo())
+			return false;
+
+		if (!player.GetActiveWeapon()!.AllowsAutoSwitchFrom())
+			return false;
+
+		if (weapon.GetWeight() > player.GetActiveWeapon()!.GetWeight())
+			return true;
+
+		return false;
 	}
 	public override BaseCombatWeapon? GetNextBestWeapon(BaseCombatCharacter player, BaseCombatWeapon? currentWeapon) {
 		return base.GetNextBestWeapon(player, currentWeapon);

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration>
+	<CodeCoverage>
+		<IncludeTestAssembly>true</IncludeTestAssembly>
+		<ModulePaths>
+			<Include>
+				<ModulePath>.*Source\.Common\.dll$</ModulePath>
+				<ModulePath>.*Source\.Common\.Tests\.dll$</ModulePath>
+			</Include>
+		</ModulePaths>
+		<Sources>
+			<Exclude>
+				<Source>.*[\\/]Source\.Common\.Tests[\\/][^\\/]+\.cs$</Source>
+			</Exclude>
+		</Sources>
+	</CodeCoverage>
+</Configuration>

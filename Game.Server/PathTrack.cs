@@ -2,6 +2,7 @@ using Game.Shared;
 
 using Source;
 using Source.Common;
+using Source.Common.Engine;
 using Source.Common.Mathematics;
 
 using System.Numerics;
@@ -180,6 +181,21 @@ public class PathTrack : PointEntity
 			return null;
 
 		return path;
+	}
+
+	public static PathTrack? Instance(Edict ent) {
+		BaseEntity? entity = BaseEntity.Instance(ent);
+		if (FClassnameIs(entity, "path_track"))
+			return (PathTrack?)entity;
+		return null;
+	}
+
+	public override void DrawDebugGeometryOverlays() {
+		if ((DebugOverlays & (DebugOverlayBits.BBox | DebugOverlayBits.AbsBox)) != 0)
+			if (Next.IsValid())
+				DebugOverlay.Line(GetAbsOrigin(), Next.Get()!.GetAbsOrigin(), 255, 100, 100, true, 0.0f);
+
+		base.DrawDebugGeometryOverlays();
 	}
 
 	void Project(PathTrack? start, PathTrack? end, ref Vector3 origin, float dist) {
