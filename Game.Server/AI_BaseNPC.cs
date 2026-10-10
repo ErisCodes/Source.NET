@@ -4194,7 +4194,20 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return DefaultEyeOffset * GetModelScale();
 	}
 
-	public virtual bool IsCrouchedActivity(Activity activity) => throw new NotImplementedException();
+	public virtual bool IsCrouchedActivity(Activity activity) {
+		Activity realActivity = TranslateActivity(activity, out _);
+
+		switch (realActivity) {
+			case Activity.ACT_RELOAD_LOW:
+			case Activity.ACT_COVER_LOW:
+			case Activity.ACT_COVER_PISTOL_LOW:
+			case Activity.ACT_COVER_SMG1_LOW:
+			case Activity.ACT_RELOAD_SMG1_LOW:
+				return true;
+		}
+
+		return false;
+	}
 
 	public override void AddEntityRelationship(BaseEntity entity, Disposition disposition, int priority) {
 		base.AddEntityRelationship(entity, disposition, priority);
