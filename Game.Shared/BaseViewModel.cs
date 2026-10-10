@@ -124,7 +124,11 @@ public partial class
 	[NetworkName("m_hWeapon")]
 	public Handle<BaseCombatWeapon> Weapon = new();
 	[NetworkName("m_nAnimationParity")]
+#if CLIENT_DLL
 	public int AnimationParity;
+#else
+	[NetworkVar] public partial int AnimationParity { get; set; }
+#endif
 
 	public BaseCombatWeapon? GetOwningWeapon() => Weapon.Get();
 

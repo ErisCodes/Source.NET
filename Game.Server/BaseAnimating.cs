@@ -31,7 +31,7 @@ public partial class InfoLightingRelative : BaseEntity
 }
 
 [NetworkName("CBaseAnimating")]
-public class BaseAnimating : BaseEntity
+public partial class BaseAnimating : BaseEntity
 {
 	public const int ANIMATION_SKIN_BITS = 10;
 	public const int ANIMATION_BODY_BITS = 32;
@@ -107,17 +107,17 @@ public class BaseAnimating : BaseEntity
 	public InlineArrayMaxStudioBoneCtrls<float> EncodedController;
 	public InlineArrayMaxStudioBoneCtrls<float> OldEncodedController;
 	[NetworkName("m_nSequence")]
-	public int Sequence;
+	[NetworkVar] public partial int Sequence { get; set; }
 	[NetworkName("m_flPlaybackRate")]
-	public TimeUnit_t PlaybackRate;
+	[NetworkVar] public partial TimeUnit_t PlaybackRate { get; set; }
 	[NetworkName("m_bClientSideAnimation")]
 	public bool ClientSideAnimation;
 	[NetworkName("m_bClientSideFrameReset")]
 	public bool ClientSideFrameReset;
 	[NetworkName("m_nNewSequenceParity")]
-	public int NewSequenceParity;
+	[NetworkVar] public partial int NewSequenceParity { get; set; }
 	[NetworkName("m_nResetEventsParity")]
-	public int ResetEventsParity;
+	[NetworkVar] public partial int ResetEventsParity { get; set; }
 	[NetworkName("m_nMuzzleFlashParity")]
 	public int MuzzleFlashParity;
 	[NetworkName("m_hLightingOrigin")]
@@ -135,7 +135,7 @@ public class BaseAnimating : BaseEntity
 	[NetworkName("m_flFadeScale")]
 	public float FadeScale;
 	[NetworkName("m_flCycle")]
-	public TimeUnit_t Cycle;
+	[NetworkVar] public partial TimeUnit_t Cycle { get; set; }
 	[NetworkName("m_OverrideViewTarget")]
 	public Vector3 OverrideViewTarget;
 
