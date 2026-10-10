@@ -1074,7 +1074,7 @@ public partial class C_BaseEntity : IClientEntity
 	public virtual void ValidateModelIndex() {
 		SetModelByIndex(ModelIndex);
 	}
-	void SetModelPointer(Model? model) {
+	public void SetModelPointer(Model? model) {
 		if (model != Model) {
 			DestroyModelInstance();
 			Model = model;

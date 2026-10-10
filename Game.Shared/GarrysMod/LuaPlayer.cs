@@ -177,6 +177,24 @@ public static partial class LuaPlayer
 		return 1;
 	}
 
+	[LuaMethod]
+	static int Player__GetVehicle(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+#if CLIENT_DLL
+		LuaEntity.Push_Entity(player.GetVehicle()?.GetVehicleEnt());
+#else
+		LuaEntity.Push_Entity(player.IsInAVehicle() ? player.GetVehicleEntity() : null);
+#endif
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Player__GetShootPos(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+		LuaVector.Push_Vector(player.Weapon_ShootPosition());
+		return 1;
+	}
+
 	[LuaFunction]
 	static int GetByID(ILuaInterface lua) {
 		BasePlayer? player = Util.PlayerByIndex((int)g_Lua!.CheckNumber(1));

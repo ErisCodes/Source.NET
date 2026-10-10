@@ -49,31 +49,6 @@ public class World : BaseEntity
 		ColdWorld = false;
 	}
 
-	public override bool KeyValue(ReadOnlySpan<char> keyName, ReadOnlySpan<char> value) {
-		if (keyName.Equals("skyname", StringComparison.Ordinal)) {
-			ConVarRef skyname = new("sv_skyname");
-			skyname.SetValue(value);
-		}
-		else if (keyName.Equals("newunit", StringComparison.Ordinal)) {
-			// if (atoi(value) != 0)
-			// 	Game_SetOneWayTransition();
-		}
-		else if (keyName.Equals("world_mins", StringComparison.Ordinal)) {
-			Vector3 vec = default;
-			UTIL_StringToVector(vec.Base(), value);
-			WorldMins = vec;
-		}
-		else if (keyName.Equals("world_maxs", StringComparison.Ordinal)) {
-			Vector3 vec = default;
-			UTIL_StringToVector(vec.Base(), value);
-			WorldMaxs = vec;
-		}
-		else
-			return base.KeyValue(keyName, value);
-
-		return true;
-	}
-
 	public override void Precache() {
 		g_WorldEntity = this;
 		g_fGameOver = false;
@@ -133,6 +108,10 @@ public class World : BaseEntity
 		if (FStrEq(keyName, "skyname")) {
 			ConVarRef skyname = new("sv_skyname");
 			skyname.SetValue(value);
+		}
+		else if (FStrEq(keyName, "newunit")) {
+			// if (atoi(value) != 0)
+			// 	Game_SetOneWayTransition();
 		}
 		else if (FStrEq(keyName, "world_mins")) {
 			Vector3 vec = default;

@@ -31,16 +31,18 @@ public static partial class LuaUtil
 	public static bool UTIL_IsValidModel(ReadOnlySpan<char> name) {
 		if (name.IsEmpty || name[0] <= ' ' || name.Length <= 3)
 			return false;
-		if (name.Contains(".bsp", StringComparison.OrdinalIgnoreCase))
+		if (!stristr(name, ".bsp").IsEmpty)
 			return false;
 		if (stricmp(name[^4..], ".mdl") != 0)
 			return false;
-#if GAME_DLL
+#if CLIENT_DLL
+		int index = UTIL_GetModelIndex(name);
+#else
 		if (!engine.IsModelPrecached(name) && !filesystem.FileExists(name, "GAME"))
 			return false;
-#endif
 
 		int index = BaseEntity.PrecacheModel(name);
+#endif
 		if (index == -1)
 			return false;
 
@@ -61,10 +63,75 @@ public static partial class LuaUtil
 		return !error;
 	}
 
+	public static int UTIL_GetModelIndex(ReadOnlySpan<char> name) {
+		if (name.Contains('*'))
+			return -1;
+		if (name.IsEmpty || (name[0] & 0xDF) == 0)
+			return -1;
+		return modelinfo.GetModelIndex(name);
+	}
+
+	public static bool UTIL_IsValidPropModel(ReadOnlySpan<char> name) {
+		if (!UTIL_IsValidModel(name))
+			return false;
+		if (!stristr(name, "coreball.mdl").IsEmpty)
+			return false;
+#if CLIENT_DLL
+		VCollide? collide = modelinfo.GetVCollide(UTIL_GetModelIndex(name));
+#else
+		VCollide? collide = modelinfo.GetVCollide(BaseEntity.PrecacheModel(name));
+#endif
+		return collide != null && collide.SolidCount == 1;
+	}
+
+	public static bool UTIL_IsValidRagdollModel(ReadOnlySpan<char> name) {
+		if (!UTIL_IsValidModel(name))
+			return false;
+#if CLIENT_DLL
+		VCollide? collide = modelinfo.GetVCollide(UTIL_GetModelIndex(name));
+#else
+		VCollide? collide = modelinfo.GetVCollide(BaseEntity.PrecacheModel(name));
+#endif
+		return collide != null && collide.SolidCount > 1;
+	}
+
+	[LuaFunction]
+	static int IsValidRagdoll(ILuaInterface lua) {
+		string? name = lua.CheckString(1);
+		if (!string.IsNullOrEmpty(name) && ' ' < name[0]) {
+			lua.PushBool(UTIL_IsValidRagdollModel(name));
+			return 1;
+		}
+		lua.PushBool(false);
+		return 0;
+	}
+
+	[LuaFunction]
+	static int IsValidProp(ILuaInterface lua) {
+		string? name = lua.CheckString(1);
+		if (!string.IsNullOrEmpty(name) && ' ' < name[0]) {
+			lua.PushBool(UTIL_IsValidPropModel(name));
+			return 1;
+		}
+		lua.PushBool(false);
+		return 0;
+	}
+
 	[LuaFunction]
 	static int PrecacheModel(ILuaInterface lua) {
 		if (UTIL_IsValidModel(g_Lua!.CheckString(1)))
 			BaseEntity.PrecacheModel(g_Lua.CheckString(1));
+		return 0;
+	}
+
+	[LuaFunction]
+	static int IsValidModel(ILuaInterface lua) {
+		string? name = lua.CheckString(1);
+		if (!string.IsNullOrEmpty(name) && ' ' < name[0]) {
+			lua.PushBool(UTIL_IsValidModel(name));
+			return 1;
+		}
+		lua.PushBool(false);
 		return 0;
 	}
 
