@@ -2804,7 +2804,81 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		return Capability;
 	}
 
-	public virtual void SetAim(in Vector3 aimDir) => throw new NotImplementedException();
+	protected int PoseAim_Pitch;
+	protected int PoseAim_Yaw;
+	protected int PoseMove_Yaw;
+
+	protected override void PopulatePoseParameters() {
+		PoseAim_Pitch = LookupPoseParameter("aim_pitch");
+		PoseAim_Yaw = LookupPoseParameter("aim_yaw");
+		PoseMove_Yaw = LookupPoseParameter("move_yaw");
+
+		base.PopulatePoseParameters();
+	}
+
+	public virtual void SetAim(in Vector3 aimDir) {
+		MathLib.VectorAngles(aimDir, out QAngle angDir);
+		float curPitch = GetPoseParameter(PoseAim_Pitch);
+		float curYaw = GetPoseParameter(PoseAim_Yaw);
+
+		float newPitch;
+		float newYaw;
+
+		if (GetEnemy() != null) {
+			newPitch = curPitch + 0.8f * Util.AngleDiff(MathLib.ApproachAngle(angDir.X, curPitch, 20), curPitch);
+
+			float relativeYaw = Util.AngleDiff(angDir.Y, GetAbsAngles().Y);
+			newYaw = curYaw + Util.AngleDiff(relativeYaw, curYaw);
+		}
+		else {
+			newPitch = curPitch + 0.6f * Util.AngleDiff(MathLib.ApproachAngle(angDir.X, curPitch, 20), curPitch);
+
+			float relativeYaw = Util.AngleDiff(angDir.Y, GetAbsAngles().Y);
+			newYaw = curYaw + 0.6f * Util.AngleDiff(relativeYaw, curYaw);
+		}
+
+		newPitch = MathLib.AngleNormalize(newPitch);
+		newYaw = MathLib.AngleNormalize(newYaw);
+
+		SetPoseParameter(PoseAim_Pitch, newPitch);
+		SetPoseParameter(PoseAim_Yaw, newYaw);
+
+		if (MathF.Abs(newYaw) < 20)
+			InteractionYaw = angDir.Y;
+		else
+			InteractionYaw = GetAbsAngles().Y;
+	}
+
+	public void RelaxAim() {
+		float curPitch = GetPoseParameter(PoseAim_Pitch);
+		float curYaw = GetPoseParameter(PoseAim_Yaw);
+
+		float newPitch = MathLib.AngleNormalize(MathLib.ApproachAngle(0, curPitch, 3));
+		float newYaw = MathLib.AngleNormalize(MathLib.ApproachAngle(0, curYaw, 2));
+
+		SetPoseParameter(PoseAim_Pitch, newPitch);
+		SetPoseParameter(PoseAim_Yaw, newYaw);
+	}
+
+	public Vector3 GetEnemyLKP() => throw new NotImplementedException();
+
+	public virtual Vector3 GetShootEnemyDir(in Vector3 shootOrigin, bool noisy = true) {
+		BaseEntity? enemy = GetEnemy();
+
+		if (enemy != null) {
+			Vector3 enemyLKP = GetEnemyLKP();
+
+			Vector3 enemyOffset = enemy.BodyTarget(shootOrigin, noisy) - enemy.GetAbsOrigin();
+
+			Vector3 retval = enemyOffset + enemyLKP - shootOrigin;
+			MathLib.VectorNormalize(ref retval);
+			return retval;
+		}
+		else {
+			MathLib.AngleVectors(GetLocalAngles(), out Vector3 forward);
+			return forward;
+		}
+	}
 
 	public virtual int HolsterWeapon() => throw new NotImplementedException();
 	public virtual int UnholsterWeapon() => throw new NotImplementedException();
@@ -6292,7 +6366,16 @@ public class AI_BaseNPC : BaseCombatCharacter, IAI_MovementSink
 		MaintainTurnActivity();
 	}
 
-	public virtual void AimGun() => throw new NotImplementedException();
+	public virtual void AimGun() {
+		if (GetEnemy() != null) {
+			Vector3 shootOrigin = Weapon_ShootPosition();
+			Vector3 shootDir = GetShootEnemyDir(shootOrigin, false);
+
+			SetAim(shootDir);
+		}
+		else
+			RelaxAim();
+	}
 
 	static readonly float[] g_DecisionIntervals = [
 		.1f,
