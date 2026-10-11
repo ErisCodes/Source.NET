@@ -128,7 +128,7 @@ public partial class BaseFileSystem : IFileSystem
 	private void AddSeparatorAndFixPath(ref string path) { // this sucks fix it later
 		path = (path.TrimEnd('\\').TrimEnd('/') + "/").Replace("\\", "/");
 	}
-	private void AddSearchPathDiskInternal(ReadOnlySpan<char> path, ReadOnlySpan<char> pathID, SearchPathAdd addType, PathGroupName groupName, bool addPackFiles) {
+	private void AddSearchPathDiskInternal(ReadOnlySpan<char> path, ReadOnlySpan<char> pathID, SearchPathAdd addType, PathGroupName groupName, bool addPackFiles, bool workshop = false) {
 		var ext = Path.GetExtension(path);
 
 		switch (ext) {
@@ -161,12 +161,12 @@ public partial class BaseFileSystem : IFileSystem
 			AddPackFiles(newPath, pathID, addType);
 		}
 
-		ISearchPath createdSearchPath = new DiskSearchPath(this, newPath);
+		ISearchPath createdSearchPath = new DiskSearchPath(this, newPath) { Workshop = workshop };
 		AddSearchPathFinal(createdSearchPath, addType, collection, groupName, pathID);
 	}
 
-	public void AddSearchPath(ReadOnlySpan<char> path, ReadOnlySpan<char> pathID, SearchPathAdd addType = SearchPathAdd.ToTail, PathGroupName name = PathGroupName.Default) {
-		AddSearchPathDiskInternal(path, pathID, addType, name, true);
+	public void AddSearchPath(ReadOnlySpan<char> path, ReadOnlySpan<char> pathID, SearchPathAdd addType = SearchPathAdd.ToTail, PathGroupName name = PathGroupName.Default, bool workshop = false) {
+		AddSearchPathDiskInternal(path, pathID, addType, name, true, workshop);
 	}
 
 	public void AddSearchPath(ISearchPath path, ReadOnlySpan<char> pathID, SearchPathAdd addType = SearchPathAdd.ToTail, PathGroupName groupName = PathGroupName.Default) {
@@ -300,19 +300,28 @@ public partial class BaseFileSystem : IFileSystem
 		return loseDefault;
 	}
 
-	readonly ref struct RelativePathToFullPath_Op() : IFirstToThePostOp<bool>
-	{
-		public bool Invoke(ISearchPath p, scoped ReadOnlySpan<char> name) => p.Exists(name);
-		public bool Win(bool v) => v;
-	}
-
 	public ReadOnlySpan<char> RelativePathToFullPath(ReadOnlySpan<char> fileName, ReadOnlySpan<char> pathID, Span<char> dest, PathTypeFilter filter = PathTypeFilter.None) {
+		using Lock.Scope scope = SearchPathLock.EnterScope();
 		fileName = fileName.SliceNullTerminatedString();
-		if (!FirstToThePost(fileName, pathID, new RelativePathToFullPath_Op(), false, out ISearchPath? winner))
-			return null;
+		Span<char> filenameNormalizedBuffer = stackalloc char[MAX_PATH];
+		ReadOnlySpan<char> filenameNormalized = ISearchPath.Normalize(fileName, filenameNormalizedBuffer);
+		CollectionIterator iterator = GetCollections(pathID.Hash());
+		while (iterator.MoveNext()) {
+			ISearchPath path = iterator.Current;
+			if (path is DiskSearchPath disk) {
+				if (disk.ExistsOnDisk(filenameNormalized))
+					return ISearchPath.Concat(path, fileName, dest);
 
-		Span<char> concatBuffer = stackalloc char[MAX_PATH];
-		return ISearchPath.Concat(winner, fileName, dest);
+				string resolved = g_AddonFileSystem.ResolveFile(disk.GetFullPath(filenameNormalized));
+				if (resolved.Length != 0) {
+					int len = strcpy(dest, resolved);
+					return dest[..len];
+				}
+			}
+			else if (path.Exists(filenameNormalized))
+				return ISearchPath.Concat(path, fileName, dest);
+		}
+		return null;
 	}
 
 	public bool FullPathToRelativePath(ReadOnlySpan<char> fullPath, Span<char> relative) => FullPathToRelativePathEx(fullPath, null, relative);
@@ -718,6 +727,8 @@ public partial class BaseFileSystem : IFileSystem
 		SearchPathCollection? currentCollection;
 		ISearchPath? currentPath;
 		HashSet<FileNameHandle_t>? foundAlready;
+		List<string>? files;
+		List<string>? dirs;
 #if GMOD_DLL
 		List<SearchFile>? addonFiles;
 #endif
@@ -733,10 +744,40 @@ public partial class BaseFileSystem : IFileSystem
 			PathID = new UtlSymbol(pathID);
 
 #if GMOD_DLL
+			if (pathID.IsEmpty) {
+				foreach (SearchPathCollection collection in system.SearchPaths.Values) {
+					if (collection.RequestOnly)
+						continue;
+					FindInLooseAddonPaths(collection, wildcard);
+				}
+			}
+			else if (!pathID.Equals("BSP", StringComparison.Ordinal) && system.SearchPaths.TryGetValue(new string(pathID).Hash(), out SearchPathCollection? collection))
+				FindInLooseAddonPaths(collection, wildcard);
+
 			if (!pathID.IsEmpty && !pathID.Equals("MOD", StringComparison.Ordinal) && !pathID.Equals("GAME", StringComparison.Ordinal) && !pathID.Equals("workshop", StringComparison.Ordinal))
 				g_AddonFileSystem.FindInAddon(new string(pathID), new string(wildcard), addonFiles!);
 #endif
 		}
+
+#if GMOD_DLL
+		readonly void FindInLooseAddonPaths(SearchPathCollection collection, ReadOnlySpan<char> wildcard) {
+			for (int i = 0; ; i++) {
+				ISearchPath? searchPath = collection.AtSorted(i);
+				if (searchPath == null)
+					break;
+				if (searchPath is not DiskSearchPath)
+					continue;
+
+				ReadOnlySpan<char> path = searchPath.GetPathString();
+				if (path.Equals("GAME", StringComparison.Ordinal))
+					continue;
+
+				string full = $"{path}{wildcard}";
+				full = full.Replace('\\', '/');
+				g_AddonFileSystem.FindFirst(full, addonFiles!, null);
+			}
+		}
+#endif
 
 		public void Reset() {
 			Wildcard = default;
@@ -752,6 +793,10 @@ public partial class BaseFileSystem : IFileSystem
 
 			foundAlready ??= [];
 			foundAlready.Clear();
+			files ??= [];
+			files.Clear();
+			dirs ??= [];
+			dirs.Clear();
 #if GMOD_DLL
 			addonFiles ??= [];
 			addonFiles.Clear();
@@ -761,62 +806,75 @@ public partial class BaseFileSystem : IFileSystem
 
 
 		public ReadOnlySpan<char> Next() {
-		findCollection:
-			if (currentCollection == null) {
-				currentCollection = PathID == 0
-					? system.SearchPaths.At(Interlocked.Increment(ref CollectionIdx))
-					: Interlocked.CompareExchange(ref ranAtLeastOnce, 1, 0) == 0
-					? (system.SearchPaths.TryGetValue(PathID.String().Hash(), out var found) ? found : null)
-						: null;
+			while (true) {
+				if (currentPath != null) {
+					var currentFile = FindAt(Interlocked.Increment(ref FileIdx));
+					if (currentFile.HasValue) {
+						IsDirectory = currentFile.Value.Item2;
+						return currentFile.Value.Item1;
+					}
+					currentPath = null;
+				}
 
 				if (currentCollection != null) {
-					// Reset these parts...
-					Interlocked.Exchange(ref FileIdx, -1);
-					Interlocked.Exchange(ref PathIdx, -1);
-					goto findPath; // We don't need to perform the next check
+					currentPath = currentCollection.AtSorted(Interlocked.Increment(ref PathIdx));
+					if (currentPath != null) {
+						PrepareFinds(currentPath);
+						Interlocked.Exchange(ref FileIdx, -1);
+						continue;
+					}
+					currentCollection = null;
 				}
-			}
-			if (currentCollection == null) {
+
+				currentCollection = NextCollection();
+				if (currentCollection == null) {
 #if GMOD_DLL
-				if (addonFiles!.Count != 0) {
-					SearchFile file = addonFiles[0];
-					addonFiles.RemoveAt(0);
-					IsDirectory = file.Folder;
-					return file.FileName;
-				}
+					if (addonFiles!.Count != 0) {
+						SearchFile file = addonFiles[0];
+						addonFiles.RemoveAt(0);
+						IsDirectory = file.Folder;
+						return file.FileName;
+					}
 #endif
-				return null; // Cannot continue.
-			}
-
-		findPath:
-			if (currentPath == null) {
-				// Find the next collection.
-				currentPath = currentCollection.AtSorted(Interlocked.Increment(ref PathIdx));
-
-				if (currentPath != null) {
-					currentPath.LockFinds(Wildcard, foundAlready!);
-					Interlocked.Exchange(ref FileIdx, -1);
-					// We don't need to perform the next check
-					goto findFileDir;
+					return null;
 				}
-			}
 
-			if (currentPath == null) {
-				// Search for a new collection?
-				currentCollection = null;
-				goto findCollection;
+				Interlocked.Exchange(ref FileIdx, -1);
+				Interlocked.Exchange(ref PathIdx, -1);
 			}
+		}
 
-		findFileDir:
-			var currentFile = currentPath.FindAt(Interlocked.Increment(ref FileIdx));
-			if (!currentFile.HasValue) {
-				// Search for a new path?
-				currentPath.UnlockFinds();
-				currentPath = null;
-				goto findPath;
+		SearchPathCollection? NextCollection() {
+			if (PathID == 0)
+				return system.SearchPaths.At(Interlocked.Increment(ref CollectionIdx));
+
+			if (Interlocked.CompareExchange(ref ranAtLeastOnce, 1, 0) == 0)
+				return system.SearchPaths.TryGetValue(PathID.String().Hash(), out var found) ? found : null;
+
+			return null;
+		}
+
+		void PrepareFinds(ISearchPath path) {
+			files!.Clear();
+			dirs!.Clear();
+			path.PrepareFinds(files, dirs, Wildcard.String());
+			for (int i = dirs.Count - 1; i >= 0; i--)
+				if (!foundAlready!.Add(dirs[i].Hash()))
+					dirs.RemoveAt(i);
+			for (int i = files.Count - 1; i >= 0; i--)
+				if (!foundAlready!.Add(files[i].Hash()))
+					files.RemoveAt(i);
+		}
+
+		readonly (string, bool)? FindAt(int index) {
+			if (index >= files!.Count) {
+				if (index >= (files.Count + dirs!.Count))
+					return null;
+				else
+					return (dirs[index - files.Count], true);
 			}
-			IsDirectory = currentFile.Value.Item2;
-			return currentFile.Value.Item1;
+			else
+				return (files[index], false);
 		}
 
 		public void Close() {
@@ -826,7 +884,6 @@ public partial class BaseFileSystem : IFileSystem
 				return;
 			}
 
-			currentPath?.UnlockFinds();
 			Locked = 0;
 			Reset();
 		}

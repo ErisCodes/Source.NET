@@ -212,7 +212,11 @@ public abstract class ModelInfo(IFileSystem filesystem, IModelLoader modelloader
 	}
 
 	public Model? FindOrLoadModel(ReadOnlySpan<char> name) {
-		throw new NotImplementedException();
+		Model? model = GetModel(GetModelIndex(name));
+		if (model != null)
+			return model;
+
+		return modelloader.GetModelForName(name, ModelLoaderFlags.ClientDLL);
 	}
 
 	public VCollide? GetVCollide(Model? model) {
@@ -264,7 +268,8 @@ public abstract class ModelInfo(IFileSystem filesystem, IModelLoader modelloader
 	public bool IsTranslucent(Model? model) => model != null && (model.Flags & ModelFlag.Translucent) != 0;
 
 	public void RecomputeTranslucency(Model? model, int skin, int nBody, object? clientRenderable, float instanceAlphaModulate = 1) {
-		throw new NotImplementedException();
+		if (model != null)
+			((ModelLoader)modelloader).Mod_RecomputeTranslucency(model, skin, nBody, clientRenderable, instanceAlphaModulate);
 	}
 
 	public int GetModelMaterialCount(Model? model) {
