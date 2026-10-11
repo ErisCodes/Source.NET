@@ -240,6 +240,7 @@ public class Resources : IResources
 		IntPtr bits = FreeImage.GetBits(bitmap);
 		if (bits == IntPtr.Zero) {
 			Warning("[CResources::SavePNG] Freeimage couldn't GetBits!\n");
+			FreeImage.Unload(bitmap);
 			return;
 		}
 
