@@ -576,19 +576,25 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 					if ((studioHdr.Flags & StudioHdrFlags.ForceOpaque) != 0)
 						return;
 
-					Span<IMaterial> materials = new IMaterial[128];
-					int materialCount = StudioRender.GetMaterialListFromBodyAndSkin(mod.Studio, skin, body, materials);
-					for (int i = 0; i < materialCount; i++) {
-						if (materials[i] != null) {
-							using MatRenderContextPtr renderContext = new(SourceDllMain.materials);
-							renderContext.Bind(materials[i], clientRenderable);
-							bool isTranslucent = materials[i].IsTranslucent();
+					IMaterial[] materialsArray = ArrayPool<IMaterial>.Shared.Rent(128);
+					try {
+						Span<IMaterial> materials = materialsArray.AsSpan(0, 128);
+						int materialCount = StudioRender.GetMaterialListFromBodyAndSkin(mod.Studio, skin, body, materials);
+						for (int i = 0; i < materialCount; i++) {
+							if (materials[i] != null) {
+								using MatRenderContextPtr renderContext = new(SourceDllMain.materials);
+								renderContext.Bind(materials[i], clientRenderable);
+								bool isTranslucent = materials[i].IsTranslucent();
 
-							if (isTranslucent) {
-								mod.Flags |= ModelFlag.Translucent;
-								break;
+								if (isTranslucent) {
+									mod.Flags |= ModelFlag.Translucent;
+									break;
+								}
 							}
 						}
+					}
+					finally {
+						ArrayPool<IMaterial>.Shared.Return(materialsArray, true);
 					}
 				}
 				break;
