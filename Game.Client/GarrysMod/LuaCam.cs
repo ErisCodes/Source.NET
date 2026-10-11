@@ -40,7 +40,7 @@ public static partial class LuaCam
 
 		ResetFrameStateChecked();
 
-		if (data.GetMemberStr("type", "3D")![0] == '2') {
+		if (data.GetMemberStr("type", "3D")!.StartsWith('2')) {
 			using MatRenderContextPtr renderContext = new(materials);
 			ClientModeShared.SetupVGuiMatrices(true, renderContext);
 			((ClientModeShared)clientMode).SetupGModSurface(true);
