@@ -132,7 +132,7 @@ public static partial class LuaCam
 	[LuaFunction]
 	static int End2D(ILuaInterface lua) {
 		if (Start2DCount < 1) {
-			lua.ErrorFromLua("cam.End3D underflow\n");
+			lua.ErrorFromLua("cam.End2D underflow\n");
 			return 0;
 		}
 
