@@ -1,5 +1,6 @@
 using Source.Common;
 using Source.Common.Commands;
+using Source.Common.Networking;
 using Source.Engine.Client;
 using Source.Engine.Server;
 
@@ -7,6 +8,38 @@ namespace Source.Engine;
 
 public class CvarUtilities(ICvar cvar, Host Host, Cmd cmd)
 {
+	public static void ConVarNetworkChangeCallback(IConVar conVar, in ConVarChangeContext ctx) {
+		ConVar var = (ConVar)conVar;
+		if (strcmp(var.GetString(), ctx.Old) == 0)
+			return;
+
+		if (var.IsFlagSet(FCvar.UserInfo)) {
+			if (cl.IsConnected()) {
+				NET_SetConVar convar = new();
+				convar.AddCVar(var.GetName(), var.GetString());
+				cl.NetChannel!.SendNetMsg(convar);
+			}
+		}
+
+		if (var.IsFlagSet(FCvar.Notify)) {
+			IGameEvent? ev = g_GameEventManager.CreateEvent("server_cvar");
+
+			if (ev != null) {
+				ev.SetString("cvarname", var.GetName());
+
+				if (var.IsFlagSet(FCvar.Protected))
+					ev.SetString("cvarvalue", "***PROTECTED***");
+				else
+					ev.SetString("cvarvalue", var.GetString());
+
+				g_GameEventManager.FireEvent(ev);
+			}
+		}
+
+		// if (var.IsFlagSet(FCvar.Replicated) && sv.IsActive()) // TODO
+		// 	SV_ReplicateConVarChange((ConVar)conVar, var.GetString());
+	}
+
 	public unsafe bool IsCommand(in TokenizedCommand args) {
 		int c = args.ArgC();
 		if (c == 0)
@@ -34,10 +67,19 @@ public class CvarUtilities(ICvar cvar, Host Host, Cmd cmd)
 #endif
 		}
 
+		if (v.IsFlagSet(FCvar.NotConnected)) {
+#if !SWDS
+			if (cl.IsConnected()) {
+				Dbg.ConMsg($"Can't set {v.GetName()} when connected\n");
+				return true;
+			}
+#endif
+		}
+
 		if (v.IsFlagSet(FCvar.Cheat)) {
 			if (!Host.IsSinglePlayerGame() && !Host.CanCheat()
 #if !SWDS
-				&& cl.IsHLTV
+				&& !cl.IsHLTV
 #endif
 				) {
 				Dbg.ConMsg($"Can't use cheat cvar {v.GetName()} in multiplayer, unless the server has sv_cheats set to 1.\n");

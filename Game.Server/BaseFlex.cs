@@ -13,36 +13,35 @@ using Source.Common.Mathematics;
 using System.Numerics;
 
 namespace Game.Server;
-using FIELD = Source.FIELD<BaseFlex>;
+
 using EventType = Game.Shared.ChoreoEvent.EventType;
 
 [LinkEntityToClass("funCBaseFlex")]
 [NetworkName("CBaseFlex")]
-public class BaseFlex : BaseAnimatingOverlay {
-	public static readonly SendTable DT_BaseFlex = new(DT_BaseAnimatingOverlay, [
-		SendPropArray3  (FIELD.OF_ARRAY(nameof(FlexWeight)), SendPropFloat(FIELD.OF_ARRAY(nameof(FlexWeight)), 12, PropFlags.RoundDown, 0.0f, 1.0f )),
-		SendPropInt     (FIELD.OF(nameof(BlinkToggle)), 1, PropFlags.Unsigned ),
-		SendPropVector  (FIELD.OF(nameof(ViewTarget)), -1, PropFlags.Coord),
+public partial class BaseFlex : BaseAnimatingOverlay
+{
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(FlexWeight)) { Bits = 12, Flags = PropFlags.RoundDown, Low = 0.0f, High = 1.0f },
+		new(nameof(BlinkToggle)) { Bits = 1, Flags = PropFlags.Unsigned },
+		new(nameof(ViewTarget)) { Bits = -1, Flags = PropFlags.Coord },
 
-		SendPropFloat   ( FIELD.OF_VECTORELEM(nameof(ViewOffset), 0), 0, PropFlags.NoScale ),
-		SendPropFloat   ( FIELD.OF_VECTORELEM(nameof(ViewOffset), 1), 0, PropFlags.NoScale ),
-		SendPropFloat   ( FIELD.OF_VECTORELEM(nameof(ViewOffset), 2), 0, PropFlags.NoScale ),
+		new(nameof(ViewOffset)) { Encoding = NetEncoding.VectorElements, Bits = 0, Flags = PropFlags.NoScale },
 
-		SendPropVector  ( FIELD.OF(nameof(Lean)), -1, PropFlags.Coord ),
-		SendPropVector  ( FIELD.OF(nameof(Shift)), -1, PropFlags.Coord ),
-	]);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_BaseFlex);
+		new(nameof(Lean)) { Bits = -1, Flags = PropFlags.Coord },
+		new(nameof(Shift)) { Bits = -1, Flags = PropFlags.Coord },
+	];
 
-	[NetworkName("m_flexWeight")]
-	public InlineArray96<float> FlexWeight;
-	[NetworkName("m_blinktoggle")]
-	public int BlinkToggle;
-	[NetworkName("m_viewtarget")]
-	public Vector3 ViewTarget;
-	[NetworkName("m_vecLean")]
-	public Vector3 Lean;
-	[NetworkName("m_vecShift")]
-	public Vector3 Shift;
+	[NetworkVar("m_flexWeight")]
+	public partial ref readonly InlineArray96<float> FlexWeight { get; }
+	[NetworkVar("m_blinktoggle")]
+	public partial int BlinkToggle { get; set; }
+	[NetworkVar("m_viewtarget")]
+	public partial Vector3 ViewTarget { get; set; }
+	[NetworkVar("m_vecLean")]
+	public partial Vector3 Lean { get; set; }
+	[NetworkVar("m_vecShift")]
+	public partial Vector3 Shift { get; set; }
 
 	public override void SetModel(ReadOnlySpan<char> modelName) {
 		base.SetModel(modelName);
@@ -64,7 +63,7 @@ public class BaseFlex : BaseAnimatingOverlay {
 				value = Math.Clamp(value, 0.0f, 1.0f);
 			}
 
-			FlexWeight[(int)index] = value;
+			FlexWeightForModify()[(int)index] = value;
 		}
 	}
 
@@ -286,7 +285,7 @@ public class BaseFlex : BaseAnimatingOverlay {
 
 		ChoreoActor? actor = ev.GetActor();
 		if (actor == null) {
-			Msg("CBaseFlex::AddSceneEvent:  event->GetActor() was NULL!!!\n");
+			Msg("CBaseFlex::AddSceneEvent:  event.GetActor() was NULL!!!\n");
 			return;
 		}
 
@@ -434,7 +433,7 @@ public class BaseFlex : BaseAnimatingOverlay {
 								EventAbsoluteTag? origTag = ev.FindAbsoluteTag(ChoreoEvent.AbsTagType.Original, kvTags.Name);
 								if (origTag != null) {
 									if (MathF.Abs(origTag.GetPercentage() - percentage) > 0.05) {
-										DevWarning($"{scene.GetFilename()} repositioned tag: {kvTags.Name} : {origTag.GetPercentage():F3} -> {percentage:F3} ({scene.GetFilename()}:{actor.GetName()}:{ev.GetParameters()})\n");
+										DevWarning($"{scene.GetFilename()} repositioned tag: {kvTags.Name} : {origTag.GetPercentage():F3} . {percentage:F3} ({scene.GetFilename()}:{actor.GetName()}:{ev.GetParameters()})\n");
 										origTag.SetPercentage(percentage);
 									}
 								}
@@ -830,10 +829,31 @@ public class BaseFlex : BaseAnimatingOverlay {
 				if (ev.GetForceShortMovement())
 					distTolerance = 0.1f;
 
+				AI_NavGoal goal = new AI_NavGoal(NavGoalType.TargetEnt, moveActivity, distTolerance, AI_NavGoalFlags.UpdateTargetPos);
 				float dist = (info.Target.Get()!.EyePosition() - GetAbsOrigin()).Length2D();
 
-				if (dist > Math.Max(Math.Max(distTolerance, 0.1f), ev.GetDistanceToTarget()))
-					throw new NotImplementedException();
+				if (dist > Math.Max(Math.Max(distTolerance, 0.1f), ev.GetDistanceToTarget())) {
+					bool result = false;
+
+					if (!myNpc.IsUnreachable(info.Target.Get()!)) {
+						result = myNpc.GetNavigator()!.SetGoal(in goal, AI_NavSetGoalFlags.ClearTarget);
+						if (!result)
+							myNpc.RememberUnreachable(info.Target.Get()!, 1.5);
+					}
+
+					if (result) {
+						myNpc.GetNavigator()!.SetMovementActivity(moveActivity);
+						myNpc.GetNavigator()!.SetArrivalDistance(ev.GetDistanceToTarget());
+						info.IsMoving = true;
+					}
+					else {
+						if (developer.GetInt() > 0 && scene_showmoveto.GetBool()) {
+							myNpc.GetMoveProbe()!.FloorPoint(info.Target.Get()!.EyePosition(), Mask.NPCSolid, 0, -64, out Vector3 testPoint);
+							DebugOverlay.HorzArrow(GetAbsOrigin() + new Vector3(0, 0, 1), testPoint + new Vector3(0, 0, 1), 4, 255, 0, 255, 0, false, 0.12f);
+							DebugOverlay.Box(testPoint, myNpc.GetHullMins(), myNpc.GetHullMaxs(), 255, 0, 255, 0, 0.12f);
+						}
+					}
+				}
 				else
 					info.HasArrived = true;
 			}

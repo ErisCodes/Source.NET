@@ -16,6 +16,8 @@ namespace Game.Shared;
 
 public static class Animation
 {
+	public const float NOMOTION = 99999;
+
 static Animation(){
 		StudioHdr.SetActivityForSequence += SetActivityForSequence;
 }
@@ -384,6 +386,12 @@ static Animation(){
 		return studiohdr.SelectWeightedSequence((int)activity, curSequence);
 	}
 
+	internal static int GetNumBodyGroups(StudioHdr? studioHdr) {
+		if (studioHdr == null)
+			return 0;
+		return studioHdr.NumBodyParts();
+	}
+
 	internal static void SetBodygroup(StudioHdr? studioHdr, ref int body, int group, int value) {
 		if (studioHdr == null)
 			return;
@@ -399,6 +407,45 @@ static Animation(){
 		int iCurrent = (body / bodypart.Base) % bodypart.NumModels;
 
 		body = (body - (iCurrent * bodypart.Base) + (value * bodypart.Base));
+	}
+
+	internal static int GetBodygroup(StudioHdr? studioHdr, int body, int group) {
+		if (studioHdr == null)
+			return 0;
+
+		if (group >= studioHdr.NumBodyParts())
+			return 0;
+
+		MStudioBodyParts bodypart = studioHdr.Bodypart(group);
+
+		if (bodypart.NumModels <= 1)
+			return 0;
+
+		int iCurrent = (body / bodypart.Base) % bodypart.NumModels;
+
+		return iCurrent;
+	}
+
+	internal static ReadOnlySpan<char> GetBodygroupName(StudioHdr? studioHdr, int group) {
+		if (studioHdr == null)
+			return "";
+
+		if (group >= studioHdr.NumBodyParts())
+			return "";
+
+		MStudioBodyParts bodypart = studioHdr.Bodypart(group);
+		return bodypart.Name();
+	}
+
+	internal static int GetBodygroupCount(StudioHdr? studioHdr, int group) {
+		if (studioHdr == null)
+			return 0;
+
+		if (group >= studioHdr.NumBodyParts())
+			return 0;
+
+		MStudioBodyParts bodypart = studioHdr.Bodypart(group);
+		return bodypart.NumModels;
 	}
 }
 

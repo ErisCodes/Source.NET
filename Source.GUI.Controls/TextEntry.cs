@@ -3,6 +3,7 @@ using CommunityToolkit.HighPerformance;
 using Source.Common.Formats.Keyvalues;
 using Source.Common.GUI;
 using Source.Common.Input;
+using Source.Common.GarrysMod.Lua;
 
 namespace Source.GUI.Controls;
 
@@ -721,7 +722,12 @@ public class TextEntry : Panel
 			engine.ClientCmd_Unrestricted(command);
 			return;
 		}
-		// todo: OnKeyCodeTyped hook
+		if (PushLuaHook(LUA_POOLEDSTRING.OnKeyCodeTyped)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushNumber((int)code);
+			if (Lua.CallInternalGetBool(2))
+				return;
+		}
 #endif
 		CursorIsAtEnd = PutCursorAtEnd;
 		PutCursorAtEnd = false;
@@ -732,7 +738,7 @@ public class TextEntry : Panel
 		bool winkey = Input.IsKeyDown(ButtonCode.KeyLWin) || Input.IsKeyDown(ButtonCode.KeyRWin);
 		bool fallThrough = false;
 
-		if ((ctrl || (winkey && IsOSX())) && !alt) {
+		if ((ctrl || (winkey && IsOSX)) && !alt) {
 			switch (code) {
 				case ButtonCode.KeyA:
 					SelectAllText(false);
@@ -764,6 +770,13 @@ public class TextEntry : Panel
 
 				case ButtonCode.KeyLeft:
 					GotoWordLeft();
+					break;
+
+				case ButtonCode.KeyBackspace:
+					if (GetSelectedRange(out _, out _))
+						DeleteSelected();
+					else
+						DeleteWordLeft();
 					break;
 
 				case ButtonCode.KeyEnter:
@@ -913,9 +926,6 @@ public class TextEntry : Panel
 	}
 
 	public override void OnKeyTyped(char ch) {
-#if GMOD_DLL
-		// todo: AllowInput hook
-#endif
 		CursorIsAtEnd = PutCursorAtEnd;
 		PutCursorAtEnd = false;
 
@@ -963,22 +973,61 @@ public class TextEntry : Panel
 		if (CursorPos < 1)
 			return;
 
-		while (--CursorPos >= 0)
-			if (!char.IsWhiteSpace(TextStream[CursorPos]))
-				break;
-
-
-		while (--CursorPos >= 0)
-			if (char.IsWhiteSpace(TextStream[CursorPos]))
-				break;
-
-		CursorPos++;
+		CursorPos = FindWordLeft(CursorPos);
 
 		ScrollLeft();
 
 		LayoutVerticalScrollBarSlider();
 		ResetCursorBlink();
 		Repaint();
+	}
+
+	enum CharClass { Whitespace, Word, Punctuation }
+
+	static CharClass GetCharClass(char ch) {
+		if (char.IsWhiteSpace(ch))
+			return CharClass.Whitespace;
+		if (char.IsLetterOrDigit(ch) || ch == '_')
+			return CharClass.Word;
+		return CharClass.Punctuation;
+	}
+
+	private int FindWordLeft(int pos) {
+		while (pos > 0 && GetCharClass(TextStream[pos - 1]) == CharClass.Whitespace)
+			pos--;
+
+		if (pos > 0) {
+			CharClass charClass = GetCharClass(TextStream[pos - 1]);
+			while (pos > 0 && GetCharClass(TextStream[pos - 1]) == charClass)
+				pos--;
+		}
+
+		return pos;
+	}
+
+	private int FindWordRight(int pos) {
+		int count = TextStream.Count;
+		if (pos < count) {
+			CharClass charClass = GetCharClass(TextStream[pos]);
+			if (charClass != CharClass.Whitespace)
+				while (pos < count && GetCharClass(TextStream[pos]) == charClass)
+					pos++;
+		}
+
+		while (pos < count && GetCharClass(TextStream[pos]) == CharClass.Whitespace)
+			pos++;
+
+		return pos;
+	}
+
+	private void DeleteWordLeft() {
+		int start = FindWordLeft(CursorPos);
+		if (start == CursorPos)
+			return;
+
+		Select[0] = start;
+		Select[1] = CursorPos;
+		DeleteSelected();
 	}
 
 	private void ScrollLeft() {
@@ -1001,16 +1050,7 @@ public class TextEntry : Panel
 	private void GotoWordRight() {
 		SelectCheck();
 
-		while (++CursorPos < TextStream.Count)
-			if (char.IsWhiteSpace(TextStream[CursorPos]))
-				break;
-
-		while (++CursorPos < TextStream.Count)
-			if (!char.IsWhiteSpace(TextStream[CursorPos]))
-				break;
-
-		if (CursorPos > TextStream.Count)
-			CursorPos = TextStream.Count;
+		CursorPos = FindWordRight(CursorPos);
 
 		ScrollRight();
 
@@ -1032,7 +1072,7 @@ public class TextEntry : Panel
 		LayoutVerticalScrollBarSlider();
 	}
 
-	private void Undo() {
+	public void Undo() {
 		CursorPos = UndoCursorPos;
 
 		// I have a bad feeling about this...
@@ -1062,6 +1102,15 @@ public class TextEntry : Panel
 
 		if (!Multiline && ch == '\n')
 			return;
+
+#if GMOD_DLL
+		if (PushLuaHook(LUA_POOLEDSTRING.AllowInput)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.PushString([ch]);
+			if (Lua.CallInternalGetBool(2))
+				return;
+		}
+#endif
 
 		if (ch == '\t')
 			return;
@@ -1176,9 +1225,6 @@ public class TextEntry : Panel
 	}
 
 	public override void OnKillFocus(Panel? newPanel) {
-#if GMOD_DLL
-		// todo: OnLoseFocus hook
-#endif
 		if (DataChanged) {
 			FireActionSignal();
 			DataChanged = false;
@@ -1200,7 +1246,20 @@ public class TextEntry : Panel
 		SelectNone();
 		PostActionSignal(new KeyValues("TextKillFocus"));
 		base.OnKillFocus(newPanel);
+#if GMOD_DLL
+		if (!InLoseFocus) {
+			InLoseFocus = true;
+			if (PushLuaHook(LUA_POOLEDSTRING.OnLoseFocus)) {
+				PushLua(Lua!, LuaType.Panel);
+				Lua!.CallInternalNoReturns(1);
+			}
+			InLoseFocus = false;
+		}
+#endif
 	}
+#if GMOD_DLL
+	bool InLoseFocus;
+#endif
 
 	private bool IsCursorOffRightSideOfWindow(int CursorPos) {
 		int wx = GetWide() - 1;
@@ -1370,7 +1429,7 @@ public class TextEntry : Panel
 		LayoutVerticalScrollBarSlider();
 	}
 
-	private void SaveUndoState() {
+	public void SaveUndoState() {
 		UndoCursorPos = CursorPos;
 		UndoTextStream.Clear();
 		UndoTextStream.AddRange(TextStream);
@@ -1618,7 +1677,7 @@ public class TextEntry : Panel
 		LayoutVerticalScrollBarSlider();
 	}
 
-	private void CopySelected() {
+	public void CopySelected() {
 		if (HideText)
 			return;
 
@@ -1649,7 +1708,7 @@ public class TextEntry : Panel
 			FireActionSignal();
 	}
 
-	private void Paste() {
+	public void Paste() {
 		if (!IsEditable())
 			return;
 
@@ -1816,7 +1875,10 @@ public class TextEntry : Panel
 		InvalidateLayout();
 #if GMOD_DLL
 		RecalculateLineBreaks();
-		// todo: OnTextChanged hook
+		if (PushLuaHook(LUA_POOLEDSTRING.OnTextChanged)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
 		FiringActionSignal = false;
 #endif
 	}
@@ -1954,6 +2016,9 @@ public class TextEntry : Panel
 		return ret;
 	}
 
+	public int GetNumLines() => LineBreaks.Count;
+	public IFont? GetFont() => Font;
+
 	public void SelectNone() {
 		Select[0] = -1;
 		Repaint();
@@ -2006,13 +2071,20 @@ public class TextEntry : Panel
 	public void SetAllowNonAsciiCharacters(bool state) => AllowNonAsciiCharacters = state;
 	public void SetAllowNumericInputOnly(bool state) => AllowNumericInputOnly = state;
 	public void SelectAllOnFirstFocus(bool state) => ShouldSelectAllOnFirstFocus = state;
+	public bool IsMultiline() => Multiline;
+	public int GetCurrentStartIndex() => CurrentStartIndex;
+	public int GetCurrentStartLine() => CurrentStartLine;
+
 	public void SelectAllOnFocusAlways(bool state) {
 		ShouldSelectAllOnFirstFocus = state;
 		ShouldSelectAllOnFocusAlways = state;
 	}
 	public override void OnSetFocus() {
 #if GMOD_DLL
-		// todo: OnGetFocus hook
+		if (PushLuaHook(LUA_POOLEDSTRING.OnGetFocus)) {
+			PushLua(Lua!, LuaType.Panel);
+			Lua!.CallInternalNoReturns(1);
+		}
 #endif
 		if (ShouldSelectAllOnFirstFocus) {
 			Select[1] = TextStream.Count;

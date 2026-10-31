@@ -107,7 +107,7 @@ public unsafe class StudioRender
 			// Bone to world must be set before calling drawmodel; it uses that here
 			ComputePoseToWorld(PoseToWorld, StudioHdr, boneMask, in pRC.ViewOrigin, pBoneToWorld);
 
-			R_StudioRenderModel(pRenderContext, info.Skin, info.Body, info.HitboxSet, info.ClientEntity,
+			R_StudioRenderModel(pRenderContext.Context, info.Skin, info.Body, info.HitboxSet, info.ClientEntity,
 				info.HardwareData.LODs[info.Lod].Materials,
 				info.HardwareData.LODs[info.Lod].MaterialFlags, flags, boneMask, info.Lod, info.ColorMeshes);
 
@@ -127,6 +127,44 @@ public unsafe class StudioRender
 			pBoneToWorld = null;
 			pFlexWeights = null;
 			pFlexDelayedWeights = null;
+		}
+	}
+
+	Matrix3x4 StaticPropRootToWorld;
+
+	internal void DrawModelStaticProp(ref DrawModelInfo info, StudioRenderCtx RC, in Matrix3x4 rootToWorld, StudioRenderFlags flags) {
+		pRC = RC;
+
+		using MatRenderContextPtr pRenderContext = new(materialSystem);
+
+		StaticPropRootToWorld = rootToWorld;
+		PoseToWorld[0] = rootToWorld;
+		fixed (Matrix3x4* pRootToWorld = &StaticPropRootToWorld) {
+			pBoneToWorld = pRootToWorld;
+			nBoneToWorld = 1;
+
+			bool flexConfig = pRC.Config.Flex;
+			pRC.Config.Flex = false;
+			bool wireframe = pRC.Config.Wireframe;
+			if ((flags & StudioRenderFlags.DrawWireframe) != 0)
+				pRC.Config.Wireframe = true;
+
+			int lod = info.Lod;
+			StudioHdr = info.StudioHdr;
+			StudioMeshes = info.HardwareData.LODs![lod].MeshData;
+
+			R_StudioRenderModel(pRenderContext.Context, info.Skin, info.Body, info.HitboxSet, info.ClientEntity,
+				info.HardwareData.LODs[lod].Materials,
+				info.HardwareData.LODs[lod].MaterialFlags, flags, Studio.BONE_USED_BY_ANYTHING, lod, info.ColorMeshes);
+
+			// TODO: decals, shadows, flashlight decals
+
+			pRC.Config.Flex = flexConfig;
+			pRC.Config.Wireframe = wireframe;
+
+			pRenderContext.SetNumBoneWeights(0);
+			pBoneToWorld = null;
+			pRC = null;
 		}
 	}
 

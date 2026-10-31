@@ -16,7 +16,7 @@ using Source.Common.Physics;
 using System.Diagnostics;
 using System.Numerics;
 
-using FIELD_BPD = Source.FIELD<BasePropDoor>;
+using DEFINE = Source.DEFINE<Game.Server.PhysicsProp>;
 using FIELD_DP = Source.FIELD<DynamicProp>;
 using FIELD_PBM = Source.FIELD<PhysBoxMultiplayer>;
 using FIELD_PP = Source.FIELD<PhysicsProp>;
@@ -45,7 +45,7 @@ public class BaseProp : BaseAnimating
 		SetNextThink(TICK_NEVER_THINK);
 
 		AnimTime = gpGlobals.CurTime;
-		PlaybackRate = 0.0;
+		PlaybackRate = 0.0f;
 		SetCycle(0);
 	}
 	public override void Precache() { }
@@ -57,25 +57,253 @@ public class BaseProp : BaseAnimating
 }
 
 [NetworkName("CBreakableProp")]
-public class BreakableProp : BaseProp
+public partial class BreakableProp : BaseProp, IBreakableWithPropData, IPlayerPickupVPhysics
 {
-	public static readonly SendTable DT_BreakableProp = new(DT_BaseAnimating, []);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_BreakableProp);
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+	];
+
+	[Flags]
+	public enum SF
+	{
+		StartAsleep = 0x000001,
+		DontTakePhysicsDamage = 0x000002,// this prop can't be damaged by physics collisions
+		Debris = 0x000004,
+		MotionDisabled = 0x000008,// motion disabled at startup (flag only valid in spawn - motion can be enabled via input)
+		Touch = 0x000010,// can be 'crashed through' by running player (plate glass)
+		Pressure = 0x000020,// can be broken by a player standing on it
+		EnableOnPhyscannon = 0x000040,// enable motion only if the player grabs it with the physcannon
+		NoRotorwashPush = 0x000080,// The rotorwash doesn't push these
+		EnablePickupOutput = 0x000100,// If set, allow the player to +USE this for the purposes of generating an output
+		PreventPickup = 0x000200,// If set, prevent +USE/Physcannon pickup of this prop
+		PreventPlayerTouchEnable = 0x000400,// If set, the player will not cause the object to enable its motion when bumped into
+		HasAttachedRagdolls = 0x000800,// Need to remove attached ragdolls on enable motion/etc
+		ForceTouchTriggers = 0x001000,// Override normal debris behavior and respond to triggers anyway
+		ForceServerSide = 0x002000,// Force multiplayer physics object to be serverside
+		RadiusPickup = 0x004000,// For Xbox, makes small objects easier to pick up by allowing them to be found 
+		AlwaysPickUp = 0x100000,// Physcannon can always pick this up, no matter what mass or constraints may apply.
+		NoCollisions = 0x200000,// Don't enable collisions on spawn
+		IsGib = 0x400000,// Limit # of active gibs
+	}
+
+
+	public bool PropDataOverrodeBlockLOS() => BlockLOSSetByPropData;
+
+	public void DisableAutoFade() {
+		FadeScale = 0;
+		DefaultFadeScale = 0;
+	}
+
+	const string s_pFadeScaleThink = "FadeScaleThink";
+	const float PROP_FLARE_LIFETIME = 30.0f;
+
+	public QAngle m_preferredCarryAngles;
+
+	Handle<BasePlayer> PhysicsAttacker = new();
+	TimeUnit_t LastPhysicsInfluenceTime;
+	bool OriginalBlockLOS;
+	string? PuntSound;
+	bool UsePuntSound;
+
+	public BreakableProp() {
+		FadeMinDist = -1;
+		FadeMaxDist = 0;
+		FadeScale = 1;
+		DefaultFadeScale = 1;
+		MpBreakMode = MultiplayerBreak.Default;
+
+		UsePuntSound = true;
+	}
+
+	public override void Spawn() {
+		DefaultFadeScale = FadeScale;
+
+		base.Spawn();
+
+		if (IsMarkedForDeletion())
+			return;
+
+		StudioHdr? studioHdr = GetModelPtr();
+
+		if (studioHdr == null) {
+			Msg("GARRY SEZ: CBreakableProp::Spawn - GetModelPtr returned NULL!\n");
+			Msg($"Model Name: {GetModelName()}\n");
+		}
+
+		if (studioHdr != null && (studioHdr.Flags() & StudioHdrFlags.NoForcedFade) != 0)
+			DisableAutoFade();
+		else
+			FadeScale = DefaultFadeScale;
+
+		m_preferredCarryAngles = new(-5, 0, 0);
+	}
+
+	public virtual void PlayPuntSound() {
+		if (!UsePuntSound)
+			return;
+
+		if (PuntSound == null)
+			return;
+
+		EmitSound(PuntSound);
+	}
+
+	public void CheckRemoveRagdolls() {
+		if (HasSpawnFlags(SF.HasAttachedRagdolls))
+			throw new NotImplementedException();
+	}
+
+	public override void SetPhysicsAttacker(BasePlayer? entity, TimeUnit_t time) {
+		PhysicsAttacker.Set(entity);
+		LastPhysicsInfluenceTime = time;
+	}
+
+	void ForceFadeScaleToAlwaysVisible() {
+		FadeScale = 0.0f;
+		SetContextThink(null, gpGlobals.CurTime, s_pFadeScaleThink);
+	}
+
+	void RampToDefaultFadeScale() {
+		FadeScale += DefaultFadeScale * (float)TICK_INTERVAL / 2.0f;
+		if (FadeScale >= DefaultFadeScale) {
+			FadeScale = DefaultFadeScale;
+			SetContextThink(null, gpGlobals.CurTime, s_pFadeScaleThink);
+		}
+		else
+			SetContextThink(RampToDefaultFadeScale, gpGlobals.CurTime + TICK_INTERVAL, s_pFadeScaleThink);
+	}
+
+	public virtual bool OnAttemptPhysGunPickup(BasePlayer physGunUser, PhysGunPickup reason = PhysGunPickup.PickedUpByCannon) => true;
+
+	public virtual BaseEntity? OnFailedPhysGunPickup(Vector3 physgunPos) => null;
+
+	public virtual void OnPhysGunPickup(BasePlayer physGunUser, PhysGunPickup reason = PhysGunPickup.PickedUpByCannon) {
+		if (reason == PhysGunPickup.PickedUpByCannon)
+			ForceFadeScaleToAlwaysVisible();
+		else
+			SetContextThink(RampToDefaultFadeScale, gpGlobals.CurTime + 2.0f, s_pFadeScaleThink);
+
+		if (reason == PhysGunPickup.PuntedByCannon)
+			PlayPuntSound();
+
+		SetPhysicsAttacker(physGunUser, gpGlobals.CurTime);
+
+		OriginalBlockLOS = BlocksLOS();
+		SetBlocksLOS(false);
+
+		if (HasInteraction(PropDataInteractions.PhysgunCreateFlare))
+			CreateFlare(PROP_FLARE_LIFETIME);
+	}
+
+	public void CreateFlare(float lifetime) => throw new NotImplementedException();
+
+	public virtual void OnPhysGunDrop(BasePlayer physGunUser, PhysGunDrop reason) {
+		SetContextThink(RampToDefaultFadeScale, gpGlobals.CurTime + 2.0f, s_pFadeScaleThink);
+
+		SetPhysicsAttacker(physGunUser, gpGlobals.CurTime);
+
+		if ((PhysGunPickup)reason == PhysGunPickup.PuntedByCannon)
+			PlayPuntSound();
+
+		SetBlocksLOS(OriginalBlockLOS);
+	}
+
+	public virtual bool HasPreferredCarryAnglesForPlayer(BasePlayer? player = null) {
+		if (HasInteraction(PropDataInteractions.PhysgunLaunchSpinZ))
+			return true;
+
+		return false;
+	}
+
+	public virtual QAngle PreferredCarryAngles() => m_preferredCarryAngles;
+
+	public virtual bool ForcePhysgunOpen(BasePlayer player) => false;
+
+	public virtual Vector3 PhysGunLaunchAngularImpulse() {
+		if (HasInteraction(PropDataInteractions.PhysgunLaunchSpinNone) || HasInteraction(PropDataInteractions.PhysgunLaunchSpinZ))
+			return new(0, 0, 0);
+
+		return RandomAngularImpulse(-600, 600);
+	}
+
+	public virtual bool ShouldPuntUseLaunchForces(PhysGunForce reason) => false;
+
+	public virtual Vector3 PhysGunLaunchVelocity(in Vector3 forward, float mass) => Pickup.DefaultPhysGunLaunchVelocity(forward, mass);
+
+	public override BasePlayer? HasPhysicsAttacker(TimeUnit_t dt) {
+		if (gpGlobals.CurTime - dt <= LastPhysicsInfluenceTime)
+			return PhysicsAttacker.Get();
+
+		return null;
+	}
+
+	public void SetDmgModBullet(float dmgMod) => DmgModBullet = dmgMod;
+	public void SetDmgModClub(float dmgMod) => DmgModClub = dmgMod;
+	public void SetDmgModExplosive(float dmgMod) => DmgModExplosive = dmgMod;
+	public float GetDmgModBullet() => DmgModBullet;
+	public float GetDmgModClub() => DmgModClub;
+	public float GetDmgModExplosive() => DmgModExplosive;
+	public void SetExplosiveRadius(float radius) => ExplodeRadius = radius;
+	public void SetExplosiveDamage(float damage) => ExplodeDamage = damage;
+	public float GetExplosiveRadius() => ExplodeRadius;
+	public float GetExplosiveDamage() => ExplodeDamage;
+	public void SetPhysicsDamageTable(ReadOnlySpan<char> tableName) => PhysicsDamageTableName = tableName.IsEmpty ? null : new(tableName);
+	public ReadOnlySpan<char> GetPhysicsDamageTable() => PhysicsDamageTableName;
+	public void SetBreakableModel(ReadOnlySpan<char> model) => BreakableModel = model.IsEmpty ? null : new(model);
+	public ReadOnlySpan<char> GetBreakableModel() => BreakableModel;
+	public void SetBreakableSkin(int skin) => BreakableSkin = skin;
+	public int GetBreakableSkin() => BreakableSkin;
+	public void SetBreakableCount(int count) => BreakableCount = count;
+	public int GetBreakableCount() => BreakableCount;
+	public void SetMaxBreakableSize(int size) => MaxBreakableSize = size;
+	public int GetMaxBreakableSize() => MaxBreakableSize;
+	public void SetPropDataBlocksLOS(bool blocksLOS) { BlockLOSSetByPropData = true; SetBlocksLOS(blocksLOS); }
+	public void SetPropDataIsAIWalkable(bool blocksLOS) => SetAIWalkable(blocksLOS);
+	public void SetBasePropData(ReadOnlySpan<char> propdata) => BasePropData = propdata.IsEmpty ? null : new(propdata);
+	public ReadOnlySpan<char> GetBasePropData() => BasePropData;
+	public void SetInteraction(PropDataInteractions interaction) => Interactions |= (1 << (int)interaction);
+	public bool HasInteraction(PropDataInteractions interaction) => (Interactions & (1 << (int)interaction)) != 0;
+	public void SetPhysicsMode(PhysicsMultiplayerMode mode) => m_iPhysicsMode = mode;
+	public PhysicsMultiplayerMode GetPhysicsMode() => m_iPhysicsMode;
+	public void SetMultiplayerBreakMode(MultiplayerBreak mode) => MpBreakMode = mode;
+	public MultiplayerBreak GetMultiplayerBreakMode() => MpBreakMode;
+
+	protected float DmgModBullet;
+	protected float DmgModClub;
+	protected float DmgModExplosive;
+	protected string? PhysicsDamageTableName;
+	protected string? BreakableModel;
+	protected int BreakableSkin;
+	protected int BreakableCount;
+	protected int MaxBreakableSize;
+	protected string? BasePropData;
+	protected int Interactions;
+	protected float ExplodeDamage;
+	protected float ExplodeRadius;
+	protected PhysicsMultiplayerMode m_iPhysicsMode;
+	protected MultiplayerBreak MpBreakMode;
+	bool BlockLOSSetByPropData;
+	float DefaultFadeScale;
 }
 
 [LinkEntityToClass("func_physbox_multiplayer")]
 [NetworkName("CPhysBoxMultiplayer")]
-public class PhysBoxMultiplayer : PhysBox, IMultiplayerPhysics
+public partial class PhysBoxMultiplayer : PhysBox, IMultiplayerPhysics
 {
-	public static readonly SendTable DT_PhysBoxMultiplayer = new(DT_PhysBox, [
-		SendPropInt(FIELD_PBM.OF(nameof(PhysicsMode)), 1, PropFlags.Unsigned),
-		SendPropFloat(FIELD_PBM.OF(nameof(Mass)), 0, PropFlags.NoScale)
-	]);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_PhysBoxMultiplayer);
-	[NetworkName("m_iPhysicsMode")]
-	public int PhysicsMode;
-	[NetworkName("m_fMass")]
-	public float Mass;
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(PhysicsMode)) { Bits = 1, Flags = PropFlags.Unsigned },
+		new(nameof(Mass)) { Bits = 0, Flags = PropFlags.NoScale },
+	];
+
+	[NetworkVar("m_iPhysicsMode")]
+	public partial int PhysicsMode { get; set; }
+	[NetworkVar("m_fMass")]
+	public partial float Mass { get; set; }
+
+	public PhysicsMultiplayerMode GetMultiplayerPhysicsMode() => (PhysicsMultiplayerMode)PhysicsMode;
+	public float GetMass() => Mass;
+	public bool IsAsleep() => VPhysicsGetObject()!.IsAsleep();
 }
 
 [LinkEntityToClass("physics_prop")]
@@ -87,16 +315,109 @@ public class PhysBoxMultiplayer : PhysBox, IMultiplayerPhysics
 [LinkEntityToClass("prop_flare")]
 [LinkEntityToClass("prop_weighted_cube")]
 [NetworkName("CPhysicsProp")]
-public class PhysicsProp : BreakableProp
+public partial class PhysicsProp : BreakableProp
 {
-	public static readonly SendTable DT_PhysicsProp = new(DT_BreakableProp, [
-		SendPropBool(FIELD_PP.OF(nameof(Awake)))
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		nameof(Awake),
+	];
+
+	[NetworkVar("m_bAwake")]
+	public partial bool Awake { get; set; }
+
+	public static readonly new DataMap DataDesc = new(typeof(PhysicsProp), BaseEntity.DataDesc, [
+		DEFINE.KEYFIELD(nameof(MassScale), FieldType.Float, "massscale"),
+		DEFINE.KEYFIELD(nameof(InertiaScale), FieldType.Float, "inertiascale"),
+		DEFINE.KEYFIELD(nameof(DamageType), FieldType.Integer, "Damagetype"),
+		DEFINE.KEYFIELD(nameof(OverrideScript), FieldType.String, "overridescript"),
+		DEFINE.KEYFIELD(nameof(DamageToEnableMotion), FieldType.Integer, "damagetoenablemotion"),
+		DEFINE.KEYFIELD(nameof(ForceToEnableMotion), FieldType.Float, "forcetoenablemotion"),
+
+		DEFINE.OUTPUT(nameof(OnPhysGunPickup_), "OnPhysGunPickup", eventFuncs),
+		DEFINE.OUTPUT(nameof(OnPhysGunOnlyPickup), "OnPhysGunOnlyPickup", eventFuncs),
+		DEFINE.OUTPUT(nameof(OnPhysGunPunt), "OnPhysGunPunt", eventFuncs),
+		DEFINE.OUTPUT(nameof(OnPhysGunDrop_), "OnPhysGunDrop", eventFuncs),
+		DEFINE.OUTPUT(nameof(OnPlayerUse), "OnPlayerUse", eventFuncs),
+		DEFINE.OUTPUT(nameof(OnPlayerPickup), "OnPlayerPickup", eventFuncs),
 	]);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_PhysicsProp);
-	[NetworkName("m_bAwake")]
-	public bool Awake;
+	public override DataMap? GetDataDescMap() => DataDesc;
+
+	public static int g_ActiveGibCount = 0;
+
+	float MassScale;
+	float InertiaScale;
+	int DamageType;
+	string? OverrideScript;
+	int DamageToEnableMotion;
+	float ForceToEnableMotion;
+
+	bool FirstCollisionAfterLaunch;
+	internal bool ThrownByPlayer;
+
+	public OutputEvent OnPhysGunPickup_ = new();
+	public OutputEvent OnPhysGunPunt = new();
+	public OutputEvent OnPhysGunOnlyPickup = new();
+	public OutputEvent OnPhysGunDrop_ = new();
+	public OutputEvent OnPlayerUse = new();
+	public OutputEvent OnPlayerPickup = new();
+
+	public void EnableMotion() => throw new NotImplementedException();
+
+	public override void OnPhysGunPickup(BasePlayer physGunUser, PhysGunPickup reason = PhysGunPickup.PickedUpByCannon) {
+		base.OnPhysGunPickup(physGunUser, reason);
+
+		IPhysicsObject? physicsObject = VPhysicsGetObject();
+		if (physicsObject != null && !physicsObject.IsMoveable()) {
+			if (!HasSpawnFlags(SF.EnableOnPhyscannon))
+				return;
+
+			EnableMotion();
+		}
+
+		OnPhysGunPickup_.FireOutput(physGunUser, this);
+
+		if (reason == PhysGunPickup.PickedUpByCannon)
+			OnPhysGunOnlyPickup.FireOutput(physGunUser, this);
+
+		if (reason == PhysGunPickup.PuntedByCannon)
+			OnPhysGunPunt.FireOutput(physGunUser, this);
+
+		if (reason == PhysGunPickup.PickedUpByCannon || reason == PhysGunPickup.PickedUpByPlayer)
+			OnPlayerPickup.FireOutput(physGunUser, this);
+
+		CheckRemoveRagdolls();
+	}
+
+	public override void OnPhysGunDrop(BasePlayer physGunUser, PhysGunDrop reason) {
+		base.OnPhysGunDrop(physGunUser, reason);
+
+		if (reason == PhysGunDrop.LaunchedByCannon) {
+			if (HasInteraction(PropDataInteractions.PhysgunLaunchSpinZ))
+				throw new NotImplementedException();
+
+			PhysSetGameFlags(VPhysicsGetObject(), PhysicsFlags.WasThrown);
+			FirstCollisionAfterLaunch = true;
+		}
+		else if (reason == PhysGunDrop.ThrownByPlayer)
+			ThrownByPlayer = true;
+
+		OnPhysGunDrop_.FireOutput(physGunUser, this);
+
+		if (HasInteraction(PropDataInteractions.PhysgunNotifyChildren))
+			throw new NotImplementedException();
+	}
+
+	public override void Term() {
+		if (HasSpawnFlags(SF.IsGib))
+			g_ActiveGibCount--;
+
+		base.Term();
+	}
 
 	public override void Spawn() {
+		if (HasSpawnFlags(SF.IsGib))
+			g_ActiveGibCount++;
+
 		// Condense classnames to one, except for "prop_physics_override"
 		if (FClassnameIs(this, "physics_prop"))
 			SetClassname("prop_physics");
@@ -110,7 +431,21 @@ public class PhysicsProp : BreakableProp
 		if (FClassnameIs(this, "prop_physics_override"))
 			SetClassname("prop_physics");
 
+		if (HasSpawnFlags(SF.Debris) || HasInteraction(PropDataInteractions.PhysgunCreateFlare))
+			SetCollisionGroup(HasSpawnFlags(SF.ForceTouchTriggers) ? Source.CollisionGroup.DebrisTrigger : Source.CollisionGroup.Debris);
+
+		if (HasSpawnFlags(SF.NoRotorwashPush))
+			AddEFlags(EFL.NoRotorWashPush);
+
 		CreateVPhysics();
+
+		if (!PropDataOverrodeBlockLOS())
+			CalculateBlockLOS();
+
+		if (((ReadOnlySpan<char>)GetModelName()).Equals("models/props_c17/door01_left.mdl", StringComparison.Ordinal)) {
+			SetFadeDistance(-1, 0);
+			DisableAutoFade();
+		}
 	}
 
 	public static bool PropIsGib(BaseEntity entity) {
@@ -121,24 +456,92 @@ public class PhysicsProp : BreakableProp
 		return false;
 	}
 
-	public bool IsGib() => (SpawnFlags & SF_PHYSPROP_IS_GIB) != 0;
+	public bool IsGib() => HasSpawnFlags(SF.IsGib);
 
 	public virtual bool CreateVPhysics() {
-		SetSolid(SolidType.VPhysics);
+		bool asleep = HasSpawnFlags(SF.StartAsleep);
 
-		if (m_takedamage == (byte)Damage.No)
-			SetMoveType(Source.MoveType.None);
+		Solid tmpSolid = default;
+		PhysModelParseSolid(ref tmpSolid, this, GetModelIndex());
 
-		IPhysicsObject? physObj = VPhysicsInitNormal(SolidType.VPhysics, GetSolidFlags(), false);
-		if (physObj == null) {
+		if (MassScale > 0)
+			tmpSolid.Params.Mass *= MassScale;
+
+		if (InertiaScale > 0) {
+			tmpSolid.Params.Inertia *= InertiaScale;
+			if (tmpSolid.Params.Inertia < 0.5)
+				tmpSolid.Params.Inertia = 0.5f;
+		}
+
+		PhysGetMassCenterOverride(this, modelinfo.GetVCollide(GetModelIndex()), ref tmpSolid);
+		if (HasSpawnFlags(SF.NoCollisions))
+			tmpSolid.Params.EnableCollisions = false;
+
+		PhysSolidOverride(ref tmpSolid, OverrideScript);
+
+		IPhysicsObject? physicsObject = VPhysicsInitNormal(SolidType.VPhysics, 0, asleep, ref tmpSolid);
+
+		if (physicsObject == null) {
 			SetSolid(SolidType.None);
 			SetMoveType(Source.MoveType.None);
 			Warning($"ERROR!: Can't create physics object for {GetModelName()}\n");
 			return false;
 		}
+		else {
+			if (DamageType == 1)
+				PhysSetGameFlags(physicsObject, PhysicsFlags.DamageSlice);
+
+			if (HasSpawnFlags(SF.MotionDisabled) || DamageToEnableMotion > 0 || ForceToEnableMotion > 0)
+				physicsObject.EnableMotion(false);
+		}
+
+		if (HasInteraction(PropDataInteractions.PhysgunLaunchSpinZ)) {
+			if ((VPhysicsGetObject()!.GetGameFlags() & PhysicsFlags.DamageSlice) == 0)
+				PhysSetGameFlags(physicsObject, PhysicsFlags.DamageSlice);
+		}
+
+		if (HasInteraction(PropDataInteractions.PhysgunDamageNone))
+			PhysSetGameFlags(physicsObject, PhysicsFlags.NoImpactDamage);
+
+		if (HasSpawnFlags(SF.PreventPickup))
+			PhysSetGameFlags(physicsObject, PhysicsFlags.NoPlayerPickup);
 
 		return true;
 	}
+
+	public override EntityCapabilities ObjectCaps() {
+		EntityCapabilities caps = base.ObjectCaps() | EntityCapabilities.WorldcraftEditPosition;
+
+		if (HasSpawnFlags(SF.EnablePickupOutput)) 
+			caps |= EntityCapabilities.ImpulseUse;
+		else if (BasePlayer.CanPickupObject(this, 35, 128)) {
+			caps |= EntityCapabilities.ImpulseUse;
+
+			if (hl2_episodic.GetBool() && HasInteraction(PropDataInteractions.PhysgunCreateFlare)) {
+				caps |= EntityCapabilities.UseInRadius;
+			}
+		}
+
+		if (HasSpawnFlags(SF.RadiusPickup)) {
+			caps |= EntityCapabilities.UseInRadius;
+		}
+
+		return caps;
+	}
+
+	public override void Use(BaseEntity? activator, BaseEntity? caller, UseType useType, float value) {
+		BasePlayer? player = ToBasePlayer(activator);
+		if (player != null) {
+			// if (HasSpawnFlags(SF_PHYSPROP_ENABLE_PICKUP_OUTPUT))
+			// 	OnPlayerUse.FireOutput(this, this);
+
+			player.PickupObject(this);
+		}
+	}
+
+	public float GetCarryDistanceOffset() => CarryDistanceOffset;
+
+	float CarryDistanceOffset;
 }
 
 [LinkEntityToClass("dynamic_prop")]
@@ -169,57 +572,61 @@ public class PhysicsProp : BreakableProp
 [LinkEntityToClass("prop_wall_projector")]
 [LinkEntityToClass("team_control_point")]
 [NetworkName("CDynamicProp")]
-public class DynamicProp : BreakableProp
+public partial class DynamicProp : BreakableProp
 {
-	public static readonly SendTable DT_DynamicProp = new(DT_BreakableProp, [
-		SendPropBool(FIELD_DP.OF(nameof(UseHitboxesForRenderBox)))
-	]);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_DynamicProp);
-	[NetworkName("m_bUseHitboxesForRenderBox")]
-	public bool UseHitboxesForRenderBox;
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		nameof(UseHitboxesForRenderBox),
+	];
+
+	[NetworkVar("m_bUseHitboxesForRenderBox")]
+	public partial bool UseHitboxesForRenderBox { get; set; }
 }
 
 [NetworkName("CPhysicsPropMultiplayer")]
-public class PhysicsPropMultiplayer : PhysicsProp
+public partial class PhysicsPropMultiplayer : PhysicsProp
 {
-	public static readonly SendTable DT_PhysicsPropMultiplayer = new(DT_PhysicsProp, [
-		SendPropInt(FIELD_PPM.OF(nameof(PhysicsMode)), 2, PropFlags.Unsigned),
-		SendPropFloat(FIELD_PPM.OF(nameof(Mass)), 0, PropFlags.NoScale),
-		SendPropVector(FIELD_PPM.OF(nameof(CollisionMins)), 0, PropFlags.NoScale),
-		SendPropVector(FIELD_PPM.OF(nameof(CollisionMaxs)), 0, PropFlags.NoScale),
-	]);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_PhysicsPropMultiplayer);
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(PhysicsMode)) { Bits = 2, Flags = PropFlags.Unsigned },
+		new(nameof(Mass)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(CollisionMins)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(CollisionMaxs)) { Bits = 0, Flags = PropFlags.NoScale },
+	];
 
-	[NetworkName("m_iPhysicsMode")]
-	public int PhysicsMode;
-	[NetworkName("m_fMass")]
-	public float Mass;
-	[NetworkName("m_collisionMins")]
-	public Vector3 CollisionMins;
-	[NetworkName("m_collisionMaxs")]
-	public Vector3 CollisionMaxs;
+	[NetworkVar("m_iPhysicsMode")]
+	public partial int PhysicsMode { get; set; }
+	[NetworkVar("m_fMass")]
+	public partial float Mass { get; set; }
+	[NetworkVar("m_collisionMins")]
+	public partial Vector3 CollisionMins { get; set; }
+	[NetworkVar("m_collisionMaxs")]
+	public partial Vector3 CollisionMaxs { get; set; }
 }
 
 
 [NetworkName("CBasePropDoor")]
-public class BasePropDoor : DynamicProp
+public partial class BasePropDoor : DynamicProp
 {
-	[NetworkName("m_bLocked")]
-	bool Locked;
-	[NetworkName("m_eDoorState")]
-	int DoorState;
-	public static readonly SendTable DT_BasePropDoor = new(DT_DynamicProp, [
-		SendPropBool(FIELD_BPD.OF(nameof(Locked))),
-		SendPropInt(FIELD_BPD.OF(nameof(DoorState)), 3, PropFlags.Unsigned)
-	]);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_BasePropDoor);
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		nameof(Locked),
+		new(nameof(DoorState)) { Bits = 3, Flags = PropFlags.Unsigned },
+	];
+
+	[NetworkVar("m_bLocked")]
+	private partial bool Locked { get; set; }
+	[NetworkVar("m_eDoorState")]
+	private partial int DoorState { get; set; }
 }
 
 [NetworkName("CPropDoorRotating")]
-public class PropDoorRotating : BasePropDoor
+public partial class PropDoorRotating : BasePropDoor
 {
-	public static readonly SendTable DT_PropDoorRotating = new(DT_BasePropDoor, []);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_PropDoorRotating);
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+	];
+
 }
 
 [LinkEntityToClass("prop_door_rotating")]

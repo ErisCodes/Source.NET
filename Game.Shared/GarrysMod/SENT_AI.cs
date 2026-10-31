@@ -5,24 +5,10 @@ using Source;
 
 #if CLIENT_DLL
 namespace Game.Client;
-using FIELD = Source.FIELD<C_SENT_AI>;
+using Game.Client.GarrysMod;
 #else
 namespace Game.Server;
-using FIELD = Source.FIELD<SENT_AI>;
-#endif
-
-using Table =
-#if CLIENT_DLL
-	RecvTable;
-#else
-	SendTable;
-#endif
-
-using Class =
-#if CLIENT_DLL
-	ClientClass;
-#else
-	ServerClass;
+using Game.Server.GarrysMod;
 #endif
 
 [LinkEntityToClass("sent_ai")]
@@ -34,20 +20,36 @@ public partial class
 	SENT_AI 	: AI_BaseNPC
 #endif
 {
-	public static readonly Table DT_SENT_AI = new(DT_AI_BaseNPC, [
-#if CLIENT_DLL
-		RecvPropDataTable("m_ScriptedEntity", DT_ScriptedEntity)
-#elif GAME_DLL
-		SendPropDataTable("m_ScriptedEntity", DT_ScriptedEntity)
-#endif
-	]);
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(ScriptedEntity)) { Encoding = NetEncoding.DataTable, DataTable = "DT_ScriptedEntity" },
+	];
 
-	public static readonly new Class
+	[NetworkVar("m_ScriptedEntity")]
+	public readonly ScriptedEntity ScriptedEntity = new();
+
 #if CLIENT_DLL
-		ClientClass
+	public C_SENT_AI() {
 #else
-		ServerClass
+	public SENT_AI() {
 #endif
-		= new Class(DT_SENT_AI);
+		ScriptedEntity.Init(this, 1);
+	}
+
+	public override ReadOnlySpan<char> GetLuaScriptName() => ScriptedEntity.GetScriptName();
+
+	public override void InitializeScriptedEntity(ReadOnlySpan<char> name) {
+		ScriptedEntity.SetScriptName(name);
+		SetClassname(name);
+		ScriptedEntity.StartLua();
+	}
+
+#if CLIENT_DLL
+	public override void OnDataChanged(DataUpdateType updateType) {
+		base.OnDataChanged(updateType);
+		if (updateType == DataUpdateType.Created)
+			ScriptedEntity.StartLua();
+	}
+#endif
 }
 #endif

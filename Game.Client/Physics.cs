@@ -12,6 +12,8 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
 
+using static Source.Engine.StaticPropMgrGlobals;
+
 namespace Game.Client;
 
 [EngineComponent]
@@ -20,6 +22,13 @@ public static class PhysicsSystemHook
 	public static readonly PhysicsSystem g_PhysicsSystem = new();
 	static PhysicsSystemHook() {
 		SetPhysicsGameSystem(g_PhysicsSystem);
+	}
+
+	public static bool PhysIsInCallback() {
+		if (physenv != null && physenv.IsInSimulation())
+			return true;
+		// return g_Collisions.IsInCallback(); TODO
+		return false;
 	}
 }
 
@@ -31,12 +40,12 @@ public class PhysicsSystem : AutoGameSystemPerFrame
 		PhysicsLevelInit();
 	}
 
-	static readonly ConVar cl_phys_timescale = new( "cl_phys_timescale", "1.0", FCvar.Cheat, "Sets the scale of time for client-side physics (ragdolls)" );
+	static readonly ConVar cl_phys_timescale = new("cl_phys_timescale", "1.0", FCvar.Cheat, "Sets the scale of time for client-side physics (ragdolls)");
 
 
 	internal void PhysicsSimulate() {
 		TimeUnit_t frametime = gpGlobals.FrameTime;
-		if(physenv != null){
+		if (physenv != null) {
 			physenv.DebugCheckContacts();
 			physenv.Simulate(frametime * cl_phys_timescale.GetDouble());
 
@@ -82,6 +91,6 @@ public class PhysicsSystem : AutoGameSystemPerFrame
 
 		g_PhysWorldObject = PhysCreateWorld_Shared(C_World.GetClientWorldEntity(), modelinfo.GetVCollide(1), g_PhysDefaultObjectParams)!;
 
-		// TODO: staticpropmgr.CreateVPhysicsRepresentations(physenv, g_SolidSetup, NULL);
+		g_StaticPropMgr.CreateVPhysicsRepresentations(physenv, g_SolidSetup, null);
 	}
 }

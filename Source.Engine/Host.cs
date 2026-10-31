@@ -2,6 +2,7 @@
 
 using Source.Common;
 using Source.Common.Audio;
+using Source.Common.Bitbuffers;
 using Source.Common.Client;
 using Source.Common.Commands;
 using Source.Common.Engine;
@@ -113,13 +114,18 @@ public partial class Host
 			return cl.MaxClients == 1;
 	}
 
+	const TimeUnit_t MAX_FRAMETIME = 0.1;
+
 	void AccumulateTime(TimeUnit_t dt) {
 		RealTime += dt;
 		FrameTime = dt;
 		FrameTimeUnbounded = FrameTime;
-		TimeUnit_t fullscale = 1; // TODO: host_timescale
-		FrameTime *= fullscale;
-		FrameTimeUnbounded = FrameTime;
+		if (host_timescale.GetFloat() > 0 && CanCheat()) {
+			TimeUnit_t fullscale = host_timescale.GetFloat();
+			FrameTime *= fullscale;
+			FrameTimeUnbounded = FrameTime;
+			FrameTime = Math.Min(FrameTime, MAX_FRAMETIME * fullscale);
+		}
 
 		soundServices.SetSoundFrametime(dt, FrameTime);
 	}
@@ -523,6 +529,7 @@ public partial class Host
 		Cbuf = engineAPI.InitSubsystem<Cbuf>()!;
 		Cmd = engineAPI.InitSubsystem<Cmd>()!;
 		Cvar = engineAPI.InitSubsystem<Cvar>()!;
+		Cvar.Changed += CvarUtilities.ConVarNetworkChangeCallback; // TODO CvarQuery
 		soundServices = engineAPI.GetRequiredService<ISoundServices>();
 #if !SWDS
 		View = engineAPI.InitSubsystem<View>()!;
@@ -554,6 +561,9 @@ public partial class Host
 			Scr = engineAPI.InitSubsystem<Scr>()!;
 			Render = engineAPI.InitSubsystem<Render>()!;
 			// engineAPI.InitSubsystem<Decal>();
+#if GMOD_DLL
+			get.MenuSystem()?.StartLua();
+#endif
 		}
 		else {
 			cl.SignOnState = SignOnState.None;
@@ -860,6 +870,10 @@ public partial class Host
 		}
 	}
 
+#if GMOD_DLL
+	public bool HostingGame;
+#endif
+
 	public bool NewGame(ReadOnlySpan<char> mapName, bool loadGame, bool backgroundLevel, ReadOnlySpan<char> oldMap = default, ReadOnlySpan<char> landmark = default, bool oldSave = false) {
 		Common.TimestampedLog("Host_NewGame");
 		Span<char> previousMapName = stackalloc char[MAX_PATH];
@@ -878,10 +892,16 @@ public partial class Host
 #if !SWDS
 			Scr.EndLoadingPlaque();
 #endif
+#if GMOD_DLL
+			HostingGame = false;
+#endif
 			return false;
 		}
 
 		DevMsg("---- Host_NewGame ----\n");
+#if GMOD_DLL
+		HostingGame = true;
+#endif
 		host_map.SetValue(_mapName);
 		if (!loadGame) {
 			HostState.RunGameInit();
@@ -895,8 +915,12 @@ public partial class Host
 
 		g_DownloadListGenerator.OnLevelLoadStart(mapName);
 
-		if (!sv.SpawnServer(mapName, _mapFile, null))
+		if (!sv.SpawnServer(mapName, _mapFile, null)) {
+#if GMOD_DLL
+			HostingGame = false;
+#endif
 			return false;
+		}
 
 		sv.LevelMainMenuBackground = backgroundLevel;
 		serverGlobalVariables.CurTime = sv.GetTime();
@@ -914,8 +938,12 @@ public partial class Host
 			serverGlobalVariables.CurTime = sv.GetTime();
 		}
 
-		if (!SV.ActivateServer())
+		if (!SV.ActivateServer()) {
+#if GMOD_DLL
+			HostingGame = false;
+#endif
 			return false;
+		}
 
 		if (!sv.IsDedicated()) {
 			Common.TimestampedLog("Stuff 'connect localhost' to console");
@@ -1089,8 +1117,13 @@ public partial class Host
 		if (count <= 0)
 			return;
 
-		if (count > 255) {
-			Sys.Error($"Engine only supported 255 ConVars marked {flags}\n");
+#if GMOD_DLL
+		const int MAX_CONVARS = 4096;
+#else
+		const int MAX_CONVARS = 255;
+#endif
+		if (count > MAX_CONVARS) {
+			Sys.Error($"Engine only supported {MAX_CONVARS} ConVars marked {flags}\n");
 		}
 
 		foreach (var var in Cvar.GetCommands()) {
@@ -1101,7 +1134,8 @@ public partial class Host
 			if (!convar.IsFlagSet(flags))
 				continue;
 
-			if (nonDefault && convar.GetDefault() != convar.GetString())
+			// It's == to the default value, don't count
+			if (nonDefault && stricmp(convar.GetDefault(), convar.GetString()) == 0)
 				continue;
 
 			cvar_s acvar = new();
@@ -1110,6 +1144,80 @@ public partial class Host
 			convars.ConVars.Add(acvar);
 		}
 	}
+
+#if GMOD_DLL
+	public void GMOD_BuildConVarUpdateMessage(INetChannel chan, FCvar flags, bool nonDefault) {
+		int count = CountVariablesWithFlags(flags, nonDefault);
+		if (count <= 0)
+			return;
+
+		NET_SetConVar convars = new();
+		count = 0;
+
+		foreach (var var in Cvar.GetCommands()) {
+			if (count > 32) {
+				chan.SendNetMsg(convars);
+				convars.ConVars.Clear();
+				count = 0;
+			}
+
+			if (var.IsCommand())
+				continue;
+
+			ConVar convar = (ConVar)var;
+			if (!convar.IsFlagSet(flags))
+				continue;
+
+			if (nonDefault && stricmp(convar.GetDefault(), convar.GetString()) == 0)
+				continue;
+
+			cvar_s acvar = new();
+			acvar.Name = convar.GetName();
+			acvar.Value = CleanupConVarStringValue(convar.GetString());
+			convars.ConVars.Add(acvar);
+			count++;
+		}
+
+		if (count != 0)
+			chan.SendNetMsg(convars);
+	}
+
+	public void GMOD_BuildConVarUpdateMessageBF(bf_write buf, FCvar flags, bool nonDefault) {
+		int count = CountVariablesWithFlags(flags, nonDefault);
+		if (count <= 0)
+			return;
+
+		NET_SetConVar convars = new();
+		count = 0;
+
+		foreach (var var in Cvar.GetCommands()) {
+			if (count > 128) {
+				convars.WriteToBuffer(buf);
+				convars.ConVars.Clear();
+				count = 0;
+			}
+
+			if (var.IsCommand())
+				continue;
+
+			ConVar convar = (ConVar)var;
+			if (!convar.IsFlagSet(flags))
+				continue;
+
+			if (nonDefault && stricmp(convar.GetDefault(), convar.GetString()) == 0)
+				continue;
+
+			cvar_s acvar = new();
+			acvar.Name = convar.GetName();
+			acvar.Value = CleanupConVarStringValue(convar.GetString());
+			convars.ConVars.Add(acvar);
+			count++;
+		}
+
+		if (count != 0)
+			convars.WriteToBuffer(buf);
+	}
+#endif
 
 	[ConCommand(helpText: "Exits the engine")]
 	void quit(in TokenizedCommand args) {
@@ -1193,7 +1301,8 @@ public partial class Host
 			if (!convar.IsFlagSet(flags))
 				continue;
 
-			if (nonDefault && convar.GetDefault() != convar.GetString())
+			// It's == to the default value, don't count
+			if (nonDefault && stricmp(convar.GetDefault(), convar.GetString()) == 0)
 				continue;
 
 			count++;
@@ -1202,9 +1311,11 @@ public partial class Host
 		return count;
 	}
 
-	internal void AllowQueuedMaterialSystem(bool v) {
-		// todo
+	internal bool AllowQueuedMaterialSystem(bool v) {
+		return services.GetRequiredService<Source.Common.MaterialSystem.IMaterialSystem>().AllowThreading(v, MaterialSystemThread);
 	}
+
+	public static int MaterialSystemThread = 0;
 
 	[ConCommand(helpText: "Reload the most recent saved game (add setpos to jump to current view position on reload).")]
 	void reload(in TokenizedCommand args, CommandSource source, int clientSlot = -1) {

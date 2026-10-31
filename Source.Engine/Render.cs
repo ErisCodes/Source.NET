@@ -387,6 +387,9 @@ public partial class Render(
 		MaterialSystem.CreateSortInfo();
 
 		modelLoader.Map_LoadDisplacements(MaterialSystem.MaterialSortInfoArray!, host_state.WorldModel!);
+
+		ModelLoader.Mod_MarkWaterSurfaces(host_state.WorldModel!);
+
 		RebuildLightmaps();
 	}
 	private void Surface_LevelInit() { }
@@ -597,6 +600,25 @@ public partial class Render(
 		if (--LightmapUpdateDepth == 0) {
 			if (g_LightmapUpdateList.Count != 0 && r_dynamiclighting.GetBool() && !ModelLoader.r_unloadlightmaps.GetBool()) {
 				DLight[] lights = CL.DLights;
+				if (CL.ActiveDlights && materials.GetRenderContext().GetCallQueue() != null) {
+					lights = ThreadDLights[ThreadDLightsFrame];
+					for (int i = 0; i < lights.Length; i++) {
+						DLight src = CL.DLights[i], dst = lights[i];
+						dst.Flags = src.Flags;
+						dst.Origin = src.Origin;
+						dst.Radius = src.Radius;
+						dst.Color = src.Color;
+						dst.Die = src.Die;
+						dst.Decay = src.Decay;
+						dst.MinLight = src.MinLight;
+						dst.Key = src.Key;
+						dst.Style = src.Style;
+						dst.Direction = src.Direction;
+						dst.InnerAngle = src.InnerAngle;
+						dst.OuterAngle = src.OuterAngle;
+					}
+					ThreadDLightsFrame = (ThreadDLightsFrame + 1) & 1;
+				}
 
 				g_LightmapUpdateList.Sort(LightmapPageComparison ??= LightmapPageCompareFunc);
 				for (int i = g_LightmapUpdateList.Count - 1; i >= 0; --i) {
@@ -839,6 +861,23 @@ public partial class Render(
 		if (onlyUseLightStyles)
 			dlightMask = 0;
 
+		ICallQueue? callQueue = materials.GetRenderContext().GetCallQueue();
+		if (callQueue != null) {
+			Span<BSPMSurface2> surfaces = host_state.WorldBrush!.Surfaces2;
+			int surfaceIndex = (int)(Unsafe.ByteOffset(ref surfaces[0], ref surfID) / Unsafe.SizeOf<BSPMSurface2>());
+			callQueue.QueueCall(static s => s.Render.BuildLightMapGutsQueued(s.Lights, s.SurfaceIndex, in s.XForm, s.Mask, s.Bumpmap, s.Lightmap),
+				(Render: this, Lights: lights, SurfaceIndex: surfaceIndex, XForm: entityToWorld, Mask: dlightMask, Bumpmap: needsBumpmap, Lightmap: needsLightmap));
+			return;
+		}
+
+		BuildLightMapGuts(lights, ref surfID, in entityToWorld, dlightMask, needsBumpmap, needsLightmap);
+	}
+
+	static readonly DLight[][] ThreadDLights = [new DLight[Constants.MAX_DLIGHTS].InstantiateArray(), new DLight[Constants.MAX_DLIGHTS].InstantiateArray()];
+	static int ThreadDLightsFrame;
+
+	void BuildLightMapGutsQueued(DLight[] lights, int surfaceIndex, in Matrix3x4 entityToWorld, uint dlightMask, bool needsBumpmap, bool needsLightmap) {
+		ref BSPMSurface2 surfID = ref host_state.WorldBrush!.Surfaces2[surfaceIndex];
 		BuildLightMapGuts(lights, ref surfID, in entityToWorld, dlightMask, needsBumpmap, needsLightmap);
 	}
 
@@ -1415,6 +1454,7 @@ public partial class Render(
 	}
 
 	public void LevelShutdown() {
+		R_Surface_LevelShutdown();
 		R_Areaportal_LevelShutdown();
 	}
 

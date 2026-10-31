@@ -46,7 +46,8 @@ public enum UniformBufferBindingLocation
 	VertexShaderConstants = 5,
 	/// <summary><b>source_ps_constants</b>: Pixel shader float constants.</summary>
 	PixelShaderConstants = 6,
-	Count = 7
+	UserClipPlanes = 7,
+	Count = 8
 }
 
 public static class UniformBufferBindings
@@ -139,18 +140,14 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		if (clearStencil)
 			flags |= GL_STENCIL_BUFFER_BIT;
 
+		if (clearColor)
+			glColorMask(true, true, true, true);
 		if (clearDepth)
 			glDepthMask(true);
 		if (clearStencil)
 			glStencilMask(0xFF);
 
 		if (flags != 0) {
-			bool* colorMask = stackalloc bool[4];
-			glGetBooleanv(GL_COLOR_WRITEMASK, colorMask);
-			bool scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
-			if (clearColor)
-				glColorMask(true, true, true, true);
-
 			bool renderTargetMatchesViewport =
 				(renderTargetWidth == -1 && renderTargetHeight == -1) ||
 				(renderTargetWidth == Viewport.Width && renderTargetHeight == Viewport.Height);
@@ -166,10 +163,15 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 				glDisable(GL_SCISSOR_TEST);
 			}
 
-			if (scissorWasEnabled)
+			if (ScissorEnabled)
 				glEnable(GL_SCISSOR_TEST);
+		}
+
+		if (boardStateValid) {
 			if (clearColor)
-				glColorMask(colorMask[0], colorMask[1], colorMask[2], colorMask[3]);
+				glColorMask(lastBoardState.ColorWrite, lastBoardState.ColorWrite, lastBoardState.ColorWrite, lastBoardState.AlphaWrite);
+			if (clearDepth)
+				glDepthMask(lastBoardState.DepthWrite);
 		}
 	}
 
@@ -183,6 +185,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	ShadowStateGl46? currentShadow;
 	internal void SetCurrentShadow(ShadowStateGl46 shadow) {
 		currentShadow = shadow;
+		ApplyCurrentShadowFogMode(false);
 	}
 
 	public void SetVertexShaderIndex(int index) {
@@ -253,6 +256,48 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		glObjectLabel(GL_BUFFER, uboPixelConstants, "ShaderAPI Pixel Shader Constants UBO");
 		glNamedBufferData(uboPixelConstants, sizeof(float) * NUM_PIXEL_SHADER_CONSTANTS * 4, null, GL_DYNAMIC_DRAW);
 		UniformBufferBindings.Bind(UniformBufferBindingLocation.PixelShaderConstants, uboPixelConstants);
+
+		uboClipPlanes = glCreateBuffer();
+		glObjectLabel(GL_BUFFER, uboClipPlanes, "ShaderAPI User Clip Planes UBO");
+		glNamedBufferData(uboClipPlanes, sizeof(Vector4) * Gl46.HardwareConfig.MAXUSERCLIPPLANES, null, GL_DYNAMIC_DRAW);
+		UniformBufferBindings.Bind(UniformBufferBindingLocation.UserClipPlanes, uboClipPlanes);
+	}
+
+	uint uboClipPlanes;
+	int UserClipPlaneEnabled;
+	int UserClipPlaneChanged;
+	readonly Vector4[] UserClipPlaneWorld = new Vector4[Gl46.HardwareConfig.MAXUSERCLIPPLANES];
+	readonly Vector4[] UserClipPlaneProj = new Vector4[Gl46.HardwareConfig.MAXUSERCLIPPLANES];
+	float FogZ;
+
+	private void MarkAllUserClipPlanesDirty() {
+		UserClipPlaneChanged |= (1 << Gl46.HardwareConfig.MAXUSERCLIPPLANES) - 1;
+	}
+
+	private unsafe void CommitUserClipPlanes() {
+		if ((UserClipPlaneChanged & UserClipPlaneEnabled & ((1 << Gl46.HardwareConfig.MAXUSERCLIPPLANES) - 1)) == 0)
+			return;
+
+		Matrix4x4 worldToProjectionInvTrans = Matrices[(int)MaterialMatrixMode.View] * Matrices[(int)MaterialMatrixMode.Projection];
+		Matrix4x4.Invert(worldToProjectionInvTrans, out worldToProjectionInvTrans);
+		worldToProjectionInvTrans = Matrix4x4.Transpose(worldToProjectionInvTrans);
+
+		for (int i = 0; i < Gl46.HardwareConfig.MAXUSERCLIPPLANES; ++i) {
+			if ((UserClipPlaneEnabled & (1 << i)) == 0)
+				continue;
+
+			if ((UserClipPlaneChanged & (1 << i)) == 0)
+				continue;
+
+			UserClipPlaneChanged &= ~(1 << i);
+
+			Vector4 clipPlaneProj = Vector4.Transform(UserClipPlaneWorld[i], worldToProjectionInvTrans);
+
+			if (clipPlaneProj != UserClipPlaneProj[i]) {
+				glNamedBufferSubData(uboClipPlanes, i * sizeof(Vector4), sizeof(Vector4), &clipPlaneProj);
+				UserClipPlaneProj[i] = clipPlaneProj;
+			}
+		}
 	}
 
 	private void AcquireInternalRenderTargets() {
@@ -301,10 +346,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	ShaderAPITextureHandle_t LinearToGammaTableIdentityTexture;
 
 	public float LinearToGamma_HardwareSpecific(float linear) {
-		if (IsPC())
-			return MathLib.SrgbLinearToGamma(linear);
-		else
-			throw new NotImplementedException();
+		return MathLib.SrgbLinearToGamma(linear);
 	}
 
 	public void SetDefaultState() {
@@ -525,8 +567,11 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	void ApplyStencilFunc() => glStencilFunc(StencilCompareFunction.GLEnum(), StencilReferenceValue, StencilTestMask);
 
+	bool ScissorEnabled;
+
 	public void SetScissorRect(int left, int top, int right, int bottom, bool enableScissor) {
 		FlushBufferedPrimitives();
+		ScissorEnabled = enableScissor;
 		if (!enableScissor) {
 			glDisable(GL_SCISSOR_TEST);
 			return;
@@ -772,17 +817,157 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	private void UpdateVertexShaderFogParams() {
-		// todo: fog params
+		float ooFogRange = 1.0f;
+
+		float start = VertexShaderFogParams[0];
+		float end = VertexShaderFogParams[1];
+
+		if (end != start)
+			ooFogRange = 1.0f / (end - start);
+
+		Span<float> fogParams = [
+			ooFogRange * end,
+			1.0f,
+			1.0f - Math.Clamp(FogMaxDensityValue, 0.0f, 1.0f),
+			ooFogRange,
+		];
 
 		Span<float> vertexShaderCameraPos = [
 			WorldSpaceCameraPosition.X,
 			WorldSpaceCameraPosition.Y,
 			WorldSpaceCameraPosition.Z,
-			0.0f, // todo: waterheight
+			FogZ,
 		];
+
+		SetVertexShaderConstant(VertexShaderConst.FogParams, fogParams);
 
 		SetVertexShaderConstant(VertexShaderConst.CameraPos, vertexShaderCameraPos);
 	}
+
+	readonly float[] VertexShaderFogParams = new float[2];
+	float FogMaxDensityValue = -1.0f;
+	float FogStartValue = -1.0f;
+	float FogEndValue = -1.0f;
+	readonly byte[] SceneFogColor = new byte[3];
+	bool SceneFogRadialValue;
+	Vector3 PixelFogColor;
+	bool FogGammaCorrectionDisabled;
+	ShaderFogMode AppliedFogMode = ShaderFogMode.Num;
+	bool AppliedFogSRGBWrite;
+	bool AppliedFogDisableGammaCorrection;
+	float DestAlphaDepthRange = 8192.0f;
+
+	private void UpdatePixelFogColorConstant() {
+		Span<float> fogColor = stackalloc float[4];
+
+		switch (GetPixelFogMode()) {
+			case MaterialFogMode.None:
+				for (int i = 0; i != 3; ++i)
+					fogColor[i] = 0.0f;
+				break;
+
+			case MaterialFogMode.Linear:
+				for (int i = 0; i != 3; ++i)
+					fogColor[i] = PixelFogColor[i];
+
+				if (currentShadow != null && currentShadow.State.SRGBWriteEnable) {
+					for (int i = 0; i != 3; ++i)
+						fogColor[i] = GammaToLinear_HardwareSpecific(fogColor[i]);
+				}
+
+				if (!FogGammaCorrectionDisabled && HardwareConfig.GetHDRType() == HDRType.Integer) {
+					for (int i = 0; i != 3; ++i)
+						fogColor[i] *= ToneMappingScale.X;
+				}
+				break;
+
+			case MaterialFogMode.LinearBelowFogZ:
+				for (int i = 0; i != 3; ++i)
+					fogColor[i] = GammaToLinear_HardwareSpecific(PixelFogColor[i]);
+
+				if (!FogGammaCorrectionDisabled && HardwareConfig.GetHDRType() == HDRType.Integer) {
+					for (int i = 0; i != 3; ++i)
+						fogColor[i] *= ToneMappingScale.X;
+				}
+				break;
+		}
+
+		fogColor[3] = 1.0f / DestAlphaDepthRange;
+
+		SetPixelShaderConstant((int)PixelShaderConst.LinearFogColor, fogColor);
+	}
+
+	private void ApplyFogMode(ShaderFogMode fogMode, bool srgbWritesEnabled, bool disableFogGammaCorrection) {
+		if (fogMode == ShaderFogMode.Disabled)
+			return;
+
+		bool shouldGammaCorrect = true;
+		byte r = 0, g = 0, b = 0;
+
+		switch (fogMode) {
+			case ShaderFogMode.Black:
+				shouldGammaCorrect = false;
+				break;
+			case ShaderFogMode.Overbright:
+			case ShaderFogMode.Grey:
+				r = g = b = 128;
+				break;
+			case ShaderFogMode.White:
+				r = g = b = 255;
+				shouldGammaCorrect = false;
+				break;
+			case ShaderFogMode.FogColor:
+				r = SceneFogColor[0];
+				g = SceneFogColor[1];
+				b = SceneFogColor[2];
+				break;
+		}
+
+		shouldGammaCorrect &= !disableFogGammaCorrection;
+		FogGammaCorrectionDisabled = !shouldGammaCorrect;
+
+		const float colorScale = 1.0f / 255.0f;
+		PixelFogColor.X = r * colorScale;
+		PixelFogColor.Y = g * colorScale;
+		PixelFogColor.Z = b * colorScale;
+
+		UpdatePixelFogColorConstant();
+	}
+
+	private void ApplyCurrentShadowFogMode(bool force) {
+		if (currentShadow == null)
+			return;
+
+		ShaderFogMode fogMode = currentShadow.FogModeState;
+		bool srgbWrite = currentShadow.State.SRGBWriteEnable;
+		bool disableGammaCorrection = currentShadow.DisableFogGammaCorrectionState;
+
+		if (!force && fogMode == AppliedFogMode && srgbWrite == AppliedFogSRGBWrite && disableGammaCorrection == AppliedFogDisableGammaCorrection)
+			return;
+
+		AppliedFogMode = fogMode;
+		AppliedFogSRGBWrite = srgbWrite;
+		AppliedFogDisableGammaCorrection = disableGammaCorrection;
+		ApplyFogMode(fogMode, srgbWrite, disableGammaCorrection);
+	}
+
+	private MaterialFogMode GetPixelFogMode() {
+		if (ShouldUsePixelFogForMode(SceneFogMode))
+			return SceneFogMode;
+		else
+			return MaterialFogMode.None;
+	}
+
+	private static bool ShouldUsePixelFogForMode(MaterialFogMode fogMode) => fogMode != MaterialFogMode.None;
+
+	public void SceneFogRadial(bool radial) {
+		if (SceneFogRadialValue != radial) {
+			FlushBufferedPrimitives();
+			SceneFogRadialValue = radial;
+		}
+	}
+
+	public bool GetSceneFogRadial() => SceneFogRadialValue;
 
 	private void InitVertexAndPixelShaders() {
 		// TODO; everything before this call
@@ -805,16 +990,15 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	MeshGl46? RenderMesh;
 	IMaterialInternal? Material;
 	uint CombobulateShadersIfChanged() {
-		uint program;
 		if (pipelineChanged) {
-			program = ShaderCombobulator();
+			uint program = ShaderCombobulator();
 			if (lastShader != program) {
 				lastShader = program;
-				glUseProgram(program);
+				glBindProgramPipeline(program);
 			}
+			pipelineChanged = program == 0;
 		}
 
-		pipelineChanged = false;
 		return lastShader;
 	}
 
@@ -822,7 +1006,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		if (IsDeactivated())
 			return;
 
-		CombobulateShadersIfChanged();
+		if (CombobulateShadersIfChanged() == 0)
+			return;
 
 		if (RenderMesh != null)
 			RenderMesh.RenderPass();
@@ -830,35 +1015,10 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			MeshMgr.RenderPassWithVertexAndIndexBuffers();
 	}
 
-	Dictionary<ulong, uint> shaderCombinations = [];
-	private unsafe uint ShaderCombobulator() {
+	private uint ShaderCombobulator() {
 		// Determines the shader program used given the current shader handles.
 		// If one does not exist, it is created.
-		Span<nint> hashedData = [activeVertexShader.Handle, activePixelShader.Handle];
-		ulong hash;
-		fixed (nint* data = hashedData)
-			hash = XXH64.DigestOf(data, hashedData.Length * sizeof(nint), 0);
-
-		if (shaderCombinations.TryGetValue(hash, out var program))
-			return program; // We have already linked a program for this shader combination
-
-		// We need to create a program then
-		program = glCreateProgram();
-		glAttachShader(program, (uint)activeVertexShader.Handle);
-		glAttachShader(program, (uint)activePixelShader.Handle);
-		glLinkProgram(program);
-		// Even invalid program states should be hashed... for now.
-		// Maybe a time based thing for invalid programs, to try allowing for the shader developer to recover, etc...
-		shaderCombinations[hash] = program;
-
-		if (!ShaderSystem.IsValidProgram(program, out string? error)) {
-			Warning("WARNING: Shader combobulation linker error.\n");
-			Warning(error);
-			Warning("\n");
-			return 0;
-		}
-
-		return program;
+		return ((ShaderSystem)ShaderManager).GetProgram(activeVertexShader, activePixelShader);
 	}
 
 	private bool IsDeactivated() {
@@ -894,7 +1054,12 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		return true;
 	}
-	public void FlushBufferedPrimitives() => FlushBufferedPrimitivesInternal();
+	public void FlushBufferedPrimitives() {
+		if (ShaderUtil != null && !ShaderUtil.OnFlushBufferedPrimitives())
+			return;
+
+		FlushBufferedPrimitivesInternal();
+	}
 	private void FlushBufferedPrimitivesInternal() {
 		Assert(RenderMesh == null);
 #if DEBUG
@@ -931,6 +1096,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		CommitVertexShaderLighting();
 
+		if (UserClipPlaneEnabled != 0)
+			CommitUserClipPlanes();
 	}
 
 	[Flags]
@@ -1346,6 +1513,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	nint TextureMemoryUsedLastFrame;
 
 	public void BeginFrame() {
+		ShaderManager.BeginFrame();
+
 		if (ResetRenderStateNeeded) {
 			ResetRenderState(false);
 			ResetRenderStateNeeded = false;
@@ -1405,68 +1574,66 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		DebugDataExportFrame = CurrentFrame;
 
-		if (IsPC()) {
-			if (DebugTextureList != null)
-				DebugTextureList = null;
+		if (DebugTextureList != null)
+			DebugTextureList = null;
 
-			DebugTextureList = new KeyValues("TextureList");
+		DebugTextureList = new KeyValues("TextureList");
 
-			TextureMemoryUsedTotal = 0;
-			TextureMemoryUsedPicMip1 = 0;
-			TextureMemoryUsedPicMip2 = 0;
-			foreach (var texkvp in Textures) {
-				var tex = texkvp.Value;
-				TextureMemoryUsedTotal += tex.GetMemUsage();
+		TextureMemoryUsedTotal = 0;
+		TextureMemoryUsedPicMip1 = 0;
+		TextureMemoryUsedPicMip2 = 0;
+		foreach (var texkvp in Textures) {
+			var tex = texkvp.Value;
+			TextureMemoryUsedTotal += tex.GetMemUsage();
 
-				// Compute picmip memory usage
-				{
-					nuint numBytes = tex.GetMemUsage();
+			// Compute picmip memory usage
+			{
+				nuint numBytes = tex.GetMemUsage();
 
-					if (tex.Levels > 1) {
-						if (tex.GetWidth() > 4 || tex.GetHeight() > 4 || tex.GetDepth() > 4) {
-							nuint topmipsize = (nuint)ImageLoader.GetMemRequired(tex.GetWidth(), tex.GetHeight(), tex.GetDepth(), tex.GetImageFormat(), false);
-							numBytes -= topmipsize;
+				if (tex.Levels > 1) {
+					if (tex.GetWidth() > 4 || tex.GetHeight() > 4 || tex.GetDepth() > 4) {
+						nuint topmipsize = (nuint)ImageLoader.GetMemRequired(tex.GetWidth(), tex.GetHeight(), tex.GetDepth(), tex.GetImageFormat(), false);
+						numBytes -= topmipsize;
 
-							TextureMemoryUsedPicMip1 += numBytes;
+						TextureMemoryUsedPicMip1 += numBytes;
 
-							if (tex.GetWidth() > 8 || tex.GetHeight() > 8 || tex.GetDepth() > 8) {
-								nuint othermipsizeRatio = (nuint)(((tex.GetWidth() > 8) ? 2 : 1) * ((tex.GetHeight() > 8) ? 2 : 1) * ((tex.GetDepth() > 8) ? 2 : 1));
-								nuint othermipsize = topmipsize / othermipsizeRatio;
-								numBytes -= othermipsize;
-							}
-
-							TextureMemoryUsedPicMip1 += numBytes;
+						if (tex.GetWidth() > 8 || tex.GetHeight() > 8 || tex.GetDepth() > 8) {
+							nuint othermipsizeRatio = (nuint)(((tex.GetWidth() > 8) ? 2 : 1) * ((tex.GetHeight() > 8) ? 2 : 1) * ((tex.GetDepth() > 8) ? 2 : 1));
+							nuint othermipsize = topmipsize / othermipsizeRatio;
+							numBytes -= othermipsize;
 						}
-						else {
-							TextureMemoryUsedPicMip1 += numBytes;
-							TextureMemoryUsedPicMip2 += numBytes;
-						}
+
+						TextureMemoryUsedPicMip1 += numBytes;
 					}
 					else {
 						TextureMemoryUsedPicMip1 += numBytes;
 						TextureMemoryUsedPicMip2 += numBytes;
 					}
 				}
-
-				if (!DebugGetAllTextures) // && tex.LastBoundFrame != CurrentFrame, todo SetTextureState
-					continue;
-
-				if (tex.LastBoundFrame != CurrentFrame)
-					tex.TimesBoundThisFrame = 0;
-
-				KeyValues pSubKey = DebugTextureList.CreateNewKey();
-				pSubKey.SetString("Name", tex.DebugName.String());
-				pSubKey.SetString("TexGroup", tex.TextureGroupName.String());
-				pSubKey.SetInt("Size", (int)tex.GetMemUsage());
-				if (tex.GetCount() > 1)
-					pSubKey.SetInt("Count", tex.GetCount());
-				pSubKey.SetString("Format", ImageLoader.GetName(tex.GetImageFormat()));
-				pSubKey.SetInt("Width", tex.GetWidth());
-				pSubKey.SetInt("Height", tex.GetHeight());
-
-				pSubKey.SetInt("BindsMax", tex.TimesBoundMax);
-				pSubKey.SetInt("BindsFrame", tex.TimesBoundThisFrame);
+				else {
+					TextureMemoryUsedPicMip1 += numBytes;
+					TextureMemoryUsedPicMip2 += numBytes;
+				}
 			}
+
+			if (!DebugGetAllTextures) // && tex.LastBoundFrame != CurrentFrame, todo SetTextureState
+				continue;
+
+			if (tex.LastBoundFrame != CurrentFrame)
+				tex.TimesBoundThisFrame = 0;
+
+			KeyValues pSubKey = DebugTextureList.CreateNewKey();
+			pSubKey.SetString("Name", tex.DebugName.String());
+			pSubKey.SetString("TexGroup", tex.TextureGroupName.String());
+			pSubKey.SetInt("Size", (int)tex.GetMemUsage());
+			if (tex.GetCount() > 1)
+				pSubKey.SetInt("Count", tex.GetCount());
+			pSubKey.SetString("Format", ImageLoader.GetName(tex.GetImageFormat()));
+			pSubKey.SetInt("Width", tex.GetWidth());
+			pSubKey.SetInt("Height", tex.GetHeight());
+
+			pSubKey.SetInt("BindsMax", tex.TimesBoundMax);
+			pSubKey.SetInt("BindsFrame", tex.TimesBoundThisFrame);
 		}
 	}
 
@@ -1522,6 +1689,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		Driver = deviceInfo.Driver;
 		Device!.MakeCurrent();
+		OwnerThreadID = ThreadGetCurrentId();
 		unsafe {
 			if (0 != (deviceInfo.Driver & GraphicsDriver.OpenGL))
 				GL_LoadExtensions(graphics.GL_LoadExtensionsPtr());
@@ -1559,13 +1727,6 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	public void Present() {
 		FlushBufferedPrimitives();
-		bool validPresent = true;
-		bool inMainThread = ThreadInMainThread();
-
-		if (!inMainThread) {
-			throw new Exception();
-		}
-
 		Device!.SwapBuffers();
 		MeshMgr.DiscardVertexBuffers();
 	}
@@ -1594,6 +1755,9 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			CacheWorldSpaceCameraPosition();
 			UpdateVertexShaderFogParams();
 		}
+
+		if (currentMode == MaterialMatrixMode.View || currentMode == MaterialMatrixMode.Projection)
+			MarkAllUserClipPlanesDirty();
 	}
 
 	public void GetMatrix(MaterialMatrixMode matrixMode, out Matrix4x4 dst) {
@@ -1626,7 +1790,32 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			name = name[1..];
 
 		// Combobulate
-		uint shader = CombobulateShadersIfChanged();
+		if (CombobulateShadersIfChanged() == 0)
+			return -1;
+
+		ShaderSystem shaders = (ShaderSystem)ShaderManager;
+		uint pixelProgram = shaders.GetShaderProgram(activePixelShader);
+		uint vertexProgram = shaders.GetShaderProgram(activeVertexShader);
+		StageUniform stage = new(pixelProgram, LocateStageUniform(pixelProgram, name), vertexProgram, LocateStageUniform(vertexProgram, name));
+		if (stage.PixelLocation == -1 && stage.VertexLocation == -1)
+			return -1;
+
+		if (!stageUniformHandles.TryGetValue(stage, out int handle)) {
+			handle = stageUniforms.Count;
+			stageUniforms.Add(stage);
+			stageUniformHandles[stage] = handle;
+		}
+
+		return handle;
+	}
+
+	readonly record struct StageUniform(uint PixelProgram, int PixelLocation, uint VertexProgram, int VertexLocation);
+	readonly List<StageUniform> stageUniforms = [];
+	readonly Dictionary<StageUniform, int> stageUniformHandles = [];
+
+	private unsafe int LocateStageUniform(uint shader, ReadOnlySpan<char> name) {
+		if (shader == 0)
+			return -1;
 
 		// Then get shader ID -> shader uniform lookup table
 		if (!locs.TryGetValue(shader, out var lookup))
@@ -1647,11 +1836,21 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public nint GetCurrentProgram() => (nint)CombobulateShadersIfChanged();
-	uint GetCurrentProgramInternal() => CombobulateShadersIfChanged();
 
 	readonly Dictionary<uint, Dictionary<int, float[]>> uniformValues = [];
-	bool UniformChanged(int uniform, ReadOnlySpan<float> values, out uint program) {
-		program = GetCurrentProgramInternal();
+	bool GetStageUniform(int uniform, out StageUniform stage) {
+		if ((uint)uniform >= (uint)stageUniforms.Count) {
+			stage = default;
+			return false;
+		}
+
+		stage = stageUniforms[uniform];
+		return true;
+	}
+
+	bool UniformChanged(uint program, int uniform, ReadOnlySpan<float> values) {
+		if (program == 0 || uniform < 0)
+			return false;
 
 		if (!uniformValues.TryGetValue(program, out var cache))
 			cache = uniformValues[program] = [];
@@ -1667,12 +1866,17 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void SetShaderUniform(int uniform, int integer) {
-		if (!UniformChanged(uniform, [BitConverter.Int32BitsToSingle(integer)], out uint program))
+		if (!GetStageUniform(uniform, out StageUniform stage))
 			return;
+
+		ReadOnlySpan<float> values = [BitConverter.Int32BitsToSingle(integer)];
 #if GL_DEBUG
 		int i = glGetError();
 #endif
-		glProgramUniform1i(program, uniform, integer);
+		if (UniformChanged(stage.PixelProgram, stage.PixelLocation, values))
+			glProgramUniform1i(stage.PixelProgram, stage.PixelLocation, integer);
+		if (UniformChanged(stage.VertexProgram, stage.VertexLocation, values))
+			glProgramUniform1i(stage.VertexProgram, stage.VertexLocation, integer);
 #if GL_DEBUG
 		if ((i = glGetError()) != 0)
 			AssertMsg(false, $"GL error {i}");
@@ -1680,24 +1884,35 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void SetShaderUniform(int uniform, uint integer) {
-		if (!UniformChanged(uniform, [BitConverter.UInt32BitsToSingle(integer)], out uint program))
+		if (!GetStageUniform(uniform, out StageUniform stage))
 			return;
 
-		glProgramUniform1ui(program, uniform, integer);
+		ReadOnlySpan<float> values = [BitConverter.UInt32BitsToSingle(integer)];
+		if (UniformChanged(stage.PixelProgram, stage.PixelLocation, values))
+			glProgramUniform1ui(stage.PixelProgram, stage.PixelLocation, integer);
+		if (UniformChanged(stage.VertexProgram, stage.VertexLocation, values))
+			glProgramUniform1ui(stage.VertexProgram, stage.VertexLocation, integer);
 	}
 
 	public void SetShaderUniform(int uniform, float fl) {
-		if (!UniformChanged(uniform, [fl], out uint program))
+		if (!GetStageUniform(uniform, out StageUniform stage))
 			return;
 
-		glProgramUniform1f(program, uniform, fl);
+		ReadOnlySpan<float> values = [fl];
+		if (UniformChanged(stage.PixelProgram, stage.PixelLocation, values))
+			glProgramUniform1f(stage.PixelProgram, stage.PixelLocation, fl);
+		if (UniformChanged(stage.VertexProgram, stage.VertexLocation, values))
+			glProgramUniform1f(stage.VertexProgram, stage.VertexLocation, fl);
 	}
 
 	public void SetShaderUniform(int uniform, ReadOnlySpan<float> flConsts) {
-		if (!UniformChanged(uniform, flConsts, out uint program))
+		if (!GetStageUniform(uniform, out StageUniform stage))
 			return;
 
-		glProgramUniform1fv(program, uniform, flConsts);
+		if (UniformChanged(stage.PixelProgram, stage.PixelLocation, flConsts))
+			glProgramUniform1fv(stage.PixelProgram, stage.PixelLocation, flConsts);
+		if (UniformChanged(stage.VertexProgram, stage.VertexLocation, flConsts))
+			glProgramUniform1fv(stage.VertexProgram, stage.VertexLocation, flConsts);
 	}
 
 	const int GL_TEXTURE_SRGB_DECODE_EXT = 0x8A48;
@@ -1736,7 +1951,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			ForcedMagFilter = mode;
 	}
 
-	unsafe void ApplyForcedFilter(Sampler sampler, ShaderAPITextureHandle_t textureHandle) {
+	void ApplyForcedFilter(Sampler sampler, ShaderAPITextureHandle_t textureHandle) {
 		int unit = (int)sampler;
 		if (ForcedMinFilter == 0 && ForcedMagFilter == 0) {
 			if (ForcedFilterSamplerBound[unit]) {
@@ -1749,20 +1964,19 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		if (ForcedFilterSamplers[unit] == 0)
 			ForcedFilterSamplers[unit] = glCreateSamplers();
 		uint samplerObject = ForcedFilterSamplers[unit];
-		uint texture = GetGL46Texture(textureHandle);
+		InternalTextureInfo info = GetTexture(textureHandle);
+		ref TextureSamplerParams samplerParams = ref info.GetSamplerParams();
 
-		int value;
-		foreach (int pname in (ReadOnlySpan<int>)[GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TEXTURE_WRAP_R, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER]) {
-			glGetTextureParameteriv(texture, pname, &value);
-			glSamplerParameteri(samplerObject, pname, value);
-		}
-		if (SupportsSRGBDecode()) {
-			glGetTextureParameteriv(texture, GL_TEXTURE_SRGB_DECODE_EXT, &value);
-			glSamplerParameteri(samplerObject, GL_TEXTURE_SRGB_DECODE_EXT, value);
-		}
+		glSamplerParameteri(samplerObject, GL_TEXTURE_WRAP_S, samplerParams.WrapS);
+		glSamplerParameteri(samplerObject, GL_TEXTURE_WRAP_T, samplerParams.WrapT);
+		glSamplerParameteri(samplerObject, GL_TEXTURE_WRAP_R, samplerParams.WrapR);
+		glSamplerParameteri(samplerObject, GL_TEXTURE_MIN_FILTER, samplerParams.MinFilter);
+		glSamplerParameteri(samplerObject, GL_TEXTURE_MAG_FILTER, samplerParams.MagFilter);
+		if (SupportsSRGBDecode())
+			glSamplerParameteri(samplerObject, GL_TEXTURE_SRGB_DECODE_EXT, info.LastSRGBDecode);
 		glSamplerParameterf(samplerObject, GL_TEXTURE_MAX_ANISOTROPY, 1.0f);
 
-		bool mipped = GetTexture(textureHandle).Levels > 1;
+		bool mipped = info.Levels > 1;
 		switch (ForcedMinFilter) {
 			case 0:
 				break;
@@ -1882,7 +2096,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			}
 		}
 		else {
-			for (int i = 0; i < vtf.MipCount(); i++) {
+			int mipCount = Math.Min(vtf.MipCount(), Math.Max(tex.Levels, 1));
+			for (int i = 0; i < mipCount; i++) {
 				info.Level = i;
 				LoadTextureFromVTF(in info, vtf, vtfFrame);
 			}
@@ -1908,7 +2123,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-		int mipCount = vtf.MipCount();
+		int mipCount = Math.Min(vtf.MipCount(), Math.Max(GetTexture(info.TextureHandle).Levels, 1));
 		for (int mip = 0; mip < mipCount; ++mip) {
 			vtf.ComputeMipLevelDimensions(mip, out int w, out int h, out _);
 			for (int face = 0; face < 6; ++face) {
@@ -1920,7 +2135,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 				else {
 					ConvertDataToAcceptableGLFormat(info.SrcFormat, data, out ImageFormat uploadFormat, out Span<byte> convertedData);
 					fixed (byte* bytes = convertedData)
-						glTextureSubImage3D((uint)info.Texture, mip, 0, 0, face, w, h, 1, ImageLoader.GetGLImageUploadFormat(uploadFormat), GL_UNSIGNED_BYTE, bytes);
+						glTextureSubImage3D((uint)info.Texture, mip, 0, 0, face, w, h, 1, ImageLoader.GetGLImageUploadFormat(uploadFormat), ImageLoader.GetGLImageUploadType(uploadFormat), bytes);
 				}
 			}
 		}
@@ -1979,6 +2194,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		bool managed = (creationFlags & CreateTextureFlags.Managed) != 0;
 		bool isDepthBuffer = (creationFlags & CreateTextureFlags.DepthBuffer) != 0;
 		bool isDynamic = (creationFlags & CreateTextureFlags.Dynamic) != 0;
+		if (isRenderTarget && !isDepthBuffer && SupportsSRGBDecode())
+			creationFlags |= CreateTextureFlags.SRGB;
 		bool isSRGB = (creationFlags & CreateTextureFlags.SRGB) != 0;
 
 		InternalTextureFlags setFlags = 0;
@@ -1995,6 +2212,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			texture.Width = width;
 			texture.Height = height;
 			texture.Depth = depth;
+			texture.Levels = mipCount;
 			texture.Count = count;
 			texture.CountIndex = i;
 
@@ -2014,6 +2232,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			else {
 				texture.NumCopies = (byte)copies;
 				texture.TextureCopies = new uint[copies];
+				texture.SamplerParams = new TextureSamplerParams[copies];
 				for (int k = 0; k < copies; k++) {
 					uint glTex = glCreateTexture(texture.DetermineGLObjectType());
 					glTextureStorage2D(glTex, mipCount, ImageLoader.GetGLImageInternalFormat(dstFormat, isSRGB), width, height);
@@ -2075,9 +2294,27 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		return handle;
 	}
 
+	public struct TextureSamplerParams
+	{
+		public int WrapS;
+		public int WrapT;
+		public int WrapR;
+		public int MinFilter;
+		public int MagFilter;
+
+		public static TextureSamplerParams Default => new() {
+			WrapS = GL_REPEAT,
+			WrapT = GL_REPEAT,
+			WrapR = GL_REPEAT,
+			MinFilter = GL_NEAREST_MIPMAP_LINEAR,
+			MagFilter = GL_LINEAR
+		};
+	}
+
 	public class InternalTextureInfo
 	{
 		internal uint[] TextureCopies = [0];
+		internal TextureSamplerParams[] SamplerParams = [TextureSamplerParams.Default];
 		internal readonly uint DepthStencilSurface = 0;
 		internal readonly InlineArray2<int> RenderTargetSurface;
 
@@ -2127,11 +2364,15 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		public void SetTexture(uint tex) {
 			TextureCopies[0] = tex;
+			SamplerParams[0] = TextureSamplerParams.Default;
 		}
 
 		public void SetTexture(int copy, uint tex) {
 			TextureCopies[copy] = tex;
+			SamplerParams[copy] = TextureSamplerParams.Default;
 		}
+
+		public ref TextureSamplerParams GetSamplerParams() => ref SamplerParams[NumCopies == 1 ? 0 : CurrentCopy];
 
 		internal nuint GetMemUsage() {
 			return SizeBytes;
@@ -2308,12 +2549,12 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, srcStride / srcFormat.SizeInBytes());
 		ConvertDataToAcceptableGLFormat(srcFormat, imageData, out srcFormat, out Span<byte> convertedData);
 		fixed (byte* data = convertedData)
-			glTextureSubImage2D((uint)info.Texture, mip, xOffset, yOffset, width >> mip, height >> mip, ImageLoader.GetGLImageUploadFormat(srcFormat), GL_UNSIGNED_BYTE, data);
+			glTextureSubImage2D((uint)info.Texture, mip, xOffset, yOffset, width >> mip, height >> mip, ImageLoader.GetGLImageUploadFormat(srcFormat), ImageLoader.GetGLImageUploadType(srcFormat), data);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 		var err = glGetError();
 		// System.Diagnostics.Debug.Assert(err == 0);
 		if (err != 0)
-			Warning($"glTextureSubImage2D error: {err}\n");
+			Warning($"glTextureSubImage2D error: {err} (blit tex {info.Texture} mip {mip} rect {xOffset},{yOffset} {width >> mip}x{height >> mip}, src {srcFormat} stride {srcStride})\n");
 	}
 
 	public void SetModifyTexture(uint textureID) {
@@ -2332,12 +2573,17 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, srcStride / srcFormat.SizeInBytes());
 		ConvertDataToAcceptableGLFormat(srcFormat, imageData, out srcFormat, out Span<byte> convertedData);
 		fixed (byte* data = convertedData)
-			glTextureSubImage2D(GetModifyTexture(), mip, x, y, width >> mip, height >> mip, ImageLoader.GetGLImageUploadFormat(srcFormat), GL_UNSIGNED_BYTE, data);
+			glTextureSubImage2D(GetModifyTexture(), mip, x, y, Math.Max(width >> mip, 1), Math.Max(height >> mip, 1), ImageLoader.GetGLImageUploadFormat(srcFormat), ImageLoader.GetGLImageUploadType(srcFormat), data);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 		var err = glGetError();
-		// System.Diagnostics.Debug.Assert(err == 0);
-		if (err != 0)
-			Warning($"glTextureSubImage2D error: {err}\n");
+		// Assert(err == 0);
+		if (err != 0) {
+			InternalTextureInfo tex = GetTexture(ModifyTextureHandle);
+			int levels = 0;
+			glGetTextureParameteriv(GetModifyTexture(), GL_TEXTURE_IMMUTABLE_LEVELS, &levels);
+			Warning($"glTextureSubImage2D error: {err} ('{tex.DebugName.String()}' {tex.Width}x{tex.Height} {tex.Format} levels {levels}, mip {mip} rect {x},{y} {width >> mip}x{height >> mip}, src {srcFormat} stride {srcStride})\n");
+			// Console.WriteLine(Environment.StackTrace);
+		}
 	}
 
 	readonly ThreadLocal<byte[]> tempTransformBuffers = new ThreadLocal<byte[]>(() => new byte[1024 * 1024]);
@@ -2432,6 +2678,27 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	GraphicsBoardState lastBoardState;
 	bool boardStateValid;
 	public bool SetBoardState(in GraphicsBoardState state) {
+		if ((OverrideBlendEnabled && OverrideBlendColor) || (OverrideBlendAlphaEnabled && OverrideBlendAlpha)) {
+			GraphicsBoardState overridden = state;
+			if (OverrideBlendEnabled && OverrideBlendColor) {
+				overridden.Blending = true;
+				overridden.SourceBlend = OverriddenSrcBlend;
+				overridden.DestinationBlend = OverriddenDestBlend;
+				overridden.BlendOperation = OverriddenBlendOp;
+			}
+			if (OverrideBlendAlphaEnabled && OverrideBlendAlpha) {
+				overridden.Blending = true;
+				overridden.AlphaSeparateBlend = true;
+				overridden.AlphaSourceBlend = OverriddenSrcBlendAlpha;
+				overridden.AlphaDestinationBlend = OverriddenDestBlendAlpha;
+				overridden.AlphaBlendOperation = OverriddenBlendOpAlpha;
+			}
+			return SetBoardStateInternal(in overridden);
+		}
+		return SetBoardStateInternal(in state);
+	}
+
+	bool SetBoardStateInternal(in GraphicsBoardState state) {
 		ulong currHash = state.Hash();
 		if (currHash != lastBoardUploadHash) {
 			ref GraphicsBoardState last = ref lastBoardState;
@@ -2456,8 +2723,10 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			}
 
 			bool alphaWrite = OverrideAlphaWrite ? OverriddenAlphaWriteValue : state.AlphaWrite;
-			if (force || state.ColorWrite != last.ColorWrite || alphaWrite != AppliedAlphaWrite) {
-				glColorMask(state.ColorWrite, state.ColorWrite, state.ColorWrite, alphaWrite);
+			bool colorWrite = OverrideColorWrite ? OverriddenColorWriteValue : state.ColorWrite;
+			if (force || colorWrite != AppliedColorWrite || alphaWrite != AppliedAlphaWrite) {
+				glColorMask(colorWrite, colorWrite, colorWrite, alphaWrite);
+				AppliedColorWrite = colorWrite;
 				AppliedAlphaWrite = alphaWrite;
 			}
 
@@ -2593,12 +2862,19 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		int srcY0 = srcHeight - (src.Y + src.Height);
 		int dstY0 = tex.Height - (dst.Y + dst.Height);
 
+		bool srgbWriteEnabled = !boardStateValid || lastBoardState.SRGBWriteEnable;
+		if (srgbWriteEnabled)
+			glToggle(GL_FRAMEBUFFER_SRGB, false);
+
 		glNamedFramebufferTexture(copyFBO, GL_COLOR_ATTACHMENT0, GetGL46Texture(textureHandle), 0);
 		glBlitNamedFramebuffer(UsingTextureRenderTarget ? renderFBO : 0, copyFBO,
 			src.X, srcY0, src.X + src.Width, srcY0 + src.Height,
 			dst.X, dstY0, dst.X + dst.Width, dstY0 + dst.Height,
 			GL_COLOR_BUFFER_BIT, GL_LINEAR);
 		glNamedFramebufferTexture(copyFBO, GL_COLOR_ATTACHMENT0, 0, 0);
+
+		if (boardStateValid && lastBoardState.SRGBWriteEnable)
+			glToggle(GL_FRAMEBUFFER_SRGB, true);
 	}
 
 	public IMesh CreateStaticMesh(VertexFormat format, ReadOnlySpan<char> textureGroup, IMaterial? material) {
@@ -2625,58 +2901,73 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			return;
 		}
 
+		int wrap;
 		switch (wrapMode) {
 			case TexWrapMode.Clamp:
-				glTextureParameteri(GetModifyTexture(), coordinate, GL_CLAMP_TO_EDGE);
+				wrap = GL_CLAMP_TO_EDGE;
 				break;
 			case TexWrapMode.Repeat:
-				glTextureParameteri(GetModifyTexture(), coordinate, GL_REPEAT);
+				wrap = GL_REPEAT;
 				break;
 			case TexWrapMode.Border:
-				glTextureParameteri(GetModifyTexture(), coordinate, GL_CLAMP_TO_BORDER);
+				wrap = GL_CLAMP_TO_BORDER;
 				break;
 			default:
 				Warning("ShaderAPIGl46.TexWrap: unknown wrapMode\n");
-				break;
+				return;
+		}
+
+		glTextureParameteri(GetModifyTexture(), coordinate, wrap);
+		ref TextureSamplerParams samplerParams = ref GetTexture(ModifyTextureHandle).GetSamplerParams();
+		switch (coord) {
+			case TexCoordComponent.S: samplerParams.WrapS = wrap; break;
+			case TexCoordComponent.T: samplerParams.WrapT = wrap; break;
+			case TexCoordComponent.U: samplerParams.WrapR = wrap; break;
 		}
 	}
 	IMaterialSystemHardwareConfig HardwareConfig = Singleton<IMaterialSystemHardwareConfig>();
 	public void TexMinFilter(TexFilterMode mode) {
+		int filter;
 		switch (mode) {
 			case TexFilterMode.Nearest:
-				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				filter = GL_NEAREST;
 				break;
 			case TexFilterMode.Linear:
-				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				filter = GL_LINEAR;
 				break;
 			case TexFilterMode.NearestMipmapNearest:
-				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+				filter = GL_NEAREST_MIPMAP_NEAREST;
 				break;
 			case TexFilterMode.LinearMipmapNearest:
-				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+				filter = GL_LINEAR_MIPMAP_NEAREST;
 				break;
 			case TexFilterMode.NearestMipmapLinear:
-				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+				filter = GL_NEAREST_MIPMAP_LINEAR;
 				break;
 			case TexFilterMode.LinearMipmapLinear:
-				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+				filter = GL_LINEAR_MIPMAP_LINEAR;
 				break;
 			case TexFilterMode.Anisotropic:
 				glTextureParameterf(GetModifyTexture(), GL_TEXTURE_MAX_ANISOTROPY, AnisotropicLevel);
-				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+				filter = GL_LINEAR_MIPMAP_LINEAR;
 				break;
 			default:
-				break;
+				return;
 		}
+
+		glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MIN_FILTER, filter);
+		GetTexture(ModifyTextureHandle).GetSamplerParams().MinFilter = filter;
 	}
 
 	public void TexMagFilter(TexFilterMode mode) {
 		switch (mode) {
 			case TexFilterMode.Nearest:
 				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				GetTexture(ModifyTextureHandle).GetSamplerParams().MagFilter = GL_NEAREST;
 				break;
 			case TexFilterMode.Linear:
 				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				GetTexture(ModifyTextureHandle).GetSamplerParams().MagFilter = GL_LINEAR;
 				break;
 			case TexFilterMode.NearestMipmapNearest:
 				Warning("ShaderAPIGl46.TexMagFilter: TexFilterMode.NearestMipmapNearest is invalid\n");
@@ -2692,6 +2983,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 				break;
 			case TexFilterMode.Anisotropic:
 				glTextureParameteri(GetModifyTexture(), GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				GetTexture(ModifyTextureHandle).GetSamplerParams().MagFilter = GL_LINEAR;
 				glTextureParameterf(GetModifyTexture(), GL_TEXTURE_MAX_ANISOTROPY_EXT, AnisotropicLevel);
 				break;
 			default:
@@ -2768,7 +3060,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		Memory<byte> buffer = GetTempLockBuffer(info.Format, width, height);
 		fixed (byte* data = buffer.Span) {
-			glGetTextureSubImage(GetModifyTexture(), level, xOffset, yOffset, 0, width, height, 1, GL_RGBA, GL_UNSIGNED_BYTE, buffer.Span.Length, data);
+			glGetTextureSubImage(GetModifyTexture(), level, xOffset, yOffset, 0, width, height, 1, ImageLoader.GetGLImageUploadFormat(info.Format), ImageLoader.GetGLImageUploadType(info.Format), buffer.Span.Length, data);
 		}
 		writer.SetPixelMemory(info.Format, buffer.Span, width * ImageLoader.SizeInBytes(info.Format));
 		return true;
@@ -2791,7 +3083,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		Memory<byte> buffer = GetTempLockBuffer(info.Format, width, height);
 		fixed (byte* data = buffer.Span) {
-			glGetTextureSubImage(GetModifyTexture(), level, xOffset, yOffset, 0, width, height, 1, GL_RGBA, GL_UNSIGNED_BYTE, buffer.Span.Length, data);
+			glGetTextureSubImage(GetModifyTexture(), level, xOffset, yOffset, 0, width, height, 1, ImageLoader.GetGLImageUploadFormat(info.Format), ImageLoader.GetGLImageUploadType(info.Format), buffer.Span.Length, data);
 		}
 		writer.SetPixelMemory(info.Format, buffer, width * ImageLoader.SizeInBytes(info.Format));
 		return true;
@@ -2800,7 +3092,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	public unsafe void TexUnlock() {
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 		fixed (byte* data = lockdata)
-			glTextureSubImage2D(GetGL46Texture(Lock.Handle), Lock.Mip, Lock.X, Lock.Y, Lock.W, Lock.H, ImageLoader.GetGLImageUploadFormat(Lock.Format), GL_UNSIGNED_BYTE, data);
+			glTextureSubImage2D(GetGL46Texture(Lock.Handle), Lock.Mip, Lock.X, Lock.Y, Lock.W, Lock.H, ImageLoader.GetGLImageUploadFormat(Lock.Format), ImageLoader.GetGLImageUploadType(Lock.Format), data);
 		Lock = default;
 	}
 
@@ -2831,8 +3123,17 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public int GetPixelFogCombo() {
-		// throw new NotImplementedException();
-		return (int)MaterialFogMode.None; // TODO!
+		if ((SceneFogMode != MaterialFogMode.None) && ShouldUsePixelFogForMode(SceneFogMode))
+			return (int)SceneFogMode - 1;
+		else
+			return (int)MaterialFogMode.None;
+	}
+
+	public int GetPixelFogCombo1(bool supportsRadial) {
+		if (supportsRadial && SceneFogRadialValue && SceneFogMode == MaterialFogMode.Linear)
+			return 2;
+
+		return GetPixelFogCombo();
 	}
 
 	public bool ShouldWriteDepthToDestAlpha() =>
@@ -2909,7 +3210,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 					case CommandBufferCommand.SetPixelShaderFogParams: {
 							int reg = MemoryMarshal.Read<int>(cmdBuf[(offset + 4)..]);
-							// SetPixelShaderFogParams(reg);
+							SetPixelShaderFogParams(reg);
 							offset += 8;
 							break;
 						}
@@ -3030,12 +3331,20 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		return fLuminance / 6.0f;
 	}
 
+	int OwnerThreadID;
+	internal bool IsOwnerThread() => OwnerThreadID == ThreadGetCurrentId();
+
 	public void AcquireThreadOwnership() {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (OwnerThreadID == ThreadGetCurrentId())
+			return;
+
+		Device?.MakeCurrent();
+		OwnerThreadID = ThreadGetCurrentId();
 	}
 
 	public void BeginOcclusionQueryDrawing(ShaderAPIOcclusionQuery_t query) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		FlushBufferedPrimitives();
+		glBeginQuery(GL_SAMPLES_PASSED, (uint)query);
 	}
 
 	public void BeginPIXEvent(Color color, ReadOnlySpan<char> name) {
@@ -3070,8 +3379,9 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
-	public void ComputeVertexDescription(Span<byte> buffer, VertexFormat vertexFormat, ref MeshDesc desc) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	public unsafe void ComputeVertexDescription(Span<byte> buffer, VertexFormat vertexFormat, ref MeshDesc desc) {
+		fixed (byte* memory = buffer)
+			VertexBufferGl46.ComputeVertexDescription(memory, vertexFormat, ref desc.Vertex);
 	}
 
 	public void CopyRenderTargetToTexture(ShaderAPITextureHandle_t textureHandle) {
@@ -3082,20 +3392,30 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
-	public ShaderAPIOcclusionQuery_t CreateOcclusionQueryObject() {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	public unsafe ShaderAPIOcclusionQuery_t CreateOcclusionQueryObject() {
+		uint query;
+		glCreateQueries(GL_SAMPLES_PASSED, 1, &query);
+		return (ShaderAPIOcclusionQuery_t)query;
 	}
 
+	MaterialCullMode DesiredCullMode = MaterialCullMode.CounterClockwise;
+
 	public void CullMode(MaterialCullMode cullMode) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (DesiredCullMode == cullMode)
+			return;
+
+		FlushBufferedPrimitives();
+		DesiredCullMode = cullMode;
+		glFrontFace(cullMode == MaterialCullMode.Clockwise ? GL_CCW : GL_CW);
 	}
 
 	public void DXSupportLevelChanged() {
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
-	public void DestroyOcclusionQueryObject(ShaderAPIOcclusionQuery_t query) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	public unsafe void DestroyOcclusionQueryObject(ShaderAPIOcclusionQuery_t query) {
+		uint id = (uint)query;
+		glDeleteQueries(1, &id);
 	}
 
 	public void DestroyVertexBuffers(bool exitingLevel = false) {
@@ -3111,7 +3431,18 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void EnableClipPlane(int index, bool bEnable) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		Assert(index < Gl46.HardwareConfig.MAXUSERCLIPPLANES && index >= 0);
+		if (((UserClipPlaneEnabled & (1 << index)) != 0) != bEnable) {
+			FlushBufferedPrimitives();
+			if (bEnable) {
+				UserClipPlaneEnabled |= 1 << index;
+				glEnable(GL_CLIP_DISTANCE0 + index);
+			}
+			else {
+				UserClipPlaneEnabled &= ~(1 << index);
+				glDisable(GL_CLIP_DISTANCE0 + index);
+			}
+		}
 	}
 
 	public void EnableFastClip(bool enable) {
@@ -3122,16 +3453,15 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
-	public void EnableShaderShaderMutex(bool enable) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
-	}
+	public void EnableShaderShaderMutex(bool enable) { }
 
 	public void EnableUserClipTransformOverride(bool enable) {
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
 	public void EndOcclusionQueryDrawing(ShaderAPIOcclusionQuery_t query) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		FlushBufferedPrimitives();
+		glEndQuery(GL_SAMPLES_PASSED);
 	}
 
 	public void EndPIXEvent() {
@@ -3147,15 +3477,32 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void FogEnd(float end) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (end != FogEndValue) {
+			FlushBufferedPrimitives();
+
+			VertexShaderFogParams[1] = end;
+			UpdateVertexShaderFogParams();
+			FogEndValue = end;
+		}
 	}
 
 	public void FogMaxDensity(float maxDensity) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (maxDensity != FogMaxDensityValue) {
+			FlushBufferedPrimitives();
+
+			FogMaxDensityValue = maxDensity;
+			UpdateVertexShaderFogParams();
+		}
 	}
 
 	public void FogStart(float start) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (start != FogStartValue) {
+			FlushBufferedPrimitives();
+
+			VertexShaderFogParams[0] = start;
+			UpdateVertexShaderFogParams();
+			FogStartValue = start;
+		}
 	}
 
 	public void ForceDepthFuncEquals(bool bEnable) {
@@ -3166,12 +3513,12 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
-	public float GammaToLinear_HardwareSpecific(float gamma) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
-	}
+	public float GammaToLinear_HardwareSpecific(float gamma) => MathLib.SrgbGammaToLinear(gamma);
 
 	public void GetFogDistances(out float start, out float end, out float fogZ) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		start = FogStartValue;
+		end = FogEndValue;
+		fogZ = FogZ;
 	}
 
 	public void GetMaxToRender(IMesh mesh, bool maxUntilFlush, out int maxVerts, out int maxIndices) {
@@ -3183,7 +3530,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void GetSceneFogColor(out Color rgb) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		rgb = new Color(SceneFogColor[0], SceneFogColor[1], SceneFogColor[2], 255);
 	}
 
 	public void HandleDeviceLost() {
@@ -3202,8 +3549,20 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
-	public int OcclusionQuery_GetNumPixelsRendered(ShaderAPIOcclusionQuery_t query, bool flush = false) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+	public unsafe int OcclusionQuery_GetNumPixelsRendered(ShaderAPIOcclusionQuery_t query, bool flush = false) {
+		int available;
+		glGetQueryObjectiv((uint)query, GL_QUERY_RESULT_AVAILABLE, &available);
+		if (available == 0) {
+			if (flush)
+				glFlush();
+			return IShaderAPI.OCCLUSION_QUERY_RESULT_PENDING;
+		}
+
+		uint pixels;
+		glGetQueryObjectuiv((uint)query, GL_QUERY_RESULT, &pixels);
+		if ((pixels & 0x80000000) != 0)
+			pixels = 0;
+		return (int)pixels;
 	}
 
 	bool OverrideAlphaWrite;
@@ -3219,16 +3578,49 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		}
 	}
 
+	bool OverrideBlendEnabled;
+	bool OverrideBlendColor;
+	ShaderBlendFactor OverriddenSrcBlend;
+	ShaderBlendFactor OverriddenDestBlend;
+	ShaderBlendOp OverriddenBlendOp;
+
+	bool OverrideBlendAlphaEnabled;
+	bool OverrideBlendAlpha;
+	ShaderBlendFactor OverriddenSrcBlendAlpha;
+	ShaderBlendFactor OverriddenDestBlendAlpha;
+	ShaderBlendOp OverriddenBlendOpAlpha;
+
 	public void OverrideBlend(bool overrideEnable, bool useSeparateAlpha, int srcBlend, int destBlend, int blendFunc) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		FlushBufferedPrimitives();
+		OverrideBlendEnabled = overrideEnable;
+		OverrideBlendColor = useSeparateAlpha;
+		OverriddenSrcBlend = (ShaderBlendFactor)srcBlend;
+		OverriddenDestBlend = (ShaderBlendFactor)destBlend;
+		OverriddenBlendOp = (ShaderBlendOp)blendFunc;
+		lastBoardUploadHash = 0;
 	}
 
 	public void OverrideBlendSeparateAlpha(bool overrideEnable, bool useSeparateAlpha, int srcBlend, int destBlend, int blendFunc) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		FlushBufferedPrimitives();
+		OverrideBlendAlphaEnabled = overrideEnable;
+		OverrideBlendAlpha = useSeparateAlpha;
+		OverriddenSrcBlendAlpha = (ShaderBlendFactor)srcBlend;
+		OverriddenDestBlendAlpha = (ShaderBlendFactor)destBlend;
+		OverriddenBlendOpAlpha = (ShaderBlendOp)blendFunc;
+		lastBoardUploadHash = 0;
 	}
 
+	bool OverrideColorWrite;
+	bool OverriddenColorWriteValue;
+	bool AppliedColorWrite;
+
 	public void OverrideColorWriteEnable(bool overrideEnable, bool colorWriteEnable) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (overrideEnable != OverrideColorWrite || colorWriteEnable != OverriddenColorWriteValue) {
+			FlushBufferedPrimitives();
+			OverrideColorWrite = overrideEnable;
+			OverriddenColorWriteValue = colorWriteEnable;
+			lastBoardUploadHash = 0;
+		}
 	}
 
 	bool OverrideDepth;
@@ -3301,15 +3693,31 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void ReleaseThreadOwnership() {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (OwnerThreadID != ThreadGetCurrentId())
+			return;
+
+		Device?.ReleaseCurrent();
+		OwnerThreadID = 0;
 	}
 
 	public void SceneFogColor3ub(byte r, byte g, byte b) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (SceneFogColor[0] != r || SceneFogColor[1] != g || SceneFogColor[2] != b) {
+			FlushBufferedPrimitives();
+			SceneFogColor[0] = r;
+			SceneFogColor[1] = g;
+			SceneFogColor[2] = b;
+
+			ApplyCurrentShadowFogMode(true);
+		}
 	}
 
 	void IShaderAPI.SceneFogMode(MaterialFogMode fogMode) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (SceneFogMode != fogMode) {
+			FlushBufferedPrimitives();
+			SceneFogMode = fogMode;
+
+			ApplyCurrentShadowFogMode(true);
+		}
 	}
 
 	public void SelectionBuffer(Span<uint> buffer) {
@@ -3330,12 +3738,19 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void SetClipPlane(int index, ReadOnlySpan<float> plane) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		Assert(index < Gl46.HardwareConfig.MAXUSERCLIPPLANES && index >= 0);
+
+		Vector4 worldPlane = new(plane[0], plane[1], plane[2], -plane[3]);
+
+		if (worldPlane != UserClipPlaneWorld[index]) {
+			FlushBufferedPrimitives();
+
+			UserClipPlaneChanged |= 1 << index;
+			UserClipPlaneWorld[index] = worldPlane;
+		}
 	}
 
-	public void SetDisallowAccess(bool access) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
-	}
+	public void SetDisallowAccess(bool access) { }
 
 	public void SetFastClipPlane(ReadOnlySpan<float> plane) {
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
@@ -3350,7 +3765,11 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void SetFogZ(float fogZ) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (fogZ != FogZ) {
+			FlushBufferedPrimitives();
+			FogZ = fogZ;
+			UpdateVertexShaderFogParams();
+		}
 	}
 
 	public void SetFullScreenTextureHandle(ShaderAPITextureHandle_t h) {
@@ -3385,13 +3804,9 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
-	public void ShaderLock() {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
-	}
+	public void ShaderLock() { }
 
-	public void ShaderUnlock() {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
-	}
+	public void ShaderUnlock() { }
 
 	public bool SupportsCSAAMode(int numSamples, int qualityLevel) {
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
@@ -3458,7 +3873,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public double CurrentTime() {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		return Platform.Time;
 	}
 
 	public void DisableTextureTransform(TextureStage textureStage) {
@@ -3520,7 +3935,9 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void GetSceneFogColor(Span<byte> rgb) {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		rgb[0] = SceneFogColor[0];
+		rgb[1] = SceneFogColor[1];
+		rgb[2] = SceneFogColor[2];
 	}
 
 	public void GetStandardTextureDimensions(out int width, out int height, StandardTextureId id) {
@@ -3569,7 +3986,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
 	}
 
-	public void PushDeformation(in DeformationBase deformation ) {
+	public void PushDeformation(in DeformationBase deformation) {
 		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
 	}
 
@@ -3585,11 +4002,11 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
 	}
 
-	public void SetBooleanPixelShaderConstant(int var, ReadOnlySpan<bool> vec, bool force = false ) {
+	public void SetBooleanPixelShaderConstant(int var, ReadOnlySpan<bool> vec, bool force = false) {
 		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
 	}
 
-	public void SetBooleanVertexShaderConstant(int var, ReadOnlySpan<bool> vec, bool force = false ) {
+	public void SetBooleanVertexShaderConstant(int var, ReadOnlySpan<bool> vec, bool force = false) {
 		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
 	}
 
@@ -3611,11 +4028,11 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			IntRenderingParameters[parmNumber] = value;
 	}
 
-	public void SetIntegerPixelShaderConstant(int var, ReadOnlySpan<int> vec, bool force = false ) {
+	public void SetIntegerPixelShaderConstant(int var, ReadOnlySpan<int> vec, bool force = false) {
 		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
 	}
 
-	public void SetIntegerVertexShaderConstant(int var, ReadOnlySpan<int> vec, bool force = false ) {
+	public void SetIntegerVertexShaderConstant(int var, ReadOnlySpan<int> vec, bool force = false) {
 		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
 	}
 
@@ -3624,7 +4041,36 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void SetPixelShaderFogParams(int reg) {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		ShaderFogMode fogMode = currentShadow?.FogModeState ?? ShaderFogMode.Disabled;
+		Span<float> fogParams = stackalloc float[4];
+
+		if ((GetPixelFogMode() != MaterialFogMode.None) && (fogMode != ShaderFogMode.Disabled)) {
+			float ooFogRange = 1.0f;
+
+			float start = VertexShaderFogParams[0];
+			float end = VertexShaderFogParams[1];
+
+			if (end != start)
+				ooFogRange = 1.0f / (end - start);
+
+			fogParams[0] = start * ooFogRange;
+			fogParams[1] = FogZ;
+			fogParams[2] = Math.Clamp(FogMaxDensityValue, 0.0f, 1.0f);
+			fogParams[3] = ooFogRange;
+
+			if (GetPixelFogMode() == MaterialFogMode.LinearBelowFogZ) {
+				fogParams[0] = 0.0f;
+				fogParams[2] = 1.0f;
+			}
+		}
+		else {
+			fogParams[0] = 0.0f;
+			fogParams[1] = FogZ;
+			fogParams[2] = 1.0f;
+			fogParams[3] = 0.0f;
+		}
+
+		SetPixelShaderConstant(reg, fogParams);
 	}
 
 	public void SetTextureTransformDimension(TextureStage textureStage, int dimension, bool projected) {

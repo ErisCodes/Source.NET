@@ -103,6 +103,12 @@ public class ConPanel : BasePanel
 	}
 
 	public override void PaintBackground() {
+#if !GMOD_DLL
+		DrawVersion();
+#endif
+	}
+
+	public void DrawVersion() {
 		if (!Con.IsVisible())
 			return;
 
@@ -474,7 +480,12 @@ public class NotifyOverlayPanel : Panel
 	public override void OnThink() => Surface.MovePopupToFront(this);
 
 	public override void Paint() {
-		if (ClientDLL.ShouldDrawDropdownConsole() && ConPanel.Instance != null)
+		if (ConPanel.Instance == null)
+			return;
+
+		ConPanel.Instance.DrawVersion();
+
+		if (ClientDLL.ShouldDrawDropdownConsole())
 			ConPanel.Instance.DrawNotify();
 	}
 
@@ -698,18 +709,12 @@ public class Con(
 	}
 	public static void NPrintF(int idx, ReadOnlySpan<char> text) {
 #if !SWDS
-		if (IsPC())
-			conPanel!.Con_NPrintf(idx, text);
-		else
-			PrintF(text);
+		conPanel!.Con_NPrintf(idx, text);
 #endif
 	}
 	public static void NXPrintF(in Con_NPrint_s info, ReadOnlySpan<char> text) {
 #if !SWDS
-		if (IsPC())
-			conPanel!.Con_NXPrintf(in info, text);
-		else
-			PrintF(text);
+		conPanel!.Con_NXPrintf(in info, text);
 #endif
 	}
 

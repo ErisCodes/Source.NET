@@ -65,6 +65,8 @@ public static class BaseEntityConstants
 #else
 	public static readonly ConVar hl2_episodic = new("hl2_episodic", "0", FCvar.Replicated);
 #endif
+	public static readonly ConVar ai_shot_bias_min = new("ai_shot_bias_min", "-1.0", FCvar.Replicated);
+	public static readonly ConVar ai_shot_bias_max = new("ai_shot_bias_max", "1.0", FCvar.Replicated);
 
 	public const int NUM_PARENTATTACHMENT_BITS = 8; // < gmod increased 6 . 8
 	public const int VPHYSICS_MAX_OBJECT_LIST_COUNT = 1024;
@@ -85,7 +87,7 @@ public enum EntityCapabilities : uint
 	UseInRadius = 0x00000200,
 	SaveNonNetworkable = 0x00000400,
 	Master = 0x10000000,
-	WCEditPosition = 0x40000000,
+	WorldcraftEditPosition = 0x40000000, // guessing this is referring to worldcraft/hammer with WC
 	DontSave = 0x80000000
 }
 
@@ -106,16 +108,6 @@ public partial class
 {
 	public const int BASEENTITY_MSG_REMOVE_DECALS = 1;
 
-	// TODO FIXME REVIEW: SHOULD THIS ACTUALLY GO HERE?
-	public static Table DT_ScriptedEntity = new(nameof(DT_ScriptedEntity), [
-#if CLIENT_DLL
-		RecvPropString(FIELD.OF(nameof(ScriptName)))
-#elif GAME_DLL
-		SendPropString(FIELD.OF(nameof(ScriptName)))
-#endif
-	]);
-	[NetworkName("m_strScriptName")]
-	public InlineArrayMaxPath<char> ScriptName;
 
 	public bool IsAnimatedEveryTick() => AnimatedEveryTick;
 	public bool IsSimulatedEveryTick() => SimulatedEveryTick;
@@ -193,8 +185,8 @@ public partial class
 
 	public bool IsAlive() => LifeState == (int)Source.LifeState.Alive;
 
-	[NetworkName("m_bIsPlayerSimulated")]
-	protected bool b_IsPlayerSimulated;
+	[NetworkVar("m_bIsPlayerSimulated")]
+	protected partial bool b_IsPlayerSimulated { get; set; }
 	public bool IsPlayerSimulated() => b_IsPlayerSimulated;
 
 	public void AddFlag(EntityFlags flag) => flags |= (int)flag;
@@ -359,10 +351,39 @@ public partial class
 	}
 
 	public void VPhysicsInitShadow(bool allowPhysicsMovement, bool allowPhysicsRotation, ref Solid solid) {
+#if !CLIENT_DLL
+		if (!VPhysicsInitSetup())
+			return;
 
+		if (GetSolid() == SolidType.None)
+			return;
+
+		Vector3 origin = GetAbsOrigin();
+		QAngle angles = GetAbsAngles();
+		IPhysicsObject? physicsObject;
+
+		if (GetSolid() == SolidType.BBox) {
+			float radius = 0.25f - DIST_EPSILON;
+			Vector3 mins = WorldAlignMins() + new Vector3(radius, radius, radius);
+			Vector3 maxs = WorldAlignMaxs() - new Vector3(radius, radius, radius);
+			physicsObject = PhysModelCreateBox(this, mins, maxs, origin, false);
+			angles = vec3_angle;
+		}
+		else if (GetSolid() == SolidType.OBB)
+			physicsObject = PhysModelCreateOBB(this, CollisionProp().OBBMins(), CollisionProp().OBBMaxs(), origin, angles, false);
+		else
+			physicsObject = PhysModelCreate(this, GetModelIndex(), origin, angles, ref solid);
+
+		if (physicsObject == null)
+			return;
+
+		VPhysicsSetObject(physicsObject);
+		physicsObject.SetShadow(1e4f, 1e4f, allowPhysicsMovement, allowPhysicsRotation);
+		physicsObject.UpdateShadow(origin, angles, false, 0);
+#endif
 	}
 	public void VPhysicsInitShadow(bool allowPhysicsMovement, bool allowPhysicsRotation) => VPhysicsInitShadow(allowPhysicsMovement, allowPhysicsRotation, ref Unsafe.NullRef<Solid>());
-	public void VPhysicsDestroyObject() {
+	public virtual void VPhysicsDestroyObject() {
 		if (PhysicsObject != null) {
 #if !CLIENT_DLL
 			PhysRemoveShadow(this);
@@ -646,7 +667,7 @@ public partial class
 		Effects |= (int)effects;
 		if ((effects & EntityEffects.NoDraw) != 0) {
 #if !CLIENT_DLL
-			// DispatchUpdateTransmitState();
+			DispatchUpdateTransmitState();
 #else
 			UpdateVisibility();
 #endif
@@ -664,7 +685,7 @@ public partial class
 		if ((effects & EntityEffects.NoDraw) != 0) {
 #if !CLIENT_DLL
 			NetworkProp().MarkPVSInformationDirty();
-			// DispatchUpdateTransmitState();
+			DispatchUpdateTransmitState();
 #else
 			UpdateVisibility();
 #endif

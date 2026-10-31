@@ -5,16 +5,25 @@ using Source.Common;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
-using FIELD = Source.FIELD<Game.Client.C_BaseAnimatingOverlay>;
-
 namespace Game.Client;
 
 [NetworkName("CBaseAnimatingOverlay")]
 public partial class C_BaseAnimatingOverlay : C_BaseAnimating
 {
-	public static readonly RecvTable DT_OverlayVars = new(nameof(DT_OverlayVars), [
-		RecvPropList<AnimationLayerRef>(FIELD.OF_LIST(nameof(AnimOverlay), MAX_OVERLAYS), ResizeAnimationLayerCallback, RecvPropDataTable(null!, AnimationLayerRef.DT_Animationlayer))
-	]);
+	[NetworkTable("DT_OverlayVars")]
+	public static readonly NetworkProp[] OverlayVarsProps = [
+		new(nameof(AnimOverlay)) { Encoding = NetEncoding.List, Count = MAX_OVERLAYS, DataTable = "DT_Animationlayer", Proxy = typeof(AnimOverlayProxy) },
+	];
+
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(OverlayVarsProps)) { Name = "overlay_vars" },
+	];
+
+	public static class AnimOverlayProxy
+	{
+		public static void Resize(object instance, object list, int len) => ResizeAnimationLayerCallback(instance, list, len);
+	}
 
 	public C_BaseAnimatingOverlay() : base() {
 		for (int i = 0; i < MAX_OVERLAYS; i++) {
@@ -71,15 +80,10 @@ public partial class C_BaseAnimatingOverlay : C_BaseAnimating
 		}
 	}
 
-
-	public static readonly RecvTable DT_BaseAnimatingOverlay = new(DT_BaseAnimating, [
-		RecvPropDataTable("overlay_vars", DT_OverlayVars)
-	]); public static readonly new ClientClass ClientClass = new ClientClass(null, null, DT_BaseAnimatingOverlay);
-
-	[NetworkName("m_AnimOverlay")]
+	[NetworkVar("m_AnimOverlay")]
 	readonly List<AnimationLayerRef> AnimOverlay = [];
 	readonly List<InterpolatedVar<AnimationLayer>> iv_AnimOverlay = [];
-	readonly float[] OverlayPrevEventCycle = new float[MAX_OVERLAYS];
+	public readonly float[] OverlayPrevEventCycle = new float[MAX_OVERLAYS];
 
 	public AnimationLayerRef GetAnimOverlay(int i) => AnimOverlay[i];
 
@@ -184,7 +188,7 @@ public partial class C_BaseAnimatingOverlay : C_BaseAnimating
 					if (fWeight > 1)
 						fWeight = 1;
 
-					boneSetup.AccumulatePose(pos, q, AnimOverlay[i].Sequence, fCycle, fWeight, currentTime, null);
+					boneSetup.AccumulatePose(pos, q, AnimOverlay[i].Sequence, fCycle, fWeight, currentTime, Ik);
 				}
 			}
 		}
@@ -199,17 +203,5 @@ public partial class C_BaseAnimatingOverlay : C_BaseAnimating
 			AnimOverlay[i].Order = MAX_OVERLAYS;
 		}
 		return hdr;
-	}
-
-	public void EstimateAbsVelocity(out Vector3 vel) {
-		if (this == C_BasePlayer.GetLocalPlayer()) {
-			// This is interpolated and networked
-			vel = GetAbsVelocity();
-			return;
-		}
-		vel = default;
-		using InterpolationContext context = new();
-		InterpolationContext.EnableExtrapolation(true);
-		IV_Origin.GetDerivative_SmoothVelocity(new Span<Vector3>(ref vel), gpGlobals.CurTime);
 	}
 }

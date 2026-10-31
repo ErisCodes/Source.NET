@@ -80,19 +80,13 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		vieweffects.LevelInit();
 
 		modemanager.LevelInit(mapname);
+		ResetToneMapping(1.0f);
 		IGameSystem.LevelInitPreEntityAllSystems(mapname);
 #if GMOD_DLL
 		garrysmod.LevelInit(mapname);
 #endif
 
-		if (gpGlobals.MaxClients > 1) {
-			if (cl_predict.GetInt() == 0)
-				engine.ClientCmd("cl_predict 1");
-		}
-		else {
-			if (cl_predict.GetInt() != 0)
-				engine.ClientCmd("cl_predict 0");
-		}
+		engine.ClientCmd(gpGlobals.MaxClients < 2 ? "cl_predict 0" : "cl_predict 1");
 	}
 
 	public void LevelInitPostEntity() {
@@ -134,6 +128,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		randomgaussian.AttachToStream(random);
 
 #if GMOD_DLL
+		get.HTML()?.Init(get.GameDirParent(), HtmlResourceHandler.g_HtmlResourceHandler);
 		get.IntroScreen()!.Start();
 		get.IntroScreen()!.Update("Start", true);
 		garrysmod.InitializeMod(services);
@@ -209,7 +204,12 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 	public void Shutdown() {
 		ClientVoiceMgr_Shutdown();
+#if GMOD_DLL
 		Game.Client.GarrysMod.GarrysMod.Lua.Kill();
+		get.MenuSystem()?.Shutdown();
+		get.HTML()?.Shutdown();
+		Game.Client.GarrysMod.MaterialProxyFactory.Shutdown();
+#endif
 	}
 
 	public void VoiceStatus(int entindex, bool talking) {
@@ -236,6 +236,24 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 	public static bool g_bLevelInitialized;
 	public static INetworkStringTable? g_pStringTableClientSideChoreoScenes;
+	public static INetworkStringTable? g_pStringTableMaterials;
+
+	public static int GetMaterialIndex(ReadOnlySpan<char> materialName) {
+		if (!materialName.IsEmpty) {
+			int index = g_pStringTableMaterials!.FindStringIndex(materialName);
+			Assert(index >= 0);
+			if (index >= 0)
+				return index;
+		}
+		return 0;
+	}
+
+	public static ReadOnlySpan<char> GetMaterialNameFromIndex(int index) {
+		if (index != (g_pStringTableMaterials!.GetMaxStrings() - 1))
+			return g_pStringTableMaterials.GetString(index);
+		else
+			return null;
+	}
 
 	public void EncodeUserCmdToBuffer(bf_write buf, int slot) {
 		input.EncodeUserCmdToBuffer(buf, slot);
@@ -265,13 +283,21 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		ref ViewRect rect = ref rects[0];
 		if (rect.Width == 0 || rect.Height == 0)
 			return;
+#if GMOD_DLL
+		using MatRenderContextPtr renderContext = new(materials);
+		renderContext.SetRenderTarget(null);
+		if (gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.PreRender) && gGM.CallFinish(0) && !enginevgui.IsGameUIVisible())
+			return;
+#endif
 		view.Render(rects);
 	}
 
 	public void InstallStringTableCallback(ReadOnlySpan<char> tableName) {
 		switch (tableName) {
 			case "VguiScreen": Warning("FIXME: VguiScreen string table not being processed yet\n"); break;
-			case "Materials": Warning("FIXME: Materials string table not being processed yet\n"); break;
+			case "Materials":
+				g_pStringTableMaterials = networkstringtable.FindTable(tableName);
+				break;
 			case "EffectDispatch": Warning("FIXME: EffectDispatch string table not being processed yet\n"); break;
 			// I don't think InfoPanel is a thing?
 			case "Scenes":
@@ -477,7 +503,7 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 		gHUD.UpdateHud(active);
 
-		BaseAnimating.AutoAllowBoneAccess boneAccess = new(true, true);
+		using BaseAnimating.AutoAllowBoneAccess boneAccess = new(true, true);
 		IGameSystem.UpdateAllSystems(frameTime);
 
 		vgui!.GetAnimationController().UpdateAnimations(gpGlobals.CurTime);
@@ -522,9 +548,11 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 		// StopAllRumbleEffects();
 
-		// gHUD.LevelShutdown();
+		gHUD.LevelShutdown();
 
-		// todo
+#if GMOD_DLL
+		Game.Client.GarrysMod.GarrysMod.Lua.Kill();
+#endif
 	}
 
 	public LookupProxyInterfaceFn GetMaterialProxyInterfaceFn() {
@@ -760,17 +788,25 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		throw new NotImplementedException();
 	}
 
+	public static InlineArray128<float> g_VoiceVolume;
+
 	public void GMOD_VoiceVolume(uint playerID, float volume) {
-		throw new NotImplementedException();
+		if (playerID == 512) {
+			C_BasePlayer? localPlayer = C_BasePlayer.GetLocalPlayer();
+			if (localPlayer == null)
+				return;
+			playerID = (uint)localPlayer.EntIndex();
+		}
+
+		if (playerID - 1U < 128)
+			g_VoiceVolume[(int)playerID - 1] = volume;
 	}
 
 	public void GMOD_OnDrawSkybox() {
 		throw new NotImplementedException();
 	}
 
-	public void IN_MouseWheelAnalog(int value) {
-		throw new NotImplementedException();
-	}
+	public void IN_MouseWheelAnalog(int value) => input.MouseWheeled(value);
 
 	public void GMOD_SignOnStateChanged(int userID, int oldState, int newState) {
 		throw new NotImplementedException();

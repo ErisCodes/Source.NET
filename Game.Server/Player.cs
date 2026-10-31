@@ -1,4 +1,4 @@
-﻿global using static Game.Server.PlayerConvars;
+global using static Game.Server.PlayerConvars;
 
 using Game.Shared;
 
@@ -8,18 +8,20 @@ using Source.Common.Client;
 using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
+using Source.Common.GarrysMod.Lua;
 using Source.Common.Game.Server;
+using Source.Common.Hashing;
 using Source.Common.Mathematics;
 using Source.Common.Physics;
 using Source.Engine;
 
+using System.Buffers;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Game.Server;
-
-using FIELD = Source.FIELD<BasePlayer>;
 
 public enum PlayerConnectedState
 {
@@ -234,6 +236,13 @@ public class GamePlayerInfo : IBotController, IPlayerInfo
 }
 
 [Flags]
+public enum VPhysicsCollisionState
+{
+	Walk,
+	Crouch,
+	Noclip,
+}
+
 public enum PlayerPhysFlag
 {
 	DirOverride = 1 << 0,
@@ -247,12 +256,41 @@ public enum PlayerPhysFlag
 [NetworkName("CBasePlayer")]
 public partial class BasePlayer : BaseCombatCharacter
 {
-	public const int SF_NORESPAWN = 1 << 30;
-	public static readonly SendTable DT_PlayerState = new(nameof(DT_PlayerState), [
-		SendPropInt(FIELD<PlayerState>.OF(nameof(PlayerState.DeadFlag)), 1, PropFlags.Unsigned)
-	]);
+	[NetworkVar("m_ArmorValue")]
+	public partial int ArmorValue { get; set; }
 
+	public int GetArmorValue() => ArmorValue;
+
+	public void SetArmorValue(int value) {
+		if (ArmorValue != value) {
+			NetworkStateChanged();
+			ArmorValue = value;
+		}
+	}
+
+	static InlineArray1024<char> InfoBuffer;
+
+	public ReadOnlySpan<char> GetInfo(ReadOnlySpan<char> name) {
+		strcpy(InfoBuffer, engine.GetClientConVarValue(engine.IndexOfEdict(Edict()), name));
+		return ((ReadOnlySpan<char>)InfoBuffer).SliceNullTerminatedString();
+	}
+
+	public float GetInfoNum(ReadOnlySpan<char> name, float fallback) {
+		strcpy(InfoBuffer, engine.GetClientConVarValue(engine.IndexOfEdict(Edict()), name));
+		if (InfoBuffer[0] == '\0')
+			return fallback;
+		return (float)atof(InfoBuffer);
+	}
+
+	[Flags]
+	public enum SF
+	{
+		NoRespawn = 1 << 30,
+	}
+	public const float DOT_30DEGREE = 0.866025403784f;
+	public const float DOT_45DEGREE = 0.707106781187f;
 	public override bool IsPlayer() => true;
+	public override Class_T Classify() => Class_T.Player;
 	public virtual bool IsBot() => (GetFlags() & EntityFlags.FakeClient) != 0;
 	public virtual bool IsFakeClient() => (GetFlags() & EntityFlags.FakeClient) != 0;
 	public virtual bool IsBotOfType(int botType) => (GetBotType() != 0) && (GetBotType() == botType);
@@ -268,49 +306,48 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	public BaseViewModel? GetViewModel(int index) => ViewModel[index].Get();
 
-	public static readonly SendTable DT_LocalPlayerExclusive = new(nameof(DT_LocalPlayerExclusive), [
-		SendPropDataTable("m_Local", FIELD.OF(nameof(Local)), PlayerLocalData.DT_Local),
-		SendPropFloat(FIELD.OF(nameof(Friction)), 0, PropFlags.NoScale | PropFlags.RoundDown, 0.0f, 4.0f),
-		SendPropArray3(FIELD.OF_ARRAY(nameof(Ammo)), SendPropInt( FIELD.OF_ARRAYINDEX(nameof(Ammo)), 16, PropFlags.Unsigned)),
-		SendPropInt(FIELD.OF(nameof(TickBase)), -1, PropFlags.ChangesOften),
-		SendPropInt(FIELD.OF(nameof(NextThinkTick))),
-		SendPropEHandle(FIELD.OF(nameof(LastWeapon))),
-		SendPropEHandle(FIELD.OF(nameof(GroundEntity)), PropFlags.ChangesOften),
-		SendPropVector(FIELD.OF(nameof(BaseVelocity)), 0, PropFlags.NoScale),
-		SendPropEHandle(FIELD.OF(nameof(ConstraintEntity))),
-		SendPropVector(FIELD.OF(nameof(ConstraintCenter)), 0, PropFlags.NoScale),
-		SendPropFloat(FIELD.OF(nameof(ConstraintRadius)), 0, PropFlags.NoScale),
-		SendPropFloat(FIELD.OF(nameof(ConstraintWidth)), 0, PropFlags.NoScale),
-		SendPropFloat(FIELD.OF(nameof(ConstraintSpeedFactor)), 0, PropFlags.NoScale),
-		SendPropFloat(FIELD.OF(nameof(DeathTime)), 0, PropFlags.NoScale),
-		SendPropFloat(FIELD.OF(nameof(LaggedMovementValue)), 0, PropFlags.NoScale),
-		SendPropEHandle(FIELD.OF(nameof(TonemapController))),
-		SendPropEHandle(FIELD.OF(nameof(ViewEntity))),
-		SendPropBool(FIELD.OF(nameof(DisableWorldClicking))),
-	]);
+	[NetworkTable("DT_LocalPlayerExclusive")]
+	public static readonly NetworkProp[] LocalPlayerExclusiveProps = [
+		new(nameof(Local)) { Encoding = NetEncoding.DataTable, DataTable = "DT_Local" },
+		new(nameof(Friction)) { Bits = 0, Flags = PropFlags.NoScale | PropFlags.RoundDown, Low = 0.0f, High = 4.0f },
+		new(nameof(Ammo)) { Bits = 16, Flags = PropFlags.Unsigned },
+		new(nameof(TickBase)) { Bits = -1, Flags = PropFlags.ChangesOften },
+		nameof(NextThinkTick),
+		nameof(LastWeapon),
+		new(nameof(GroundEntity)) { Flags = PropFlags.ChangesOften },
+		new(nameof(BaseVelocity)) { Bits = 0, Flags = PropFlags.NoScale },
+		nameof(ConstraintEntity),
+		new(nameof(ConstraintCenter)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(ConstraintRadius)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(ConstraintWidth)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(ConstraintSpeedFactor)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(DeathTime)) { Encoding = NetEncoding.Float, Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(LaggedMovementValue)) { Encoding = NetEncoding.Float, Bits = 0, Flags = PropFlags.NoScale },
+		nameof(TonemapController),
+		nameof(ViewEntity),
+		nameof(DisableWorldClicking),
+	];
 
-	public static readonly SendTable DT_BasePlayer = new(DT_BaseCombatCharacter, [
-		SendPropDataTable(nameof(pl), FIELD.OF(nameof(pl)), DT_PlayerState, SendProxy_DataTableToDataTable),
-		SendPropEHandle(FIELD.OF(nameof(Vehicle))),
-		SendPropEHandle(FIELD.OF(nameof(UseEntity))),
-		SendPropInt(FIELD.OF(nameof(LifeState)), 3, PropFlags.Unsigned ),
-		SendPropEHandle(FIELD.OF(nameof(ColorCorrectionCtrl))), // << gmod specific
-		SendPropFloat(FIELD.OF(nameof(Maxspeed)), 12, PropFlags.RoundDown, 0.0f, 2048.0f ),
-		SendPropInt(FIELD.OF("flags"), Constants.PLAYER_FLAG_BITS, PropFlags.Unsigned|PropFlags.ChangesOften, SendProxy_CropFlagsToPlayerFlagBitsLength),
-		SendPropInt(FIELD.OF(nameof(ObserverMode)), 3, PropFlags.Unsigned),
-		SendPropEHandle(FIELD.OF(nameof(ObserverTarget))),
-		SendPropFloat(FIELD.OF(nameof(FOV)), 16, PropFlags.Unsigned, 0, 65536),
-		SendPropFloat(FIELD.OF(nameof(FOVStart)), 16, PropFlags.Unsigned, 0, 65536),
-		SendPropTime64(FIELD.OF(nameof(FOVTime))),
-		SendPropFloat(FIELD.OF(nameof(DefaultFOV)), 16, PropFlags.Unsigned, 0, 65536),
-		SendPropEHandle(FIELD.OF(nameof(ZoomOwner))),
-
-		SendPropEHandle(FIELD.OF_SENDINFO_ARRAY(nameof(ViewModel))),
-		SendPropArray(FIELD.OF_ARRAY(nameof(ViewModel))),
-
-		SendPropBool(FIELD.OF(nameof(UseWeaponsInVehicle))),
-		SendPropDataTable( "localdata", DT_LocalPlayerExclusive, SendProxy_SendLocalDataTable),
-	]);
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(pl)) { Encoding = NetEncoding.DataTable, DataTable = "DT_PlayerState" },
+		nameof(Vehicle),
+		nameof(UseEntity),
+		new(nameof(LifeState)) { Bits = 3, Flags = PropFlags.Unsigned },
+		nameof(ColorCorrectionCtrl), // << gmod specific
+		new(nameof(Maxspeed)) { Bits = 12, Flags = PropFlags.RoundDown, Low = 0.0f, High = 2048.0f },
+		new(nameof(flags)) { Bits = Constants.PLAYER_FLAG_BITS, Flags = PropFlags.Unsigned | PropFlags.ChangesOften, Proxy = typeof(CropFlagsToPlayerFlagBitsLengthProxy) },
+		new(nameof(ObserverMode)) { Bits = 3, Flags = PropFlags.Unsigned },
+		nameof(ObserverTarget),
+		new(nameof(FOV)) { Encoding = NetEncoding.Float, Bits = 16, Flags = PropFlags.Unsigned, Low = 0, High = 65536 },
+		new(nameof(FOVStart)) { Encoding = NetEncoding.Float, Bits = 16, Flags = PropFlags.Unsigned, Low = 0, High = 65536 },
+		nameof(FOVTime),
+		new(nameof(DefaultFOV)) { Bits = 16, Flags = PropFlags.Unsigned, Low = 0, High = 65536 },
+		nameof(ZoomOwner),
+		new(nameof(ViewModel)) { Encoding = NetEncoding.Array },
+		nameof(UseWeaponsInVehicle),
+		new(nameof(LocalPlayerExclusiveProps)) { Name = "localdata", Proxy = typeof(LocalPlayerExclusiveProxy) },
+	];
 
 	public static Edict? s_PlayerEdict;
 	public static BaseEntity? g_LastSpawn;
@@ -346,7 +383,12 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	public int ObserverLastMode;
 	public bool ForcedObserverMode;
-	PlayerPhysFlag PhysicsFlags;
+	protected PlayerPhysFlag PhysicsFlags;
+	public int Train;
+
+	int MouseWheelValue;
+	public int MouseWheel() => MouseWheelValue;
+	public void SetMouseWheel(int value) => MouseWheelValue = value;
 
 	public void SetPhysicsFlag(PlayerPhysFlag flag, bool set) {
 		if (set)
@@ -358,6 +400,8 @@ public partial class BasePlayer : BaseCombatCharacter
 	int LastDmageAmount;
 	Vector3 DmgOrigin;
 	Vector3 OldOrigin;
+	float OldPlayerZ;
+	float OldPlayerViewOffsetZ;
 	bool ForceOrigin;
 	Vector3 ForcedOrigin;
 	Vector3 SmoothedVelocity;
@@ -381,19 +425,38 @@ public partial class BasePlayer : BaseCombatCharacter
 	public TimeUnit_t LerpTime;
 	public bool LagCompensation;
 	public bool PredictWeapons;
+	readonly List<UserCmd> AvailableCommandsBuf = [];
 
-	public static void SendProxy_CropFlagsToPlayerFlagBitsLength(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		int mask = (1 << Constants.PLAYER_FLAG_BITS) - 1;
-		int data = field.GetValue<int>(instance);
-		outData.Int = data & mask;
+	public static class CropFlagsToPlayerFlagBitsLengthProxy
+	{
+		public static void Send(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
+			int mask = (1 << Constants.PLAYER_FLAG_BITS) - 1;
+			int data = field.GetValue<int>(instance);
+			outData.Int = data & mask;
+		}
+	}
+
+	public static class LocalPlayerExclusiveProxy
+	{
+		public static object? Send(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID)
+			=> SendProxy_SendLocalDataTable(prop, instance, data, recipients, objectID);
 	}
 
 	GamePlayerInfo PlayerInfo = new();
 
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_BasePlayer);
-
 
 	public BasePlayer() {
+		Local.Outer = this;
+		pl.OnNetworkStateChanged = NetworkStateChanged;
+		ViewModelForModify() = new();
+		Vehicle = new();
+		UseEntity = new();
+		ObserverTarget = new();
+		ZoomOwner = new();
+		ConstraintEntity = new();
+		TonemapController = new();
+		ViewEntity = new();
+		ColorCorrectionCtrl = new();
 		AddEFlags(EFL.NoAutoEdictAttach);
 
 #if DEBUG
@@ -428,7 +491,7 @@ public partial class BasePlayer : BaseCombatCharacter
 		bitsDamageType = 0;
 
 		ForceOrigin = false;
-		Vehicle.Set(null);
+		Vehicle = EHANDLE.FromEntity(null);
 		CurrentCommand = default;
 		LockViewanglesTickNumber = 0;
 		LockedViewangles.Init();
@@ -436,7 +499,7 @@ public partial class BasePlayer : BaseCombatCharacter
 		// Setup our default FOV
 		DefaultFOV = g_pGameRules.DefaultFOV();
 
-		ZoomOwner.Set(null);
+		ZoomOwner = EHANDLE.FromEntity(null);
 
 		UpdateRate = 20;  // cl_updaterate defualt
 		LerpTime = 0.1f; // cl_interp default
@@ -486,11 +549,13 @@ public partial class BasePlayer : BaseCombatCharacter
 		LastObjectiveTime = -1;
 	}
 
+	[NetworkVar("pl")]
 	public readonly PlayerState pl = new();
-	[NetworkName("m_Local")]
+	[NetworkVar("m_Local")]
 	public readonly PlayerLocalData Local = new();
 
-	public ref AudioParams GetAudioParams() => ref Local.Audio;
+	public ref readonly AudioParams GetAudioParams() => ref Local.Audio;
+	public ref AudioParams GetAudioParamsForModify() => ref Local.AudioForModify();
 
 	// Used by env_soundscape_triggerable to manage when the player is touching multiple
 	// soundscape triggers simultaneously.
@@ -502,27 +567,31 @@ public partial class BasePlayer : BaseCombatCharacter
 			SetPoseParameter(BodyPitchPoseParam, pitch);
 	}
 
-	[NetworkName("m_hVehicle")]
-	public EHANDLE Vehicle = new();
-	[NetworkName("m_hUseEntity")]
-	public EHANDLE UseEntity = new();
-	[NetworkName("m_hObserverTarget")]
-	public EHANDLE ObserverTarget = new();
-	[NetworkName("m_hZoomOwner")]
-	public EHANDLE ZoomOwner = new();
-	[NetworkName("m_hConstraintEntity")]
-	public EHANDLE ConstraintEntity = new();
-	[NetworkName("m_hTonemapController")]
-	public EHANDLE TonemapController = new();
-	[NetworkName("m_hViewEntity")]
-	public EHANDLE ViewEntity = new();
-	[NetworkName("m_hViewModel")]
-	protected InlineArrayNewMaxViewmodels<Handle<BaseViewModel>> ViewModel = new();
+	[NetworkVar("m_hVehicle")]
+	public partial EHANDLE Vehicle { get; set; }
+	[NetworkVar("m_hUseEntity")]
+	public partial EHANDLE UseEntity { get; set; }
+	[NetworkVar("m_hObserverTarget")]
+	public partial EHANDLE ObserverTarget { get; set; }
+	[NetworkVar("m_hZoomOwner")]
+	public partial EHANDLE ZoomOwner { get; set; }
+	[NetworkVar("m_hConstraintEntity")]
+	public partial EHANDLE ConstraintEntity { get; set; }
+	[NetworkVar("m_hTonemapController")]
+	public partial EHANDLE TonemapController { get; set; }
+	[NetworkVar("m_hViewEntity")]
+	public partial EHANDLE ViewEntity { get; set; }
+	[NetworkVar("m_hViewModel")]
+	protected partial ref readonly InlineArrayNewMaxViewmodels<Handle<BaseViewModel>> ViewModel { get; }
 	readonly List<Handle<BaseEntity>> SimulatedByThisPlayer = [];
 
 	public IServerVehicle? GetVehicle() => Vehicle.Get()?.GetServerVehicle();
 	public override BaseEntity? GetVehicleEntity() => Vehicle.Get();
 	public override bool IsInAVehicle() => Vehicle.Get() != null;
+#if GMOD_DLL
+	public virtual bool RestrictPlayerPitch() => false;
+	public virtual bool CanAttack() => true;
+#endif
 	public float GetStepSize() => Local.StepSize;
 
 	public BaseEntity? GetViewEntity() => ViewEntity.Get();
@@ -530,7 +599,7 @@ public partial class BasePlayer : BaseCombatCharacter
 	public virtual ReadOnlySpan<char> GetSceneSoundToken() => "";
 
 	public void SetViewEntity(BaseEntity? entity) {
-		ViewEntity.Set(entity);
+		ViewEntity = EHANDLE.FromEntity(entity);
 
 		if (ViewEntity.Get() != null)
 			engine.SetView(Edict()!, ViewEntity.Get()!.Edict()!);
@@ -546,42 +615,47 @@ public partial class BasePlayer : BaseCombatCharacter
 	}
 
 	bool HasHaptics;
-	[NetworkName("m_bDisableWorldClicking")]
-	public bool DisableWorldClicking;
+	[NetworkVar("m_bDisableWorldClicking")]
+	public partial bool DisableWorldClicking { get; set; }
 	public bool WorldClicking;
 	public Vector3 WorldClickVector;
-	[NetworkName("m_flMaxspeed")]
-	float Maxspeed;
-	[NetworkName("m_iObserverMode")]
-	int ObserverMode;
-	[NetworkName("m_iFOV")]
-	int FOV;
-	[NetworkName("m_nTickBase")]
-	public int TickBase;
-	[NetworkName("m_iFOVStart")]
-	int FOVStart;
-	[NetworkName("m_flFOVTime")]
-	TimeUnit_t FOVTime;
-	[NetworkName("m_iDefaultFOV")]
-	float DefaultFOV;
-	[NetworkName("m_vecConstraintCenter")]
-	public Vector3 ConstraintCenter;
-	[NetworkName("m_flConstraintRadius")]
-	public float ConstraintRadius;
-	[NetworkName("m_flConstraintWidth")]
-	public float ConstraintWidth;
-	[NetworkName("m_flConstraintSpeedFactor")]
-	public float ConstraintSpeedFactor;
+	[NetworkVar("m_flMaxspeed")]
+	private partial float Maxspeed { get; set; }
+	[NetworkVar("m_iObserverMode")]
+	private partial int ObserverMode { get; set; }
+	[NetworkVar("m_iFOV")]
+	private partial int FOV { get; set; }
+	[NetworkVar("m_nTickBase")]
+	public partial int TickBase { get; set; }
+	[NetworkVar("m_iFOVStart")]
+	private partial int FOVStart { get; set; }
+	[NetworkVar("m_flFOVTime")]
+	private partial TimeUnit_t FOVTime { get; set; }
+	[NetworkVar("m_iDefaultFOV")]
+	private partial float DefaultFOV { get; set; }
+	[NetworkVar("m_vecConstraintCenter")]
+	public partial Vector3 ConstraintCenter { get; set; }
+	[NetworkVar("m_flConstraintRadius")]
+	public partial float ConstraintRadius { get; set; }
+	[NetworkVar("m_flConstraintWidth")]
+	public partial float ConstraintWidth { get; set; }
+	[NetworkVar("m_flConstraintSpeedFactor")]
+	public partial float ConstraintSpeedFactor { get; set; }
 	InlineArray18<char> LastPlaceName;
-	[NetworkName("m_hColorCorrectionCtrl")]
-	EHANDLE ColorCorrectionCtrl = new();
-	[NetworkName("m_bUseWeaponsInVehicle")]
-	bool UseWeaponsInVehicle;
+	[NetworkVar("m_hColorCorrectionCtrl")]
+	private partial EHANDLE ColorCorrectionCtrl { get; set; }
+	[NetworkVar("m_bUseWeaponsInVehicle")]
+	private partial bool UseWeaponsInVehicle { get; set; }
+	public bool GetAllowWeaponsInVehicle() => UseWeaponsInVehicle;
+
+	public virtual void StopObserverMode() {
+		// todo
+	}
 	public bool OnTarget;
-	[NetworkName("m_flDeathTime")]
-	public TimeUnit_t DeathTime;
-	[NetworkName("m_flLaggedMovementValue")]
-	public double LaggedMovementValue;
+	[NetworkVar("m_flDeathTime")]
+	public partial TimeUnit_t DeathTime { get; set; }
+	[NetworkVar("m_flLaggedMovementValue")]
+	public partial double LaggedMovementValue { get; set; }
 	public TimeUnit_t StepSoundTime;
 
 	InlineArray32<char> AnimExtension;
@@ -623,6 +697,22 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	public virtual void EquipSuit(bool playEffects = false) {
 		Local.WearingSuit = true;
+	}
+
+	public void RemoveAllItems(bool removeSuit) {
+		if (GetActiveWeapon() != null) {
+			ResetAutoaim();
+			GetActiveWeapon()!.Holster();
+		}
+
+		Weapon_SetLast(null);
+		RemoveAllWeapons();
+		RemoveAllAmmo();
+
+		if (removeSuit)
+			RemoveSuit();
+
+		UpdateClientData();
 	}
 
 	public virtual void RemoveSuit() {
@@ -836,15 +926,15 @@ public partial class BasePlayer : BaseCombatCharacter
 		}
 
 		pent.SetLocalOrigin(GetLocalOrigin());
-		// pent.AddSpawnFlags(SF_NORESPAWN);
+		pent.AddSpawnFlags(SF.NoRespawn);
 
 		BaseCombatWeapon? weapon = (BaseCombatWeapon?)((BaseEntity)pent);
 		weapon?.SetSubType(subType);
 
 		Util.DispatchSpawn(pent);
 
-		// if (pent != null && !(pent.IsMarkedForDeletion()))
-		// 	pent.Touch(this);
+		if (pent != null && !(pent.IsMarkedForDeletion()))
+			pent.Touch(this);
 
 		return pent;
 	}
@@ -889,6 +979,13 @@ public partial class BasePlayer : BaseCombatCharacter
 				}
 
 				if (tr.Fraction != 1.0) { // line hit something, so paint a decal
+#if GMOD_DLL
+					if (gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.PlayerSpray)) {
+						Game.Server.GarrysMod.LuaEntity.Push_Entity(this);
+						if (gGM.CallFinish(1))
+							break;
+					}
+#endif
 					// todo
 				}
 
@@ -1042,9 +1139,23 @@ public partial class BasePlayer : BaseCombatCharacter
 			vm.SetIndex(index);
 			Util.DispatchSpawn(vm);
 			vm.FollowEntity(this);
-			ViewModel[index].Set(vm);
+			ViewModelForModify()[index].Set(vm);
 		}
 	}
+
+	public void DestroyViewModels() {
+		int i;
+		for (i = MAX_VIEWMODELS - 1; i >= 0; i--) {
+			BaseViewModel? vm = GetViewModel(i);
+			if (vm == null)
+				continue;
+
+			Util.Remove(vm);
+			ViewModelForModify()[i].Set(null);
+		}
+	}
+
+	public void SetConnected(PlayerConnectedState connected) => Connected = connected;
 
 	public TimeUnit_t GetDeathTime() => DeathTime;
 
@@ -1165,7 +1276,7 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	void RemoveAllCommandContexts() => CommandContext.Clear();
 
-	void ReplaceContextCommands(CommandContext ctx, UserCmd[] cmds, int commands) {
+	void ReplaceContextCommands(CommandContext ctx, ReadOnlySpan<UserCmd> cmds, int commands) {
 		ctx.Cmds.Clear();
 
 		ctx.NumCmds = commands;
@@ -1332,7 +1443,7 @@ public partial class BasePlayer : BaseCombatCharacter
 
 		int command_context_count = GetCommandContextCount();
 
-		List<UserCmd> vecAvailCommands = [];
+		AvailableCommandsBuf.Clear();
 
 		for (int context_number = 0; context_number < command_context_count; context_number++) {
 			CommandContext ctx = GetCommandContext(context_number);
@@ -1350,32 +1461,32 @@ public partial class BasePlayer : BaseCombatCharacter
 				while (droppedcmds > numbackup) {
 					UserCmd lastCmd = GetLastUserCommand();
 					lastCmd.CommandNumber++;
-					vecAvailCommands.Add(lastCmd);
+					AvailableCommandsBuf.Add(lastCmd);
 					droppedcmds--;
 				}
 
 				while (droppedcmds > 0) {
 					int cmdnum = ctx.NumCmds + droppedcmds - 1;
-					vecAvailCommands.Add(ctx.Cmds[cmdnum]);
+					AvailableCommandsBuf.Add(ctx.Cmds[cmdnum]);
 					droppedcmds--;
 				}
 			}
 
 			for (int i = ctx.NumCmds - 1; i >= 0; i--)
-				vecAvailCommands.Add(ctx.Cmds[i]);
+				AvailableCommandsBuf.Add(ctx.Cmds[i]);
 
 			LastCmd = ctx.Cmds[ctx.Cmds.Count - 1];
 		}
 
 		int commandLimit = IsSimulatingOnAlternateTicks() ? 2 : 1;
-		int commandsToRun = vecAvailCommands.Count;
-		if (gpGlobals.SimTicksThisFrame >= commandLimit && vecAvailCommands.Count > commandLimit) {
-			int commandsToRollOver = Math.Min(vecAvailCommands.Count, (gpGlobals.SimTicksThisFrame - 1));
-			commandsToRun = vecAvailCommands.Count - commandsToRollOver;
+		int commandsToRun = AvailableCommandsBuf.Count;
+		if (gpGlobals.SimTicksThisFrame >= commandLimit && AvailableCommandsBuf.Count > commandLimit) {
+			int commandsToRollOver = Math.Min(AvailableCommandsBuf.Count, (gpGlobals.SimTicksThisFrame - 1));
+			commandsToRun = AvailableCommandsBuf.Count - commandsToRollOver;
 			Assert(commandsToRun >= 0);
 			if (commandsToRollOver > 0) {
 				CommandContext ctx = RemoveAllCommandContextsExceptNewest();
-				ReplaceContextCommands(ctx, [.. vecAvailCommands.GetRange(vecAvailCommands.Count - commandsToRollOver, commandsToRollOver)], commandsToRollOver);
+				ReplaceContextCommands(ctx, CollectionsMarshal.AsSpan(AvailableCommandsBuf).Slice(AvailableCommandsBuf.Count - commandsToRollOver, commandsToRollOver), commandsToRollOver);
 			}
 			else
 				RemoveAllCommandContexts();
@@ -1404,12 +1515,12 @@ public partial class BasePlayer : BaseCombatCharacter
 				IPredictionSystem.SuppressHostEvents(this);
 
 			for (int i = 0; i < commandsToRun; ++i) {
-				PlayerRunCommand(vecAvailCommands[i], MoveHelperServer.s_MoveHelperServer);
+				PlayerRunCommand(AvailableCommandsBuf[i], MoveHelperServer.s_MoveHelperServer);
 
-				// if (PhysicsController != null) { // todo
-				// 	// UpdateVPhysicsPosition(vNewVPhysicsPosition, vNewVPhysicsVelocity, vphysicsArrivalTime);
-				// 	vphysicsArrivalTime += TICK_INTERVAL;
-				// }
+				if (PhysicsController != null) {
+					UpdateVPhysicsPosition(NewVPhysicsPosition, NewVPhysicsVelocity, (float)vphysicsArrivalTime);
+					vphysicsArrivalTime += TICK_INTERVAL;
+				}
 			}
 
 			IPredictionSystem.SuppressHostEvents(null);
@@ -1424,11 +1535,51 @@ public partial class BasePlayer : BaseCombatCharacter
 				pi.NumCmds = commandsToRun;
 			}
 		}
-		else if (GetTimeSinceLastUserCommand() > 3.0f /*sv_player_usercommand_timeout.GetFloat()*/)
-			RunNullCommand();
 
 		gpGlobals.CurTime = savetime;
 		gpGlobals.FrameTime = saveframetime;
+
+		if (GetTimeSinceLastUserCommand() >= UserCommandTimeout)
+			RunLastCommand();
+	}
+
+	const float UserCommandTimeout = 0.5f;
+
+	private void RunLastCommand() {
+		UserCmd cmd = LastCmd;
+		cmd.CommandNumber++;
+		cmd.TickCount++;
+		cmd.Forced = true;
+		cmd.RandomSeed = (int)(MD5Value.PseudoRandom((uint)cmd.CommandNumber) & 0x7fffffff);
+		cmd.MouseDeltaX = 0;
+		cmd.MouseDeltaY = 0;
+		cmd.Impulse = 0;
+		cmd.WeaponSelect = 0;
+		cmd.ScrollWheelSpeed = 0;
+
+		TimeUnit_t oldFrameTime = gpGlobals.FrameTime;
+		TimeUnit_t oldCurTime = gpGlobals.CurTime;
+
+		MoveHelperServer.s_MoveHelperServer.SetHost(this);
+		PlayerRunCommand(cmd, MoveHelperServer.s_MoveHelperServer);
+
+		if (PhysicsController != null)
+			UpdateVPhysicsPosition(NewVPhysicsPosition, NewVPhysicsVelocity, (float)TICK_INTERVAL);
+
+		if (VecPlayerSimInfo.Count > 0) {
+			PlayerSimInfo pi = VecPlayerSimInfo[VecPlayerSimInfo.Count - 1];
+			pi.Time = Platform.Time;
+			pi.AbsOrigin = GetAbsOrigin();
+			pi.GameSimulationTime = gpGlobals.CurTime;
+			pi.NumCmds = 1;
+		}
+
+		MoveHelperServer.s_MoveHelperServer.SetHost(null);
+
+		LastCmd = cmd;
+
+		gpGlobals.FrameTime = oldFrameTime;
+		gpGlobals.CurTime = oldCurTime;
 	}
 
 	private void RunNullCommand() {
@@ -1474,6 +1625,7 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	public virtual void PlayerRunCommand(UserCmd userCmd, IMoveHelper s_MoveHelperServer) {
 		TouchedPhysObject = false;
+		MouseWheelValue = userCmd.ScrollWheelSpeed;
 
 		if (pl.FixAngle == (int)FixAngle.None)
 			MathLib.VectorCopy(userCmd.ViewAngles, out pl.ViewingAngle);
@@ -1509,7 +1661,7 @@ public partial class BasePlayer : BaseCombatCharacter
 
 	public bool IsPredictingWeapons() => false; // todo
 
-	TimeUnit_t GetTimeSinceLastUserCommand() => /*(!IsConnected() || IsFakeClient() || IsBot()) ? 0.0f :*/ gpGlobals.CurTime - LastUserCommandTime;
+	TimeUnit_t GetTimeSinceLastUserCommand() => (!IsConnected() || IsFakeClient() || IsBot()) ? 0.0f : gpGlobals.CurTime - LastUserCommandTime;
 
 	public virtual void SetupVisibility(BaseEntity? viewEntity, byte[] pvs, int pvssize) {
 		if (viewEntity != null)
@@ -1604,12 +1756,17 @@ public partial class BasePlayer : BaseCombatCharacter
 				else
 					SetCollisionBounds(VEC_HULL_MIN, VEC_HULL_MAX);
 
-				// if (UseEntity.Get() != null) {
-				// 	if (UseEntity.OnControls(this) && (!GetActiveWeapon() || GetActiveWeapon()->IsEffectActive(EF_NODRAW) || (GetActiveWeapon()->GetActivity() == ACT_VM_HOLSTER)))
-				// 		UseEntity.Use(this, this, USE_SET, 2);
-				// 	else
-				// 		ClearUseEntity();
-				// }
+				// Handle controlling an entity
+				if (UseEntity.Get() != null) {
+					// if they've moved too far from the gun, or deployed another weapon, unuse the gun
+					if (UseEntity.Get()!.OnControls(this) && (GetActiveWeapon() == null || GetActiveWeapon()!.IsEffectActive(EntityEffects.NoDraw) || (GetActiveWeapon()!.GetActivity() == Activity.ACT_VM_HOLSTER))) {
+						UseEntity.Get()!.Use(this, this, UseType.Set, 2);    // try fire the gun
+					}
+					else {
+						// they've moved off the controls
+						ClearUseEntity();
+					}
+				}
 
 				ItemPostFrame();
 
@@ -1653,58 +1810,381 @@ public partial class BasePlayer : BaseCombatCharacter
 	}
 
 	IPhysicsPlayerController? PhysicsController;
+	IPhysicsObject? ShadowStand;
+	IPhysicsObject? ShadowCrouch;
+	VPhysicsCollisionState CollisionState;
+	Vector3 NewVPhysicsPosition;
+	Vector3 NewVPhysicsVelocity;
+
+	public IPhysicsPlayerController? GetPhysicsController() => PhysicsController;
 
 	public void InitVCollision(in Vector3 vecAbsOrigin, in Vector3 vecAbsVelocity) {
 		VPhysicsDestroyObject();
 
-		PhysCollide model = physcollision.BBoxToCollide(GetPlayerMins(), GetPlayerMaxs());
+		PhysCollide? model = PhysCreateBbox(VEC_HULL_MIN_SCALED(this), VEC_HULL_MAX_SCALED(this));
+		PhysCollide? crouchModel = PhysCreateBbox(VEC_DUCK_HULL_MIN_SCALED(this), VEC_DUCK_HULL_MAX_SCALED(this));
 
-		ObjectParams solid = g_PhysDefaultObjectParams;
-		solid.GameData = this;
-		solid.Name = "player";
-		solid.Mass = 85.0f;
-		solid.Inertia = 1e24f;
-		solid.EnableCollisions = true;
-		solid.DragCoefficient = 0;
+		SetupVPhysicsShadow(vecAbsOrigin, vecAbsVelocity, model, "player_stand", crouchModel, "player_crouch");
+	}
 
-		IPhysicsObject? shadow = physenv.CreatePolyObject(model, (int)physprops.GetSurfaceIndex("player"), vecAbsOrigin, vec3_angle, ref solid);
-		if (shadow == null)
+	public void SetupVPhysicsShadow(in Vector3 vecAbsOrigin, in Vector3 vecAbsVelocity, PhysCollide? standModel, ReadOnlySpan<char> standHullName, PhysCollide? crouchModel, ReadOnlySpan<char> crouchHullName) {
+		if (standModel == null || crouchModel == null) {
+			Warning("Failed to create player physics shadow due to invalid collision model! Are player hull values valid?\n");
 			return;
+		}
 
-		VPhysicsSetObject(shadow);
+		if (ShadowStand != null)
+			Error("CBasePlayer m_pShadowStand already exists?\n");
+		if (ShadowCrouch != null)
+			Error("CBasePlayer m_pShadowCrouch already exists?\n");
+		if (PhysicsController != null)
+			Error("CBasePlayer m_pPhysicsController already exists?\n");
+
+		Solid solid = default;
+		strcpy(solid.SurfaceProp, "player");
+		solid.Params = g_PhysDefaultObjectParams;
+		solid.Params.Mass = 85.0f;
+		solid.Params.Inertia = 1e24f;
+		solid.Params.EnableCollisions = false;
+		solid.Params.DragCoefficient = 0;
+
+		ShadowStand = PhysModelCreateCustom(this, standModel, GetLocalOrigin(), GetLocalAngles(), standHullName, false, ref solid);
+		ShadowStand!.SetCallbackFlags(CallbackFlags.GlobalCollision | CallbackFlags.ShadowCollision);
+
+		ShadowCrouch = PhysModelCreateCustom(this, crouchModel, GetLocalOrigin(), GetLocalAngles(), crouchHullName, false, ref solid);
+		ShadowCrouch!.SetCallbackFlags(CallbackFlags.GlobalCollision | CallbackFlags.ShadowCollision);
+
+		VPhysicsSetObject(ShadowStand);
+
 		PhysAddShadow(this);
-
-		PhysicsController = physenv.CreatePlayerController(shadow);
+		PhysicsController = physenv.CreatePlayerController(ShadowStand);
 		PhysicsController.SetPushMassLimit(350.0f);
 		PhysicsController.SetPushSpeedLimit(50.0f);
 
-		shadow.SetPosition(vecAbsOrigin, vec3_angle, true);
+		UpdatePhysicsShadowToPosition(vecAbsOrigin);
+
+		SetVCollisionState(vecAbsOrigin, vecAbsVelocity, (GetFlags() & EntityFlags.Ducking) != 0 ? VPhysicsCollisionState.Crouch : VPhysicsCollisionState.Walk);
 	}
 
-	bool ShadowCollisionsDisabled;
+	public override void VPhysicsDestroyObject() {
+		IPhysicsObject? physics = VPhysicsGetObject();
+		if (physics == ShadowStand || physics == ShadowCrouch)
+			VPhysicsSetObject(null);
 
-	void UpdateVPhysicsShadowState() {
-		IPhysicsObject? shadow = VPhysicsGetObject();
-		if (shadow == null)
+		PhysRemoveShadow(this);
+
+		if (PhysicsController != null) {
+			physenv.DestroyPlayerController(PhysicsController);
+			PhysicsController = null;
+		}
+
+		if (ShadowStand != null) {
+			ShadowStand.EnableCollisions(false);
+			PhysDestroyObject(ShadowStand, null!);
+			ShadowStand = null;
+		}
+
+		if (ShadowCrouch != null) {
+			ShadowCrouch.EnableCollisions(false);
+			PhysDestroyObject(ShadowCrouch, null!);
+			ShadowCrouch = null;
+		}
+
+		base.VPhysicsDestroyObject();
+	}
+
+	public void SetVCollisionState(in Vector3 vecAbsOrigin, in Vector3 vecAbsVelocity, VPhysicsCollisionState collisionState) {
+		CollisionState = collisionState;
+		switch (collisionState) {
+			case VPhysicsCollisionState.Walk:
+				ShadowStand!.SetPosition(vecAbsOrigin, vec3_angle, true);
+				ShadowStand.SetVelocity(vecAbsVelocity, new Vector3(float.NaN));
+				ShadowCrouch!.EnableCollisions(false);
+				PhysicsController!.SetObject(ShadowStand);
+				VPhysicsSwapObject(ShadowStand);
+				ShadowStand.EnableCollisions(true);
+				break;
+
+			case VPhysicsCollisionState.Crouch:
+				ShadowCrouch!.SetPosition(vecAbsOrigin, vec3_angle, true);
+				ShadowCrouch.SetVelocity(vecAbsVelocity, new Vector3(float.NaN));
+				ShadowStand!.EnableCollisions(false);
+				PhysicsController!.SetObject(ShadowCrouch);
+				VPhysicsSwapObject(ShadowCrouch);
+				ShadowCrouch.EnableCollisions(true);
+				break;
+
+			case VPhysicsCollisionState.Noclip:
+				ShadowCrouch!.EnableCollisions(false);
+				ShadowStand!.EnableCollisions(false);
+				break;
+		}
+	}
+
+	public bool IsRideablePhysics(IPhysicsObject? physics) {
+		if (physics != null) {
+			if (physics.GetMass() > (VPhysicsGetObject()!.GetMass() * 2))
+				return true;
+		}
+
+		return false;
+	}
+
+	public IPhysicsObject? GetGroundVPhysics() {
+		BaseEntity? groundEntity = GetGroundEntity();
+		if (groundEntity != null && groundEntity.GetMoveType() == Source.MoveType.VPhysics) {
+			IPhysicsObject? physGround = groundEntity.VPhysicsGetObject();
+			if (physGround != null && physGround.IsMoveable())
+				return physGround;
+		}
+
+		return null;
+	}
+
+	public void SetTouchedPhysics(bool touch) => TouchedPhysObject = touch;
+	public bool TouchedPhysics() => TouchedPhysObject;
+
+	public override void Touch(BaseEntity? other) {
+		if (other == GetGroundEntity())
 			return;
 
-		MoveType mt = (MoveType)GetMoveType();
-		bool noclip = mt == Source.MoveType.Noclip || mt == Source.MoveType.Observer;
-		if (noclip != ShadowCollisionsDisabled) {
-			ShadowCollisionsDisabled = noclip;
-			shadow.EnableCollisions(!noclip);
-		}
+		if (other!.GetMoveType() != Source.MoveType.VPhysics || other.GetSolid() != SolidType.VPhysics || (other.GetSolidFlags() & SolidFlags.Trigger) != 0)
+			return;
+
+		IPhysicsObject? phys = other.VPhysicsGetObject();
+		if (phys == null || !phys.IsMoveable())
+			return;
+
+		SetTouchedPhysics(true);
 	}
 
 	public void PostThinkVPhysics() {
 		if (PhysicsController == null)
 			return;
 
-		UpdateVPhysicsShadowState();
+		Vector3 newPosition = GetAbsOrigin();
+		float frametime = (float)gpGlobals.FrameTime;
+		if (frametime <= 0 || frametime > 0.1f)
+			frametime = 0.1f;
 
+		IPhysicsObject? physGround = GetGroundVPhysics();
+
+		if (physGround == null && TouchedPhysObject && g_MoveData.StepHeight <= 0.0f && (GetFlags() & EntityFlags.OnGround) != 0) {
+			newPosition = OldOrigin + frametime * g_MoveData.WishVel;
+			newPosition = (GetAbsOrigin() * 0.5f) + (newPosition * 0.5f);
+		}
+
+		VPhysicsCollisionState collisionState = VPhysicsCollisionState.Walk;
+		if (GetMoveType() == Source.MoveType.Noclip || GetMoveType() == Source.MoveType.Observer)
+			collisionState = VPhysicsCollisionState.Noclip;
+		else if ((GetFlags() & EntityFlags.Ducking) != 0)
+			collisionState = VPhysicsCollisionState.Crouch;
+
+		if (collisionState != CollisionState)
+			SetVCollisionState(GetAbsOrigin(), GetAbsVelocity(), collisionState);
+
+		if (!(TouchedPhysics() || physGround != null)) {
+			float maxSpeed = Maxspeed > 0.0f ? Maxspeed : sv_maxspeed.GetFloat();
+			g_MoveData.WishVel = new(maxSpeed, maxSpeed, maxSpeed);
+		}
+
+		if (g_MoveData.StepHeight > 0.1f) {
+			if (g_MoveData.StepHeight > 4.0f)
+				VPhysicsGetObject()!.SetPosition(GetAbsOrigin(), vec3_angle, true);
+			else {
+				VPhysicsGetObject()!.GetPosition(out Vector3 position, out _);
+				Vector3 end = position;
+				end.Z += g_MoveData.StepHeight;
+				Util.TraceEntity(this, position, end, Mask.PlayerSolid, this, Source.CollisionGroup.PlayerMovement, out Trace trace);
+				if (trace.DidHit())
+					g_MoveData.StepHeight = trace.EndPos.Z - position.Z;
+
+				PhysicsController.StepUp(g_MoveData.StepHeight);
+			}
+			PhysicsController.Jump();
+		}
+		g_MoveData.StepHeight = 0.0f;
+
+		NewVPhysicsPosition = newPosition;
+		NewVPhysicsVelocity = g_MoveData.WishVel;
+
+		OldOrigin = GetAbsOrigin();
+	}
+
+	public void UpdateVPhysicsPosition(in Vector3 position, in Vector3 velocity, float secondsToArrival) {
 		bool onground = (GetFlags() & EntityFlags.OnGround) != 0;
-		IPhysicsObject? ground = GetGroundEntity()?.VPhysicsGetObject();
-		PhysicsController.Update(GetAbsOrigin(), GetAbsVelocity(), (float)gpGlobals.FrameTime, onground, ground!);
+		IPhysicsObject? physGround = GetGroundVPhysics();
+
+		if (!IsRideablePhysics(physGround))
+			physGround = null;
+
+		PhysicsController?.Update(position, velocity, secondsToArrival, onground, physGround!);
+	}
+
+	public void UpdatePhysicsShadowToPosition(in Vector3 vecAbsOrigin) => UpdateVPhysicsPosition(vecAbsOrigin, vec3_origin, (float)gpGlobals.FrameTime);
+
+	public virtual bool IsFollowingPhysics() => false;
+
+	public override void VPhysicsUpdate(IPhysicsObject physics) {
+		float savedImpact = ImpactEnergyScale;
+
+		ImpactEnergyScale *= 0.125f;
+		ApplyStressDamage(physics, true);
+		ImpactEnergyScale = savedImpact;
+	}
+
+	static readonly ConVar physicsshadowupdate_render = new("physicsshadowupdate_render", "0");
+
+	const float VPHYS_MAX_DISTANCE = 2.0f;
+	const float VPHYS_MAX_VELOCITY = 10.0f;
+	const float VPHYS_MAX_DISTSQR = VPHYS_MAX_DISTANCE * VPHYS_MAX_DISTANCE;
+	const float VPHYS_MAX_VELSQR = VPHYS_MAX_VELOCITY * VPHYS_MAX_VELOCITY;
+
+	const double ShadowAngleResetTolerance = 0.05;
+
+	static void ResetShadowAngles(IPhysicsObject shadow) {
+		shadow.GetPosition(out Vector3 position, out QAngle angles);
+		float angleLength = MathF.Sqrt(angles.X * angles.X + angles.Y * angles.Y + angles.Z * angles.Z);
+		if (Math.Abs(angleLength % 360.0) > ShadowAngleResetTolerance)
+			shadow.SetPosition(position, vec3_angle, false);
+	}
+
+	public override void VPhysicsShadowUpdate(IPhysicsObject physics) {
+		bool physicsUpdated = PhysicsController!.GetShadowPosition(out Vector3 newPosition, out _) > 0;
+
+		if ((physics.GetGameFlags() & Source.Common.Physics.PhysicsFlags.Penetrating) != 0) {
+			List<BaseEntity> list = [];
+			PhysGetListOfPenetratingEntities(this, list);
+			for (int i = list.Count - 1; i >= 0; --i) {
+				if (list[i].GetMoveType() == Source.MoveType.VPhysics)
+					TouchedPhysObject = true;
+
+				AI_BaseNPC? npc = list[i].MyNPCPointer();
+				npc?.PlayerPenetratingVPhysics();
+			}
+		}
+
+		bool checkStuck = false;
+		if ((PhysicsFlags & PlayerPhysFlag.GamePhysicsRotPush) != 0) {
+			checkStuck = true;
+			PhysicsFlags &= ~PlayerPhysFlag.GamePhysicsRotPush;
+		}
+
+		if (PhysicsController.IsInContact() || (PhysicsFlags & PlayerPhysFlag.VPhysicsMotionController) != 0)
+			TouchedPhysObject = true;
+
+		if (IsFollowingPhysics())
+			TouchedPhysObject = true;
+
+		if (GetMoveType() == Source.MoveType.Noclip || pl.DeadFlag) {
+			OldOrigin = GetAbsOrigin();
+			return;
+		}
+
+		if (GMOD_PhysicsGetTotalTimeScale() == 0.0f)
+			return;
+
+		if (!physicsUpdated)
+			return;
+
+		ResetShadowAngles(ShadowStand!);
+		ResetShadowAngles(ShadowCrouch!);
+
+		IPhysicsObject? physGround = GetGroundVPhysics();
+
+		physics.GetPosition(out newPosition, out _);
+		PhysicsController.GetShadowVelocity(out Vector3 newVelocity);
+		Vector3 lastValidPosition = newPosition;
+
+		if (physicsshadowupdate_render.GetBool()) {
+			Game.Shared.DebugOverlay.Box(GetAbsOrigin(), WorldAlignMins(), WorldAlignMaxs(), 255, 0, 0, 24, 15.0f);
+			Game.Shared.DebugOverlay.Box(newPosition, WorldAlignMins(), WorldAlignMaxs(), 0, 0, 255, 24, 15.0f);
+		}
+
+		Vector3 tmp = GetAbsOrigin() - newPosition;
+		if (!TouchedPhysObject && (GetFlags() & EntityFlags.OnGround) == 0)
+			tmp.Z *= 0.5f;
+
+		float dist = tmp.LengthSquared();
+		float deltaV = (newVelocity - GetAbsVelocity()).LengthSquared();
+
+		float maxDistErrorSqr = VPHYS_MAX_DISTSQR;
+		float maxVelErrorSqr = VPHYS_MAX_VELSQR;
+		if (IsRideablePhysics(physGround)) {
+			maxDistErrorSqr *= 0.25f;
+			maxVelErrorSqr *= 0.25f;
+		}
+
+		Trace trace;
+		if (PhysicsController.WasFrozen()) {
+			PhysicsWasFrozen = true;
+
+			Util.TraceEntity(this, GetAbsOrigin(), GetAbsOrigin(), Mask.PlayerSolid, this, Source.CollisionGroup.PlayerMovement, out trace);
+			if (!trace.StartSolid)
+				return;
+
+			Util.TraceEntity(this, newPosition, GetAbsOrigin(), Mask.PlayerSolid, this, Source.CollisionGroup.PlayerMovement, out trace);
+			if (!trace.StartSolid) {
+				SetAbsOrigin(trace.EndPos);
+				UpdateVPhysicsPosition(trace.EndPos, vec3_origin, 0);
+				return;
+			}
+		}
+
+		if (dist >= maxDistErrorSqr || deltaV >= maxVelErrorSqr || (physGround != null && !TouchedPhysObject)) {
+			if (TouchedPhysObject || physGround != null) {
+				if (deltaV >= maxVelErrorSqr && !PhysicsWasFrozen) {
+					Vector3 dir = GetAbsVelocity();
+					float len = MathLib.VectorNormalize(ref dir);
+					float dot = Vector3.Dot(newVelocity, dir);
+					if (dot > len)
+						dot = len;
+					else if (dot < -len)
+						dot = -len;
+
+					newVelocity += -dot * dir;
+
+					if ((PhysicsFlags & PlayerPhysFlag.VPhysicsMotionController) != 0) {
+						float val = MathLib.Lerp(0.1f, len, dot);
+						newVelocity += (val - len) * dir;
+					}
+
+					if (!IsRideablePhysics(physGround)) {
+						if ((PhysicsFlags & PlayerPhysFlag.VPhysicsMotionController) == 0 && IsSimulatingOnAlternateTicks())
+							newVelocity *= 0.5f;
+
+						ApplyAbsVelocityImpulse(newVelocity);
+					}
+				}
+
+				Util.TraceEntity(this, newPosition, newPosition, Mask.PlayerSolid, this, Source.CollisionGroup.PlayerMovement, out trace);
+				if (!trace.AllSolid && !trace.StartSolid)
+					SetAbsOrigin(newPosition);
+			}
+			else
+				checkStuck = true;
+		}
+		else {
+			if (TouchedPhysObject) {
+				Util.TraceEntity(this, GetAbsOrigin(), GetAbsOrigin(), Mask.PlayerSolid, this, Source.CollisionGroup.PlayerMovement, out trace);
+
+				if (trace.AllSolid || trace.StartSolid) {
+					checkStuck = true;
+					lastValidPosition = OldOrigin;
+					SetAbsOrigin(newPosition);
+				}
+			}
+		}
+
+		if (checkStuck) {
+			Util.TraceEntity(this, GetAbsOrigin(), GetAbsOrigin(), Mask.PlayerSolid, this, Source.CollisionGroup.PlayerMovement, out trace);
+
+			if (trace.AllSolid || trace.StartSolid)
+				SetAbsOrigin(lastValidPosition);
+		}
+
+		OldOrigin = GetAbsOrigin();
+		PhysicsWasFrozen = false;
 	}
 
 	public float GeigerRange = 1000;     // range to nearest radiation source
@@ -1771,7 +2251,7 @@ public partial class BasePlayer : BaseCombatCharacter
 		if (g_fGameOver /*|| PlayerLocked*/)
 			return;
 
-		// ItemPreFrame();
+		ItemPreFrame();
 		WaterMove();
 
 		// if (g_pGameRules && g_pGameRules.FAllowFlashlight())
@@ -1824,6 +2304,11 @@ public partial class BasePlayer : BaseCombatCharacter
 
 		// todo
 
+		for (int i = 0; i < WeaponCount(); i++) {
+			if (GetWeapon(i) != null)
+				GetWeapon(i)!.UpdateClientData(this);
+		}
+
 		// g_pGameRules.UpdateClientData(this);
 	}
 
@@ -1849,6 +2334,12 @@ public partial class BasePlayer : BaseCombatCharacter
 	public Activity GetActivity() { return Activity.ACT_IDLE; } // TODO
 
 	internal int GetUserID() => engine.GetPlayerUserId(Edict());
+
+	public bool GetSteamID(out Steamworks.CSteamID id) {
+		Steamworks.CSteamID? steamID = engine.GetClientSteamID(Edict());
+		id = steamID ?? default;
+		return steamID != null;
+	}
 
 	internal ReadOnlySpan<char> GetNetworkIDString() {
 		ReadOnlySpan<char> str = engine.GetPlayerNetworkIDString(Edict());
@@ -1882,12 +2373,145 @@ public partial class BasePlayer : BaseCombatCharacter
 		SuicideCustomKillFlags = 0;
 	}
 
+	public static int TrainSpeed(int speed, int max) {
+		float fSpeed, fMax;
+		int ret = 0;
+
+		fMax = (float)max;
+		fSpeed = speed;
+
+		fSpeed = fSpeed / fMax;
+
+		if (speed < 0)
+			ret = FuncTrackTrain.TRAIN_BACK;
+		else if (speed == 0)
+			ret = FuncTrackTrain.TRAIN_NEUTRAL;
+		else if (fSpeed < 0.33)
+			ret = FuncTrackTrain.TRAIN_SLOW;
+		else if (fSpeed < 0.66)
+			ret = FuncTrackTrain.TRAIN_MEDIUM;
+		else
+			ret = FuncTrackTrain.TRAIN_FAST;
+
+		return ret;
+	}
+
+	public virtual void ObserverUse(bool isPressed) { }
+
+	public virtual void PlayUseDenySound() { }
+
+	public virtual void PickupObject(BaseEntity obj, bool limitMassAndSize = true) { }
+
+	public void SetUseEntity(BaseEntity? useEntity) => UseEntity = EHANDLE.FromEntity(useEntity);
+	public BaseEntity? GetUseEntity() => UseEntity.Get();
+
+	public static bool CanPickupObject(BaseEntity? obj, float massLimit, float sizeLimit) {
+		// UNDONE: Make this virtual and move to HL2 player
+		//Must be valid
+		if (obj == null)
+			return false;
+
+		//Must move with physics
+		if (obj.GetMoveType() != Source.MoveType.VPhysics)
+			return false;
+
+		IPhysicsObject[] list = ArrayPool<IPhysicsObject>.Shared.Rent(VPHYSICS_MAX_OBJECT_LIST_COUNT);
+		try {
+			int count = obj.VPhysicsGetObjectList(list);
+
+			//Must have a physics object
+			if (count == 0)
+				return false;
+
+			float objectMass = 0;
+			bool checkEnable = false;
+			for (int i = 0; i < count; i++) {
+				objectMass += list[i].GetMass();
+				if (!list[i].IsMoveable())
+					checkEnable = true;
+				if ((list[i].GetGameFlags() & Source.Common.Physics.PhysicsFlags.NoPlayerPickup) != 0)
+					return false;
+				if (list[i].IsHinged())
+					return false;
+			}
+
+			//Must be under our threshold weight
+			if (massLimit > 0 && objectMass > massLimit)
+				return false;
+
+			if (checkEnable) {
+				// Allowing picking up of bouncebombs.
+				// CBounceBomb *pBomb = dynamic_cast<CBounceBomb*>(pObject);
+				// if( pBomb )
+				// 	return true;
+
+				// Allow pickup of phys props that are motion enabled on player pickup
+				PhysicsProp? prop = obj as PhysicsProp;
+				PhysBox? box = obj as PhysBox;
+				if (prop == null && box == null)
+					return false;
+
+				if (prop != null && !(prop.HasSpawnFlags(BreakableProp.SF.EnableOnPhyscannon)))
+					return false;
+
+				if (box != null && !(box.HasSpawnFlags(PhysBox.SF.EnableOnPhyscannon)))
+					return false;
+			}
+
+			if (sizeLimit > 0) {
+				ref readonly Vector3 size = ref obj.CollisionProp().OBBSize();
+				if (size.X > sizeLimit || size.Y > sizeLimit || size.Z > sizeLimit)
+					return false;
+			}
+
+			return true;
+		}
+		finally {
+			ArrayPool<IPhysicsObject>.Shared.Return(list, true);
+		}
+	}
+
+	/// <summary>
+	/// Return true if this object can be +used by the player
+	/// </summary>
+	public virtual bool IsUseableEntity(BaseEntity? entity, EntityCapabilities requiredCaps) {
+		if (entity != null) {
+			EntityCapabilities caps = entity.ObjectCaps();
+			if ((caps & (EntityCapabilities.ImpulseUse | EntityCapabilities.ContinuousUse | EntityCapabilities.OnOffUse | EntityCapabilities.DirectionalUse)) != 0) {
+				if ((caps & requiredCaps) == requiredCaps)
+					return true;
+			}
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	/// Perhaps a poorly-named function. This function traces against the supplied
+	/// NPC's hitboxes (instead of hull). If the trace hits a different NPC, the
+	/// new NPC is selected. Otherwise, the supplied NPC is determined to be the
+	/// one the citizen wants. This function allows the selection of a citizen over
+	/// another citizen's shoulder, which is impossible without tracing against
+	/// hitboxes instead of the hull (sjb)
+	/// </summary>
+	public BaseEntity? DoubleCheckUseNPC(BaseEntity? npc, in Vector3 src, in Vector3 dir) {
+		Util.TraceLine(src, src + dir * 1024, Mask.Shot, this, Source.CollisionGroup.None, out Trace tr);
+
+		if (tr.Ent != null && tr.Ent.MyNPCPointer() != null && tr.Ent != npc) {
+			// Player is selecting a different NPC through some negative space
+			// in the first NPC's hitboxes (between legs, over shoulder, etc).
+			return tr.Ent;
+		}
+
+		return npc;
+	}
+
 	public bool ClearUseEntity() {
 		if (UseEntity.Get() != null) {
 			// Stop controlling the train/object
 			// TODO: Send HUD Update
 			UseEntity.Get()!.Use(this, this, UseType.Off, 0);
-			UseEntity.Set(null);
+			UseEntity = EHANDLE.FromEntity(null);
 			return true;
 		}
 

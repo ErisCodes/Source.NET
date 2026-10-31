@@ -1,9 +1,14 @@
 using Source;
 using Source.Common.GarrysMod.Lua;
 using Source.Common.GUI;
+using Source.Common.MaterialSystem;
 using Source.GUI.Controls;
 
+#if MENU_DLL
+namespace Game.MenuSystem.GarrysMod;
+#else
 namespace Game.Client.GarrysMod;
+#endif
 
 public static partial class LuaVGUI
 {
@@ -59,8 +64,8 @@ public static partial class LuaVGUI
 			return 1;
 
 		if (panel != null) {
-			string? key = lua.GetString(2);
-			if (key != null && key.Length == 1) {
+			ReadOnlySpan<byte> key = lua.GetStringBytes(2);
+			if (key.Length == 1) {
 				if (key[0] == 'x' || key[0] == 'X') {
 					panel.GetPos(out int x, out _);
 					lua.PushNumber(x);
@@ -76,6 +81,74 @@ public static partial class LuaVGUI
 		return 0;
 	}
 
+#if !MENU_DLL
+	[LuaMethod]
+	static int Panel__SetSteamID(ILuaInterface lua) {
+		Panel? panel = Get_Panel(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is AvatarImage avatar) {
+			_ = ulong.TryParse(lua.CheckString(2), out ulong steamID);
+			int size = 0;
+			if (lua.GetType(3) == LuaType.Number) {
+				int value = (int)lua.GetNumber(3);
+				size = 32 < value ? 1 : 0;
+				if (64 < value)
+					size = 2;
+			}
+			avatar.SetSteamID(steamID, size);
+		}
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetPlayer(ILuaInterface lua) {
+		Panel? panel = Get_Panel(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is not AvatarImage avatar)
+			return 0;
+
+		int size = 0;
+		if (lua.GetType(3) == LuaType.Number) {
+			int value = (int)lua.GetNumber(3);
+			size = 32 < value ? 1 : 0;
+			if (64 < value)
+				size = 2;
+		}
+		avatar.SetPlayer(LuaPlayer.Get_Player(2, true), size);
+		return 0;
+	}
+#endif
+
+	[LuaMethod]
+	static int Panel__PaintManual(ILuaInterface lua) {
+		Panel? panel = Get_Panel(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		panel.PaintManual(lua.GetType(2) != LuaType.Nil && lua.GetBool(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__PaintAt(ILuaInterface lua) {
+		Panel? panel = Get_Panel(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+		panel.PaintAt((int)lua.CheckNumber(2), (int)lua.CheckNumber(3));
+		return 0;
+	}
+
 	[LuaMethod]
 	static int Panel____newindex(ILuaInterface lua) {
 		Panel? panel = Get_Panel(1);
@@ -85,13 +158,13 @@ public static partial class LuaVGUI
 		ILuaObject key = lua.GetObject(2)!;
 		if (key.isString()) {
 			ILuaObject value = lua.GetObject(3)!;
-			string? name = key.GetString();
-			if (name == "x" || name == "X") {
+			ReadOnlySpan<byte> name = lua.GetStringBytes(2);
+			if (name.Length == 1 && (name[0] == 'x' || name[0] == 'X')) {
 				panel.GetPos(out _, out int y);
 				panel.SetPos((int)value.GetFloat(), y);
 				return 0;
 			}
-			if (name == "y" || name == "Y") {
+			if (name.Length == 1 && (name[0] == 'y' || name[0] == 'Y')) {
 				panel.GetPos(out int x, out _);
 				panel.SetPos(x, (int)value.GetFloat());
 				return 0;
@@ -135,21 +208,29 @@ public static partial class LuaVGUI
 	static void Panel__SetVisible(Panel panel, [LuaGet] bool visible) => panel.SetVisible(visible);
 
 	[LuaMethod]
-	static void Panel__SetPos(Panel panel, int x, int y) => panel.SetPos(x, y);
+	static void Panel__SetPos(Panel panel, [LuaGet] int x, [LuaGet] int y) => panel.SetPos(x, y);
 
 	[LuaMethod]
-	static void Panel__SetSize(Panel panel, int wide, int tall) => panel.SetSize(wide, tall);
+	static void Panel__SetSize(Panel panel, [LuaGet] int wide, [LuaGet] int tall) => panel.SetSize(wide, tall);
 
 	[LuaMethod]
 	static void Panel__SetParent(ILuaInterface lua, Panel panel) {
 		if (!panel.LuaPanel || panel.IsMarkedForDeletion())
 			return;
 
+#if MENU_DLL
+		Panel? parent = MenuPanels.GetMenuPanel();
+#else
 		Panel? parent = GModBase.GetGModBasePanel(true);
+#endif
 		if (lua.GetType(2) == LuaType.Panel)
 			parent = Get_Panel(2);
 
+#if MENU_DLL
+		if (parent != null && parent != MenuPanels.GetMenuPanel() && parent != MenuPanels.GetOverlayPanel()) {
+#else
 		if (parent != null && parent != GModBase.GetGModBasePanel(true) && parent != HudGMod.g_HudGMod && parent != GModBase.GetGModParentToHUDPanel()) {
+#endif
 			if (!parent.LuaPanel || parent.IsMarkedForDeletion())
 				return;
 		}
@@ -157,6 +238,7 @@ public static partial class LuaVGUI
 		panel.SetParent(parent);
 	}
 
+#if !MENU_DLL
 	[LuaMethod]
 	static int Panel__ParentToHUD(ILuaInterface lua) {
 		Panel? panel = Get_Panel(1);
@@ -166,8 +248,10 @@ public static partial class LuaVGUI
 			panel.SetParent(GModBase.GetGModParentToHUDPanel());
 		return 0;
 	}
+#endif
 
 	[LuaMethod]
+	[LuaMethod("Valid")]
 	static int Panel__IsValid(ILuaInterface lua) {
 		Panel? panel = Get_Panel(1);
 		lua.PushBool(panel != null && (!panel.IsMarkedForDeletion() || panel.RunningOnRemove));
@@ -233,7 +317,7 @@ public static partial class LuaVGUI
 	static void Panel__SetEnabled(Panel panel, [LuaGet] bool state) => panel.SetEnabled(state);
 
 	[LuaMethod]
-	static void Panel__SetMinimumSize(Panel panel, int wide, int tall) => panel.SetMinimumSize(wide, tall);
+	static void Panel__SetMinimumSize(Panel panel, [LuaGet] int wide, [LuaGet] int tall) => panel.SetMinimumSize(wide, tall);
 
 	[LuaMethod]
 	static bool Panel__IsMarkedForDeletion(Panel panel) => panel.IsMarkedForDeletion();
@@ -249,7 +333,7 @@ public static partial class LuaVGUI
 	static void Panel__InvalidateLayout(Panel panel, [LuaGet] bool layoutNow) => panel.InvalidateLayout(layoutNow, false);
 
 	[LuaMethod]
-	static void Panel__SetZPos(Panel panel, int z) => panel.SetZPos(z);
+	static void Panel__SetZPos(Panel panel, [LuaGet] int z) => panel.SetZPos(z);
 
 	[LuaMethod]
 	static int Panel__GetZPos(Panel panel) => panel.GetZPos();
@@ -564,6 +648,7 @@ public static partial class LuaVGUI
 		return 0;
 	}
 
+#if !MENU_DLL
 	[LuaMethod]
 	static int Panel__SetModel(ILuaInterface lua) {
 		Panel? panel = (Panel?)PanelClass.Get(1);
@@ -575,6 +660,7 @@ public static partial class LuaVGUI
 			spawnIcon.SetModel(lua.CheckString(2), (int)lua.CheckNumberOpt(3, 0), lua.CheckStringOpt(4, ""));
 		return 0;
 	}
+#endif
 
 	[LuaMethod]
 	static int Panel__SetAllowNonAsciiCharacters(ILuaInterface lua) {
@@ -773,13 +859,8 @@ public static partial class LuaVGUI
 	[LuaMethod]
 	static int Panel__NewObject(ILuaInterface lua) {
 		Panel? panel = (Panel?)PanelClass.Get(1);
-		if (panel == null) {
+		if (panel == null)
 			lua.Error("Tried to use a NULL Panel!");
-			return 0;
-		}
-
-		if (panel is HtmlPanel html)
-			html.NewObject(lua.CheckString(2));
 		return 0;
 	}
 
@@ -868,6 +949,136 @@ public static partial class LuaVGUI
 		lua.PushBool(html.IsLoading());
 		return 1;
 	}
+
+	[LuaMethod]
+	static int Panel__UpdateHTMLTexture(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html)
+			html.UpdateHTMLTexture();
+		return 0;
+	}
+
+#if !MENU_DLL
+	[LuaMethod]
+	static int Panel__GetHTMLMaterial(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is not HtmlPanel html)
+			return 0;
+
+		IMaterial? material = html.GetHTMLMaterial();
+		if (material == null)
+			return 0;
+
+		LuaMaterial.Push(material);
+		return 1;
+	}
+#endif
+
+	[LuaMethod]
+	static int Panel__SetHTML(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html)
+			html.SetHTML(lua.CheckString(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__Refresh(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html)
+			html.Refresh();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__StopLoading(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html)
+			html.StopLoading();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GoBack(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html)
+			html.GoBack();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GoForward(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html)
+			html.GoForward();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GoToHistoryOffset(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel)
+			Msg("TODO: HTMLPanel.GoToHistoryOffset is NYI.\n");
+		return 0;
+	}
+
+	static int RunJavascript(ILuaInterface lua) {
+		Panel? panel = (Panel?)PanelClass.Get(1);
+		if (panel == null) {
+			lua.Error("Tried to use a NULL Panel!");
+			return 0;
+		}
+
+		if (panel is HtmlPanel html)
+			html.RunJavascript(lua.CheckString(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__Exec(ILuaInterface lua) => RunJavascript(lua);
+
+	[LuaMethod]
+	static int Panel__RunJavascript(ILuaInterface lua) => RunJavascript(lua);
 
 	static readonly int[] ContentAlignmentToNumpad = [7, 8, 9, 4, 5, 6, 1, 2, 3];
 
@@ -1009,7 +1220,11 @@ public static partial class LuaVGUI
 	static void Panel__SetFontInternal(ILuaInterface lua, Panel panel) {
 		IFont? font = LuaFonts.GetFont(lua.GetString(2));
 		if (font == null) {
+#if MENU_DLL
+			font = MenuPanels.GetMenuPanel()!.GetScheme()!.GetFont(lua.GetString(2), false);
+#else
 			font = GModBase.GetGModBasePanel(true)!.GetScheme()!.GetFont(lua.GetString(2), false);
+#endif
 			if (font == null) {
 				lua.ErrorNoHalt($"SetFontInternal: font doesn't exist ({lua.GetString(2)})\n");
 				return;
@@ -1025,13 +1240,13 @@ public static partial class LuaVGUI
 	}
 
 	[LuaMethod]
-	static (int, int) Panel__LocalToScreen(Panel panel, int x, int y) {
+	static (int, int) Panel__LocalToScreen(Panel panel, [LuaGet] int x, [LuaGet] int y) {
 		panel.LocalToScreen(ref x, ref y);
 		return (x, y);
 	}
 
 	[LuaMethod]
-	static (int, int) Panel__ScreenToLocal(Panel panel, int x, int y) {
+	static (int, int) Panel__ScreenToLocal(Panel panel, [LuaGet] int x, [LuaGet] int y) {
 		panel.ScreenToLocal(ref x, ref y);
 		return (x, y);
 	}
@@ -1078,4 +1293,446 @@ public static partial class LuaVGUI
 		else
 			panel.SetCursor(stricmp(name, "up") == 0 ? CursorCode.Up : CursorCode.None);
 	}
+
+	static Panel? GetPanelOrError(ILuaInterface lua) {
+		Panel? panel = Get_Panel(1);
+		if (panel == null)
+			lua.Error("Tried to use a NULL Panel!");
+		return panel;
+	}
+
+	[LuaMethod]
+	static int Panel____gc(ILuaInterface lua) {
+		Panel? panel = Get_Panel(1);
+		if (panel != null) {
+			lua.ReleaseUserTypeObject(panel);
+			panel.LuaHandle = false;
+		}
+		lua.SetUserType(1, 0);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel____eq(ILuaInterface lua) {
+		lua.PushBool(Get_Panel(1) == Get_Panel(2));
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__DoModal(ILuaInterface lua) {
+		GetPanelOrError(lua)?.DoModal();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__LoadControlsFromString(ILuaInterface lua) {
+		lua.ErrorFromLua("Panel:LoadControlsFromString is deprecated. Do not use it.");
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__LoadControlsFromFile(ILuaInterface lua) {
+		lua.ErrorFromLua("Panel:LoadControlsFromFile is deprecated. Do not use it.");
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GetFGColor(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel == null)
+			return 0;
+		lua.PushColor(panel.GetFgColor());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__GetBGColor(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel == null)
+			return 0;
+		lua.PushColor(panel.GetBgColor());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__KillFocus(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel != null && panel.HasFocus())
+			panel.OnKillFocus(null);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__FocusNext(ILuaInterface lua) {
+		GetPanelOrError(lua)?.RequestFocusNext();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__FocusPrevious(ILuaInterface lua) {
+		GetPanelOrError(lua)?.RequestFocusPrev();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GetBounds(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel == null)
+			return 0;
+		panel.GetBounds(out int x, out int y, out int w, out int h);
+		lua.PushNumber(x);
+		lua.PushNumber(y);
+		lua.PushNumber(w);
+		lua.PushNumber(h);
+		return 4;
+	}
+
+	[LuaMethod]
+	static int Panel__SetAchievement(ILuaInterface lua) {
+		GetPanelOrError(lua);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__LoadTGAImage(ILuaInterface lua) {
+		GetPanelOrError(lua);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetURL(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is URLLabel label)
+			label.SetURL(lua.GetString(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__Find(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel == null)
+			return 0;
+		Panel? child = panel.FindChildByName(lua.CheckString(2), false);
+		if (child == null || !child.LuaPanel)
+			return 0;
+		Push_Panel(child);
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__InsertClickableTextStart(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.InsertClickableTextStart(lua.GetString(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__InsertClickableTextEnd(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.InsertClickableTextEnd();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__InsertFade(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.InsertFade((float)lua.GetNumber(2), (float)lua.GetNumber(3));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__ResetAllFades(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.ResetAllFades(lua.GetBool(2), lua.GetBool(3), lua.GetNumber(4));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetToFullHeight(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.SetToFullHeight();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__InsertColorChange(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is not RichText richText)
+			return 0;
+		int a = (int)lua.CheckNumber(5);
+		int b = (int)lua.CheckNumber(4);
+		int g = (int)lua.CheckNumber(3);
+		int r = (int)lua.CheckNumber(2);
+		richText.InsertColorChange(new Color((byte)r, (byte)g, (byte)b, (byte)a));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetTextSelectionColors(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is TextEntry textEntry) {
+			textEntry.SetSelectionTextColor(lua.GetColor(2));
+			textEntry.SetSelectionBgColor(lua.GetColor(3));
+		}
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__AppendText(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.InsertString(lua.GetString(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GotoTextStart(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.GotoTextStart();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GotoTextEnd(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.GotoTextEnd();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GetNumLines(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel is RichText richText) {
+			lua.PushNumber(richText.GetNumLines());
+			return 1;
+		}
+		if (panel is TextEntry textEntry) {
+			lua.PushNumber(textEntry.GetNumLines());
+			return 1;
+		}
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GetLineHeight(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is not RichText richText)
+			return 0;
+		lua.PushNumber(richText.GetLineHeight());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__SetLineHeight(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.LineHeight = (short)(int)lua.GetNumber(2);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__AppendTextWithURLs(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.InsertPossibleURLString(lua.GetString(2), lua.GetColor(3), lua.GetColor(4));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetMaximumCharCount(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel is TextEntry textEntry)
+			textEntry.SetMaximumCharCount((int)lua.GetNumber(2));
+		else if (panel is RichText richText)
+			richText.SetMaximumCharCount((int)lua.GetNumber(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GetMaximumCharCount(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel is TextEntry textEntry) {
+			lua.PushNumber(textEntry.GetMaximumCharCount());
+			return 1;
+		}
+		if (panel is RichText richText) {
+			lua.PushNumber(richText.GetMaximumCharCount());
+			return 1;
+		}
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GetSelectedTextRange(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel is TextEntry textEntry) {
+			textEntry.GetSelectedRange(out int start, out int end);
+			lua.PushNumber(start);
+			lua.PushNumber(end);
+			return 2;
+		}
+		if (panel is RichText richText) {
+			richText.GetSelectedRange(out int start, out int end);
+			lua.PushNumber(start);
+			lua.PushNumber(end);
+			return 2;
+		}
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetUnderlineFont(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is RichText richText)
+			richText.SetUnderlineFont(LuaFonts.GetFont(lua.GetString(2)));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__GetFont(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		IFont? font = panel switch {
+			Label label => label.GetFont(),
+			TextEntry textEntry => textEntry.GetFont(),
+			RichText richText => richText.GetFont(),
+			_ => null
+		};
+		if (font == null)
+			return 0;
+		lua.PushString(Surface.GetFontName(font));
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__GetTextInset(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is not Label label)
+			return 0;
+		label.GetTextInset(out int x, out int y);
+		lua.PushNumber(x);
+		lua.PushNumber(y);
+		return 2;
+	}
+
+	[LuaMethod]
+	static int Panel__SetDrawLanguageIDAtLeft(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is TextEntry textEntry)
+			textEntry.SetDrawLanguageIDAtLeft(lua.GetBool(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetDrawLanguageID(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is TextEntry textEntry)
+			textEntry.SetDrawLanguageID(lua.GetBool(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SelectAllOnFocus(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is TextEntry textEntry)
+			textEntry.SelectAllOnFocusAlways(true);
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SelectAll(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel is TextEntry textEntry)
+			textEntry.SelectAllText(false);
+		else if (panel is RichText richText)
+			richText.SelectAllText();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SelectAllText(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is TextEntry textEntry)
+			textEntry.SelectAllText(lua.GetBool(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SelectNone(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel is TextEntry textEntry)
+			textEntry.SelectNone();
+		else if (panel is RichText richText)
+			richText.SelectNone();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__CutSelected(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel is TextEntry textEntry)
+			textEntry.CutSelected();
+		else if (panel is RichText richText)
+			richText.CutSelected();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__CopySelected(ILuaInterface lua) {
+		Panel? panel = GetPanelOrError(lua);
+		if (panel is TextEntry textEntry)
+			textEntry.CopySelected();
+		else if (panel is RichText richText)
+			richText.CopySelected();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__Paste(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is TextEntry textEntry)
+			textEntry.Paste();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__Undo(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is TextEntry textEntry)
+			textEntry.Undo();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SaveUndoState(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is TextEntry textEntry)
+			textEntry.SaveUndoState();
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__IsMultiline(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is not TextEntry textEntry)
+			return 0;
+		lua.PushBool(textEntry.IsMultiline());
+		return 1;
+	}
+
+	[LuaMethod]
+	static int Panel__GetScrollStartIndexes(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is not TextEntry textEntry)
+			return 0;
+		lua.PushNumber(textEntry.GetCurrentStartIndex());
+		lua.PushNumber(textEntry.GetCurrentStartLine());
+		return 2;
+	}
+
+	[LuaMethod]
+	static int Panel__SetTextHidden(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is TextEntry textEntry)
+			textEntry.SetTextHidden(lua.GetBool(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__SetPopupStayAtBack(ILuaInterface lua) {
+		GetPanelOrError(lua)?.SetPopupStayAtBack(lua.GetBool(2));
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Panel__AddText(ILuaInterface lua) => 0;
+
+#if MENU_DLL
+	[LuaMethod]
+	static int Panel__SetOpenLinksExternally(ILuaInterface lua) {
+		if (GetPanelOrError(lua) is HtmlPanel html)
+			html.SetOpenLinksExternally(lua.GetBool(2));
+		return 0;
+	}
+#endif
 }

@@ -1,4 +1,5 @@
-#if CLIENT_DLL || GAME_DLL
+#if CLIENT_DLL || GAME_DLL || MENU_DLL
+using Source;
 using Source.Common.GarrysMod.Lua;
 using Source.Common.Mathematics;
 
@@ -8,6 +9,8 @@ using static Source.Common.Mathematics.MathLib;
 
 #if CLIENT_DLL
 namespace Game.Client.GarrysMod;
+#elif MENU_DLL
+namespace Game.MenuSystem.GarrysMod;
 #else
 namespace Game.Server.GarrysMod;
 #endif
@@ -21,7 +24,11 @@ public static partial class LuaAngle
 
 	public static void Push_Angle(in QAngle ang) => g_Lua!.PushAngle(in ang);
 
-	static char FirstChar(ReadOnlySpan<char> str) => str.IsEmpty ? '\0' : str[0];
+	static char FirstChar(int stackPos) {
+		g_Lua!.CheckType(stackPos, LuaType.String);
+		ReadOnlySpan<byte> str = g_Lua.GetStringBytes(stackPos);
+		return str.IsEmpty ? '\0' : (char)str[0];
+	}
 
 	[LuaMethod]
 	static int Angle____newindex(ILuaInterface lua) {
@@ -35,7 +42,7 @@ public static partial class LuaAngle
 				return 0;
 		}
 		else {
-			switch (FirstChar(g_Lua.CheckString(2))) {
+			switch (FirstChar(2)) {
 				case 'P': case 'X': case 'p': case 'x': index = 0; break;
 				case 'Y': case 'y': index = 1; break;
 				case 'R': case 'Z': case 'r': case 'z': index = 2; break;
@@ -51,6 +58,15 @@ public static partial class LuaAngle
 	}
 
 	[LuaMethod]
+	static int Angle____tostring(ILuaInterface lua) {
+		ref QAngle ang = ref Get_Angle(1);
+		Span<char> str = stackalloc char[64];
+		sprintf(str, "%.3f %.3f %.3f").F(ang.X).F(ang.Y).F(ang.Z);
+		g_Lua!.PushString(((ReadOnlySpan<char>)str).SliceNullTerminatedString());
+		return 1;
+	}
+
+	[LuaMethod]
 	static int Angle____index(ILuaInterface lua) {
 		if (g_Lua!.FindOnObjectsMetaTable(1, 2))
 			return 1;
@@ -63,7 +79,7 @@ public static partial class LuaAngle
 				return 0;
 		}
 		else {
-			switch (FirstChar(g_Lua.CheckString(2))) {
+			switch (FirstChar(2)) {
 				case 'P': case 'X': case 'p': case 'x': index = 0; break;
 				case 'Y': case 'y': index = 1; break;
 				case 'R': case 'Z': case 'r': case 'z': index = 2; break;

@@ -7,13 +7,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using CommunityToolkit.HighPerformance;
 
-#if WIN32
-using Microsoft.Win32;
-#endif
-
 namespace Source.SDLManager;
 
-public unsafe class SDL3_System(ICommandLine commandLine) : ISystem
+public unsafe partial class SDL3_System(ICommandLine commandLine) : ISystem
 {
 	public bool CommandLineParamExists(ReadOnlySpan<char> paramName) {
 		return commandLine.FindParm(paramName) != 0;
@@ -132,8 +128,9 @@ public unsafe class SDL3_System(ICommandLine commandLine) : ISystem
 			SDL3.SDL_SetClipboardText("");
 
 		nuint bytes = (nuint)Encoding.UTF8.GetByteCount(text);
-		byte* rawData = (byte*)NativeMemory.Alloc(bytes);
+		byte* rawData = (byte*)NativeMemory.Alloc(bytes + 1);
 		Encoding.UTF8.GetBytes(text, new Span<byte>(rawData, (int)bytes));
+		rawData[bytes] = 0;
 		SDL3.SDL_SetClipboardText(rawData);
 		NativeMemory.Free(rawData);
 	}
@@ -157,106 +154,6 @@ public unsafe class SDL3_System(ICommandLine commandLine) : ISystem
 	public void ShellExecuteEx(ReadOnlySpan<char> command, ReadOnlySpan<char> file, ReadOnlySpan<char> pParams) {
 		throw new NotImplementedException();
 	}
-
-#if WIN32
-#pragma warning disable CA1416 // Validate platform compatibility (WIN32 ifdef catches this instead)
-	static string[] possibleKeys = [@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", @"SOFTWARE\Microsoft\Windows\CurrentVersion\Fonts"];
-
-	struct Entry
-	{
-		public string Name;
-		public int Index;
-		public int Weight;
-		public bool Italic;
-		public string AbsPath;
-	}
-	List<Entry>? Entries;
-
-	public ReadOnlySpan<char> GetEntryPath(ReadOnlySpan<char> name, int weight, bool italic) {
-		if (Entries == null) {
-			Entries = [];
-			string windowsDirectory = Environment.GetEnvironmentVariable("windir")!;
-			string fontsPath = Path.Combine(windowsDirectory, "Fonts");
-			foreach (var keyPath in possibleKeys) {
-				using var baseKey = Registry.LocalMachine.OpenSubKey(keyPath, false);
-				if (baseKey is null)
-					continue;
-
-				foreach (var valueName in baseKey.GetValueNames()) {
-					var value = baseKey.GetValue(valueName);
-
-					string absPath = Path.Combine(fontsPath, (string)value!);
-					int i = 0;
-					foreach (var fontfile in GetFontConditions(absPath)) {
-						Entries.Add(new() {
-							AbsPath = absPath,
-							Index = i++,
-							Italic = fontfile.Italic,
-							Weight = fontfile.Weight,
-							Name = fontfile.Name
-						});
-					}
-				}
-			}
-		}
-
-		Span<Entry> entries = Entries.AsSpan();
-
-		string? consideration = null;
-		int closestDistance = int.MaxValue;
-
-		for (int i = 0; i < entries.Length; i++) {
-			ref Entry entry = ref entries[i];
-
-			if (entry.Italic == italic && name.Equals(entry.Name, StringComparison.OrdinalIgnoreCase)) {
-				int distance = Math.Abs(entry.Weight - weight);
-				if (distance < closestDistance) {
-					consideration = entry.AbsPath;
-					closestDistance = distance;
-				}
-			}
-		}
-
-		return consideration;
-	}
-
-	public ReadOnlySpan<char> GetSystemFontPath(ReadOnlySpan<char> fontName, int weight = 0, bool italic = false) {
-		return GetEntryPath(fontName, weight, italic);
-	}
-#pragma warning restore CA1416 // Validate platform compatibility
-#elif LINUX
-	public ReadOnlySpan<char> GetSystemFontPath(ReadOnlySpan<char> fontName, int weight = 0, bool italic = false) {
-		try {
-			var processStartInfo = new System.Diagnostics.ProcessStartInfo {
-				FileName = "fc-match",
-				RedirectStandardOutput = true,
-				UseShellExecute = false,
-				CreateNoWindow = true
-			};
-
-			// Use ArgumentList to escape fontName
-			processStartInfo.ArgumentList.Add("--format=%{file}");
-			processStartInfo.ArgumentList.Add("--"); // Ensure user can't inject options
-			processStartInfo.ArgumentList.Add(new string(fontName));
-
-			using var process = System.Diagnostics.Process.Start(processStartInfo);
-			if (process != null) {
-				string output = process.StandardOutput.ReadToEnd();
-				process.WaitForExit();
-
-				if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output)) {
-					return output.Trim();
-				}
-			}
-		} catch(Exception ex) {
-			Assert($"GetSystemFontPath: {ex.Message}");
-		}
-
-		return null;
-	}
-#else
-#error Please implement System.GetSystemFontPath for this platform
-#endif
 
 	private static ushort SwapUInt16(ushort val) {
 		return (ushort)((val >> 8) | (val << 8));

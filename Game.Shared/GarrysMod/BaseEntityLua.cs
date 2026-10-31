@@ -18,6 +18,30 @@ public partial class
 	BaseEntity
 #endif
 {
+	public class LuaCallback
+	{
+		public int ID;
+		public readonly LuaObject Function = new();
+		public bool Removed;
+	}
+
+	public class LuaCallbackList
+	{
+		public readonly LinkedList<LuaCallback> Callbacks = [];
+		public int NextID;
+		public int Changes;
+	}
+
+	public static readonly string[] LuaCallbackNames = ["OnAngleChange", "BuildBonePositions", "PhysicsCollide", "BuildFlexWeights"];
+	public readonly LuaCallbackList[] LuaCallbacks = [new(), new(), new(), new()];
+
+	public static int LuaCallbackIndex(ReadOnlySpan<char> name) {
+		for (int i = 0; i < LuaCallbackNames.Length; i++)
+			if (strcmp(name, LuaCallbackNames[i]) == 0)
+				return i;
+		return -1;
+	}
+
 	public LuaObject LuaCalcAbsolutePosition = new();
 	public LuaObject? LuaTableObject = new();
 	public LuaObject? LuaEntityObject = new();
@@ -25,8 +49,12 @@ public partial class
 	public virtual bool IsWeapon() => false;
 	public virtual bool IsVehicle() => false;
 	public virtual bool IsRagdollProp() => false;
+	public virtual bool IsRagdoll() => false;
 	public virtual bool IsJeep() => false;
 	public virtual void PostLuaSpawn() { }
+	public virtual ReadOnlySpan<char> GetLuaScriptName() => null;
+	public virtual void InitializeScriptedEntity(ReadOnlySpan<char> name) { }
+	public virtual void Lua_OnEntityInitialized() { }
 	public virtual LuaClass Lua_GetLuaClass() => LuaEntity.LC_Entity;
 
 	public virtual void PushEntity() {

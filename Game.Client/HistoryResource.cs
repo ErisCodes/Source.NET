@@ -65,7 +65,10 @@ class HudHistoryResource : EditableHudElement, IHudElement
 	}
 
 	public override void Init() {
+		IHudElement.HookMessage("SWEPCmd", MsgFunc_SWEPCmd);
+#if !GMOD_DLL
 		IHudElement.HookMessage("ItemPickup", MsgFunc_ItemPickup);
+#endif
 		IHudElement.HookMessage("AmmoDenied", MsgFunc_AmmoDenied);
 		Reset();
 	}
@@ -150,6 +153,22 @@ class HudHistoryResource : EditableHudElement, IHudElement
 			freeslot.DisplayTime = gpGlobals.CurTime + BaseHudWeaponSelection.hud_drawhistory_time.GetFloat();
 
 		++CurrentHistorySlot;
+	}
+
+	static InlineArray32<char> SWEPCmdFunction;
+	static InlineArray256<char> SWEPCmdArgs;
+	private void MsgFunc_SWEPCmd(bf_read msg) {
+		if (gHUD.FindElement("CHudGMod") == null || g_Lua == null)
+			return;
+		int encodedEHandle = msg.ReadLong();
+		int entity = encodedEHandle & ((1 << Constants.MAX_EDICT_BITS) - 1);
+		int serialNum = encodedEHandle >> Constants.MAX_EDICT_BITS;
+		EHANDLE ent = new(entity, serialNum);
+		if (ent.Get() is not C_WeaponSWEP weapon)
+			return;
+		msg.ReadString(SWEPCmdFunction);
+		msg.ReadString(SWEPCmdArgs);
+		weapon.RunSWEPCmd(((ReadOnlySpan<char>)SWEPCmdFunction).SliceNullTerminatedString(), ((ReadOnlySpan<char>)SWEPCmdArgs).SliceNullTerminatedString());
 	}
 
 	private void MsgFunc_ItemPickup(bf_read msg) {

@@ -1,6 +1,6 @@
 ﻿global using static Source.Dbg;
 global using static Source.Common.CFormatting;
-global using static Source.PlatformMacros;
+global using static Source.Platform;
 global using static Source.Common.MemUtils;
 global using static Source.Common.ThreadUtils;
 global using static Source.Common.Engine.EngineSoundGlobals;
@@ -25,6 +25,7 @@ global using static Source.Common.CoordSize;
 global using static Source.Common.DataMapConstants;
 global using static Source.Common.PartitionConstants;
 global using static Source.Common.DispCollCommon;
+global using static Source.Common.BaseHandleExts;
 global using CRC32_t = uint;
 global using HCursor = nint;
 global using UtlSymId_t = ulong;

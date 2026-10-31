@@ -5,6 +5,7 @@ using Source.Common;
 using Source.Common.Commands;
 using Source.Common.DataCache;
 using Source.Common.Engine;
+using Source.Common.Formats.BSP;
 using Source.Common.Formats.Keyvalues;
 using Source.Common.Mathematics;
 
@@ -14,130 +15,157 @@ using System.Xml.Linq;
 
 namespace Game.Server;
 
-using FIELD = Source.FIELD<Game.Server.BaseAnimating>;
-using FIELD_ILR = Source.FIELD<Game.Server.InfoLightingRelative>;
-
 [LinkEntityToClass("info_lighting_relative")]
 [NetworkName("CInfoLightingRelative")]
 public partial class InfoLightingRelative : BaseEntity
 {
-	public static readonly SendTable DT_InfoLightingRelative = new(DT_BaseEntity, [
-		SendPropEHandle(FIELD_ILR.OF(nameof(LightingLandmark)))
-	]);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_InfoLightingRelative);
+	public InfoLightingRelative() {
+		LightingLandmark = new();
+	}
 
-	[NetworkName("m_hLightingLandmark")]
-	public EHANDLE LightingLandmark = new();
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		nameof(LightingLandmark),
+	];
+
+	[NetworkVar("m_hLightingLandmark")]
+	public partial EHANDLE LightingLandmark { get; set; }
 }
 
 [NetworkName("CBaseAnimating")]
 public partial class BaseAnimating : BaseEntity
 {
+	public BaseAnimating() {
+		ModelScale = 1.0f;
+		LightingOrigin = new();
+		LightingOriginRelative = new();
+		BoneManipulator = new();
+		FlexManipulator = new();
+	}
+
 	public const int ANIMATION_SKIN_BITS = 10;
 	public const int ANIMATION_BODY_BITS = 32;
 	public const int ANIMATION_HITBOXSET_BITS = 2;
 	public const int ANIMATION_POSEPARAMETER_BITS = 11;
 	public const int ANIMATION_PLAYBACKRATE_BITS = 8;
 
-	public static readonly SendTable DT_ServerAnimationData = new(nameof(DT_ServerAnimationData), [
-		SendPropFloat(FIELD.OF(nameof(Cycle)), ANIMATION_CYCLE_BITS, PropFlags.ChangesOften|PropFlags.RoundDown, -1.0f, 1.0f)
-	]);
-	public static readonly SendTable DT_BaseAnimating = new(DT_BaseEntity, [
-		SendPropInt( FIELD.OF(nameof(ForceBone)), 8, 0 ),
-		SendPropVector( FIELD.OF(nameof(Force)), 0, PropFlags.NoScale ),
+	[PredictionTable]
+	public static readonly new PredictionField[] Prediction = [];
 
-		SendPropInt( FIELD.OF(nameof(Skin)), ANIMATION_SKIN_BITS),
-		SendPropInt( FIELD.OF(nameof(Body)), ANIMATION_BODY_BITS),
+	[NetworkTable("DT_ServerAnimationData")]
+	public static readonly NetworkProp[] ServerAnimationDataProps = [
+		new(nameof(Cycle)) { Encoding = NetEncoding.Float, Bits = ANIMATION_CYCLE_BITS, Flags = PropFlags.ChangesOften | PropFlags.RoundDown, Low = -1.0f, High = 1.0f },
+	];
 
-		SendPropInt( FIELD.OF(nameof(HitboxSet)),ANIMATION_HITBOXSET_BITS, PropFlags.Unsigned ),
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(ForceBone)) { Bits = 8 },
+		new(nameof(Force)) { Bits = 0, Flags = PropFlags.NoScale },
 
-		SendPropFloat( FIELD.OF(nameof(ModelScale)) ),
+		new(nameof(Skin)) { Bits = ANIMATION_SKIN_BITS },
+		new(nameof(Body)) { Bits = ANIMATION_BODY_BITS },
 
-		SendPropArray3( FIELD.OF_ARRAY(nameof(PoseParameter)), SendPropFloat(null!, ANIMATION_POSEPARAMETER_BITS, 0, 0.0f, 1.0f ) ),
+		new(nameof(HitboxSet)) { Bits = ANIMATION_HITBOXSET_BITS, Flags = PropFlags.Unsigned },
 
-		SendPropInt( FIELD.OF(nameof(Sequence)), ANIMATION_SEQUENCE_BITS, PropFlags.Unsigned ),
-		SendPropFloat( FIELD.OF(nameof(PlaybackRate)), ANIMATION_PLAYBACKRATE_BITS, PropFlags.RoundUp, -4.0f, 12.0f ),
+		nameof(ModelScale),
 
-		SendPropArray3(FIELD.OF_ARRAY(nameof(EncodedController)), SendPropFloat(null!, 11, PropFlags.RoundDown, 0.0f, 1.0f ) ),
+		new(nameof(PoseParameter)) { Bits = ANIMATION_POSEPARAMETER_BITS, Low = 0.0f, High = 1.0f },
 
-		SendPropInt( FIELD.OF(nameof( ClientSideAnimation )), 1, PropFlags.Unsigned ),
-		SendPropInt( FIELD.OF(nameof( ClientSideFrameReset )), 1, PropFlags.Unsigned ),
+		new(nameof(Sequence)) { Bits = ANIMATION_SEQUENCE_BITS, Flags = PropFlags.Unsigned },
+		new(nameof(PlaybackRate)) { Encoding = NetEncoding.Float, Bits = ANIMATION_PLAYBACKRATE_BITS, Flags = PropFlags.RoundUp, Low = -4.0f, High = 12.0f },
 
-		SendPropInt( FIELD.OF(nameof( NewSequenceParity) ), (int)EntityEffects.ParityBits, PropFlags.Unsigned ),
-		SendPropInt( FIELD.OF(nameof( ResetEventsParity )), (int)EntityEffects.ParityBits, PropFlags.Unsigned ),
-		SendPropInt( FIELD.OF(nameof( MuzzleFlashParity )), (int)EntityEffects.MuzzleflashBits, PropFlags.Unsigned ),
+		new(nameof(EncodedController)) { Bits = 11, Flags = PropFlags.RoundDown, Low = 0.0f, High = 1.0f },
 
-		SendPropEHandle( FIELD.OF(nameof( LightingOrigin )) ),
-		SendPropEHandle( FIELD.OF(nameof( LightingOriginRelative )) ),
+		new(nameof(ClientSideAnimation)) { Encoding = NetEncoding.Int, Bits = 1, Flags = PropFlags.Unsigned },
+		new(nameof(ClientSideFrameReset)) { Encoding = NetEncoding.Int, Bits = 1, Flags = PropFlags.Unsigned },
 
-		SendPropDataTable( "serveranimdata", DT_ServerAnimationData, SendProxy_ClientSideAnimation ),
+		new(nameof(NewSequenceParity)) { Bits = (int)EntityEffects.ParityBits, Flags = PropFlags.Unsigned },
+		new(nameof(ResetEventsParity)) { Bits = (int)EntityEffects.ParityBits, Flags = PropFlags.Unsigned },
+		new(nameof(MuzzleFlashParity)) { Bits = (int)EntityEffects.MuzzleflashBits, Flags = PropFlags.Unsigned },
 
-		SendPropFloat( FIELD.OF(nameof(FadeMinDist) ), 0, PropFlags.NoScale ),
-		SendPropFloat( FIELD.OF(nameof(FadeMaxDist )), 0, PropFlags.NoScale ),
-		SendPropFloat( FIELD.OF(nameof(FadeScale )), 0, PropFlags.NoScale ),
+		nameof(LightingOrigin),
+		nameof(LightingOriginRelative),
+
+		new(nameof(ServerAnimationDataProps)) { Name = "serveranimdata", Proxy = typeof(ClientSideAnimationProxy) },
+
+		new(nameof(FadeMinDist)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(FadeMaxDist)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(FadeScale)) { Bits = 0, Flags = PropFlags.NoScale },
 
 		// Gmod specific
-		SendPropEHandle(FIELD.OF(nameof(BoneManipulator))),
-		SendPropEHandle(FIELD.OF(nameof(FlexManipulator))),
-		SendPropVector(FIELD.OF(nameof(OverrideViewTarget)), 0, PropFlags.NoScale),
-	]);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_BaseAnimating);
+		nameof(BoneManipulator),
+		nameof(FlexManipulator),
+		new(nameof(OverrideViewTarget)) { Bits = 0, Flags = PropFlags.NoScale },
+	];
 
-	[NetworkName("m_nForceBone")]
-	public int ForceBone;
-	[NetworkName("m_vecForce")]
-	public Vector3 Force;
-	[NetworkName("m_nSkin")]
-	public int Skin;
-	[NetworkName("m_nBody")]
-	public int Body;
-	[NetworkName("m_nHitboxSet")]
-	public int HitboxSet;
+	[NetworkVar("m_nForceBone")]
+	public partial int ForceBone { get; set; }
+	[NetworkVar("m_vecForce")]
+	public partial Vector3 Force { get; set; }
+	[NetworkVar("m_nSkin")]
+	public partial int Skin { get; set; }
+	[NetworkVar("m_nBody")]
+	public partial int Body { get; set; }
+	[NetworkVar("m_nHitboxSet")]
+	public partial int HitboxSet { get; set; }
 
 	public int GetHitboxSet() => HitboxSet;
 
-	[NetworkName("m_flModelScale")]
-	public float ModelScale = 1.0f;
-	[NetworkName("m_flPoseParameter")]
-	public InlineArrayMaxStudioPoseParam<float> PoseParameter;
+	[NetworkVar("m_flModelScale")]
+	public partial float ModelScale { get; set; }
+	[NetworkVar("m_flPoseParameter")]
+	public partial ref readonly InlineArrayMaxStudioPoseParam<float> PoseParameter { get; }
 	public InlineArrayMaxStudioPoseParam<float> OldPoseParameters;
 	public float PrevEventCycle;
 	public int EventSequence;
-	[NetworkName("m_flEncodedController")]
-	public InlineArrayMaxStudioBoneCtrls<float> EncodedController;
+	[NetworkVar("m_flEncodedController")]
+	public partial ref readonly InlineArrayMaxStudioBoneCtrls<float> EncodedController { get; }
 	public InlineArrayMaxStudioBoneCtrls<float> OldEncodedController;
-	[NetworkName("m_nSequence")]
-	[NetworkVar] public partial int Sequence { get; set; }
-	[NetworkName("m_flPlaybackRate")]
-	[NetworkVar] public partial TimeUnit_t PlaybackRate { get; set; }
-	[NetworkName("m_bClientSideAnimation")]
-	public bool ClientSideAnimation;
-	[NetworkName("m_bClientSideFrameReset")]
-	public bool ClientSideFrameReset;
-	[NetworkName("m_nNewSequenceParity")]
-	[NetworkVar] public partial int NewSequenceParity { get; set; }
-	[NetworkName("m_nResetEventsParity")]
-	[NetworkVar] public partial int ResetEventsParity { get; set; }
-	[NetworkName("m_nMuzzleFlashParity")]
-	public int MuzzleFlashParity;
-	[NetworkName("m_hLightingOrigin")]
-	public EHANDLE LightingOrigin = new();
-	[NetworkName("m_hLightingOriginRelative")]
-	public EHANDLE LightingOriginRelative = new();
-	[NetworkName("m_pBoneManipulator")]
-	public EHANDLE BoneManipulator = new();
-	[NetworkName("m_pFlexManipulator")]
-	public EHANDLE FlexManipulator = new();
-	[NetworkName("m_fadeMinDist")]
-	public float FadeMinDist;
-	[NetworkName("m_fadeMaxDist")]
-	public float FadeMaxDist;
-	[NetworkName("m_flFadeScale")]
-	public float FadeScale;
-	[NetworkName("m_flCycle")]
-	[NetworkVar] public partial TimeUnit_t Cycle { get; set; }
-	[NetworkName("m_OverrideViewTarget")]
-	public Vector3 OverrideViewTarget;
+	[NetworkVar("m_nSequence")] public partial int Sequence { get; set; }
+	[NetworkVar("m_flPlaybackRate")] public partial float PlaybackRate { get; set; }
+	[NetworkVar("m_bClientSideAnimation")]
+	public partial bool ClientSideAnimation { get; set; }
+	[NetworkVar("m_bClientSideFrameReset")]
+	public partial bool ClientSideFrameReset { get; set; }
+	[NetworkVar("m_nNewSequenceParity")] public partial int NewSequenceParity { get; set; }
+	[NetworkVar("m_nResetEventsParity")] public partial int ResetEventsParity { get; set; }
+	[NetworkVar("m_nMuzzleFlashParity")]
+	public partial int MuzzleFlashParity { get; set; }
+	[NetworkVar("m_hLightingOrigin")]
+	public partial EHANDLE LightingOrigin { get; set; }
+	[NetworkVar("m_hLightingOriginRelative")]
+	public partial EHANDLE LightingOriginRelative { get; set; }
+	[NetworkVar("m_pBoneManipulator")]
+	public partial EHANDLE BoneManipulator { get; set; }
+	[NetworkVar("m_pFlexManipulator")]
+	public partial EHANDLE FlexManipulator { get; set; }
+
+	public virtual void SetFlexManipulator(BaseEntity? manipulator) => FlexManipulator = EHANDLE.FromEntity(manipulator);
+
+	public virtual BaseEntity? GetFlexManipulator(bool create) {
+		if (FlexManipulator.Get() == null && create) {
+			BaseEntity? manipulator = CreateEntityByName("manipulate_flex");
+			if (manipulator == null)
+				return null;
+
+			manipulator.SetParent(this, -1);
+			manipulator.SetLocalOrigin(default);
+			manipulator.Spawn();
+			SetFlexManipulator(manipulator);
+		}
+
+		return FlexManipulator.Get();
+	}
+
+	[NetworkVar("m_fadeMinDist")]
+	public partial float FadeMinDist { get; set; }
+	[NetworkVar("m_fadeMaxDist")]
+	public partial float FadeMaxDist { get; set; }
+	[NetworkVar("m_flFadeScale")]
+	public partial float FadeScale { get; set; }
+	[NetworkVar("m_flCycle")] public partial float Cycle { get; set; }
+	[NetworkVar("m_OverrideViewTarget")]
+	public partial Vector3 OverrideViewTarget { get; set; }
 
 	public override void SetModel(ReadOnlySpan<char> modelName) {
 		UnlockStudioHdr();
@@ -169,8 +197,6 @@ public partial class BaseAnimating : BaseEntity
 		SetSequence(sequence);
 		ResetSequenceInfo();
 	}
-
-	public bool ComputeHitboxSurroundingBox(out Vector3 vecWorldMins, out Vector3 vecWorldMaxs) => throw new NotImplementedException();
 
 	public const int NUM_POSEPAREMETERS = 24;
 	public const int NUM_BONECTRLS = 4;
@@ -209,7 +235,7 @@ public partial class BaseAnimating : BaseEntity
 		Assert(controller >= 0 && controller < NUM_BONECTRLS);
 
 		float retVal = BoneSetup.Studio_SetController(model, controller, value, out float newValue);
-		EncodedController[controller] = newValue;
+		EncodedControllerForModify()[controller] = newValue;
 
 		return retVal;
 	}
@@ -310,11 +336,7 @@ public partial class BaseAnimating : BaseEntity
 		return hdr;
 	}
 
-	static readonly ConVar npc_height_adjust = new("npc_height_adjust", "1", FCvar.Archive, "Enable test mode for ik height adjustment");
-
-	public void UpdateStepOrigin() {
-		// todo
-	}
+	public static readonly ConVar npc_height_adjust = new("npc_height_adjust", "1", FCvar.Archive, "Enable test mode for ik height adjustment");
 
 	public Activity GetSequenceActivity(int sequence) {
 		if (sequence == -1) {
@@ -328,12 +350,12 @@ public partial class BaseAnimating : BaseEntity
 	}
 
 	public TimeUnit_t GetPlaybackRate() => PlaybackRate;
-	public void SetPlaybackRate(TimeUnit_t rate) => PlaybackRate = rate;
+	public void SetPlaybackRate(TimeUnit_t rate) => PlaybackRate = (float)rate;
 
 	public bool IsSequenceFinished() => SequenceFinished;
 	public bool IsDissolving() => (GetFlags() & EntityFlags.Dissolving) != 0;
 
-	public virtual void SetLightingOriginRelative(BaseEntity? lightingOriginRelative) => LightingOriginRelative.Set(lightingOriginRelative);
+	public virtual void SetLightingOriginRelative(BaseEntity? lightingOriginRelative) => LightingOriginRelative = EHANDLE.FromEntity(lightingOriginRelative);
 	public BaseEntity? GetLightingOriginRelative() => LightingOriginRelative.Get();
 
 	public bool IsModelScaleFractional() => ModelScale < 1.0f;
@@ -420,6 +442,27 @@ public partial class BaseAnimating : BaseEntity
 		return false;
 	}
 
+	public void GetBonePosition(int bone, out Vector3 origin, out QAngle angles) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null) {
+			AssertMsg(false, "BaseAnimating.GetBonePosition: model missing");
+			origin = default;
+			angles = default;
+			return;
+		}
+
+		if (bone < 0 || bone >= studioHdr.NumBones()) {
+			AssertMsg(false, "BaseAnimating.GetBonePosition: invalid bone index");
+			origin = default;
+			angles = default;
+			return;
+		}
+
+		GetBoneTransform(bone, out Matrix3x4 boneToWorld);
+
+		MathLib.MatrixAngles(boneToWorld, out angles, out origin);
+	}
+
 	public void GetBoneTransform(int bone, out Matrix3x4 boneToWorld) {
 		StudioHdr? studioHdr = GetModelPtr();
 
@@ -495,7 +538,201 @@ public partial class BaseAnimating : BaseEntity
 		return pcache;
 	}
 
-	public bool IsRagdoll() => RenderFX == (byte)RenderFx.Ragdoll;
+	public void StopAnimation() => PlaybackRate = 0;
+
+	public virtual void ClampRagdollForce(in Vector3 forceIn, out Vector3 forceOut) => forceOut = forceIn;
+
+	public virtual bool BecomeRagdollOnClient(in Vector3 force) {
+		if (CanBecomeRagdoll()) {
+			VPhysicsDestroyObject();
+			AddSolidFlags(SolidFlags.NotSolid);
+			RenderFX = (byte)RenderFx.Ragdoll;
+
+			ClampRagdollForce(force, out Vector3 clampedForce);
+			Force = clampedForce;
+
+			SetParent(null);
+
+			AddFlag(EntityFlags.TransRagdoll);
+
+			SetMoveType(Source.MoveType.None);
+			SetThink(null);
+
+			SetNextThink(gpGlobals.CurTime + 2.0f);
+			SetThink(SUB_Remove);
+
+			if (EffectEntity.Get() is EntityFlame fireChild) {
+				fireChild.SetThink(fireChild.SUB_Remove);
+				fireChild.SetNextThink(gpGlobals.CurTime + 0.1f);
+			}
+
+			return true;
+		}
+		return false;
+	}
+
+	public override bool IsRagdoll() => RenderFX == (byte)RenderFx.Ragdoll;
+
+	public override void Teleport(Vector3? newPosition, QAngle? newAngles, Vector3? newVelocity) {
+		base.Teleport(newPosition, newAngles, newVelocity);
+		Ik?.ClearTargets();
+		InitStepHeightAdjust();
+	}
+
+	TimeUnit_t IKGroundContactTime;
+	float IKGroundMinHeight;
+	float IKGroundMaxHeight;
+
+	float EstIkFloor;
+	float EstIkOffset;
+
+	public void InitStepHeightAdjust() {
+		IKGroundContactTime = 0;
+		IKGroundMinHeight = 0;
+		IKGroundMaxHeight = 0;
+
+		EstIkFloor = GetAbsOrigin().Z;
+		EstIkOffset = 0;
+	}
+
+	public void UpdateStepOrigin() {
+		if (!npc_height_adjust.GetBool()) {
+			EstIkOffset = 0;
+			EstIkFloor = GetLocalOrigin().Z;
+			return;
+		}
+
+		if (IKGroundContactTime > 0.2 && IKGroundContactTime > gpGlobals.CurTime - 0.2) {
+			if ((GetFlags() & (EntityFlags.Fly | EntityFlags.Swim)) == 0 && GetMoveParent() == null && GetGroundEntity() != null && !GetGroundEntity()!.IsMoving()) {
+				Vector3 toAbs = GetAbsOrigin() - GetLocalOrigin();
+				if (toAbs.Z == 0.0) {
+					AI_BaseNPC? npc = MyNPCPointer();
+					float height = 18.0f;
+					if (npc != null)
+						height = npc.StepHeight();
+
+					EstIkFloor = (float)(EstIkFloor * 0.2 + IKGroundMinHeight * 0.8);
+
+					float bias = Math.Clamp((IKGroundMaxHeight - IKGroundMinHeight) - height, 0.0f, height);
+					EstIkOffset = Math.Clamp(EstIkFloor - GetAbsOrigin().Z, -height + bias, 0.0f);
+					return;
+				}
+			}
+		}
+
+		EstIkOffset *= 0.5f;
+		EstIkFloor = GetLocalOrigin().Z;
+	}
+
+	public override Vector3 GetStepOrigin() {
+		Vector3 tmp = GetLocalOrigin();
+		tmp.Z += EstIkOffset;
+		return tmp;
+	}
+
+	struct TraceFilterSkipNPCs(IHandleEntity? passentity, CollisionGroup collisionGroup) : ITraceFilter
+	{
+		TraceFilterSimple Simple = new(passentity, collisionGroup);
+
+		public bool ShouldHitEntity(IHandleEntity serverEntity, Contents contentsMask) {
+			if (Simple.ShouldHitEntity(serverEntity, contentsMask)) {
+				BaseEntity? entity = EntityFromEntityHandle(serverEntity);
+				if (entity == null)
+					return true;
+
+				if (entity.IsNPC())
+					return false;
+
+				return true;
+			}
+			return false;
+		}
+	}
+
+	public virtual void CalculateIKLocks(TimeUnit_t currentTime) {
+		if (Ik != null) {
+			Ray ray = default;
+			TraceFilterSkipNPCs traceFilter = new(this, GetCollisionGroup());
+			GetVectors(out _, out _, out Vector3 up);
+
+			float minHeight = float.MaxValue;
+			float maxHeight = -float.MaxValue;
+
+			for (int i = 0; i < Ik.Target.Count; i++) {
+				Trace trace;
+				IKTarget target = Ik.Target[i];
+
+				if (!target.IsActive())
+					continue;
+
+				switch (target.Type) {
+					case Studio.IK_GROUND: {
+							Vector3 estGround;
+							estGround = target.Est.Pos - GetAbsOrigin();
+							estGround = estGround - (estGround * up) * up;
+							estGround = GetAbsOrigin() + estGround + target.Est.Floor * up;
+
+							MathLib.VectorMA(estGround, target.Est.Height, up, out Vector3 p1);
+							MathLib.VectorMA(estGround, -target.Est.Height, up, out Vector3 p2);
+
+							float r = Math.Max(target.Est.Radius, 1);
+
+							ray.Init(p1, p2, new Vector3(-r, -r, 0), new Vector3(r, r, 1));
+							enginetrace.TraceRay(ray, Mask.Solid, ref traceFilter, out trace);
+
+							if (trace.StartSolid) {
+								ray.Init(target.Trace.Hip, target.Est.Pos, new Vector3(-r, -r, 0), new Vector3(r, r, 1));
+
+								enginetrace.TraceRay(ray, Mask.Solid, ref traceFilter, out trace);
+
+								p1 = trace.EndPos;
+								MathLib.VectorMA(p1, -target.Est.Height, up, out p2);
+								ray.Init(p1, p2, new Vector3(-r, -r, 0), new Vector3(r, r, 1));
+
+								enginetrace.TraceRay(ray, Mask.Solid, ref traceFilter, out trace);
+
+								if (trace.StartSolid)
+									break;
+							}
+
+							if (trace.DidHitWorld()) {
+								target.SetPosWithNormalOffset(trace.EndPos, trace.Plane.Normal);
+								target.SetNormal(trace.Plane.Normal);
+							}
+							else {
+								target.SetPos(trace.EndPos);
+								target.SetAngles(GetAbsAngles());
+							}
+
+							if (target.Est.Release < 0.1) {
+								float height = Vector3.Dot(target.Est.Pos, up);
+								maxHeight = Math.Max(height, maxHeight);
+								minHeight = Math.Min(height, minHeight);
+							}
+						}
+						break;
+				}
+			}
+
+			if (minHeight != float.MaxValue && maxHeight != -float.MaxValue) {
+				IKGroundContactTime = gpGlobals.CurTime;
+				IKGroundMinHeight = minHeight;
+				IKGroundMaxHeight = maxHeight;
+			}
+		}
+	}
+
+	public virtual bool CanBecomeRagdoll() {
+		int ragdollSequence = SelectWeightedSequence(Activity.ACT_DIERAGDOLL);
+
+		if (ragdollSequence == StudioHdr.ACTIVITY_NOT_AVAILABLE)
+			return false;
+
+		if ((GetFlags() & EntityFlags.TransRagdoll) != 0)
+			return false;
+
+		return true;
+	}
 
 	public virtual void GetSkeleton(StudioHdr? studioHdr, Span<Vector3> pos, Span<Quaternion> q, int boneMask) {
 		if (studioHdr == null) {
@@ -506,10 +743,14 @@ public partial class BaseAnimating : BaseEntity
 		BoneSetup boneSetup = new(studioHdr, boneMask, PoseParameter);
 		boneSetup.InitPose(pos, q);
 
-		boneSetup.AccumulatePose(pos, q, GetSequence(), GetCycle(), 1.0f, gpGlobals.CurTime, null);
+		boneSetup.AccumulatePose(pos, q, GetSequence(), GetCycle(), 1.0f, gpGlobals.CurTime, Ik);
 
-		if (!IsRagdoll())
-			boneSetup.CalcAutoplaySequences(pos, q, gpGlobals.CurTime, null);
+		if (Ik == null) {
+			if (!IsRagdoll())
+				boneSetup.CalcAutoplaySequences(pos, q, gpGlobals.CurTime, null);
+		}
+		else
+			boneSetup.CalcAutoplaySequences(pos, q, gpGlobals.CurTime, CreateAutoplayIK(studioHdr, gpGlobals.CurTime, boneMask));
 	}
 
 	public virtual void SetupBones(Span<Matrix3x4> boneToWorld, int boneMask) {
@@ -529,13 +770,32 @@ public partial class BaseAnimating : BaseEntity
 		Span<Vector3> pos = stackalloc Vector3[Studio.MAXSTUDIOBONES];
 		Span<Quaternion> q = stackalloc Quaternion[Studio.MAXSTUDIOBONES];
 
-		Vector3 adjOrigin = GetAbsOrigin();
+		Vector3 adjOrigin = GetAbsOrigin() + new Vector3(0, 0, EstIkOffset);
 
-		GetSkeleton(studioHdr, pos, q, boneMask);
+		if (Ik != null) {
+			BoneBitList boneComputed = new();
+			Ik.Init(studioHdr, GetAbsAngles(), adjOrigin, gpGlobals.CurTime, NextIKFrameCounter(), boneMask);
+			GetSkeleton(studioHdr, pos, q, boneMask);
+
+			Ik.UpdateTargets(pos, q, boneToWorld, ref boneComputed);
+			CalculateIKLocks(gpGlobals.CurTime);
+			Ik.SolveDependencies(pos, q, boneToWorld, ref boneComputed);
+			ApplyFootClearance(studioHdr, pos, q, boneToWorld);
+		}
+		else
+			GetSkeleton(studioHdr, pos, q, boneMask);
 
 		BoneSetup.Studio_BuildMatrices(studioHdr, GetAbsAngles(), adjOrigin, pos, q, -1, GetModelScale(), boneToWorld, boneMask);
 
 		RemoveEFlags(EFL.SettingUpBones);
+	}
+
+	public int LookupBone(ReadOnlySpan<char> name) {
+		StudioHdr? studioHdr = GetModelPtr();
+		Assert(studioHdr);
+		if (studioHdr == null)
+			return -1;
+		return BoneSetup.Studio_BoneIndexByName(studioHdr, name);
 	}
 
 	public int LookupAttachment(ReadOnlySpan<char> name) {
@@ -666,7 +926,7 @@ public partial class BaseAnimating : BaseEntity
 
 		if (parameter >= 0) {
 			value = BoneSetup.Studio_SetPoseParameter(studioHdr, parameter, value, out float newValue);
-			PoseParameter[parameter] = newValue;
+			PoseParameterForModify()[parameter] = newValue;
 		}
 
 		return value;
@@ -722,6 +982,53 @@ public partial class BaseAnimating : BaseEntity
 		else
 			interval = Math.Clamp(AnimTime - PrevAnimTime, 0, MAX_ANIMTIME_INTERVAL);
 		return interval;
+	}
+
+	public bool HasMovement(int sequence) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return false;
+
+		if (BoneSetup.Studio_SeqMovement(studioHdr, sequence, 0.0f, 1.0f, GetPoseParameterArray(), out _, out _))
+			return true;
+
+		return false;
+	}
+
+	public bool GetIntervalMovement(TimeUnit_t intervalUsed, out bool moveSeqFinished, out Vector3 newPosition, out QAngle newAngles) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null || !studioHdr.SequencesAvailable()) {
+			moveSeqFinished = default;
+			newPosition = default;
+			newAngles = default;
+			return false;
+		}
+
+		float computedCycleRate = GetSequenceCycleRate(GetSequence());
+
+		TimeUnit_t nextCycle = GetCycle() + intervalUsed * computedCycleRate * PlaybackRate;
+
+		if (!SequenceLoops && nextCycle > 1.0) {
+			intervalUsed = GetCycle() / (computedCycleRate * PlaybackRate);
+			nextCycle = 1.0;
+			moveSeqFinished = true;
+		}
+		else {
+			moveSeqFinished = false;
+		}
+
+		if (BoneSetup.Studio_SeqMovement(studioHdr, GetSequence(), (float)GetCycle(), (float)nextCycle, GetPoseParameterArray(), out Vector3 deltaPos, out QAngle deltaAngles)) {
+			MathLib.VectorYawRotate(deltaPos, GetLocalAngles().Y, out deltaPos);
+			newPosition = GetLocalOrigin() + deltaPos;
+			newAngles = default;
+			newAngles.Y = GetLocalAngles().Y + deltaAngles.Y;
+			return true;
+		}
+		else {
+			newPosition = GetLocalOrigin();
+			newAngles = GetLocalAngles();
+			return false;
+		}
 	}
 
 	public void InvalidateBoneCache() => Studio.InvalidateBoneCache(BoneCacheHandle);
@@ -781,6 +1088,20 @@ public partial class BaseAnimating : BaseEntity
 	public int SelectWeightedSequence(Activity activity) {
 		return Animation.SelectWeightedSequence(GetModelPtr(), activity, GetSequence());
 	}
+	public int SelectWeightedSequence(Activity activity, int curSequence) {
+		Assert(activity != Activity.ACT_INVALID);
+		Assert(GetModelPtr() != null);
+		return Animation.SelectWeightedSequence(GetModelPtr(), activity, curSequence);
+	}
+	public string GetSequenceName(int sequence) {
+		if (sequence == -1)
+			return "Not Found!";
+
+		if (GetModelPtr() == null)
+			return "No model!";
+
+		return Animation.GetSequenceName(GetModelPtr(), sequence);
+	}
 	public int SelectHeaviestSequence(Activity activity) {
 		Assert(GetModelPtr() != null);
 		return Animation.SelectHeaviestSequence(GetModelPtr(), activity);
@@ -836,14 +1157,14 @@ public partial class BaseAnimating : BaseEntity
 
 	public virtual void HandleAnimEvent(ref AnimEvent animEvent) {
 		if ((animEvent.Type & AnimEventType.NewEventSystem) != 0 && (animEvent.Type & AnimEventType.Server) != 0) {
-			if (animEvent.Event == (int)Animevent.AE_SV_PLAYSOUND) {
+			if (animEvent.Event == (int)AnimEventId.AE_SV_PLAYSOUND) {
 				EmitSound(animEvent.Options);
 				return;
 			}
-			else if (animEvent.Event == (int)Animevent.AE_RAGDOLL) {
+			else if (animEvent.Event == (int)AnimEventId.AE_RAGDOLL) {
 				throw new NotImplementedException();
 			}
-			else if (animEvent.Event == (int)Animevent.AE_SV_DUSTTRAIL) {
+			else if (animEvent.Event == (int)AnimEventId.AE_SV_DUSTTRAIL) {
 				throw new NotImplementedException();
 			}
 		}
@@ -860,7 +1181,12 @@ public partial class BaseAnimating : BaseEntity
 	public bool SequenceFinished;
 	public TimeUnit_t LastEventCheck;
 	public TimeUnit_t GetCycle() => Cycle;
-	public void SetCycle(TimeUnit_t cycle) => Cycle = cycle;
+	public void SetCycle(TimeUnit_t cycle) => Cycle = (float)cycle;
+
+	public void SetFadeDistance(float minFadeDist, float maxFadeDist) {
+		FadeMinDist = minFadeDist;
+		FadeMaxDist = maxFadeDist;
+	}
 	public float GetSequenceMoveDist(StudioHdr? studioHdr, int sequence) {
 		Animation.GetSequenceLinearMotion(studioHdr, sequence, GetPoseParameterArray(), out Vector3 ret);
 
@@ -873,6 +1199,74 @@ public partial class BaseAnimating : BaseEntity
 			return (GetSequenceMoveDist(studioHdr, sequence) / (float)t);
 		else
 			return 0;
+	}
+	public float GetSequenceMoveYaw(int sequence) {
+		Assert(GetModelPtr() != null);
+		Animation.GetSequenceLinearMotion(GetModelPtr(), sequence, GetPoseParameterArray(), out Vector3 vecReturn);
+
+		if (vecReturn.Length() > 0)
+			return Util.VecToYaw(vecReturn);
+
+		return Animation.NOMOTION;
+	}
+	public void GetSequenceLinearMotion(int sequence, out Vector3 vec) {
+		Assert(GetModelPtr() != null);
+		Animation.GetSequenceLinearMotion(GetModelPtr(), sequence, GetPoseParameterArray(), out vec);
+	}
+	public virtual float GetIdealSpeed() => GroundSpeed;
+	public virtual float GetIdealAccel() => GetIdealSpeed() + 50;
+	public bool HasPoseParameter(int sequence, ReadOnlySpan<char> name) {
+		int parameter = LookupPoseParameter(name);
+		if (parameter == -1)
+			return false;
+
+		return HasPoseParameter(sequence, parameter);
+	}
+	public bool HasPoseParameter(int sequence, int parameter) {
+		StudioHdr? studioHdr = GetModelPtr();
+
+		if (studioHdr == null)
+			return false;
+
+		if (!studioHdr.SequencesAvailable())
+			return false;
+
+		if (sequence < 0 || sequence >= studioHdr.GetNumSeq())
+			return false;
+
+		MStudioSeqDesc seqdesc = studioHdr.Seqdesc(sequence);
+		if (studioHdr.GetSharedPoseParameter(sequence, seqdesc.ParamIndex[0]) == parameter ||
+			studioHdr.GetSharedPoseParameter(sequence, seqdesc.ParamIndex[1]) == parameter)
+			return true;
+		return false;
+	}
+	public float GetInstantaneousVelocity(float interval = 0.0f) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return 0;
+
+		float nextCycle = (float)(GetCycle() + interval * GetSequenceCycleRate(GetSequence()) * PlaybackRate);
+
+		BoneSetup.Studio_SeqVelocity(studioHdr, GetSequence(), nextCycle, GetPoseParameterArray(), out Vector3 vecVelocity);
+		vecVelocity *= (float)PlaybackRate;
+
+		return vecVelocity.Length();
+	}
+	public float GetEntryVelocity(int sequence) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return 0;
+
+		BoneSetup.Studio_SeqVelocity(studioHdr, sequence, 0.0f, GetPoseParameterArray(), out Vector3 vecVelocity);
+
+		return vecVelocity.Length();
+	}
+	public float GetMovementFrame(float dist) {
+		StudioHdr? studioHdr = GetModelPtr();
+		if (studioHdr == null)
+			return 0;
+
+		return BoneSetup.Studio_FindSeqDistance(studioHdr, GetSequence(), GetPoseParameterArray(), dist);
 	}
 	public void ResetSequenceInfo() {
 		if (GetSequence() == -1)
@@ -888,7 +1282,7 @@ public partial class BaseAnimating : BaseEntity
 		GroundSpeed = GetSequenceGroundSpeed(studioHdr, GetSequence()) * GetModelScale();
 		SequenceLoops = ((Animation.GetSequenceFlags(studioHdr, GetSequence()) & StudioAnimSeqFlags.Looping) != 0);
 		// m_flAnimTime = gpGlobals.time;
-		PlaybackRate = 1.0;
+		PlaybackRate = 1.0f;
 		SequenceFinished = false;
 		LastEventCheck = 0;
 
@@ -914,15 +1308,28 @@ public partial class BaseAnimating : BaseEntity
 			return sequence;
 	}
 
+	public int GetNumBodyGroups() => Animation.GetNumBodyGroups(GetModelPtr());
+
 	public void SetBodygroup(int group, int value) {
 		int newBody = Body;
 		Animation.SetBodygroup(GetModelPtr(), ref newBody, group, value);
 		Body = newBody;
 	}
 
+	public int GetBodygroup(int group) => Animation.GetBodygroup(GetModelPtr(), Body, group);
+	public ReadOnlySpan<char> GetBodygroupName(int group) => Animation.GetBodygroupName(GetModelPtr(), group);
+	public int GetBodygroupCount(int group) => Animation.GetBodygroupCount(GetModelPtr(), group);
+
 	public override BaseAnimating? GetBaseAnimating() => this;
 
 	public bool IsUsingClientSideAnimation() {
 		return ClientSideAnimation;
+	}
+
+	public void UseClientSideAnimation(bool use) {
+		if (ClientSideAnimation != use) {
+			NetworkStateChanged();
+			ClientSideAnimation = use;
+		}
 	}
 }

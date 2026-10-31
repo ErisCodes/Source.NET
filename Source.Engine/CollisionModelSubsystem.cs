@@ -8,6 +8,7 @@ using Source.Common.Formats.BSP;
 using Source.Common.GUI;
 using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
+using Source.Common.Utilities;
 
 using System.Drawing;
 using System.Numerics;
@@ -27,16 +28,16 @@ public class CollisionBSPData
 {
 	public string? MapName;
 	public string? MapNullName;
-	public readonly List<CollisionModel> MapCollisionModels = [];
-	public readonly List<CollisionSurface> MapSurfaces = [];
-	public readonly List<CollisionPlane> MapPlanes = [];
-	public readonly List<CollisionBrush> MapBrushes = [];
-	public readonly List<CollisionBrushSide> MapBrushSides = [];
-	public readonly List<CollisionBoxBrush> MapBoxBrushes = [];
-	public readonly List<CollisionNode> MapNodes = [];
-	public readonly List<CollisionLeaf> MapLeafs = [];
-	public readonly List<ushort> MapDispList = [];
-	public readonly List<ushort> MapLeafBrushes = [];
+	public CollisionModel[] MapCollisionModels = [];
+	public CollisionSurface[] MapSurfaces = [];
+	public CollisionPlane[] MapPlanes = [];
+	public CollisionBrush[] MapBrushes = [];
+	public CollisionBrushSide[] MapBrushSides = [];
+	public CollisionBoxBrush[] MapBoxBrushes = [];
+	public CollisionNode[] MapNodes = [];
+	public CollisionLeaf[] MapLeafs = [];
+	public ushort[] MapDispList = [];
+	public ushort[] MapLeafBrushes = [];
 	public readonly List<string?> TextureNames = [];
 	public static readonly CollisionSurface NullSurface = new() { Name = "**empty**", Flags = 0, SurfaceProps = 0 };
 	public string? MapEntityString;
@@ -61,9 +62,9 @@ public class CollisionBSPData
 	// More of these should just be explicit Count's into their respective lists, honestly
 	public int NumSurfaces;
 	public int NumLeafs;
-	public int NumBrushes => MapBrushes.Count;
+	public int NumBrushes => MapBrushes.Length;
 	public int NumAreas;
-	public int NumPlanes => MapPlanes.Count;
+	public int NumPlanes => MapPlanes.Length;
 	public int NumClusters;
 	public int NumNodes;
 	public int NumTextures;
@@ -90,30 +91,31 @@ public class CollisionBSPData
 		Init();
 	}
 	internal void Destroy() {
-		for (int i = 0; i < MapCollisionModels.Count; i++)
+		for (int i = 0; i < MapCollisionModels.Length; i++)
 			physcollision.VCollideUnload(MapCollisionModels[i].VCollisionData);
 
 		// DispCollTrees_FreeLeafList(this);
-		// CM.DestroyDispPhysCollide();
+		CM.DestroyDispPhysCollide();
 		// DispCollTrees_Free(CM.g_DispCollTrees);
 		// CM.g_DispCollTrees = null;
 		// CM.g_DispBounds = null;
 		CM.g_DispCollTreeCount = 0;
 
-		MapPlanes.Clear();
+		MapPlanes = [];
 		TextureNames.Clear();
-		MapSurfaces.Clear();
+		MapSurfaces = [];
 		MapAreaPortals = [];
 		PortalOpen = [];
 		MapAreas = [];
 		MapEntityString = null;
-		MapBrushes.Clear();
-		MapDispList.Clear();
-		MapCollisionModels.Clear();
-		MapLeafBrushes.Clear();
-		MapLeafs.Clear();
-		MapNodes.Clear();
-		MapBrushSides.Clear();
+		MapBrushes = [];
+		MapDispList = [];
+		MapCollisionModels = [];
+		MapLeafBrushes = [];
+		MapLeafs = [];
+		MapNodes = [];
+		MapBrushSides = [];
+		MapBoxBrushes = [];
 		MapVis = null;
 
 		NumBrushSides = 0;
@@ -139,7 +141,8 @@ public class CollisionBSPData
 
 		BSPDTexData[] inData = lh.LoadLumpData<BSPDTexData>(throwIfNoElements: true, maxElements: BSPFileCommon.MAX_MAP_TEXDATA, sysErrorIfOOB: true);
 		IMaterial? material;
-		MapSurfaces.Clear(); MapSurfaces.EnsureCapacity(inData.Length);
+		MapSurfaces = new CollisionSurface[inData.Length];
+		SpanList<CollisionSurface> surfaces = new(MapSurfaces);
 		TextureNames.Clear(); TextureNames.EnsureCapacity(inData.Length);
 		int lastNull = -1;
 		for (int i = 0; i < stringData.Length; i++) {
@@ -158,7 +161,7 @@ public class CollisionBSPData
 
 			int index = _in.NameStringTableID;
 
-			MapSurfaces.Add(new CollisionSurface() {
+			surfaces.Add(new CollisionSurface() {
 				Name = TextureNames[index]!,
 				SurfaceProps = 0,
 				Flags = 0
@@ -171,7 +174,7 @@ public class CollisionBSPData
 				var = material.FindVar("$surfaceprop", out varFound, false);
 				if (varFound) {
 					ReadOnlySpan<char> props = var.GetStringValue();
-					// TODO: set surface properties.
+					MapSurfaces.AsSpan()[i].SurfaceProps = (ushort)physprop.GetSurfaceIndex(props);
 				}
 			}
 		}
@@ -211,7 +214,7 @@ public class CollisionBSPData
 	private void CollisionBSPData_LoadLeafs_Version_1(MapLoadHelper lh) {
 		BSPDLeaf[] inData = lh.LoadLumpData<BSPDLeaf>(throwIfNoElements: true, BSPFileCommon.MAX_MAP_LEAFS, sysErrorIfOOB: true);
 		int count = inData.Length;
-		MapLeafs.Clear(); MapLeafs.EnsureCount(count + 1);
+		MapLeafs = new CollisionLeaf[count + 1];
 
 		NumLeafs = count;
 		NumClusters = 0;
@@ -247,7 +250,7 @@ public class CollisionBSPData
 	private void CollisionBSPData_LoadLeafs_Version_0(MapLoadHelper lh) {
 		BSPDLeafVersion0[] inData = lh.LoadLumpData<BSPDLeafVersion0>(throwIfNoElements: true, BSPFileCommon.MAX_MAP_PLANES, sysErrorIfOOB: true);
 		int count = inData.Length;
-		MapLeafs.Clear(); MapLeafs.EnsureCount(count + 1);
+		MapLeafs = new CollisionLeaf[count + 1];
 
 		NumLeafs = count;
 		NumClusters = 0;
@@ -284,13 +287,13 @@ public class CollisionBSPData
 		MapLoadHelper lh = new MapLoadHelper(LumpIndex.LeafBrushes);
 		ushort[] inData = lh.LoadLumpData<ushort>(throwIfNoElements: true, BSPFileCommon.MAX_MAP_LEAFBRUSHES, sysErrorIfOOB: true);
 
-		MapLeafBrushes.Clear(); MapLeafBrushes.AddRange(inData);
+		MapLeafBrushes = inData;
 	}
 
 	internal void LoadPlanes() {
 		MapLoadHelper lh = new MapLoadHelper(LumpIndex.Planes);
 		BSPDPlane[] inData = lh.LoadLumpData<BSPDPlane>(throwIfNoElements: true, BSPFileCommon.MAX_MAP_PLANES, sysErrorIfOOB: true);
-		MapPlanes.Clear(); MapPlanes.EnsureCount(inData.Length + 1);
+		MapPlanes = new CollisionPlane[inData.Length + 1];
 
 		Span<CollisionPlane> planes = MapPlanes.AsSpan();
 		int count = inData.Length;
@@ -313,7 +316,7 @@ public class CollisionBSPData
 		MapLoadHelper lh = new MapLoadHelper(LumpIndex.Brushes);
 		BSPDBrush[] inData = lh.LoadLumpData<BSPDBrush>(throwIfNoElements: true, BSPFileCommon.MAX_MAP_BRUSHES, sysErrorIfOOB: true);
 
-		MapBrushes.EnsureCountNew(inData.Length);
+		MapBrushes = new CollisionBrush[inData.Length];
 		Span<CollisionBrush> outData = MapBrushes.AsSpan();
 		for (int i = 0; i < inData.Length; i++) {
 			ref CollisionBrush outBrush = ref outData[i];
@@ -354,8 +357,8 @@ public class CollisionBSPData
 			}
 		}
 
-		MapBrushSides.EnsureCountNew(brushSideCount);
-		MapBoxBrushes.EnsureCountNew(boxBrushCount);
+		MapBrushSides = new CollisionBrushSide[brushSideCount];
+		MapBoxBrushes = new CollisionBoxBrush[boxBrushCount];
 		Span<CollisionBrushSide> brushsides = MapBrushSides.AsSpan();
 		Span<CollisionBoxBrush> boxbrushes = MapBoxBrushes.AsSpan();
 
@@ -377,7 +380,7 @@ public class CollisionBSPData
 				for (int j = 0; j < brush.NumSides; j++) {
 					ref CollisionBrushSide side = ref brushsides[outBrushSide];
 					ref BSPDBrushSide inputSide = ref inData[firstInputSide + j];
-					side.SetPlanePointer(MapPlanes.Base(), inputSide.PlaneNum);
+					side.SetPlanePointer(MapPlanes, inputSide.PlaneNum);
 					int t = inputSide.TexInfo;
 					if (t >= map_texinfo.Count)
 						Sys.Error("Bad brushside texinfo");
@@ -435,10 +438,10 @@ public class CollisionBSPData
 		MapLoadHelper lh = new MapLoadHelper(LumpIndex.Models);
 		BSPDModel[] inData = lh.LoadLumpData<BSPDModel>(throwIfNoElements: true, BSPFileCommon.MAX_MAP_MODELS, sysErrorIfOOB: true);
 
-		MapCollisionModels.EnsureCountNew(inData.Length);
+		MapCollisionModels = new CollisionModel[inData.Length];
 
 		for (int i = 0; i < inData.Length; i++) {
-			CollisionModel outModel = MapCollisionModels[i];
+			CollisionModel outModel = MapCollisionModels[i] = new();
 			ref BSPDModel inModel = ref inData[i];
 
 			for (int j = 0; j < 3; j++) {   // spread the mins / maxs by a pixel
@@ -453,7 +456,7 @@ public class CollisionBSPData
 		MapLoadHelper lh = new MapLoadHelper(LumpIndex.Nodes);
 		BSPDNode[] inData = lh.LoadLumpData<BSPDNode>(throwIfNoElements: true, BSPFileCommon.MAX_MAP_NODES, sysErrorIfOOB: true);
 		int count = inData.Length;
-		MapNodes.Clear(); MapNodes.EnsureCount(count + 6);
+		MapNodes = new CollisionNode[count + 6];
 
 		NumNodes = count;
 		MapRootNode = 0;
@@ -557,10 +560,14 @@ public class CollisionBSPData
 		BSPDertex[] verts = new MapLoadHelper(LumpIndex.Vertexes).LoadLumpData<BSPDertex>();
 		BSPDEdge[] edges = new MapLoadHelper(LumpIndex.Edges).LoadLumpData<BSPDEdge>();
 		int[] surfEdges = new MapLoadHelper(LumpIndex.SurfEdges).LoadLumpData<int>();
-		BSPDFace[] faces = new MapLoadHelper(LumpIndex.Faces).LoadLumpData<BSPDFace>();
+		LumpIndex faceLumpToLoad = LumpIndex.Faces;
+		if (HardwareConfig.GetHDRType() != HDRType.None && MapLoadHelper.GetLumpSize(LumpIndex.FacesHDR) > 0)
+			faceLumpToLoad = LumpIndex.FacesHDR;
+		BSPDFace[] faces = new MapLoadHelper(faceLumpToLoad).LoadLumpData<BSPDFace>();
 		BSPDDispInfo[] dispInfos = new MapLoadHelper(LumpIndex.DispInfo).LoadLumpData<BSPDDispInfo>();
 		DispVert[] dispVerts = new MapLoadHelper(LumpIndex.DispVerts).LoadLumpData<DispVert>();
 		DispTri[] dispTris = new MapLoadHelper(LumpIndex.DispTris).LoadLumpData<DispTri>();
+		BSPTexInfo[] texinfos = new MapLoadHelper(LumpIndex.TexInfo).LoadLumpData<BSPTexInfo>();
 
 		if (faces.Length == 0)
 			return;
@@ -640,12 +647,30 @@ public class CollisionBSPData
 			tree.GetBounds(out Vector3 treeMins, out Vector3 treeMaxs);
 			g_DispBounds[i].Init(treeMins, treeMaxs, tree.Counter, tree.GetContents());
 
-			// NOTE: surface props are left at their defaults; physprops material lookup
-			// is not yet wired in the collision subsystem (see LoadTextures TODO).
+			ref BSPTexInfo tex = ref texinfos[face.TexInfo];
+			if (tex.TexData >= 0) {
+				IMaterial material = materials!.FindMaterial(MapSurfaces[tex.TexData].Name, MaterialDefines.TEXTURE_GROUP_WORLD, true);
+				if (!material.IsErrorMaterial()) {
+					IMaterialVar var = material.FindVar("$surfaceprop", out bool varFound, false);
+					if (varFound) {
+						ReadOnlySpan<char> props = var.GetStringValue();
+						tree.SetSurfaceProps(0, (short)physprop.GetSurfaceIndex(props));
+						tree.SetSurfaceProps(1, (short)physprop.GetSurfaceIndex(props));
+					}
+
+					var = material.FindVar("$surfaceprop2", out varFound, false);
+					if (varFound) {
+						ReadOnlySpan<char> props = var.GetStringValue();
+						tree.SetSurfaceProps(1, (short)physprop.GetSurfaceIndex(props));
+					}
+				}
+			}
 		}
 
 		// Link each displacement into the BSP leaves it touches.
 		CM_DispTreeLeafnum();
+
+		CM.CreateDispPhysCollide((int)MapLoadHelper.GetLumpSize(LumpIndex.PhysDisp));
 	}
 
 	// Port of CM_DispTreeLeafnum + CDispLeafBuilder: build the per-leaf displacement lists.
@@ -682,7 +707,7 @@ public class CollisionBSPData
 		}
 
 		// Write the compact per-leaf reference lists.
-		MapDispList.SetCount(totalRefs);
+		MapDispList = new ushort[totalRefs];
 		Span<ushort> outList = MapDispList.AsSpan();
 		for (int i = 0; i < treeCount; i++) {
 			foreach (int leafIndex in perDispLeaves[i]) {
@@ -873,10 +898,40 @@ public static partial class CM
 	internal static CollisionModel? InlineModelNumber(int index) {
 		CollisionBSPData bspData = GetCollisionBSPData();
 
-		if ((index < 0) || (index >= bspData.MapCollisionModels.Count))
+		if ((index < 0) || (index >= bspData.MapCollisionModels.Length))
 			return null;
 
 		return (bspData.MapCollisionModels[index]);
+	}
+
+	static Contents BrushContents_r(CollisionBSPData bspData, int nodenum) {
+		Contents contents = 0;
+
+		while (true) {
+			if (nodenum < 0) {
+				int leafIndex = -1 - nodenum;
+				ref CollisionLeaf leaf = ref bspData.MapLeafs.AsSpan()[leafIndex];
+
+				for (int i = 0; i < leaf.NumLeafBrushes; i++) {
+					ushort brushIndex = bspData.MapLeafBrushes[leaf.FirstLeafBrush + i];
+					contents |= bspData.MapBrushes.AsSpan()[brushIndex].Contents;
+				}
+
+				return contents;
+			}
+
+			ref CollisionNode node = ref bspData.MapNodes.AsSpan()[bspData.MapRootNode + nodenum];
+			contents |= BrushContents_r(bspData, node.Children[0]);
+			nodenum = node.Children[1];
+		}
+	}
+
+	public static Contents InlineModelContents(int index) {
+		CollisionModel? model = InlineModelNumber(index);
+		if (model == null)
+			return 0;
+
+		return BrushContents_r(GetCollisionBSPData(), model.HeadNode);
 	}
 
 	internal static void ClearTrace(ref Trace trace) {

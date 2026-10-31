@@ -2,9 +2,11 @@
 using Source.Common.DataCache;
 using Source.Common.Engine;
 using Source.Common.Filesystem;
+using Source.Common.Formats.BSP;
 using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
 using Source.Common.Physics;
+using Source.Common.Utilities;
 using Source.Engine.Client;
 
 using System.Numerics;
@@ -98,9 +100,9 @@ public abstract class ModelInfo(IFileSystem filesystem, IModelLoader modelloader
 	public Memory<byte> GetAnimBlock(StudioHeader studioHdr, int block) {
 		return mdlCache.GetAnimBlock(studioHdr.VirtualModel, block);
 	}
-	public int GetAutoplayList(StudioHeader studioHdr, out Span<short> autoplayList) {
+	public int GetAutoplayList(StudioHeader studioHdr, out ReadOnlySpan<short> autoplayList) {
 		MDLHandle_t handle = studioHdr.VirtualModel;
-		autoplayList = mdlCache.GetAutoplayList(handle).Span;
+		autoplayList = mdlCache.GetAutoplayList(handle);
 		return autoplayList.Length;
 	}
 
@@ -273,15 +275,20 @@ public abstract class ModelInfo(IFileSystem filesystem, IModelLoader modelloader
 	}
 
 	public int GetModelMaterialCount(Model? model) {
-		throw new NotImplementedException();
+		if (model == null)
+			return 0;
+		return ((ModelLoader)modelloader).Mod_GetMaterialCount(model);
 	}
 
 	public void GetModelMaterials(Model? model, Span<IMaterial> material) {
-		throw new NotImplementedException();
+		if (model == null)
+			return;
+		SpanList<IMaterial> materials = new(material);
+		((ModelLoader)modelloader).Mod_GetModelMaterials(model, ref materials);
 	}
 
 	public bool IsModelVertexLit(Model? model) {
-		throw new NotImplementedException();
+		return model != null && (model.Flags & ModelFlag.VertexLit) != 0;
 	}
 
 	public ReadOnlySpan<char> GetModelKeyValueText(Model? model) {
@@ -317,7 +324,16 @@ public abstract class ModelInfo(IFileSystem filesystem, IModelLoader modelloader
 	}
 
 	public int GetModelContents(int modelIndex) {
-		throw new NotImplementedException();
+		Model? model = GetModel(modelIndex);
+		if (model != null) {
+			switch (model.Type) {
+				case ModelType.Brush:
+					return (int)CM.InlineModelContents(modelIndex - 1);
+				case ModelType.Studio:
+					return (int)Contents.Solid;
+			}
+		}
+		return 0;
 	}
 
 	public void SetLevelScreenFadeRange(float minSize, float maxSize) {
@@ -337,7 +353,7 @@ public abstract class ModelInfo(IFileSystem filesystem, IModelLoader modelloader
 	public byte ComputeViewScreenFade(in Vector3 absOrigin, float radius, float fadeScale) => 255;// TODO!!
 
 	public PhysCollide? GetCollideForVirtualTerrain(int index) {
-		throw new NotImplementedException();
+		return CM.PhysCollideForDisp(index);
 	}
 
 	public bool IsUsingFBTexture(Model? model, int nSkin, int nBody, object? pClientRenderable) {

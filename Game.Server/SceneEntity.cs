@@ -15,7 +15,6 @@ using System.Numerics;
 
 namespace Game.Server;
 
-using FIELD = FIELD<SceneEntity>;
 using DEFINE = Source.DEFINE<SceneEntity>;
 using EventType = Game.Shared.ChoreoEvent.EventType;
 
@@ -96,6 +95,42 @@ public static class SceneEntityGlobals
 		}
 
 		g_pStringTableClientSideChoreoScenes!.AddString(true, scene);
+	}
+
+	public static float InstancedScriptedScene(BaseFlex? actor, ReadOnlySpan<char> sceneName, ref EHANDLE sceneEnt, float postDelay = 0.0f, bool isBackground = false, bool multiplayer = false, IRecipientFilter? filter = null) {
+		InstancedSceneEntity scene = (InstancedSceneEntity)BaseEntity.CreateNoSpawn("instanced_scripted_scene", vec3_origin, vec3_angle)!;
+
+		if (actor != null) {
+			Span<char> instanceFilename = stackalloc char[ChoreoScene.MAX_SCENE_FILENAME];
+			soundemitterbase.GenderExpandString(actor.GetModelName(), sceneName, instanceFilename);
+			scene.SceneFile = new string(instanceFilename.SliceNullTerminatedString());
+		}
+		else
+			scene.SceneFile = new string(sceneName);
+
+		scene.Owner.Set(actor);
+		scene.HadOwner = actor != null;
+		scene.Multiplayer = multiplayer;
+		scene.SetPostSpeakDelay(postDelay);
+		Util.DispatchSpawn(scene);
+		scene.Activate();
+		scene.IsBackgroundScene = isBackground;
+
+		scene.SetBackground(isBackground);
+		scene.SetRecipientFilter(filter);
+
+		scene.StartPlayback();
+
+		sceneEnt.Set(scene);
+
+		return scene.EstimateLength();
+	}
+
+	public static void StopScriptedScene(BaseFlex? actor, EHANDLE sceneEnt) {
+		if (sceneEnt.Get() is SceneEntity scene) {
+			Scene_Printf($"{scene.SceneFile} : stop scripted scene\n");
+			scene.CancelPlayback();
+		}
 	}
 
 	public static void RemoveActorFromScriptedScenes(BaseFlex actor, bool instancedscenesonly, bool nonidlescenesonly = false, ReadOnlySpan<char> thisSceneOnly = default) => GetSceneManager()!.RemoveActorFromScenes(actor, instancedscenesonly, nonidlescenesonly, thisSceneOnly);
@@ -224,9 +259,164 @@ public class SceneListManager : LogicalEntity
 	public void SceneStarted(BaseEntity sceneOrManager) => throw new NotImplementedException();
 }
 
+[LinkEntityToClass("instanced_scripted_scene")]
 public class InstancedSceneEntity : SceneEntity
 {
 	public EHANDLE Owner = new();
+	public bool HadOwner;
+	public float PostSpeakDelay;
+	public float PreDelay;
+	public bool IsBackgroundScene;
+
+	public override void StartPlayback() {
+		if (GetPreDelay() != 0)
+			return;
+
+		base.StartPlayback();
+	}
+
+	public override void DoThink(TimeUnit_t frametime) {
+		CheckInterruptCompletion();
+
+		if (PreDelay > 0) {
+			PreDelay = (float)Math.Max(0, PreDelay - frametime);
+			StartPlayback();
+			if (!IsPlayingBack)
+				return;
+		}
+
+		if (Scene == null || !IsPlayingBack || (HadOwner && Owner.Get() == null)) {
+			Util.Remove(this);
+			return;
+		}
+
+		Assert(Pitch >= SCENE_MIN_PITCH && Pitch <= SCENE_MAX_PITCH);
+		Pitch = Math.Clamp(Pitch, SCENE_MIN_PITCH, SCENE_MAX_PITCH);
+
+		if (Paused) {
+			PauseThink();
+			return;
+		}
+
+		TimeUnit_t dt = frametime;
+
+		Scene.SetSoundFileStartupLatency(GetSoundSystemLatency());
+
+		Scene.Think(CurrentTime);
+		SetCurrentTime(CurrentTime + dt * Pitch, false);
+
+		if (Scene.SimulationFinished()) {
+			OnSceneFinished(false, false);
+
+			Util.Remove(this);
+		}
+	}
+
+	public override BaseFlex? FindNamedActor(ReadOnlySpan<char> name) {
+		if (Scene!.GetNumActors() == 1 || stricmp(name, "!self") == 0) {
+			if (Owner.Get() != null) {
+				if (Owner.Get() is BaseCombatCharacter character)
+					return character;
+			}
+		}
+		return base.FindNamedActor(name);
+	}
+
+	public BaseEntity? FindNamedEntity(ReadOnlySpan<char> name) {
+		BaseEntity? other = null;
+
+		BaseEntity? owner = Owner.Get();
+		if (owner != null) {
+			AI_BaseNPC? npc = owner.MyNPCPointer();
+
+			if (npc != null)
+				other = npc.FindNamedEntity(name);
+			else if (owner is BaseCombatCharacter)
+				other = owner;
+		}
+
+		if (other == null)
+			other = base.FindNamedEntity(name);
+		return other;
+	}
+
+	public override float GetPostSpeakDelay() => PostSpeakDelay;
+	public virtual void SetPostSpeakDelay(float delay) => PostSpeakDelay = delay;
+	public virtual float GetPreDelay() => PreDelay;
+	public virtual void SetPreDelay(float delay) => PreDelay = delay;
+
+	public override void OnLoaded() {
+		base.OnLoaded();
+		SetBackground(IsBackgroundScene);
+	}
+
+	public override void DispatchStartMoveTo(ChoreoScene scene, BaseFlex actor, BaseEntity actor2, ChoreoEvent ev) {
+		if (PassThrough(actor))
+			base.DispatchStartMoveTo(scene, actor, actor2, ev);
+	}
+
+	public override void DispatchEndMoveTo(ChoreoScene scene, BaseFlex actor, ChoreoEvent ev) {
+		if (PassThrough(actor))
+			base.DispatchEndMoveTo(scene, actor, ev);
+	}
+
+	public override void DispatchStartFace(ChoreoScene scene, BaseFlex actor, BaseEntity actor2, ChoreoEvent ev) {
+		if (PassThrough(actor))
+			base.DispatchStartFace(scene, actor, actor2, ev);
+	}
+
+	public override void DispatchEndFace(ChoreoScene scene, BaseFlex actor, ChoreoEvent ev) {
+		if (PassThrough(actor))
+			base.DispatchEndFace(scene, actor, ev);
+	}
+
+	public override void DispatchStartSequence(ChoreoScene scene, BaseFlex actor, ChoreoEvent ev) {
+		if (IsMultiplayer())
+			base.DispatchStartSequence(scene, actor, ev);
+	}
+
+	public override void DispatchEndSequence(ChoreoScene scene, BaseFlex actor, ChoreoEvent ev) {
+		if (IsMultiplayer())
+			base.DispatchEndSequence(scene, actor, ev);
+	}
+
+	public override void DispatchPauseScene(ChoreoScene scene, ReadOnlySpan<char> parameters) { }
+
+	public override void OnRestore() {
+		if (HadOwner && Owner.Get() == null) {
+			Util.Remove(this);
+			return;
+		}
+
+		Scene?.SetBackground(IsBackgroundScene);
+		base.OnRestore();
+	}
+
+	public override float EstimateLength() => base.EstimateLength() + GetPreDelay();
+
+	bool PassThrough(BaseFlex? actor) {
+		if (actor == null)
+			return false;
+
+		AI_BaseNPC? myNpc = actor.MyNPCPointer();
+
+		if (myNpc == null)
+			return false;
+
+		if (myNpc.IsCurSchedule(SCHED_SCENE_GENERIC))
+			return true;
+
+		if (myNpc.GetCurSchedule() != null) {
+			myNpc.GetCurSchedule()!.GetInterruptMask(out AI_ScheduleBits testBits);
+
+			if (testBits.IsBitSet((int)SCOND_t.COND_IDLE_INTERRUPT))
+				return true;
+		}
+
+		Scene_Printf($"{SceneFile} : event suppressed\n");
+
+		return false;
+	}
 }
 
 [LinkEntityToClass("logic_choreographed_scene")]
@@ -257,28 +447,28 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 
 	public const int MAX_ACTORS_IN_SCENE = 16;
 
-	[NetworkName("m_nSceneStringIndex")]
-	public int SceneStringIndex;
-	[NetworkName("m_bIsPlayingBack")]
-	public bool IsPlayingBack;
-	[NetworkName("m_bPaused")]
-	public bool Paused;
-	[NetworkName("m_bMultiplayer")]
-	public bool Multiplayer;
-	[NetworkName("m_flForceClientTime")]
-	public float ForceClientTime;
-	[NetworkName("m_hActorList")]
+	[NetworkVar("m_nSceneStringIndex")]
+	public partial int SceneStringIndex { get; set; }
+	[NetworkVar("m_bIsPlayingBack")]
+	public partial bool IsPlayingBack { get; set; }
+	[NetworkVar("m_bPaused")]
+	public partial bool Paused { get; set; }
+	[NetworkVar("m_bMultiplayer")]
+	public partial bool Multiplayer { get; set; }
+	[NetworkVar("m_flForceClientTime")]
+	public partial float ForceClientTime { get; set; }
+	[NetworkVar("m_hActorList")]
 	readonly List<EHANDLE> ActorList = [];
 
-	public static readonly SendTable DT_SceneEntity = new([
-		SendPropInt(FIELD.OF(nameof(SceneStringIndex)), 12, PropFlags.Unsigned),
-		SendPropBool(FIELD.OF(nameof(IsPlayingBack))),
-		SendPropBool(FIELD.OF(nameof(Paused))),
-		SendPropBool(FIELD.OF(nameof(Multiplayer))),
-		SendPropFloat(FIELD.OF(nameof(ForceClientTime)), 0, PropFlags.NoScale),
-		SendPropList<EHANDLE>(FIELD.OF(nameof(ActorList)), MAX_ACTORS_IN_SCENE, SendPropEHandle()),
-	]);
-	public static new readonly ServerClass ServerClass = new ServerClass(DT_SceneEntity);
+	[NetworkTable(NoBase = true)]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(SceneStringIndex)) { Bits = 12, Flags = PropFlags.Unsigned },
+		nameof(IsPlayingBack),
+		nameof(Paused),
+		nameof(Multiplayer),
+		new(nameof(ForceClientTime)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(ActorList)) { Encoding = NetEncoding.List, Count = MAX_ACTORS_IN_SCENE },
+	];
 
 	public static readonly new DataMap DataDesc = new(typeof(SceneEntity), BaseEntity.DataDesc, [
 		DEFINE.KEYFIELD(nameof(SceneFile), FieldType.String, "SceneFile"),
@@ -425,7 +615,7 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 
 	bool SceneMissing;
 
-	ChoreoScene? Scene;
+	protected ChoreoScene? Scene;
 
 	static ConVar? SndMixahead;
 
@@ -539,7 +729,7 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 		GetSceneManager()?.AddSceneEntity(this);
 	}
 
-	float GetSoundSystemLatency() {
+	protected float GetSoundSystemLatency() {
 		if (SndMixahead != null)
 			return SndMixahead.GetFloat();
 
@@ -1242,7 +1432,7 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 			actor = FindNamedActor(choreoActor.GetName());
 
 			if (actor != null) {
-				ActorList[index] = new EHANDLE().Set(actor);
+				ActorList[index] = actor.GetRefEHandle();
 				NetworkProp().NetworkStateForceUpdate();
 			}
 		}

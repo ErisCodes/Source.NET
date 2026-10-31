@@ -242,8 +242,10 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 		throw new NotImplementedException();
 	}
 
-	public void CreateVPhysicsRepresentations(IPhysicsEnvironment physenv, IVPhysicsKeyHandler defaults, object gameData) {
-		throw new NotImplementedException();
+	public void CreateVPhysicsRepresentations(IPhysicsEnvironment physenv, IVPhysicsKeyHandler defaults, object? gameData) {
+		int count = StaticProps.Count;
+		for (int i = count; --i >= 0;)
+			StaticProps[i].CreateVPhysics(physenv, defaults, gameData);
 	}
 
 	public void GetAllStaticProps(List<ICollideable> output) {
@@ -259,7 +261,11 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 	}
 
 	public bool PropHasBakedLightingDisabled(IHandleEntity? handleEntity) {
-		throw new NotImplementedException();
+		int index = HandleEntityToIndex(handleEntity);
+
+		StaticProp prop = StaticProps[index];
+
+		return (prop.Flags() & (int)StaticPropFlags.NoPerVertexLighting) != 0;
 	}
 
 	public ref readonly Vector3 ViewOrigin() => ref LastViewOrigin;
@@ -335,8 +341,17 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 		if (!r_drawstaticprops.GetBool())
 			return;
 
-		// todo: fast pipeline
-		DrawStaticProps_Slow(ref props, count, shadowDepth, drawVCollideWireframe);
+		if (IsUsingStaticPropDebugModes() || drawVCollideWireframe)
+			DrawStaticProps_Slow(ref props, count, shadowDepth, drawVCollideWireframe);
+		else {
+			if (pipeline_static_props.GetBool() &&
+				HardwareConfig.GetDXSupportLevel() >= 80 &&
+				HardwareConfig.SupportsColorOnSecondStream() &&
+				HardwareConfig.SupportsStaticPlusDynamicLighting())
+				DrawStaticProps_FastPipeline(props, count, shadowDepth);
+			else
+				DrawStaticProps_Fast(ref props, count, shadowDepth);
+		}
 	}
 
 	void DrawStaticProps_Slow(ref InlineArray512<IClientRenderable> props, int count, bool shadowDepth, bool drawVCollideWireframe) {
@@ -353,7 +368,32 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 	}
 
 	void DrawStaticProps_Fast(ref InlineArray512<IClientRenderable> props, int count, bool shadowDepth) => throw new NotImplementedException();
-	void DrawStaticProps_FastPipeline(ref InlineArray512<IClientRenderable> props, int count, bool shadowDepth) => throw new NotImplementedException();
+
+	const int MAX_OBJECTS = 2048;
+	readonly StaticPropRenderInfo[] PropList = new StaticPropRenderInfo[MAX_OBJECTS];
+
+	void DrawStaticProps_FastPipeline(Span<IClientRenderable> props, int count, bool shadowDepth) {
+		Span<StaticPropRenderInfo> propList = PropList;
+		int listCount = 0;
+		if (count > MAX_OBJECTS)
+			DrawStaticProps_FastPipeline(props[MAX_OBJECTS..], count - MAX_OBJECTS, shadowDepth);
+
+		for (int i = 0; i < count; i++) {
+			StaticProp prop = (StaticProp)props[i];
+			if (prop.Model == null)
+				continue;
+			propList[listCount].ModelToWorld = prop.ModelToWorld;
+			propList[listCount].Model = prop.Model;
+			propList[listCount].Instance = prop.ModelInstance;
+			propList[listCount].Skin = prop.Skin;
+			propList[listCount].Renderable = prop;
+			propList[listCount].LightingOrigin = prop.LightingOrigin;
+			listCount++;
+		}
+		modelrender.DrawStaticPropArrayFast(propList, listCount, shadowDepth);
+	}
+
+	static readonly ConVar pipeline_static_props = new("pipeline_static_props", "1");
 
 	void OutputLevelStats() => throw new NotImplementedException();
 	void PrecacheLighting() { // FIXME: This is very slow... 
@@ -571,14 +611,28 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 
 public class StaticProp : IClientUnknown, IClientRenderable, ICollideable
 {
+	static readonly ObjectParams g_PhysDefaultObjectParams = new() {
+		MassCenterOverrideFn = null,
+		Mass = 1.0f,
+		Inertia = 1.0f,
+		Damping = 0.1f,
+		RotDamping = 0.1f,
+		RotInertiaLimit = 0.05f,
+		Name = "DEFAULT",
+		GameData = null,
+		Volume = 0f,
+		DragCoefficient = 1.0f,
+		EnableCollisions = true
+	};
+
 	Vector3 Origin;
 	QAngle Angles;
-	Model? Model;
+	internal Model? Model;
 	SpatialPartitionHandle_t Partition;
-	ModelInstanceHandle_t ModelInstance;
+	internal ModelInstanceHandle_t ModelInstance;
 	byte Alpha;
 	byte Solid;
-	byte Skin;
+	internal byte Skin;
 	byte flags;
 	ushort firstLeaf;
 	ushort leafCount;
@@ -589,13 +643,13 @@ public class StaticProp : IClientUnknown, IClientRenderable, ICollideable
 
 	Vector3 RenderBBoxMin;
 	Vector3 RenderBBoxMax;
-	Matrix3x4 ModelToWorld;
+	internal Matrix3x4 ModelToWorld;
 	float radius;
 
 	Vector3 WorldRenderBBoxMin;
 	Vector3 WorldRenderBBoxMax;
 
-	Vector3 LightingOrigin;
+	internal Vector3 LightingOrigin;
 
 	public StaticProp() {
 		ModelInstance = MODEL_INSTANCE_INVALID;
@@ -868,7 +922,52 @@ public class StaticProp : IClientUnknown, IClientRenderable, ICollideable
 	public ClientRenderHandle_t GetRenderHandle() => renderHandle;
 	public void SetAlpha(byte alpha) => Alpha = alpha;
 
-	public void CreateVPhysics(IPhysicsEnvironment physenv, IVPhysicsKeyHandler defaults, object gameData) => throw new NotImplementedException();
+	public void CreateVPhysics(IPhysicsEnvironment physenv, IVPhysicsKeyHandler defaults, object? gameData) {
+		if (Solid == (byte)SolidType.None)
+			return;
+
+		VCollide? vcollide = null;
+		Solid solid = default;
+		PhysCollide? physCollide;
+
+		if (Model != null && Solid == (byte)SolidType.VPhysics)
+			vcollide = CM.VCollideForModel(-1, Model);
+
+		if (vcollide != null) {
+			physCollide = vcollide.Solids![0];
+
+			IVPhysicsKeyParser parse = physcollision.VPhysicsKeyParserCreate(vcollide.KeyValues!);
+			while (!parse.Finished()) {
+				ReadOnlySpan<char> block = parse.GetCurrentBlockName();
+				if (strcmpi(block, "solid") == 0) {
+					parse.ParseSolid(ref solid, defaults);
+					break;
+				}
+				else
+					parse.SkipBlock();
+			}
+			physcollision.VPhysicsKeyParserDestroy(parse);
+		}
+		else {
+			if (Solid != (byte)SolidType.BBox) {
+				ReadOnlySpan<char> model = Model != null ? modelLoader.GetName(Model) : "unknown model";
+				Warning($"Map Error:  Static prop with bogus solid type {Solid}! ({model})\n");
+				Solid = (byte)SolidType.None;
+				return;
+			}
+
+			physCollide = physcollision.BBoxToCollide(Model!.Mins, Model.Maxs);
+			solid.Params = g_PhysDefaultObjectParams;
+		}
+
+		Assert(physCollide != null);
+		solid.Params.EnableCollisions = true;
+		solid.Params.GameData = gameData;
+		solid.Params.Name = "prop_static";
+
+		int surfaceData = (int)physprop.GetSurfaceIndex(((ReadOnlySpan<char>)solid.SurfaceProp).SliceNullTerminatedString());
+		physenv.CreatePolyObjectStatic(physCollide!, surfaceData, Origin, Angles, ref solid.Params);
+	}
 
 	public float Radius() => radius;
 	public int Flags() => flags;

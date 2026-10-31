@@ -103,16 +103,22 @@ public class Material : IMaterialInternal
 		if (IsPrecached())
 			return;
 
-		if (!PrecacheVars())
-			return;
+		MaterialLock hMaterialLock = materials.Lock();
+		try {
+			if (!PrecacheVars())
+				return;
 
-		flags |= MaterialFlags.IsPrecached;
-		if (Shader != null)
-			materials.ShaderSystem.InitShaderInstance(Shader, ShaderParams, GetName(), GetTextureGroupName());
+			flags |= MaterialFlags.IsPrecached;
+			if (Shader != null)
+				materials.ShaderSystem.InitShaderInstance(Shader, ShaderParams, GetName(), GetTextureGroupName());
 
-		RecomputeStateSnapshots();
-		FindRepresentativeTexture();
-		PrecacheMappingDimensions();
+			RecomputeStateSnapshots();
+			FindRepresentativeTexture();
+			PrecacheMappingDimensions();
+		}
+		finally {
+			materials.Unlock(hMaterialLock);
+		}
 	}
 
 	public void ColorModulate(float r, float g, float b) {
@@ -146,6 +152,12 @@ public class Material : IMaterialInternal
 	}
 
 	public void RecomputeStateSnapshots() {
+		MatCallQueue? callQueue = materials.GetRenderCallQueue();
+		if (callQueue != null) {
+			callQueue.QueueCall(static material => material.RecomputeStateSnapshots(), this);
+			return;
+		}
+
 		bool ok = InitializeRenderState();
 		if (!ok)
 			SetupErrorShader();
@@ -169,7 +181,29 @@ public class Material : IMaterialInternal
 	}
 
 	private void SetupErrorShader() {
-		throw new NotImplementedException();
+		int flags = 0;
+		if (ShaderParams != null && ShaderParams[(int)ShaderMaterialVars.Flags] != null)
+			flags = ShaderParams[(int)ShaderMaterialVars.Flags].GetIntValue() & (int)MaterialVarFlags.Model;
+
+		CleanUpShaderParams();
+		CleanUpMaterialProxy();
+
+		Shader = materials.ShaderSystem.FindShader(MissingShaderName());
+		Assert(Shader);
+
+		VarCount = Shader!.GetNumParams();
+		ShaderParams = new IMaterialVar[VarCount];
+
+		for (int i = 0; i < VarCount; ++i)
+			ShaderParams[i] = new MaterialVar(this, Shader.GetParamName(i));
+
+		SetMaterialVarFlags((MaterialVarFlags)flags, true);
+
+		materials.ShaderSystem.InitShaderParameters(Shader, ShaderParams, "Error", null);
+
+		materials.ShaderSystem.InitShaderInstance(Shader, ShaderParams, "Error", GetTextureGroupName());
+
+		InitializeRenderState();
 	}
 
 	static readonly ConVarRef mat_reduceparticles = new("mat_reduceparticles");
@@ -181,10 +215,11 @@ public class Material : IMaterialInternal
 		Span<char> lowercased = stackalloc char[varName.Length];
 		varName.ToLowerInvariant(lowercased);
 		ReadOnlySpan<char> lowercasedROS = lowercased; // Need to make a version of that that works on Span...
-		foreach (var shaderParam in Vars) {
-			if (shaderParam.GetName().Hash() == lowercasedROS.Hash()) {
+		Span<IMaterialVar> vars = Vars;
+		for (int i = vars.Length; --i >= 0;) {
+			if (vars[i].GetName().Hash() == lowercasedROS.Hash()) {
 				found = true;
-				return shaderParam;
+				return vars[i];
 			}
 		}
 		found = false;
@@ -259,7 +294,7 @@ public class Material : IMaterialInternal
 	readonly List<FileNameHandle_t> VMTIncludes = [];
 
 	private string GetTextureGroupName() {
-		return "";
+		return texGroupName;
 	}
 
 	public static bool LoadVMTFile(IFileSystem fileSystem, ref KeyValues keyValues, KeyValues patchKeyValues, ReadOnlySpan<char> materialName, bool absolutePath, List<FileNameHandle_t>? includes = null) {
@@ -460,6 +495,8 @@ public class Material : IMaterialInternal
 		if (IsPrecachedVars())
 			return true;
 
+		MaterialLock hMaterialLock = materials.Lock();
+
 		// How should we load VMT includes?
 		// How should we allow async?
 
@@ -496,6 +533,7 @@ public class Material : IMaterialInternal
 			}
 		}
 
+		materials.Unlock(hMaterialLock);
 		return ok;
 	}
 
@@ -994,9 +1032,9 @@ public class Material : IMaterialInternal
 			else if (0 == stricmp(cond, "ldr"))
 				shouldSkip = materials.HardwareConfig.GetHDRType() != HDRType.None;
 			else if (0 == stricmp(cond, "360"))
-				shouldSkip = !IsX360();
+				shouldSkip = true;
 			else if (0 == stricmp(cond, "gameconsole"))
-				shouldSkip = !IsConsole();
+				shouldSkip = true;
 			else
 				Warning($"unrecognized conditional test {varName} in {GetName()}\n");
 
@@ -1108,6 +1146,19 @@ public class Material : IMaterialInternal
 		}
 	}
 
+	public void ReloadTextures() {
+		Precache();
+		int paramCount = ShaderParamCount();
+		IMaterialVar[]? vars = GetShaderParams();
+		for (int i = 0; i < paramCount; i++) {
+			if (vars![i] != null && vars[i].IsTexture()) {
+				ITexture? texture = vars[i].GetTextureValue();
+				if (!ITexture.IsError(texture))
+					texture.Download();
+			}
+		}
+	}
+
 	public void RefreshPreservingMaterialVars() {
 		if (materials.ShaderDevice.IsUsingGraphics()) {
 			Uncache(true);
@@ -1116,6 +1167,8 @@ public class Material : IMaterialInternal
 	}
 
 	public void Uncache(bool preserveVars = false) {
+		MaterialLock hMaterialLock = materials.Lock();
+
 		if (IsPrecached()) {
 			CleanUpStateSnapshots();
 			flags &= ~MaterialFlags.ValidRenderState;
@@ -1132,18 +1185,32 @@ public class Material : IMaterialInternal
 				flags &= ~MaterialFlags.VarsIsPrecached;
 			}
 		}
+
+		materials.Unlock(hMaterialLock);
 	}
 
 	private void CleanUpMaterialProxy() {
+		if (ProxyInfo.Count == 0)
+			return;
 
+		IMaterialProxyFactory? materialProxyFactory = materials.GetMaterialProxyFactory();
+		if (materialProxyFactory == null)
+			return;
+
+		for (int i = ProxyInfo.Count - 1; i >= 0; i--)
+			materialProxyFactory.DeleteProxy(ProxyInfo[i]);
+
+		ProxyInfo.Clear();
 	}
 
 	private void CleanUpShaderParams() {
-
+		ShaderParams = null;
+		VarCount = 0;
 	}
 
 	private void CleanUpStateSnapshots() {
-
+		if (IsValidRenderState())
+			materials.ShaderSystem.CleanupRenderState(ShaderRenderState);
 	}
 
 	int EnumerationID;
@@ -1193,6 +1260,8 @@ public class Material : IMaterialInternal
 	public int ShaderParamCount() => VarCount;
 
 	int RefCount;
+
+	public int GetReferenceCount() => RefCount;
 
 	public void IncrementReferenceCount() => ++RefCount;
 
@@ -1311,9 +1380,16 @@ public class Material : IMaterialInternal
 
 	public void CallBindProxy(object? proxydata) {
 		if (ProxyInfo.Count != 0) {
+			bool threaded = materials.GetRenderCallQueue() != null;
+			if (threaded)
+				MaterialVar.EnableThreadedMaterialVarAccess(true);
+
 			foreach (var proxy in ProxyInfo) {
 				proxy.OnBind(proxydata);
 			}
+
+			if (threaded)
+				MaterialVar.EnableThreadedMaterialVarAccess(false);
 		}
 	}
 
@@ -1329,6 +1405,12 @@ public class Material : IMaterialInternal
 	}
 
 	public void SetMaterialVarFlag(MaterialVarFlags flag, bool on) {
+		MatCallQueue? callQueue = materials.GetRenderCallQueue();
+		if (callQueue != null) {
+			callQueue.QueueCall(static s => s.Material.SetMaterialVarFlag(s.Flag, s.On), (Material: this, Flag: flag, On: on));
+			return;
+		}
+
 		bool oldOn = (GetMaterialVarFlags() & flag) != 0;
 		if (oldOn != on) {
 			SetMaterialVarFlags(flag, on);
@@ -1346,7 +1428,7 @@ public class Material : IMaterialInternal
 	public bool IsAlphaTested() {
 		Precache();
 		if (Shader != null && IsValidRenderState())
-			return (ShaderRenderState.GetFlags() & ShaderFlags.OpacityAlphaTest) != 0 || GetMaterialVarFlag(MaterialVarFlags.AlphaTest);
+			return (ShaderRenderState.GetFlags() & ShaderRenderStateFlags.OpacityAlphaTest) != 0 || GetMaterialVarFlag(MaterialVarFlags.AlphaTest);
 
 		return false;
 	}

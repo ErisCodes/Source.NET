@@ -59,8 +59,8 @@ public enum GameRulesPlayerRelationship
 	Neutral
 }
 
-[NetworkName("CGameRulesProxy")]
-public class
+[NetworkName("CGameRulesProxy", NoBase = true)]
+public partial class
 #if CLIENT_DLL
 	C_GameRulesProxy
 #else
@@ -68,28 +68,16 @@ public class
 #endif
 	: BaseEntity
 {
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+	];
+
 	public virtual GameRules GameRules => gameRules!;
 	GameRules? gameRules = null;
 
 	public static GameRulesProxy? s_GameRulesProxy;
 
 	public static void NotifyNetworkStateChanged() => s_GameRulesProxy?.NetworkStateChanged();
-
-	public static readonly
-#if CLIENT_DLL
-		RecvTable
-#else
-		SendTable
-#endif
-		DT_GameRulesProxy = new([]);
-#if CLIENT_DLL
-	public static readonly new ClientClass ClientClass = new ClientClass(null, null, DT_GameRulesProxy);
-#else
-#pragma warning disable CS0109 // Member does not hide an inherited member; new keyword is not required
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_GameRulesProxy);
-#pragma warning restore CS0109 // Member does not hide an inherited member; new keyword is not required
-#endif
-
 }
 
 public abstract class
@@ -310,7 +298,25 @@ public abstract class
 	public virtual void Precache() { return; }
 
 	public virtual void RefreshSkillData(bool forceUpdate) {
-		// todo
+#if !CLIENT_DLL
+		if (!forceUpdate) {
+			if (GlobalEntity.IsInTable("skill.cfg"))
+				return;
+		}
+		GlobalEntity.Add("skill.cfg", gpGlobals.MapName, GlobalEState.On);
+
+		ConVarRef skill = new("skill");
+
+		SetSkillLevel(skill.IsValid() ? skill.GetInt() : 1);
+
+#if HL2_DLL
+		engine.ServerCommand("exec skill_manifest.cfg\n");
+		engine.ServerExecute();
+#elif !TF_DLL && !DOD_DLL
+		engine.ServerCommand($"exec skill{GetSkillLevel()}.cfg\n");
+		engine.ServerExecute();
+#endif
+#endif
 	}
 
 	// Called each frame. This just forwards the call to Think().

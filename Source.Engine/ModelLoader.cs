@@ -12,8 +12,8 @@ using Source.Common.Formats.BSP;
 using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
 using Source.Common.ShaderAPI;
+using Source.Common.Utilities;
 
-using System.Buffers;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -219,10 +219,11 @@ public class MDLCacheNotify : IMDLCacheNotify
 		if ((studioHdr.Flags & StudioHdrFlags.DoNotCastShadows) != 0)
 			model.Flags |= ModelFlag.DoNotCastShadows;
 
-		Span<IMaterial> materials = new IMaterial[128];
-		int materialCount = modelLoader.Mod_GetModelMaterials(model, materials);
+		InlineArray128<IMaterial> materialBuffer = default;
+		SpanList<IMaterial> materials = new(materialBuffer);
+		modelLoader.Mod_GetModelMaterials(model, ref materials);
 
-		for (int i = 0; i < materialCount; ++i) {
+		for (int i = 0; i < materials.Count; ++i) {
 			IMaterial material = materials[i];
 			if (material == null)
 				continue;
@@ -525,14 +526,13 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 			double t1 = Platform.Time;
 			model.Materials = default;
 
-			IMaterial[] materials = ArrayPool<IMaterial>.Shared.Rent(128);
-			int nMaterials = Mod_GetModelMaterials(model, materials);
+			InlineArray128<IMaterial> materialBuffer = default;
+			SpanList<IMaterial> materials = new(materialBuffer);
+			Mod_GetModelMaterials(model, ref materials);
+			int nMaterials = materials.Count;
 
-			if ((model.LoadFlags & ModelLoaderFlags.Dynamic) != 0) {
-				model.Materials = new Memory<IMaterial>(new IMaterial[nMaterials]);
-				for (int i = 0; i < nMaterials; i++)
-					model.Materials.Span[i] = materials[i];
-			}
+			if ((model.LoadFlags & ModelLoaderFlags.Dynamic) != 0)
+				model.Materials = materials.AsSpan().ToArray();
 
 			if (nMaterials != 0)
 				model.LoadFlags |= ModelLoaderFlags.TouchedMaterials;
@@ -542,8 +542,6 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 
 			if (touchAllData || preloaded)
 				Mod_TouchAllData(model, Host.GetServerCount());
-
-			ArrayPool<IMaterial>.Shared.Return(materials, true);
 		}
 	}
 
@@ -576,34 +574,64 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 					if ((studioHdr.Flags & StudioHdrFlags.ForceOpaque) != 0)
 						return;
 
-					IMaterial[] materialsArray = ArrayPool<IMaterial>.Shared.Rent(128);
-					try {
-						Span<IMaterial> materials = materialsArray.AsSpan(0, 128);
-						int materialCount = StudioRender.GetMaterialListFromBodyAndSkin(mod.Studio, skin, body, materials);
-						for (int i = 0; i < materialCount; i++) {
-							if (materials[i] != null) {
-								using MatRenderContextPtr renderContext = new(SourceDllMain.materials);
-								renderContext.Bind(materials[i], clientRenderable);
-								bool isTranslucent = materials[i].IsTranslucent();
+					InlineArray128<IMaterial> materialBuffer = default;
+					SpanList<IMaterial> materials = new(materialBuffer);
+					StudioRender.GetMaterialListFromBodyAndSkin(mod.Studio, skin, body, ref materials);
+					for (int i = 0; i < materials.Count; i++) {
+						if (materials[i] != null) {
+							using MatRenderContextPtr renderContext = new(SourceDllMain.materials);
+							renderContext.Bind(materials[i], clientRenderable);
+							bool isTranslucent = materials[i].IsTranslucent();
 
-								if (isTranslucent) {
-									mod.Flags |= ModelFlag.Translucent;
-									break;
-								}
+							if (isTranslucent) {
+								mod.Flags |= ModelFlag.Translucent;
+								break;
 							}
 						}
-					}
-					finally {
-						ArrayPool<IMaterial>.Shared.Return(materialsArray, true);
 					}
 				}
 				break;
 		}
 	}
 
-	internal int Mod_GetModelMaterials(Model model, Span<IMaterial> materials) {
+	static bool ContainsMaterial(ReadOnlySpan<IMaterial> materials, IMaterial? material) {
+		foreach (IMaterial existing in materials) {
+			if (existing == material)
+				return true;
+		}
+		return false;
+	}
+
+	internal int Mod_GetMaterialCount(Model mod) {
+		switch (mod.Type) {
+			case ModelType.Brush: {
+					List<IMaterial?> uniqueMaterials = new(32);
+					for (int i = 0; i < mod.Brush.NumModelSurfaces; ++i) {
+						ref BSPMSurface2 surfID = ref SurfaceHandleFromIndex(mod.Brush.FirstModelSurface + i, mod.Brush.Shared);
+						if ((MSurf_Flags(ref surfID) & SurfDraw.NoDraw) != 0)
+							continue;
+
+						IMaterial? material = MSurf_TexInfo(ref surfID, mod.Brush.Shared).Material;
+						if (!uniqueMaterials.Contains(material))
+							uniqueMaterials.Add(material);
+					}
+					return uniqueMaterials.Count;
+				}
+
+			case ModelType.Studio:
+				Assert(false);
+				break;
+
+			default:
+				Assert(false);
+				break;
+		}
+
+		return 0;
+	}
+
+	internal void Mod_GetModelMaterials(Model model, ref SpanList<IMaterial> materials) {
 		StudioHeader studioHdr;
-		int found = 0;
 		int i;
 
 		switch (model.Type) {
@@ -615,27 +643,26 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 
 						IMaterial? material = MSurf_TexInfo(ref surfID, model.Brush.Shared).Material;
 
-						int j = found;
-						while (--j >= 0) {
-							if (materials[j] == material)
-								break;
-						}
-						if (j < 0)
-							materials[found++] = material!;
+						if (!ContainsMaterial(materials.AsSpan(), material))
+							materials.Add(material!);
 
-						if (found >= materials.Length)
-							return found;
+						if (materials.Count >= materials.Capacity)
+							return;
 					}
 				}
 				break;
 
 			case ModelType.Studio:
 				if (!model.Materials.IsEmpty) {
-					model.Materials.Span.CopyTo(materials);
+					foreach (IMaterial material in model.Materials.Span) {
+						if (materials.Count >= materials.Capacity)
+							break;
+						materials.Add(material);
+					}
 				}
 				else {
 					studioHdr = MDLCache.GetStudioHdr(model.Studio);
-					found = StudioRender.GetMaterialList(studioHdr, materials);
+					StudioRender.GetMaterialList(studioHdr, ref materials);
 				}
 				break;
 
@@ -643,8 +670,6 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 				Assert(false);
 				break;
 		}
-
-		return found;
 	}
 
 	private void Mod_TouchAllData(Model model, int serverCount) {
@@ -774,6 +799,59 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 		data = lh.LoadLumpData<T>();
 	}
 
+	bool MapHasHDRLighting;
+	public bool LastLoadedMapHasHDRLighting() => MapHasHDRLighting;
+
+	void EnableHDR(bool enable) {
+		if (materialSystemHardwareConfig.GetHDREnabled() == enable)
+			return;
+
+		materialSystemHardwareConfig.SetHDREnabled(enable);
+
+		MatSysInterface.UpdateMaterialSystemConfig();
+
+		materialSystem.ReleaseResources();
+		materialSystem.ReacquireResources();
+	}
+
+	bool Map_CheckForHDR(Model mod, ReadOnlySpan<char> loadName) {
+		MapLoadHelper.Init(mod, loadName);
+
+		bool hasHDR = MapLoadHelper.GetLumpSize(LumpIndex.LightingHDR) > 0 &&
+			MapLoadHelper.GetLumpSize(LumpIndex.WorldLightsHDR) > 0;
+		if (MapLoadHelper.MapHeader.Version >= 20 && MapLoadHelper.GetLumpSize(LumpIndex.LeafAmbientLightingHDR) == 0)
+			hasHDR = false;
+
+		bool enableHDR = hasHDR && mat_hdr_level.GetInt() >= 2;
+
+		EnableHDR(enableHDR);
+
+		Map_CheckFeatureFlags();
+
+		MapLoadHelper.Shutdown();
+
+		return hasHDR;
+	}
+
+	internal static bool g_bLoadedMapHasBakedPropLighting = false;
+	internal static bool g_bBakedPropLightingNoSeparateHDR = false;
+
+	void Map_CheckFeatureFlags() {
+		g_bLoadedMapHasBakedPropLighting = false;
+		g_bBakedPropLightingNoSeparateHDR = false;
+
+		if (MapLoadHelper.GetLumpSize(LumpIndex.MapFlags) > 0) {
+			MapLoadHelper lh = new(LumpIndex.MapFlags);
+			BSPDFlagsLump flagsLump = lh.LoadLumpData<BSPDFlagsLump>()[0];
+
+			g_bLoadedMapHasBakedPropLighting =
+				(flagsLump.LevelFlags & LevelFlags.BakedStaticPropLightingNonHDR) != 0 ||
+				(flagsLump.LevelFlags & LevelFlags.BakedStaticPropLightingHDR) != 0;
+			g_bBakedPropLightingNoSeparateHDR =
+				(flagsLump.LevelFlags & LevelFlags.BakedStaticPropLightingHDR) == 0;
+		}
+	}
+
 	private void Map_LoadModel(Model mod) {
 		MapLoadCount++;
 
@@ -790,7 +868,7 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 		mod.Brush.RenderHandle = 0;
 
 		Common.TimestampedLog("  Map_CheckForHDR");
-		// todo
+		MapHasHDRLighting = Map_CheckForHDR(mod, LoadNameSliced());
 
 		Common.TimestampedLog("  CM_LoadMap");
 		CM.LoadMap(mod.StrName, false, out uint checksum);
@@ -1051,6 +1129,89 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 		g_ToolBSPTree.EnumerateLeavesInBox(mins, maxs, ref brushIterator, brush.GetHashCode());
 		brushIterator.CheckSurfaces();
 		host_state.SetWorldModel(pTemp);
+	}
+
+	static void MarkWaterSurfaces_ProcessLeafNode(BSPMLeaf leaf) {
+		int i;
+
+		SurfDraw flags = (leaf.LeafWaterDataID == -1) ? SurfDraw.AboveWater : SurfDraw.UnderWater;
+
+		Span<SurfaceHandle_t> handles = host_state.WorldBrush!.MarkSurfaces.AsSpan(leaf.FirstMarkSurface);
+
+		for (i = 0; i < leaf.NumMarkSurfaces; i++) {
+			ref BSPMSurface2 surfID = ref SurfaceHandleFromIndex(handles[i]);
+			if ((MSurf_Flags(ref surfID) & SurfDraw.WaterSurface) != 0)
+				continue;
+
+			if (SurfaceHasDispInfo(ref surfID))
+				continue;
+
+			MSurf_Flags(ref surfID) |= flags;
+		}
+
+		for (i = 0; i < leaf.DispCount; i++) {
+			IDispInfo? dispInfo = DispInfo.MLeaf_Disaplcement(leaf, i);
+
+			if (dispInfo != null) {
+				ref BSPMSurface2 parentSurfID = ref dispInfo.GetParent();
+				MSurf_Flags(ref parentSurfID) |= flags;
+			}
+		}
+	}
+
+	static void MarkWaterSurfaces_r(BSPMNode node) {
+		if (node.Contents == (int)Contents.Solid)
+			return;
+
+		if (node.Contents >= 0) {
+			MarkWaterSurfaces_ProcessLeafNode((BSPMLeaf)node);
+			return;
+		}
+
+		MarkWaterSurfaces_r(node.Children[0]!);
+		MarkWaterSurfaces_r(node.Children[1]!);
+	}
+
+	static int SurfFlagsToSortGroup(ref BSPMSurface2 surfID, SurfDraw flags) {
+		if ((flags & SurfDraw.WaterSurface) != 0)
+			return (int)MatSortGroup.WaterSurface;
+
+		if ((flags & (SurfDraw.UnderWater | SurfDraw.AboveWater)) == (SurfDraw.UnderWater | SurfDraw.AboveWater))
+			return (int)MatSortGroup.IntersectsWaterSurface;
+
+		if ((flags & SurfDraw.UnderWater) != 0)
+			return (int)MatSortGroup.StrictlyUnderwater;
+
+		if ((flags & SurfDraw.AboveWater) != 0)
+			return (int)MatSortGroup.StrictlyAboveWater;
+
+		if (++SurfFlagsToSortGroupWarningCount < 10) {
+			DevWarning($"SurfFlagsToSortGroup:  unhandled flags ({(int)flags:X}) ({MSurf_TexInfo(ref surfID).Material!.GetName()})!\n");
+			DevWarning("- This implies you have a surface (usually a displacement) embedded in solid.\n");
+		}
+		return (int)MatSortGroup.StrictlyAboveWater;
+	}
+
+	static int SurfFlagsToSortGroupWarningCount;
+
+	public static bool Mod_MarkWaterSurfaces(Model model) {
+		bool hasWaterSurfaces = false;
+		Model? saveModel = host_state.WorldModel;
+
+		host_state.SetWorldModel(model);
+		MarkWaterSurfaces_r(model.Brush.Shared!.Nodes![0]);
+		for (int i = 0; i < model.Brush.Shared.NumSurfaces; i++) {
+			ref BSPMSurface2 surfID = ref SurfaceHandleFromIndex(i, model.Brush.Shared);
+
+			int sortGroup = SurfFlagsToSortGroup(ref surfID, MSurf_Flags(ref surfID));
+			if (sortGroup == (int)MatSortGroup.WaterSurface)
+				hasWaterSurfaces = true;
+
+			MSurf_SetSortGroup(ref surfID, sortGroup);
+		}
+		host_state.SetWorldModel(saveModel);
+
+		return hasWaterSurfaces;
 	}
 
 	public void RecomputeSurfaceFlags(Model mod) {
@@ -1468,8 +1629,8 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 			pMap.Leafs[i].DispCount = pCLeaf[i].DispCount;
 			pMap.Leafs[i].DispListStart = pCLeaf[i].DispListStart;
 		}
-		pMap.DispInfoReferences = GetCollisionBSPData().MapDispList.Base();
-		pMap.NumDispInfoReferences = GetCollisionBSPData().MapDispList.Count;
+		pMap.DispInfoReferences = GetCollisionBSPData().MapDispList;
+		pMap.NumDispInfoReferences = GetCollisionBSPData().MapDispList.Length;
 	}
 
 	private void Mod_LoadMarksurfaces() {
@@ -1838,7 +1999,10 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 	}
 
 	private void Mod_LoadFaces() {
-		MapLoadHelper lh = new MapLoadHelper(LumpIndex.Faces);
+		LumpIndex faceLumpToLoad = LumpIndex.Faces;
+		if (materialSystemHardwareConfig.GetHDRType() != HDRType.None && MapLoadHelper.GetLumpSize(LumpIndex.FacesHDR) > 0)
+			faceLumpToLoad = LumpIndex.FacesHDR;
+		MapLoadHelper lh = new MapLoadHelper(faceLumpToLoad);
 		BSPDFace[] inFaces = lh.LoadLumpData<BSPDFace>();
 
 		int count = inFaces.Length;
@@ -1981,7 +2145,7 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 	}
 	private void Mod_LoadTexdata() {
 		MapLoadHelper.Map!.NumTexData = GetCollisionBSPData().NumSurfaces;
-		MapLoadHelper.Map!.TexData = GetCollisionBSPData().MapSurfaces.Base();
+		MapLoadHelper.Map!.TexData = GetCollisionBSPData().MapSurfaces;
 	}
 
 	private void Mod_LoadTexinfo() {
@@ -2027,7 +2191,7 @@ public class ModelLoader(IFileSystem fileSystem, Host Host,
 	}
 
 	private void Mod_LoadPlanes() {
-		MapLoadHelper.Map!.Planes = GetCollisionBSPData().MapPlanes.Base();
+		MapLoadHelper.Map!.Planes = GetCollisionBSPData().MapPlanes;
 		MapLoadHelper.Map!.NumPlanes = GetCollisionBSPData().NumPlanes;
 	}
 

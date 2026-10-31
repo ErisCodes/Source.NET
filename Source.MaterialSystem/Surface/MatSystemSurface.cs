@@ -1071,6 +1071,9 @@ public class MatSystemSurface : IMatSystemSurface
 	}
 
 	public void MovePopupToFront(IPanel panel) {
+		if (panel.IsPopupStayAtBack())
+			return;
+
 		int index = PopupList.IndexOf(panel);
 		if (index == -1)
 			return;
@@ -1114,6 +1117,7 @@ public class MatSystemSurface : IMatSystemSurface
 			StartDrawing();
 
 			renderContext.ClearBuffers(false, true, true);
+#if !GMOD_DLL
 			renderContext.SetStencilEnable(true);
 			renderContext.SetStencilFailOperation(StencilOperation.Keep);
 			renderContext.SetStencilZFailOperation(StencilOperation.Keep);
@@ -1122,6 +1126,7 @@ public class MatSystemSurface : IMatSystemSurface
 			renderContext.SetStencilReferenceValue(0);
 			renderContext.SetStencilTestMask(0xFFFFFFFF);
 			renderContext.SetStencilWriteMask(0xFFFFFFFF);
+#endif
 		}
 
 		float oldZPos = zPos;
@@ -1141,6 +1146,28 @@ public class MatSystemSurface : IMatSystemSurface
 
 		if (paintPopups) {
 			int popups = GetPopupCount();
+#if GMOD_DLL
+			int stencilRef = 254;
+			for (int i = 0; i < popups; ++i) {
+				IPanel? popupPanel = GetPopup(i);
+
+				if (popupPanel == null)
+					continue;
+
+				if (!popupPanel.IsFullyVisible())
+					continue;
+
+				if (!IsPanelUnderRestrictedPanel(popupPanel))
+					continue;
+
+				if (stencilRef == 1)
+					Warning("Too many popups! Rendering will be bad!\n");
+				--stencilRef;
+
+				zPos = i / (float)popups;
+				popupPanel.PaintTraverse(true);
+			}
+#else
 			if (popups > 254)
 				Warning("Too many popups! Rendering will be bad!\n");
 
@@ -1165,6 +1192,7 @@ public class MatSystemSurface : IMatSystemSurface
 				zPos = i / (float)popups;
 				popupPanel.PaintTraverse(true);
 			}
+#endif
 		}
 
 		zPos = oldZPos;

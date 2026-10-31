@@ -135,6 +135,10 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 		return cl.IsActive();
 	}
 
+#if GMOD_DLL
+	public bool IsHostingGame() => Host.HostingGame;
+#endif
+
 	public double GetLastTimeStamp() {
 		return cl.LastServerTickTime;
 	}
@@ -247,7 +251,9 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 	public bool CheckDoneKeyTrapping(out ButtonCode code) => Key.CheckDoneTrapping(out code);
 
 	public void Con_NPrintf(int pos, ReadOnlySpan<char> text) {
-		// todo
+#if !SWDS
+		Con.NPrintF(pos, text);
+#endif
 	}
 
 	public bool IsBoxInViewCluster(in Vector3 mins, in Vector3 maxs) {
@@ -521,7 +527,7 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 	public uint GetEngineBuildNumber() => Protocol.VERSION;
 
 	public ReadOnlySpan<char> GetProductVersionString() {
-		throw new NotImplementedException();
+		return GetSteamInfIDVersionInfo().PatchVersion;
 	}
 
 	public void GrabPreColorCorrectedFrame(int x, int y, int width, int height) {
@@ -533,7 +539,7 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 	}
 
 	public bool MapHasHDRLighting() {
-		throw new NotImplementedException();
+		return modelloader.LastLoadedMapHasHDRLighting();
 	}
 
 	public int GetAppID() {
@@ -696,8 +702,6 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 		throw new NotImplementedException();
 	}
 
-	public bool IsDedicatedServer() {
-		throw new NotImplementedException();
-	}
+	public bool IsDedicatedServer() => ClientState.IsDedicated;
 }
 #endif

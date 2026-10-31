@@ -193,7 +193,7 @@ static class PackedEntities
 		throw new NotImplementedException();
 	}
 
-	static void NetworkBackDoor(int clientCount, GameClient[] clients, FrameSnapshot snapshot) {
+	static void NetworkBackDoor(int clientCount, ReadOnlySpan<GameClient> clients, FrameSnapshot snapshot) {
 		Assert(clientCount == 1);
 
 		GameClient client = clients[0];   // update variables cl, pInfo, frame for current client
@@ -224,7 +224,7 @@ static class PackedEntities
 		EngineServer.InvalidateSharedEdictChangeInfos();
 	}
 
-	static void Normal(int clientCount, GameClient[] clients, FrameSnapshot snapshot) {
+	static void Normal(int clientCount, ReadOnlySpan<GameClient> clients, FrameSnapshot snapshot) {
 		Assert(snapshot.NumValidEntities >= 0 && snapshot.NumValidEntities <= Constants.MAX_EDICTS);
 
 		List<PackWork> workItems = [];
@@ -280,7 +280,7 @@ static class PackedEntities
 		// InvalidateSharedEdictChangeInfos(); todo
 	}
 
-	public static void ComputeClientPacks(int clientCount, GameClient[] clients, FrameSnapshot snapshot) {
+	public static void ComputeClientPacks(int clientCount, ReadOnlySpan<GameClient> clients, FrameSnapshot snapshot) {
 		for (int i = 0; i < clientCount; i++) {
 			CheckTransmitInfo info = clients[i].PackInfo;
 
@@ -394,7 +394,10 @@ static class PackedEntities
 		msg.WriteToBuffer(buffer);
 	}
 
-	static ReadOnlySpan<char> GetObjectClassName(int objectId) {
-		throw new NotImplementedException();
+	public static ReadOnlySpan<char> GetObjectClassName(int objectId) {
+		if (objectId >= 0 && objectId < sv.NumEdicts)
+			return sv.Edicts![objectId].GetClassName();
+		else
+			return "[unknown]";
 	}
 }

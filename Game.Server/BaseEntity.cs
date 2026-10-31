@@ -5,6 +5,8 @@ using Game.Shared;
 using Source;
 using Source.Common;
 using Source.Common.GarrysMod;
+using Source.Common.GarrysMod.Lua;
+using Game.Server.GarrysMod;
 using Source.Common.Audio;
 using Source.Common.Commands;
 using Source.Common.Engine;
@@ -549,9 +551,119 @@ public static class BaseEntity_ConCommands
 }
 
 [LinkEntityToClass("func_proprrespawnzone")]
-[NetworkName("CBaseEntity")]
+[NetworkName("CBaseEntity", NoBase = true)]
 public partial class BaseEntity : IServerEntity
 {
+	[NetworkTable("DT_AnimTimeMustBeFirst")]
+	public static readonly NetworkProp[] AnimTimeMustBeFirstProps = [
+		new(nameof(AnimTime)) { Encoding = NetEncoding.Int, Bits = 8, Flags = PropFlags.Unsigned | PropFlags.ChangesOften | PropFlags.EncodedAgainstTickCount, Proxy = typeof(AnimTimeProxy) },
+	];
+
+	[NetworkTable("DT_PredictableId")]
+	public static readonly NetworkProp[] PredictableIdProps = [
+		new(nameof(PredictableId)) { Encoding = NetEncoding.PredictableId },
+		new(nameof(b_IsPlayerSimulated)) { Encoding = NetEncoding.Int, Bits = 1, Flags = PropFlags.Unsigned },
+	];
+
+	[PredictionTable]
+	public static readonly PredictionField[] Prediction = [];
+
+	[NetworkTable]
+	public static readonly NetworkProp[] Props = [
+		new(nameof(AnimTimeMustBeFirstProps)) { Proxy = typeof(BaseEntity.ClientSideAnimationProxy) },
+		new(nameof(SimulationTime)) { Encoding = NetEncoding.Int, Bits = SIMULATION_TIME_WINDOW_BITS, Flags = PropFlags.Unsigned | PropFlags.ChangesOften | PropFlags.EncodedAgainstTickCount, Proxy = typeof(SimulationTimeProxy) },
+		new(nameof(Origin)) { Bits = -1, Flags = PropFlags.Coord | PropFlags.ChangesOften, Low = 0.0f, High = Constants.HIGH_DEFAULT, Proxy = typeof(OriginProxy) },
+		new(nameof(InterpolationFrame)) { Bits = NOINTERP_PARITY_MAX_BITS, Flags = PropFlags.Unsigned },
+		new(nameof(ModelIndex)) { Encoding = NetEncoding.ModelIndex },
+		new(nameof(Collision)) { Encoding = NetEncoding.DataTable, DataTable = "DT_CollisionProperty" },
+		new(nameof(RenderFX)) { Bits = 8, Flags = PropFlags.Unsigned },
+		new(nameof(RenderMode)) { Bits = 8, Flags = PropFlags.Unsigned },
+		new(nameof(Effects)) { Bits = (int)EntityEffects.MaxBits, Flags = PropFlags.Unsigned },
+		new(nameof(ColorRender)) { Encoding = NetEncoding.Int, Bits = 32, Flags = PropFlags.Unsigned },
+		new(nameof(TeamNum)) { Bits = TEAMNUM_NUM_BITS },
+		new(nameof(CollisionGroup)) { Bits = 5, Flags = PropFlags.Unsigned },
+		new(nameof(Elasticity)) { Bits = 0, Flags = PropFlags.Coord | PropFlags.NoScale },
+		new(nameof(ShadowCastDistance)) { Bits = 12, Flags = PropFlags.Unsigned },
+		nameof(OwnerEntity),
+		nameof(EffectEntity),
+		nameof(MoveParent),
+		new(nameof(ParentAttachment)) { Bits = NUM_PARENTATTACHMENT_BITS, Flags = PropFlags.Unsigned },
+		new(nameof(MoveType)) { Bits = (int)Source.MoveType.MaxBits, Flags = PropFlags.Unsigned },
+		new(nameof(MoveCollide)) { Bits = (int)Source.MoveCollide.MaxBits, Flags = PropFlags.Unsigned },
+		new(nameof(Rotation)) { Bits = 24, Flags = PropFlags.ChangesOften | PropFlags.RoundDown, Proxy = typeof(AnglesProxy) },
+		new(nameof(TextureFrameIndex)) { Encoding = NetEncoding.Int, Bits = 8, Flags = PropFlags.Unsigned },
+		new(nameof(PredictableIdProps)) { Name = "predictable_id", Proxy = typeof(BaseEntity.PredictableIdProxy) },
+		new(nameof(SimulatedEveryTick)) { Encoding = NetEncoding.Int, Bits = 1, Flags = PropFlags.Unsigned },
+		new(nameof(AnimatedEveryTick)) { Encoding = NetEncoding.Int, Bits = 1, Flags = PropFlags.Unsigned },
+		nameof(AlternateSorting),
+		new(nameof(m_takedamage)) { Bits = 8 },
+		new(nameof(RealClassName)) { Bits = 16, Flags = PropFlags.Unsigned },
+		new(nameof(OverrideMaterial)) { Bits = 16, Flags = PropFlags.Unsigned, Proxy = typeof(OverrideMaterialProxy) },
+		new(nameof(OverrideSubMaterials)) { Encoding = NetEncoding.Array2, Bits = 16, Flags = PropFlags.Unsigned },
+		new(nameof(Health)) { Bits = 32, Flags = PropFlags.Normal | PropFlags.ChangesOften | PropFlags.VarInt },
+		new(nameof(MaxHealth)) { Bits = 32 },
+		new(nameof(SpawnFlags)) { Bits = 32, Flags = PropFlags.Unsigned },
+		new(nameof(GModFlags)) { Bits = 7 },
+		nameof(OnFire),
+		new(nameof(CreationTime)) { Bits = 0, Flags = PropFlags.NoScale },
+		new(nameof(Velocity)) { Encoding = NetEncoding.VectorElements, Bits = 0, Flags = PropFlags.NoScale | PropFlags.ChangesOften },
+		new(nameof(GMOD_DataTable)) { Encoding = NetEncoding.GModTable },
+		nameof(GMOD_bool),
+		nameof(GMOD_float),
+		nameof(GMOD_int),
+		nameof(GMOD_Vector),
+		new(nameof(GMOD_QAngle)) { Bits = 32, Flags = PropFlags.RoundDown },
+		nameof(GMOD_EHANDLE),
+		new(nameof(GMOD_String0)) { Encoding = NetEncoding.String },
+		new(nameof(GMOD_String1)) { Encoding = NetEncoding.String },
+		new(nameof(GMOD_String2)) { Encoding = NetEncoding.String },
+		new(nameof(GMOD_String3)) { Encoding = NetEncoding.String },
+		new(nameof(CreationID)) { Bits = 24 },
+		new(nameof(MapCreatedID)) { Bits = 16 },
+	];
+
+	public static class AnimTimeProxy
+	{
+		public static void Send(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID)
+			=> SendProxy_AnimTime(prop, instance, field, ref outData, element, objectID);
+	}
+
+	public static class SimulationTimeProxy
+	{
+		public static void Send(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID)
+			=> SendProxy_SimulationTime(prop, instance, field, ref outData, element, objectID);
+	}
+
+	public static class OriginProxy
+	{
+		public static void Send(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID)
+			=> SendProxy_Origin(prop, instance, field, ref outData, element, objectID);
+	}
+
+	public static class AnglesProxy
+	{
+		public static void Send(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID)
+			=> SendProxy_Angles(prop, instance, field, ref outData, element, objectID);
+	}
+
+	public static class OverrideMaterialProxy
+	{
+		public static void Send(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID)
+			=> SendProxy_OverrideMaterial(prop, instance, field, ref outData, element, objectID);
+	}
+
+	public static class ClientSideAnimationProxy
+	{
+		public static object? Send(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID)
+			=> SendProxy_ClientSideAnimation(prop, instance, data, recipients, objectID);
+	}
+
+	public static class PredictableIdProxy
+	{
+		public static object? Send(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID)
+			=> SendProxy_SendPredictableId(prop, instance, data, recipients, objectID);
+	}
+
 	public static Edict? g_pForceAttachEdict;
 
 	public delegate void BASEPTR(BaseEntity self);
@@ -682,9 +794,6 @@ public partial class BaseEntity : IServerEntity
 		outData.Int = addt;
 	}
 
-	public static SendTable DT_AnimTimeMustBeFirst = new(nameof(DT_AnimTimeMustBeFirst), [
-		SendPropInt (FIELD.OF(nameof(AnimTime)), 8, PropFlags.Unsigned|PropFlags.ChangesOften|PropFlags.EncodedAgainstTickCount, proxyFn: SendProxy_AnimTime),
-	]);
 
 	public virtual int Save(ISave save) { throw new NotImplementedException(); }
 	public virtual int Restore(IRestore save) { throw new NotImplementedException(); }
@@ -706,82 +815,16 @@ public partial class BaseEntity : IServerEntity
 		else
 			return null;
 	}
-	public static SendTable DT_PredictableId = new(nameof(DT_PredictableId), [
-		SendPropPredictableId(FIELD.OF(nameof(PredictableId))),
-		SendPropInt(FIELD.OF(nameof(b_IsPlayerSimulated)), 1, PropFlags.Unsigned)
-	]);
 
-	public static SendTable DT_BaseEntity = new([
-		SendPropDataTable("AnimTimeMustBeFirst", DT_AnimTimeMustBeFirst, SendProxy_ClientSideAnimation),
-
-		SendPropInt(FIELD.OF(nameof(SimulationTime)), SIMULATION_TIME_WINDOW_BITS, PropFlags.Unsigned | PropFlags.ChangesOften | PropFlags.EncodedAgainstTickCount, proxyFn: SendProxy_SimulationTime /* todo */),
-		SendPropVector(NetworkVarFields.Origin, -1, PropFlags.Coord | PropFlags.ChangesOften, 0, Constants.HIGH_DEFAULT, SendProxy_Origin),
-		SendPropInt(FIELD.OF(nameof(InterpolationFrame)), NOINTERP_PARITY_MAX_BITS, PropFlags.Unsigned),
-		SendPropModelIndex(FIELD.OF(nameof(ModelIndex))),
-		SendPropDataTable("m_Collision", FIELD.OF(nameof(Collision)), CollisionProperty.DT_CollisionProperty),
-		SendPropInt(FIELD.OF(nameof(RenderFX)), 8, PropFlags.Unsigned),
-		SendPropInt(FIELD.OF(nameof(RenderMode)), 8, PropFlags.Unsigned),
-		SendPropInt(FIELD.OF(nameof(Effects)), (int)EntityEffects.MaxBits, PropFlags.Unsigned),
-		SendPropInt(FIELD.OF(nameof(ColorRender)), 32, PropFlags.Unsigned),
-		SendPropInt(FIELD.OF(nameof(TeamNum)), TEAMNUM_NUM_BITS, 0),
-		SendPropInt(FIELD.OF(nameof(CollisionGroup)), 5, PropFlags.Unsigned),
-		SendPropFloat(FIELD.OF(nameof(Elasticity)), 0, PropFlags.Coord | PropFlags.NoScale),
-		SendPropFloat(NetworkVarFields.ShadowCastDistance, 12, PropFlags.Unsigned),
-		SendPropEHandle(FIELD.OF(nameof(OwnerEntity))),
-		SendPropEHandle(FIELD.OF(nameof(EffectEntity))),
-		SendPropEHandle(FIELD.OF(nameof(MoveParent))),
-		SendPropInt(FIELD.OF(nameof(ParentAttachment)), NUM_PARENTATTACHMENT_BITS, PropFlags.Unsigned),
-		SendPropInt(FIELD.OF(nameof(MoveType)), (int)Source.MoveType.MaxBits, PropFlags.Unsigned ),
-		SendPropInt(FIELD.OF(nameof(MoveCollide)), (int)Source.MoveCollide.MaxBits, PropFlags.Unsigned ),
-		SendPropQAngles (NetworkVarFields.Rotation, 24, PropFlags.ChangesOften | PropFlags.RoundDown, SendProxy_Angles ),
-		SendPropInt( FIELD.OF(nameof( TextureFrameIndex) ),     8, PropFlags.Unsigned ),
-		SendPropDataTable( "predictable_id", DT_PredictableId, SendProxy_SendPredictableId ),
-		SendPropInt(FIELD.OF(nameof(SimulatedEveryTick)),       1, PropFlags.Unsigned ),
-		SendPropInt(FIELD.OF(nameof(AnimatedEveryTick)),        1, PropFlags.Unsigned ),
-		SendPropBool( NetworkVarFields.AlternateSorting ),
-
-		// The rest of this is Garry's Mod specific in order
-		SendPropInt(FIELD.OF(nameof(m_takedamage)), 8),
-		SendPropInt(FIELD.OF(nameof(RealClassName)), 16, PropFlags.Unsigned),
-
-		SendPropInt(FIELD.OF(nameof(OverrideMaterial)), 16, PropFlags.Unsigned, SendProxy_OverrideMaterial),
-
-		SendPropInt(FIELD.OF_SENDINFO_ARRAY(nameof(OverrideSubMaterials)), 16, PropFlags.Unsigned),
-		SendPropArray2(null, 32, "m_OverrideSubMaterials"),
-
-		SendPropInt(FIELD.OF(nameof(Health)), 32, PropFlags.Normal | PropFlags.ChangesOften | PropFlags.VarInt),
-		SendPropInt(NetworkVarFields.MaxHealth, 32),
-		SendPropInt(FIELD.OF(nameof(SpawnFlags)), 32, PropFlags.Unsigned),
-		SendPropInt(FIELD.OF(nameof(GModFlags)), 7),
-		SendPropBool(FIELD.OF(nameof(OnFire))),
-		SendPropFloat(FIELD.OF(nameof(CreationTime)), 0, PropFlags.NoScale),
-
-		SendPropFloat(FIELD.OF_VECTORELEM(nameof(Velocity), 0), 0, PropFlags.NoScale | PropFlags.ChangesOften),
-		SendPropFloat(FIELD.OF_VECTORELEM(nameof(Velocity), 1), 0, PropFlags.NoScale | PropFlags.ChangesOften),
-		SendPropFloat(FIELD.OF_VECTORELEM(nameof(Velocity), 2), 0, PropFlags.NoScale | PropFlags.ChangesOften),
-
-		SendPropGModTable(FIELD.OF(nameof(GMOD_DataTable))),
-
-		// Addon exposed data tables
-		SendPropArray3(FIELD.OF_ARRAY(nameof(GMOD_bool)), SendPropBool(FIELD.OF_ARRAYINDEX(nameof(GMOD_bool), 0))),
-		SendPropArray3(FIELD.OF_ARRAY(nameof(GMOD_float)), SendPropFloat(FIELD.OF_ARRAYINDEX(nameof(GMOD_float), 0))),
-		SendPropArray3(FIELD.OF_ARRAY(nameof(GMOD_int)), SendPropInt(FIELD.OF_ARRAYINDEX(nameof(GMOD_int), 0))),
-		SendPropArray3(FIELD.OF_ARRAY(nameof(GMOD_Vector)),SendPropVector(FIELD.OF_ARRAYINDEX(nameof(GMOD_Vector), 0))),
-		SendPropArray3(FIELD.OF_ARRAY(nameof(GMOD_QAngle)), SendPropQAngles(FIELD.OF_ARRAYINDEX(nameof(GMOD_QAngle), 0), 32, PropFlags.RoundDown)),
-		SendPropArray3(FIELD.OF_ARRAY(nameof(GMOD_EHANDLE)), SendPropEHandle(FIELD.OF_ARRAYINDEX(nameof(GMOD_EHANDLE), 0))),
-		SendPropString(FIELD.OF(nameof(GMOD_String0))),
-		SendPropString(FIELD.OF(nameof(GMOD_String1))),
-		SendPropString(FIELD.OF(nameof(GMOD_String2))),
-		SendPropString(FIELD.OF(nameof(GMOD_String3))),
-
-		// Creation IDs
-		SendPropInt(FIELD.OF(nameof(CreationID)), 24),
-		SendPropInt(FIELD.OF(nameof(MapCreatedID)), 16),
-	]);
 
 	public BaseEntity() : this(false) { }
 
 	public BaseEntity(bool serverOnly) {
+		GMOD_EHANDLEForModify() = new();
+		OwnerEntity = new();
+		EffectEntity = new();
+		MoveParent = new();
+		GroundEntity = new();
 		CollisionGroup = (int)Source.CollisionGroup.None;
 
 		CollisionProp().Init(this);
@@ -873,8 +916,6 @@ public partial class BaseEntity : IServerEntity
 
 	public virtual DamageType GetDamageType() => DamageType.Generic;
 
-	public virtual Mask PhysicsSolidMaskForEntity() => Mask.Solid;
-
 	public BaseEntity? Link;
 
 	public virtual bool CanBeSeenBy(AI_BaseNPC npc) => true;
@@ -894,6 +935,19 @@ public partial class BaseEntity : IServerEntity
 
 	public virtual void UpdateOnRemove() {
 		Util.g_bReceivedChainedUpdateOnRemove = true;
+
+#if GMOD_DLL
+		if (GetRefEHandle().Index != Constants.INVALID_EHANDLE_INDEX)
+			garrysmod.EntityRemoved(this, false);
+
+		for (int i = 0; i < DeleteOnRemoveList.Count; i++) {
+			BaseEntity? ent = DeleteOnRemoveList[i].Get();
+			if (ent == null)
+				continue;
+			Util.RemoveSafe(ent);
+			DeleteOnRemoveList[i] = new();
+		}
+#endif
 
 		// Virtual call to shut down any looping sounds.
 		StopLoopingSounds();
@@ -991,7 +1045,7 @@ public partial class BaseEntity : IServerEntity
 		if (Physics.g_bTestMoveTypeStepSimulation && GetMoveType() == Source.MoveType.Step && HasDataObjectType(DataObjectType.StepSimulation)) {
 			ref StepSimulationData step = ref GetDataObject<StepSimulationData>(DataObjectType.StepSimulation);
 			ComputeStepSimulationNetwork(ref step);
-			
+
 			ok = step.AnglesActive;
 			return ref step.NetworkAngles;
 		}
@@ -1186,6 +1240,24 @@ public partial class BaseEntity : IServerEntity
 		}
 	}
 
+	public bool AddStepDiscontinuity(TimeUnit_t time, in Vector3 origin, in QAngle angles) {
+		if ((GetMoveType() != Source.MoveType.Step) || !HasDataObjectType(DataObjectType.StepSimulation))
+			return false;
+
+		ref StepSimulationData step = ref GetDataObject<StepSimulationData>(DataObjectType.StepSimulation);
+
+		if (Unsafe.IsNullRef(ref step)) {
+			Assert(false);
+			return false;
+		}
+
+		step.Discontinuity.TickCount = TIME_TO_TICKS(time);
+		step.Discontinuity.Origin = origin;
+		MathLib.AngleQuaternion(angles, out step.Discontinuity.Rotation);
+
+		return true;
+	}
+
 	public void TransformStepData_ParentToWorld(BaseEntity? parent) {
 		// Fix up our step simulation points to be in the proper local space
 		ref StepSimulationData step = ref GetDataObject<StepSimulationData>(DataObjectType.StepSimulation);
@@ -1235,8 +1307,20 @@ public partial class BaseEntity : IServerEntity
 		if (attachment == -1)
 			attachment = ParentAttachment;
 
+		if (!IsPlayer() && Game.Client.GarrysMod.GarrysMod.IsSacredEntity(Classname ?? "")) {
+			Warning($"Refusing to set parent on {Classname}!\n");
+			return;
+		}
+
+		for (BaseEntity? ancestor = parentEntity; ancestor != null; ancestor = ancestor.GetParent()) {
+			if (ancestor.GetParent() == this)
+				ancestor.SetParent(null);
+		}
+
 		bool wasNotParented = GetParent() == null;
 		BaseEntity? oldParent = GetParent();
+
+		UnlinkFromParent(this);
 
 		Parent.Set(parentEntity);
 
@@ -1346,34 +1430,309 @@ public partial class BaseEntity : IServerEntity
 	public int GetTeamNumber() => TeamNum;
 
 	IPhysicsObject? PhysicsObject = null!;
-	public void VPhysicsUpdate(IPhysicsObject physics) {
+	public virtual void VPhysicsUpdate(IPhysicsObject physics) {
 		switch (GetMoveType()) {
 			case Source.MoveType.VPhysics: {
 					if (GetMoveParent() != null) {
+#if !GMOD_DLL
 						DevWarning($"Updating physics on object in hierarchy {GetClassname()}!\n");
+#endif
 						return;
 					}
 
 					physics.GetPosition(out Vector3 origin, out QAngle angles);
 
-					if (!IsEntityQAngleReasonable(angles))
+					if (!IsEntityQAngleReasonable(angles)) {
+						if (CheckEmitReasonablePhysicsSpew())
+							Warning($"Ignoring bogus angles ({angles.X:F6},{angles.Y:F6},{angles.Z:F6}) from vphysics! (entity {GetDebugName()})\n");
 						angles = vec3_angle;
+					}
+					Vector3 prevOrigin = GetAbsOrigin();
 
 					if (IsEntityPositionReasonable(origin))
 						SetAbsOrigin(origin);
+					else {
+						if (CheckEmitReasonablePhysicsSpew())
+							Warning($"Ignoring unreasonable position ({origin.X:F6},{origin.Y:F6},{origin.Z:F6}) from vphysics! (entity {GetDebugName()})\n");
+					}
 
 					angles.X = MathLib.AngleNormalize(angles.X);
 					angles.Y = MathLib.AngleNormalize(angles.Y);
 					angles.Z = MathLib.AngleNormalize(angles.Z);
 					SetAbsAngles(angles);
+
+					PhysicsTouchTriggers(prevOrigin);
+					PhysicsRelinkChildren(gpGlobals.FrameTime);
 					break;
 				}
+
+			case Source.MoveType.Push:
+				VPhysicsUpdatePusher(physics);
+				break;
+
 			default:
 				break;
 		}
 	}
 
+	static BaseEntity? FindPhysicsBlocker(IPhysicsObject physics, PhysicsPushList list, in Vector3 pushVel) {
+		IPhysicsFrictionSnapshot snapshot = physics.CreateFrictionSnapshot();
+		BaseEntity? blocker = null;
+		float maxForce = 0;
+		while (snapshot.IsValid()) {
+			IPhysicsObject other = snapshot.GetObject(1)!;
+			BaseEntity? otherEntity = other.GetGameData() as BaseEntity;
+			bool inList = false;
+			for (int i = 0; i < list.PushedCount; i++) {
+				if (otherEntity == list.PushedEnts[i].Get()) {
+					inList = true;
+					break;
+				}
+			}
+
+			snapshot.GetSurfaceNormal(out Vector3 normal);
+			float dot = Vector3.Dot(pushVel, snapshot.GetNormalForce() * normal);
+			if (blocker == null || (!inList && dot > maxForce)) {
+				blocker = otherEntity;
+				if (!inList)
+					maxForce = dot;
+			}
+
+			snapshot.NextFrictionData();
+		}
+		physics.DestroyFrictionSnapshot(snapshot);
+
+		return blocker;
+	}
+
+	struct PushBlock
+	{
+		public PhysicsPushList? List;
+		public BaseEntity RootParent;
+		public BaseEntity? BlockedEntity;
+		public float MoveBackFraction;
+		public float MoveTime;
+	}
+
+	static void ComputePushStartMatrix(out Matrix3x4 start, BaseEntity entity, in PushBlock pushBlock) {
+		Vector3 localOrigin;
+		QAngle localAngles;
+		if (pushBlock.List != null) {
+			localOrigin = pushBlock.List.LocalOrigin;
+			localAngles = pushBlock.List.LocalAngles;
+		}
+		else {
+			localOrigin = pushBlock.RootParent.GetAbsOrigin() - pushBlock.RootParent.GetAbsVelocity() * pushBlock.MoveTime;
+			localAngles = pushBlock.RootParent.GetAbsAngles() - pushBlock.RootParent.GetLocalAngularVelocity() * pushBlock.MoveTime;
+		}
+		MathLib.AngleMatrix(localAngles, localOrigin, out Matrix3x4 xform);
+
+		MathLib.MatrixInvert(pushBlock.RootParent.EntityToWorldTransform(), out Matrix3x4 srcInv);
+		MathLib.ConcatTransforms(xform, srcInv, out Matrix3x4 delta);
+		MathLib.ConcatTransforms(delta, entity.EntityToWorldTransform(), out start);
+	}
+
+	static void CheckPushedEntity(BaseEntity entity, ref PushBlock pushBlock) {
+		IPhysicsObject? physics = entity.VPhysicsGetObject();
+		if (physics == null)
+			return;
+
+		Assert(physics.IsMoveable());
+		IPhysicsShadowController? shadow = physics.GetShadowController();
+		if (!physics.IsMoveable() || shadow == null)
+			return;
+
+		bool checkrot = true;
+		bool checkmove = true;
+		physics.GetShadowPosition(out Vector3 origin, out QAngle angles);
+		float fraction = -1.0f;
+
+		if (entity == pushBlock.RootParent) {
+			if (entity.GetLocalAngularVelocity() == vec3_angle)
+				checkrot = false;
+			if (entity.GetLocalVelocity() == vec3_origin)
+				checkmove = false;
+		}
+
+		if (checkmove) {
+			Vector3 dir = entity.GetAbsVelocity();
+			float speed = MathLib.VectorNormalize(ref dir);
+			shadow.GetTargetPosition(out Vector3 targetPos, out _);
+			float targetAmount = Vector3.Dot(targetPos, dir);
+			float currentAmount = Vector3.Dot(origin, dir);
+			float entityAmount = Vector3.Dot(entity.GetAbsOrigin(), dir);
+
+			if ((targetAmount - entityAmount) > 1)
+				entity.UpdatePhysicsShadowToCurrentPosition(0);
+			else {
+				float dist = targetAmount - currentAmount;
+				if (dist > 1) {
+					float movementAmount = targetAmount - (speed * pushBlock.MoveTime);
+					if (entity == pushBlock.RootParent) {
+						if (pushBlock.List != null) {
+							Vector3 localVel = entity.GetLocalVelocity();
+							MathLib.VectorNormalize(ref localVel);
+							float localTargetAmt = Vector3.Dot(entity.GetLocalOrigin(), localVel);
+							movementAmount = targetAmount + Vector3.Dot(pushBlock.List.LocalOrigin, localVel) - localTargetAmt;
+						}
+					}
+					else {
+						ComputePushStartMatrix(out Matrix3x4 start, entity, pushBlock);
+						MathLib.MatrixPosition(start, out Vector3 startPos);
+						movementAmount = Vector3.Dot(startPos, dir);
+					}
+					float expectedDist = targetAmount - movementAmount;
+					if (expectedDist <= 0)
+						fraction = 1;
+					else {
+						fraction = dist / expectedDist;
+						fraction = Math.Clamp(fraction, 0.0f, 1.0f);
+					}
+				}
+			}
+		}
+
+		if (checkrot) {
+			MathLib.RotationDeltaAxisAngle(angles, entity.GetAbsAngles(), out Vector3 axis, out float deltaAngle);
+			if (MathF.Abs(deltaAngle) > 0.5f) {
+				shadow.GetTargetPosition(out _, out QAngle targetRot);
+				MathLib.RotationDeltaAxisAngle(angles, targetRot, out _, out float deltaTargetAngle);
+				if (MathF.Abs(deltaTargetAngle) > 0.01f) {
+					float expectedDist = deltaAngle;
+					if (entity == pushBlock.RootParent)
+						expectedDist = entity.GetLocalAngularVelocity().Length() * pushBlock.MoveTime;
+					else {
+						ComputePushStartMatrix(out Matrix3x4 start, entity, pushBlock);
+						MathLib.MatrixAngles(start, out QAngle startAngles, out _);
+						MathLib.RotationDeltaAxisAngle(startAngles, entity.GetAbsAngles(), out Vector3 startAxis, out float startAngle);
+						expectedDist = startAngle * Vector3.Dot(startAxis, axis);
+					}
+
+					float t = expectedDist != 0.0f ? MathF.Abs(deltaAngle / expectedDist) : 1.0f;
+					t = Math.Clamp(t, 0.0f, 1.0f);
+					fraction = Math.Max(fraction, t);
+				}
+				else
+					entity.UpdatePhysicsShadowToCurrentPosition(0);
+			}
+		}
+
+		if (fraction >= pushBlock.MoveBackFraction) {
+			pushBlock.MoveBackFraction = fraction;
+			pushBlock.BlockedEntity = entity;
+		}
+	}
+
+	public void VPhysicsUpdatePusher(IPhysicsObject physics) {
+		float movetime = (float)(LocalTime - VPhysicsUpdateLocalTime);
+		if (movetime <= 0)
+			return;
+
+		if (!PhysIsFinalTick())
+			return;
+
+		if (GetSolid() != SolidType.BSP && physics.GetShadowPosition(out _, out _) != 0) {
+			List<BaseEntity> list = [];
+			Hierarchy.GetAllInHierarchy(this, list);
+
+			PhysicsPushList? pushList = null;
+			if (HasDataObjectType(DataObjectType.PhysicsPushList)) {
+				pushList = GetDataObject<PhysicsPushList>(DataObjectType.PhysicsPushList);
+				Assert(pushList != null);
+			}
+			bool checkrot = GetLocalAngularVelocity() != vec3_angle;
+			bool checkmove = GetLocalVelocity() != vec3_origin;
+
+			PushBlock pushBlock = new() {
+				RootParent = this,
+				List = pushList,
+				BlockedEntity = null,
+				MoveBackFraction = 0.0f,
+				MoveTime = movetime
+			};
+			for (int i = 0; i < list.Count; i++) {
+				if (list[i].IsSolid())
+					CheckPushedEntity(list[i], ref pushBlock);
+			}
+
+			TimeUnit_t physLocalTime = LocalTime;
+			if (pushBlock.BlockedEntity != null) {
+				float moveback = movetime * pushBlock.MoveBackFraction;
+				if (moveback > 0) {
+					physLocalTime = LocalTime - moveback;
+					if (physLocalTime <= (VPhysicsUpdateLocalTime + movetime * 0.99f)) {
+						BaseEntity? blocked = null;
+
+						if (pushList != null) {
+							SetLocalOrigin(pushList.LocalOrigin);
+							SetLocalAngles(pushList.LocalAngles);
+							physLocalTime = pushList.LocalMoveTime;
+							for (int i = 0; i < pushList.PushedCount; i++) {
+								BaseEntity? pushedEntity = pushList.PushedEnts[i].Get();
+								if (pushedEntity == null)
+									continue;
+
+								pushedEntity.SetAbsOrigin(pushedEntity.GetAbsOrigin() - pushList.PushVec[i]);
+							}
+							BaseEntity? physicsBlocker = FindPhysicsBlocker(VPhysicsGetObject()!, pushList, pushList.PushVec[0]);
+							if (physicsBlocker != null)
+								blocked = physicsBlocker;
+						}
+						else {
+							Vector3 origin = GetLocalOrigin();
+							QAngle angles = GetLocalAngles();
+
+							if (checkmove)
+								origin -= GetLocalVelocity() * moveback;
+							if (checkrot)
+								angles -= GetLocalAngularVelocity() * moveback;
+
+							SetLocalOrigin(origin);
+							SetLocalAngles(angles);
+						}
+
+						if (blocked != null)
+							Blocked(blocked);
+
+						LocalTime = physLocalTime;
+					}
+				}
+			}
+		}
+
+		if (HasDataObjectType(DataObjectType.PhysicsPushList))
+			DestroyDataObject(DataObjectType.PhysicsPushList);
+
+		VPhysicsUpdateLocalTime = LocalTime;
+		if (MoveDoneTime <= LocalTime && MoveDoneTime > 0) {
+			SetMoveDoneTime(-1);
+			MoveDone();
+		}
+	}
+
+	public void PhysicsRelinkChildren(TimeUnit_t dt) {
+		BaseEntity? child;
+
+		for (child = FirstMoveChild(); child != null; child = child.NextMovePeer()) {
+			if (child.IsSolid() || child.IsSolidFlagSet(SolidFlags.Trigger))
+				child.PhysicsTouchTriggers();
+
+			if (child.GetMoveType() != Source.MoveType.VPhysics)
+				child.UpdatePhysicsShadowToCurrentPosition(dt);
+			else if (child.GetOwnerEntity() != this)
+				Assert(false);
+
+			if (child.FirstMoveChild() != null)
+				child.PhysicsRelinkChildren(dt);
+		}
+	}
+
 	public virtual void VPhysicsShadowCollision(int index, ref GameVCollisionEvent ev) { }
+
+	public virtual void VPhysicsShadowUpdate(IPhysicsObject physics) { }
+
+	public virtual BasePlayer? HasPhysicsAttacker(TimeUnit_t dt) => null;
+	public virtual void SetPhysicsAttacker(BasePlayer? entity, TimeUnit_t time) { }
 
 	public virtual void VPhysicsCollision(int index, ref GameVCollisionEvent ev) {
 		int otherIndex = index == 0 ? 1 : 0;
@@ -1418,6 +1777,16 @@ public partial class BaseEntity : IServerEntity
 		PhysicsObject = physics;
 	}
 
+	public void VPhysicsSwapObject(IPhysicsObject? swap) {
+		if (swap == null)
+			PhysRemoveShadow(this);
+
+		if (PhysicsObject == null)
+			Warning($"Bad vphysics swap for {GetClassname()}\n");
+
+		PhysicsObject = swap;
+	}
+
 	bool VPhysicsInitSetup() {
 		// don't support logical ents
 		if (Edict() == null || IsMarkedForDeletion())
@@ -1459,7 +1828,7 @@ public partial class BaseEntity : IServerEntity
 
 		return physicsObject;
 	}
-	public int VPhysicsGetObjectList(Span<IPhysicsObject> list) {
+	public virtual int VPhysicsGetObjectList(Span<IPhysicsObject?> list) {
 		IPhysicsObject? phys = VPhysicsGetObject();
 		if (phys != null) {
 			Assert((phys.GetGameFlags() & PhysicsFlags.MultiObjectEntity) == 0);
@@ -1529,146 +1898,135 @@ public partial class BaseEntity : IServerEntity
 		return ent;
 	}
 
-	[NetworkName("m_nRenderFX")]
-	public byte RenderFX;
-	[NetworkName("m_nRenderMode")]
-	public byte RenderMode;
+	[NetworkVar("m_flAnimTime")]
+	public partial TimeUnit_t AnimTime { get; set; }
+	[NetworkVar("m_flSimulationTime")]
+	public partial TimeUnit_t SimulationTime { get; set; }
+	[NetworkVar("m_vecOrigin")]
+	public partial Vector3 Origin { get; set; }
+	[NetworkVar("m_ubInterpolationFrame")]
+	public partial byte InterpolationFrame { get; set; }
+	[NetworkVar("m_nModelIndex")]
+	public partial int ModelIndex { get; set; }
+	[NetworkVar("m_Collision")]
+	public readonly CollisionProperty Collision = new();
+	[NetworkVar("m_nRenderFX")]
+	public partial byte RenderFX { get; set; }
+	[NetworkVar("m_nRenderMode")]
+	public partial byte RenderMode { get; set; }
+	[NetworkVar("m_fEffects")]
+	public partial int Effects { get; set; }
+	[NetworkVar("m_clrRender")]
+	public partial Source.Color ColorRender { get; set; }
+	[NetworkVar("m_iTeamNum")]
+	public partial int TeamNum { get; set; }
+	[NetworkVar("m_CollisionGroup")]
+	public partial int CollisionGroup { get; set; }
+	[NetworkVar("m_flElasticity")]
+	public partial float Elasticity { get; set; }
+	[NetworkVar("m_flShadowCastDistance")]
+	public partial float ShadowCastDistance { get; set; }
+	[NetworkVar("m_hOwnerEntity")]
+	public partial EHANDLE OwnerEntity { get; set; }
+	[NetworkVar("m_hEffectEntity")]
+	public partial EHANDLE EffectEntity { get; set; }
+	[NetworkVar("moveparent")]
+	public partial EHANDLE MoveParent { get; set; }
+	[NetworkVar("m_iParentAttachment")]
+	public partial byte ParentAttachment { get; set; }
+	[NetworkVar("movetype")]
+	public partial byte MoveType { get; set; }
+	[NetworkVar("movecollide")]
+	public partial byte MoveCollide { get; set; }
+	[NetworkVar("m_angRotation")]
+	public partial QAngle Rotation { get; set; }
+	[NetworkVar("m_iTextureFrameIndex")]
+	public partial bool TextureFrameIndex { get; set; }
+	[NetworkVar("m_PredictableID")]
+	public readonly PredictableId PredictableId = new();
+	[NetworkVar("m_bSimulatedEveryTick")]
+	public partial bool SimulatedEveryTick { get; set; }
+	[NetworkVar("m_bAnimatedEveryTick")]
+	public partial bool AnimatedEveryTick { get; set; }
+	[NetworkVar("m_bAlternateSorting")]
+	public partial bool AlternateSorting { get; set; }
+	[NetworkVar("m_takedamage")]
+	public partial byte m_takedamage { get; set; }
+	[NetworkVar("m_RealClassName")]
+	public partial ushort RealClassName { get; set; }
+	[NetworkVar("m_OverrideMaterial")]
+	public partial ushort OverrideMaterial { get; set; }
+	[NetworkVar("m_OverrideSubMaterials")]
+	public partial ref readonly InlineArray32<ushort> OverrideSubMaterials { get; }
+	[NetworkVar("m_iHealth")]
+	public partial int Health { get; set; }
+	[NetworkVar("m_iMaxHealth")]
+	public partial int MaxHealth { get; set; }
+	[NetworkVar("m_spawnflags")]
+	public partial int SpawnFlags { get; set; }
+	[NetworkVar("m_iGModFlags")]
+	public partial int GModFlags { get; set; }
+	[NetworkVar("m_bOnFire")]
+	public partial bool OnFire { get; set; }
+	[NetworkVar("m_CreationTime")]
+	public partial float CreationTime { get; set; }
+	[NetworkVar("m_vecVelocity")]
+	public partial Vector3 Velocity { get; set; }
+	[NetworkVar("m_GMOD_DataTable")]
+	public readonly IGMODDataTable GMOD_DataTable;
+	[NetworkVar("m_GMOD_bool")]
+	public partial ref readonly InlineArray32<bool> GMOD_bool { get; }
+	[NetworkVar("m_GMOD_float")]
+	public partial ref readonly InlineArray32<float> GMOD_float { get; }
+	[NetworkVar("m_GMOD_int")]
+	public partial ref readonly InlineArray32<int> GMOD_int { get; }
+	[NetworkVar("m_GMOD_Vector")]
+	public partial ref readonly InlineArray32<Vector3> GMOD_Vector { get; }
+	[NetworkVar("m_GMOD_QAngle")]
+	public partial ref readonly InlineArray32<QAngle> GMOD_QAngle { get; }
+	[NetworkVar("m_GMOD_EHANDLE")]
+	public partial ref readonly InlineArrayNew32<EHANDLE> GMOD_EHANDLE { get; }
+	[NetworkVar("m_GMOD_String0")]
+	public partial ref readonly InlineArray512<char> GMOD_String0 { get; }
+	[NetworkVar("m_GMOD_String1")]
+	public partial ref readonly InlineArray512<char> GMOD_String1 { get; }
+	[NetworkVar("m_GMOD_String2")]
+	public partial ref readonly InlineArray512<char> GMOD_String2 { get; }
+	[NetworkVar("m_GMOD_String3")]
+	public partial ref readonly InlineArray512<char> GMOD_String3 { get; }
+	[NetworkVar("m_iCreationID")]
+	public partial int CreationID { get; set; }
+	[NetworkVar("m_iMapCreatedID")]
+	public partial int MapCreatedID { get; set; }
+	[NetworkVar("m_hGroundEntity")]
+	public partial EHANDLE GroundEntity { get; set; }
+	[NetworkVar("m_lifeState")]
+	public partial byte LifeState { get; set; }
+	[NetworkVar("m_vecBaseVelocity")]
+	public partial Vector3 BaseVelocity { get; set; }
+	[NetworkVar("m_nNextThinkTick")]
+	public partial int NextThinkTick { get; set; }
+	[NetworkVar("m_nWaterLevel")]
+	public partial byte WaterLevel { get; set; }
+	[NetworkVar("m_vecViewOffset")]
+	public partial Vector3 ViewOffset { get; set; }
+	[NetworkVar("m_flFriction")]
+	public partial float Friction { get; set; }
+
 	public byte OldRenderMode;
-	[NetworkName("m_fEffects")]
-	public int Effects;
-	[NetworkName("m_clrRender")]
-	public Source.Color ColorRender;
-	[NetworkName("m_iTeamNum")]
-	public int TeamNum;
-	[NetworkName("m_CollisionGroup")]
-	public int CollisionGroup;
-	[NetworkName("m_flElasticity")]
-	public float Elasticity;
-	[NetworkName("m_flShadowCastDistance")]
-	[NetworkVar] public partial float ShadowCastDistance { get; set; }
-	[NetworkName("m_iParentAttachment")]
-	public byte ParentAttachment;
-	[NetworkName("movetype")]
-	public byte MoveType;
-	[NetworkName("movecollide")]
-	public byte MoveCollide;
 	public Vector3 AbsOrigin;
 	public QAngle AbsRotation;
-	[NetworkName("m_vecOrigin")]
-	[NetworkVar] public partial Vector3 Origin { get; set; }
-	[NetworkName("m_angRotation")]
-	[NetworkVar] public partial QAngle Rotation { get; set; }
-	[NetworkName("m_iTextureFrameIndex")]
-	public bool TextureFrameIndex;
-	[NetworkName("m_bSimulatedEveryTick")]
-	public bool SimulatedEveryTick;
-	[NetworkName("m_bAnimatedEveryTick")]
-	public bool AnimatedEveryTick;
-	[NetworkName("m_bAlternateSorting")]
-	[NetworkVar] public partial bool AlternateSorting { get; set; }
-
-	public byte m_takedamage;
-	[NetworkName("m_RealClassName")]
-	public ushort RealClassName;
-	[NetworkName("m_OverrideMaterial")]
-	public ushort OverrideMaterial;
-	[NetworkName("m_OverrideSubMaterials")]
-	public InlineArray32<ushort> OverrideSubMaterials;
-	[NetworkName("m_iHealth")]
-	public int Health;
-	[NetworkName("m_iMaxHealth")]
-	[NetworkVar] public partial int MaxHealth { get; set; }
-	[NetworkName("m_spawnflags")]
-	public int SpawnFlags;
-	[NetworkName("m_iGModFlags")]
-	public int GModFlags;
-	[NetworkName("m_bOnFire")]
-	public bool OnFire;
-	[NetworkName("m_CreationTime")]
-	public float CreationTime;
-	[NetworkName("m_vecVelocity")]
-	public Vector3 Velocity;
-	[NetworkName("m_iCreationID")]
-	public int CreationID;
-	[NetworkName("m_iMapCreatedID")]
-	public int MapCreatedID;
-
 	public readonly List<ThinkFunc> ThinkFunctions = [];
 	public int CurrentThinkContext = NO_THINK_CONTEXT;
-
-	[NetworkName("m_PredictableID")]
-	public readonly PredictableId PredictableId = new();
-
-	[NetworkName("m_GMOD_DataTable")]
-	public readonly IGMODDataTable GMOD_DataTable;
-
 	public float Speed;
-
-	[NetworkName("m_hOwnerEntity")]
-	public EHANDLE OwnerEntity = new();
-	[NetworkName("m_hEffectEntity")]
-	public EHANDLE EffectEntity = new();
-	[NetworkName("moveparent")]
-	public EHANDLE MoveParent = new();
 	public EHANDLE MoveChild = new();
 	public EHANDLE MovePeer = new();
-	[NetworkName("m_hGroundEntity")]
-	public EHANDLE GroundEntity = new();
-
 	public string? ModelName;
-
-	[NetworkName("m_lifeState")]
-	public int LifeState;
-	[NetworkName("m_vecBaseVelocity")]
-	public Vector3 BaseVelocity;
-	[NetworkName("m_nNextThinkTick")]
-	public int NextThinkTick;
 	public int LastThinkTick;
-	[NetworkName("m_nWaterLevel")]
-	public byte WaterLevel;
 	public byte WaterType;
-
-	[NetworkName("m_GMOD_bool")]
-	InlineArray32<bool> GMOD_bool;
-	[NetworkName("m_GMOD_float")]
-	InlineArray32<float> GMOD_float;
-	[NetworkName("m_GMOD_int")]
-	InlineArray32<int> GMOD_int;
-	[NetworkName("m_GMOD_Vector")]
-	InlineArray32<Vector3> GMOD_Vector;
-	[NetworkName("m_GMOD_QAngle")]
-	InlineArray32<QAngle> GMOD_QAngle;
-	[NetworkName("m_GMOD_EHANDLE")]
-	InlineArray32<EHANDLE> GMOD_EHANDLE; // << ENSURE THESE ARE INITIALIZED!!!!
-	[NetworkName("m_GMOD_String0")]
-	InlineArray512<char> GMOD_String0;
-	[NetworkName("m_GMOD_String1")]
-	InlineArray512<char> GMOD_String1;
-	[NetworkName("m_GMOD_String2")]
-	InlineArray512<char> GMOD_String2;
-	[NetworkName("m_GMOD_String3")]
-	InlineArray512<char> GMOD_String3;
-
 	public int DataObjectTypes;
-
-	public static readonly ServerClass ServerClass = new ServerClass(DT_BaseEntity);
-
-	[NetworkName("m_flAnimTime")]
-	public TimeUnit_t AnimTime;
 	public TimeUnit_t PrevAnimTime;
-	[NetworkName("m_flSimulationTime")]
-	public TimeUnit_t SimulationTime;
-	[NetworkName("m_vecViewOffset")]
-	public Vector3 ViewOffset;
 	public Vector3 NetworkAngles;
-	[NetworkName("m_ubInterpolationFrame")]
-	public byte InterpolationFrame;
-	[NetworkName("m_nModelIndex")]
-	public int ModelIndex;
-	[NetworkName("m_Collision")]
-	public CollisionProperty Collision = new();
-	[NetworkName("m_flFriction")]
-	public float Friction;
 	public long SimulationTick;
 
 	public virtual Vector3 BodyTarget(in Vector3 posSrc, bool noisy) => WorldSpaceCenter();
@@ -1676,6 +2034,16 @@ public partial class BaseEntity : IServerEntity
 
 	public virtual int GetMaxHealth() => MaxHealth;
 	public void GetMaxHealth(int amt) => MaxHealth = amt;
+	public void SetMaxHealth(int amt) => MaxHealth = amt;
+	public virtual BaseCombatCharacter? MyCombatCharacterPointer() => null;
+
+	public readonly List<EHANDLE> DeleteOnRemoveList = [];
+
+	public virtual void DeleteOnRemove(BaseEntity? ent) {
+		EHANDLE handle = new();
+		handle.Set(ent);
+		DeleteOnRemoveList.Add(handle);
+	}
 
 	public int GetHealth() => Health;
 	public int SetHealth(int amt) => Health = amt;
@@ -1747,6 +2115,24 @@ public partial class BaseEntity : IServerEntity
 		else {
 			TakeDamageInfo info = inputInfo;
 
+#if GMOD_DLL
+			TakeDamageInfoRef infoRef = new() { Info = info };
+			if (gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.EntityTakeDamage)) {
+				LuaEntity.Push_Entity(this);
+				LuaTakeDamageInfo.Push_TakeDamageInfo(infoRef);
+				if (gGM.CallFinish(2))
+					return 0;
+			}
+
+			int ret = OnTakeDamage(infoRef.Info);
+			if (gGM != null && gGM.CallWithArgs((int)LUA_POOLEDSTRING.PostEntityTakeDamage)) {
+				LuaEntity.Push_Entity(this);
+				LuaTakeDamageInfo.Push_TakeDamageInfo(infoRef);
+				g_Lua!.PushBool(ret != 0);
+				gGM.CallNoReturns(3);
+			}
+			return ret;
+#else
 			// Scale the damage by the attacker's modifier.
 			if (info.GetAttacker() != null)
 				info.ScaleDamage(info.GetAttacker()!.GetAttackDamageScale(this));
@@ -1757,6 +2143,7 @@ public partial class BaseEntity : IServerEntity
 			//Msg("%s took %.2f Damage, at %.2f\n", GetClassname(), info.GetDamage(), gpGlobals.curtime );
 
 			return OnTakeDamage(info);
+#endif
 		}
 		return 0;
 	}
@@ -2086,6 +2473,36 @@ public partial class BaseEntity : IServerEntity
 		return 1;
 	}
 
+	public virtual void DeathNotice(BaseEntity victim) { }
+
+	public IPhysicsObject? VPhysicsInitStatic() {
+		if (!VPhysicsInitSetup())
+			return null;
+
+		if (GetMoveParent() != null) {
+			if (GetSolid() == SolidType.BSP && GetRootMoveParent().GetSolid() != SolidType.BSP)
+				SetSolid(SolidType.VPhysics);
+
+			VPhysicsInitShadow(false, false);
+			return VPhysicsGetObject();
+		}
+
+		if (GetSolid() == SolidType.None)
+			return null;
+
+		IPhysicsObject? physicsObject;
+		if (GetSolid() == SolidType.BBox)
+			physicsObject = PhysModelCreateBox(this, WorldAlignMins(), WorldAlignMaxs(), GetAbsOrigin(), true);
+		else
+			physicsObject = PhysModelCreateUnmoveable(this, GetModelIndex(), GetAbsOrigin(), GetAbsAngles());
+
+		if (PhysicsObject != null)
+			Error("VPhysicsInitStatic got a physics object at unexpected time!\n");
+
+		VPhysicsSetObject(physicsObject);
+		return physicsObject;
+	}
+
 	public virtual void Event_KilledOther(BaseEntity killed, in TakeDamageInfo info) {
 
 	}
@@ -2177,7 +2594,18 @@ public partial class BaseEntity : IServerEntity
 	public void SetName(string? name) {
 		Name = name;
 	}
-	public void SetOwnerEntity(BaseEntity? owner) => OwnerEntity.Set(owner);
+	public virtual void SetOwnerEntity(BaseEntity? owner) {
+		if (OwnerEntity.Get() == owner)
+			return;
+		if (OwnerEntity.Get() != owner) {
+			NetworkStateChanged();
+			OwnerEntity = EHANDLE.FromEntity(owner);
+		}
+		CollisionRulesChanged();
+		OnOwnerChanged();
+	}
+
+	public virtual void OnOwnerChanged() { }
 	public BaseEntity? GetOwnerEntity() => OwnerEntity.Get();
 
 	public void SetMoveType(MoveType val, MoveCollide moveCollide = Source.MoveCollide.Default) {
@@ -2262,10 +2690,19 @@ public partial class BaseEntity : IServerEntity
 
 	public bool BlocksLOS() => !IsEFlagSet(EFL.DontBlockLOS);
 
+	public void SetAIWalkable(bool blocksLOS) {
+		if (blocksLOS)
+			RemoveEFlags(EFL.DontWalkOn);
+		else
+			AddEFlags(EFL.DontWalkOn);
+	}
+
+	public bool IsAIWalkable() => !IsEFlagSet(EFL.DontWalkOn);
+
 	public Vector3 AbsVelocity;
 	public QAngle AngVelocity;
 
-	public ref readonly Vector3 GetLocalVelocity() => ref Velocity;
+	public ref readonly Vector3 GetLocalVelocity() => ref __nv_Velocity;
 
 	public ref readonly Vector3 GetAbsVelocity() {
 		if (IsEFlagSet(EFL.DirtyAbsVelocity))
@@ -2484,7 +2921,7 @@ public partial class BaseEntity : IServerEntity
 	public void InputKill(InputData inputdata) {
 		BaseEntity? owner = GetOwnerEntity();
 		if (owner != null) {
-			// owner.DeathNotice(this);
+			owner.DeathNotice(this);
 			SetOwnerEntity(null);
 		}
 
@@ -2500,7 +2937,7 @@ public partial class BaseEntity : IServerEntity
 
 		BaseEntity? owner = GetOwnerEntity();
 		if (owner != null) {
-			// owner.DeathNotice(this);
+			owner.DeathNotice(this);
 			SetOwnerEntity(null);
 		}
 
@@ -2629,34 +3066,54 @@ public partial class BaseEntity : IServerEntity
 
 	public static void PrecacheModelComponents(int modelIndex) {
 		Model? model = (Model?)modelinfo.GetModel(modelIndex);
-		if (model != null || modelinfo.GetModelType(model) != ModelType.Studio)
+		if (model == null || modelinfo.GetModelType(model) != ModelType.Studio)
 			return;
 
 		// sounds
-		if (IsPC()) {
-			ReadOnlySpan<char> name = modelinfo.GetModelName(model);
-			if (!g_ModelSoundsCache.TryGetValue(name.Hash(), out _)) {
-				ReadOnlySpan<char> extension = Path.GetExtension(name);
+		ReadOnlySpan<char> name = modelinfo.GetModelName(model);
+		if (!g_ModelSoundsCache.EntryExists(name)) {
+			ReadOnlySpan<char> extension = Path.GetExtension(name);
 
-				if (!stristr(extension, "mdl").IsEmpty)
-					DevMsg(2, $"Late precache of {name}, need to rebuild modelsounds.cache\n");
-				else {
-					if (extension[0] == '\0')
-						Warning($"Precache of {name} ambigious (no extension specified)\n");
-					else
-						Warning($"Late precache of {name} (file missing?)\n");
-					return;
-				}
+			if (!stristr(extension, "mdl").IsEmpty)
+				DevMsg(2, $"Late precache of {name}, need to rebuild modelsounds.cache\n");
+			else {
+				if (extension.IsEmpty)
+					Warning($"Precache of {name} ambigious (no extension specified)\n");
+				else
+					Warning($"Late precache of {name} (file missing?)\n");
+				return;
 			}
-
-			if (g_ModelSoundsCache.TryGetValue(name.Hash(), out ModelSoundsCache? entry))
-				entry.PrecacheSoundList();
 		}
+
+		ModelSoundsCache? entry = g_ModelSoundsCache.Get(name);
+		Assert(entry != null);
+		entry?.PrecacheSoundList();
 	}
 
-	static readonly Dictionary<UtlSymId_t, ModelSoundsCache> g_ModelSoundsCache = [];
+	public static StudioHdr? ModelSoundsCache_LoadModel(ReadOnlySpan<char> filename) {
+		int idx = engine.PrecacheModel(filename, true);
+		if (idx != -1) {
+			Model? mdl = modelinfo.GetModel(idx);
+			if (mdl != null) {
+				StudioHdr studioHdr = new();
+				studioHdr.Init(modelinfo.GetStudiomodel(mdl), mdlcache);
+				if (studioHdr.IsValid())
+					return studioHdr;
+			}
+		}
+		return null;
+	}
+
+	public static void ModelSoundsCache_FinishModel(StudioHdr hdr) => Assert(hdr != null);
+
+	public static void ModelSoundsCache_PrecacheScriptSound(ReadOnlySpan<char> soundname) => PrecacheScriptSound(soundname);
+
+	const int MODELSOUNDSCACHE_VERSION = 5;
+	static readonly UtlCachedFileData<ModelSoundsCache> g_ModelSoundsCache = new("modelsounds.cache", MODELSOUNDSCACHE_VERSION, null, UtlCachedFileDataType.UseFilesize, false);
 
 	public bool HasSpawnFlags(int flags) => (SpawnFlags & flags) != 0;
+
+	public bool HasSpawnFlags<T>(T flags) where T : unmanaged, Enum => HasSpawnFlags(Unsafe.As<T, int>(ref flags));
 
 	public int GetModelIndex() => ModelIndex;
 
@@ -2784,13 +3241,13 @@ public partial class BaseEntity : IServerEntity
 			edict.NetworkSerialNumber = (short)(RefEHandle.GetSerialNumber() & ((1 << Constants.NUM_NETWORKED_EHANDLE_SERIAL_NUMBER_BITS) - 1));
 	}
 
-	[NetworkName("m_fFlags")]
-	protected int flags;
+	[NetworkVar("m_fFlags")]
+	protected partial int flags { get; set; }
 	EFL eflags;
 	public Matrix3x4 CoordinateFrame;
 
 
-	public ref readonly Vector3 GetBaseVelocity() => ref BaseVelocity;
+	public ref readonly Vector3 GetBaseVelocity() => ref __nv_BaseVelocity;
 	public void SetBaseVelocity(in Vector3 v) => BaseVelocity = v;
 
 	public void SetAbsOrigin(Vector3 vector3) {
@@ -2833,7 +3290,7 @@ public partial class BaseEntity : IServerEntity
 
 		return ref AbsOrigin;
 	}
-	public ref readonly Vector3 GetViewOffset() => ref ViewOffset;
+	public ref readonly Vector3 GetViewOffset() => ref __nv_ViewOffset;
 	public ref readonly QAngle GetAbsAngles() {
 		Assert(BaseEntity.IsAbsQueriesValid());
 
@@ -2951,12 +3408,18 @@ public partial class BaseEntity : IServerEntity
 		}
 	}
 
+	public bool IsOnFire() => (GetFlags() & EntityFlags.OnFire) != 0;
+
 	public virtual void Use(BaseEntity? activator, BaseEntity? caller, UseType useType, float value) {
 		if (FnUse != null)
 			FnUse(activator, caller, useType, value);
 		else
 			Parent.Get()?.Use(activator, caller, useType, value);
 	}
+
+	public bool IsFollowingEntity() => IsEffectActive(EntityEffects.BoneMerge) && (GetMoveType() == Source.MoveType.None) && GetMoveParent() != null;
+
+	public virtual bool OnControls(BaseEntity controls) => false;
 
 	public int ShouldToggle(UseType useType, int currentState) {
 		if (useType != UseType.Toggle && useType != UseType.Set) {
@@ -3050,7 +3513,13 @@ public partial class BaseEntity : IServerEntity
 	public virtual void PostClientActive() { }
 
 	public void AddSpawnFlags(int flags) => SpawnFlags |= flags;
+
+	public void AddSpawnFlags<T>(T flags) where T : unmanaged, Enum => AddSpawnFlags(Unsafe.As<T, int>(ref flags));
+
 	public void RemoveSpawnFlags(int flags) => SpawnFlags &= ~flags;
+
+	public void RemoveSpawnFlags<T>(T flags) where T : unmanaged, Enum => RemoveSpawnFlags(Unsafe.As<T, int>(ref flags));
+
 	public void SetFriction(float friction) => Friction = friction;
 
 	public TimeUnit_t GetNextThink(ReadOnlySpan<char> context = default) {
@@ -3185,8 +3654,15 @@ public partial class BaseEntity : IServerEntity
 
 	public virtual bool CanBeHitByMeleeAttack(BaseEntity? attacker) => true;
 
-	public virtual bool FVisible(BaseEntity entity, Mask traceMask = Mask.BlockLOS) {
+	public bool FVisible(BaseEntity entity, Mask traceMask = Mask.BlockLOS) => FVisible(entity, traceMask, out _);
+
+	public virtual bool FVisible(BaseEntity entity, Mask traceMask, out BaseEntity? blocker) {
+		blocker = null;
+
 		if ((entity.GetFlags() & EntityFlags.NoTarget) != 0)
+			return false;
+
+		if (IsNPC() && entity.IsPlayer() && AI_BaseNPCGlobals.g_IgnorePlayers.GetBool())
 			return false;
 
 		Vector3 vecLookerOrigin = EyePosition();
@@ -3216,6 +3692,39 @@ public partial class BaseEntity : IServerEntity
 					return true;
 			}
 
+			blocker = tr.Ent;
+
+			return false;
+		}
+
+		return true;
+	}
+
+	public virtual bool FVisible(in Vector3 vecTarget, Mask traceMask = Mask.BlockLOS) => FVisible(vecTarget, traceMask, out _);
+
+	public virtual bool FVisible(in Vector3 vecTarget, Mask traceMask, out BaseEntity? blocker) {
+		blocker = null;
+
+		Trace tr;
+		Vector3 vecLookerOrigin = EyePosition();
+
+		if (AI_BaseNPCGlobals.ai_LOS_mode.GetBool())
+			Util.TraceLine(vecLookerOrigin, vecTarget, traceMask, this, Source.CollisionGroup.None, out tr);
+		else {
+			if (traceMask == Mask.BlockLOS)
+				traceMask = Mask.BlockLOSAndNPCs;
+
+			if (IsPlayer()) {
+				traceMask |= (Mask)Contents.IgnoreNoDrawOpaque;
+				traceMask &= ~(Mask)Contents.BlockLOS;
+			}
+
+			TraceFilterLOS traceFilter = new(this, Source.CollisionGroup.None);
+			Util.TraceLine(vecLookerOrigin, vecTarget, traceMask, ref traceFilter, out tr);
+		}
+
+		if (tr.Fraction != 1.0) {
+			blocker = tr.Ent;
 			return false;
 		}
 
@@ -3234,6 +3743,14 @@ public partial class BaseEntity : IServerEntity
 	}
 
 	public TimeUnit_t NavIgnoreUntilTime;
+
+	public void SetNavIgnore(float duration = float.MaxValue) {
+		TimeUnit_t navIgnoreUntilTime = (duration == float.MaxValue) ? float.MaxValue : gpGlobals.CurTime + duration;
+		if (navIgnoreUntilTime > NavIgnoreUntilTime)
+			NavIgnoreUntilTime = navIgnoreUntilTime;
+	}
+
+	public void ClearNavIgnore() => NavIgnoreUntilTime = 0;
 
 	public bool IsNavIgnored() => gpGlobals.CurTime <= NavIgnoreUntilTime;
 

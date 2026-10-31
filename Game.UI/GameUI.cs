@@ -113,7 +113,7 @@ public class GameUI(IEngineClient engine) : IGameUI
 		// I have no idea why this one defines needed resource strings... TODO: Is this still needed?
 		localize.AddFile("Resource/itemtest_%language%.txt", "GAME", true);
 
-		staticPanel = new BasePanel(this);
+		staticPanel = new BasePanel();
 		staticPanel.SetBounds(0, 0, 400, 300);
 		staticPanel.SetPaintBorderEnabled(false);
 		staticPanel.SetPaintBackgroundEnabled(true);
@@ -137,10 +137,14 @@ public class GameUI(IEngineClient engine) : IGameUI
 		staticPanel.RunFrame();
 	}
 
-	public void SetMainMenuOverride(IPanel panel) {
-		//BasePanel? basePanel = BasePanel();
-		//if (basePanel != null)
-		// basePanel.SetMainMenuOverride(panel); // todo
+	public void SendMainMenuCommand(ReadOnlySpan<char> command) {
+		BasePanel()?.RunMenuCommand(command);
+	}
+
+	public void SetMainMenuOverride(IPanel? panel) {
+		BasePanel? basePanel = BasePanel();
+		if (basePanel != null)
+			basePanel.SetMainMenuOverride(panel);
 	}
 
 	public bool SetShowProgressText(bool show) {
@@ -154,24 +158,15 @@ public class GameUI(IEngineClient engine) : IGameUI
 		platformDir = string.Empty;
 
 #if WIN32
-		var location = System.Reflection.Assembly.GetExecutingAssembly().Location;
-		if (string.IsNullOrEmpty(location))
-			return false;
-
-		var dir = Path.GetDirectoryName(location);
-		if (dir == null)
-			return false;
-
-		platformDir = Path.Combine(dir, "platform") + Path.DirectorySeparatorChar;
-		return true;
+		string? dir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 #else
-		string dir = Directory.GetCurrentDirectory();
+		string? dir = Directory.GetCurrentDirectory();
+#endif
 		if (string.IsNullOrEmpty(dir))
 			return false;
 
 		platformDir = Path.Combine(dir, "platform") + Path.DirectorySeparatorChar;
 		return true;
-#endif
 	}
 
 	public void Shutdown() {
@@ -182,20 +177,18 @@ public class GameUI(IEngineClient engine) : IGameUI
 		if (!FindPlatformDirectory(out ReadOnlySpan<char> platformDir))
 			return;
 
-		if (IsPC()) {
-			Span<char> configDir = stackalloc char[512];
-			strcpy(configDir, platformDir);
-			strcat(configDir, "config");
+		Span<char> configDir = stackalloc char[512];
+		strcpy(configDir, platformDir);
+		strcat(configDir, "config");
 
-			Msg($"Steam config directory: {configDir.SliceNullTerminatedString()}\n");
+		Msg($"Steam config directory: {configDir.SliceNullTerminatedString()}\n");
 
-			fileSystem.AddSearchPath(configDir.SliceNullTerminatedString(), "CONFIG");
-			fileSystem.CreateDirHierarchy("", "CONFIG");
+		fileSystem.AddSearchPath(configDir.SliceNullTerminatedString(), "CONFIG");
+		fileSystem.CreateDirHierarchy("", "CONFIG");
 
-			// todo SetUserConfigFile
+		// todo SetUserConfigFile
 
-			fileSystem.AddSearchPath("platform", "PLATFORM");
-		}
+		fileSystem.AddSearchPath("platform", "PLATFORM");
 
 		localize.AddFile("Resource/platform_%language%.txt");
 		localize.AddFile("Resource/vgui_%language%.txt");
@@ -232,7 +225,7 @@ public class GameUI(IEngineClient engine) : IGameUI
 		return true;
 	}
 
-	public LoadingDialog? LoadingDialog;
+	public static LoadingDialog? LoadingDialog;
 	string? PreviousStatusText;
 
 	public void StartProgressBar() {

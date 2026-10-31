@@ -209,7 +209,7 @@ public class GameServer : BaseServer
 			slot.SetModel(model);
 
 		bool loadNow;
-		loadNow = (slot.GetModel() == null && ((flags & Res.Preload) != 0 || IsX360()));
+		loadNow = (slot.GetModel() == null && (flags & Res.Preload) != 0);
 		if (CommandLine.FindParm("-nopreload") != 0 || CommandLine.FindParm("-nopreloadmodels") != 0)
 			loadNow = false;
 		else if (sv_forcepreload.GetInt() != 0 || CommandLine.FindParm("-preload") != 0)
@@ -428,8 +428,8 @@ public class GameServer : BaseServer
 	}
 
 	public override void SendClientMessages(bool bSendSnapshots) {
-		int receivingClientCount = 0;
-		GameClient[] receivingClients = new GameClient[Constants.ABSOLUTE_PLAYER_LIMIT];
+		InlineArray128<GameClient> receivingClientsBuffer = default;
+		SpanList<GameClient> receivingClients = new(receivingClientsBuffer);
 
 		for (int i = 0; i < GetClientCount(); i++) {
 			GameClient client = Client(i);
@@ -438,8 +438,7 @@ public class GameServer : BaseServer
 				continue;
 
 			if (bSendSnapshots && client.IsActive()) {
-				receivingClients[receivingClientCount] = client;
-				receivingClientCount++;
+				receivingClients.Add(client);
 			}
 			else {
 				if (client.IsFakeClient())
@@ -454,11 +453,12 @@ public class GameServer : BaseServer
 			}
 		}
 
+		int receivingClientCount = receivingClients.Count;
 		if (receivingClientCount > 0) {
 			FrameSnapshot snapshot = FrameSnapshotManager.TakeTickSnapshot((int)TickCount);
 			CopyTempEntities(snapshot);
 
-			PackedEntities.ComputeClientPacks(receivingClientCount, receivingClients, snapshot);
+			PackedEntities.ComputeClientPacks(receivingClientCount, receivingClients.AsSpan(), snapshot);
 
 			// if (receivingClientCount > 1 && sv_parallel_sendsnapshot.GetBool()) {
 			// 
@@ -718,7 +718,7 @@ public class GameServer : BaseServer
 #elif LINUX
 		ev.SetString( "os", "LINUX" );
 #elif OSX
-		ev.etString( "os", "OSX" );
+		ev.SetString( "os", "OSX" );
 #else
 #error Please define your platform
 #endif

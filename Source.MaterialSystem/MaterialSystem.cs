@@ -58,10 +58,11 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	public IShaderAPI ShaderAPI;
 	public readonly IMeshMgr MeshMgr;
 	public readonly IMaterialSystemHardwareConfig HardwareConfig;
+	public readonly ICommandLine CommandLine;
 	public readonly MaterialSystem_Config Config;
 
 	readonly static ConVar mat_vsync = new("mat_vsync", "0", 0, "Force sync to vertical retrace", 0, 1);
-	readonly static ConVar mat_forcehardwaresync = new(IsPC() ? "1" : "0", 0);
+	readonly static ConVar mat_forcehardwaresync = new("1", 0);
 	readonly static ConVar mat_trilinear = new("1", 0);
 	readonly static ConVar mat_forceaniso = new("16", FCvar.Archive); // 0 = Bilinear, 1 = Trilinear, 2+ = Aniso
 	readonly static ConVar mat_filterlightmaps = new("1", 0);
@@ -123,7 +124,10 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		HardwareConfig = services.GetRequiredService<IMaterialSystemHardwareConfig>(); // todo: interface
 		ShaderSystem = services.GetRequiredService<IShaderSystem>();
 		Config = services.GetRequiredService<MaterialSystem_Config>()!;
+		CommandLine = services.GetRequiredService<ICommandLine>()!;
 		HardwareRenderContext = new(this);
+		QueuedRenderContexts = [new(this), new(this)];
+		ExecuteQueuedContextJobs = [new(MatQueueJob.JobKind.ExecuteQueuedContext, QueuedRenderContexts[0]), new(MatQueueJob.JobKind.ExecuteQueuedContext, QueuedRenderContexts[1])];
 
 		// Link up
 		ShaderDevice.PreInit(this, services);
@@ -135,6 +139,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		ShaderSystem.Init();
 		CreateDebugMaterials();
 		MatLightmaps = new(this);
+		OcclusionQueryMgr = new(this);
 	}
 
 	ILauncherManager launcherMgr;
@@ -185,10 +190,10 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 		ShaderAPI.SetDefaultState();
 
-		// if (config.HDREnabled() != Config.HDREnabled()) {
-		// 	forceUpdate = true;
-		// 	reloadMaterials = true;
-		// }
+		if (config.HDREnabled() != Config.HDREnabled()) {
+			forceUpdate = true;
+			reloadMaterials = true;
+		}
 
 		if (config.ShadowDepthTexture != Config.ShadowDepthTexture) {
 			forceUpdate = true;
@@ -297,7 +302,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		if (resetAnisotropy || recomputeSnapshots || redownloadLightmaps ||
 				redownloadTextures || resetAnisotropy || videoModeChange ||
 				setStandardVertexShaderConstants || resetTextureFilter) {
-			// ForceSingleThreaded();
+			ForceSingleThreaded();
 		}
 
 		if (reloadMaterials)
@@ -335,8 +340,8 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 				TextureSystem.RestoreRenderTargets();
 		}
 
-		// if (videoModeChange)
-		// ForceSingleThreaded();
+		if (videoModeChange)
+			ForceSingleThreaded();
 
 		return redownloadLightmaps;
 	}
@@ -460,8 +465,206 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 		GetRenderContextInternal().EndFrame();
 
+		int convarThreadMode = mat_queue_mode.GetInt();
+		if (convarThreadMode == -2)
+			convarThreadMode = (int)MaterialThreadMode.QueuedThreaded;
+
+		if (convarThreadMode == (int)MaterialThreadMode.QueuedSingleThreaded)
+			convarThreadMode = (int)MaterialThreadMode.SingleThreaded;
+
+		MaterialThreadMode nextThreadMode = (convarThreadMode >= 0) ? (MaterialThreadMode)convarThreadMode : IdealThreadMode;
+		bool deviceReady = ShaderAPI.CanDownloadTextures();
+		if (!deviceReady || !AllowQueuedRendering)
+			nextThreadMode = MaterialThreadMode.SingleThreaded;
+
+		if (ForcedSingleThreaded) {
+			nextThreadMode = MaterialThreadMode.SingleThreaded;
+			ForcedSingleThreaded = false;
+		}
+
+		switch (ThreadMode) {
+			case MaterialThreadMode.SingleThreaded:
+				break;
+
+			case MaterialThreadMode.QueuedThreaded: {
+					if (!ThreadHasOwnership)
+						ThreadAcquire(true);
+
+					if (ActiveAsyncJob != null && !ActiveAsyncJob.IsFinished())
+						ActiveAsyncJob.WaitForFinish();
+					ActiveAsyncJob = null;
+
+					MatQueuedRenderContext prevContext = QueuedRenderContexts[CurQueuedContext];
+
+					CurQueuedContext = (CurQueuedContext + 1) % QueuedRenderContexts.Length;
+					QueuedRenderContexts[CurQueuedContext].BeginQueue(prevContext);
+					CurrentThreadRenderContext = QueuedRenderContexts[CurQueuedContext];
+
+					ActiveAsyncJob = ExecuteQueuedContextJobs[prevContext == QueuedRenderContexts[0] ? 0 : 1];
+					ActiveAsyncJob.Reset();
+					MatQueueThread.AddJob(ActiveAsyncJob);
+					break;
+				}
+		}
+
+		if (!deviceReady && nextThreadMode != MaterialThreadMode.SingleThreaded)
+			nextThreadMode = MaterialThreadMode.SingleThreaded;
+
+		if (ThreadMode != nextThreadMode) {
+			switch (ThreadMode) {
+				case MaterialThreadMode.SingleThreaded:
+					break;
+
+				case MaterialThreadMode.QueuedThreaded: {
+						if (ActiveAsyncJob != null) {
+							ActiveAsyncJob.WaitForFinish();
+							ActiveAsyncJob = null;
+						}
+
+						HardwareRenderContext.InitializeFrom(QueuedRenderContexts[CurQueuedContext]);
+						CurrentThreadRenderContext = HardwareRenderContext;
+						QueuedRenderContexts[CurQueuedContext].EndQueue(true);
+						ThreadRelease();
+					}
+					break;
+			}
+
+			ThreadMode = nextThreadMode;
+
+			switch (ThreadMode) {
+				case MaterialThreadMode.SingleThreaded:
+					CurrentThreadRenderContext = HardwareRenderContext;
+					for (int i = 0; i < QueuedRenderContexts.Length; i++)
+						QueuedRenderContexts[i].EndQueue(true);
+					break;
+
+				case MaterialThreadMode.QueuedThreaded: {
+						for (int i = 0; i < QueuedRenderContexts.Length; i++) {
+							if (!QueuedRenderContexts[i].IsInitialized())
+								QueuedRenderContexts[i].Init(HardwareRenderContext);
+						}
+
+						CurQueuedContext = 0;
+						QueuedRenderContexts[CurQueuedContext].BeginQueue(HardwareRenderContext);
+						CurrentThreadRenderContext = QueuedRenderContexts[CurQueuedContext];
+
+						ShaderAPI.ReleaseThreadOwnership();
+						MatQueueThread.AddJob(new MatQueueJob(MatQueueJob.JobKind.AcquireThreadOwnership));
+
+						ThreadHasOwnership = true;
+						ThreadOwnershipID = ThreadGetCurrentId();
+					}
+					break;
+			}
+		}
+
 		Assert(InFrame);
 		InFrame = false;
+	}
+
+	static readonly ConVar mat_queue_mode = new("mat_queue_mode", "-1", FCvar.Archive, "The queue/thread mode the material system should use: -1=default, 0=synchronous single thread, 2=queued multithreaded");
+	static readonly ConVar mat_queue_report = new("mat_queue_report", "0", FCvar.Archive, "Report thread stalls.  Positive number will filter by stalls >= time in ms.  -1 reports all locks.");
+	MaterialThreadMode IdealThreadMode = MaterialThreadMode.SingleThreaded;
+	int ServiceThread = -1;
+	bool AllowQueuedRendering;
+	bool ForcedSingleThreaded;
+	bool ThreadHasOwnership;
+	int ThreadOwnershipID;
+
+	readonly object MatSysMutex = new();
+	readonly MatQueuedRenderContext[] QueuedRenderContexts;
+	readonly MatQueueJob[] ExecuteQueuedContextJobs;
+	int CurQueuedContext;
+	MatQueueJob? ActiveAsyncJob;
+	MatQueueThread? matQueueThread;
+	MatQueueThread MatQueueThread => matQueueThread ??= new(this);
+
+	public void ForceSingleThreaded() {
+		if (!ThreadInMainThread())
+			Error("Can't force single thread from within thread!\n");
+
+		if (GetThreadMode() != MaterialThreadMode.SingleThreaded) {
+			if (ActiveAsyncJob != null && !ActiveAsyncJob.IsFinished())
+				ActiveAsyncJob.WaitForFinish();
+			ActiveAsyncJob = null;
+
+			ThreadRelease();
+
+			HardwareRenderContext.InitializeFrom(QueuedRenderContexts[CurQueuedContext]);
+			CurrentThreadRenderContext = HardwareRenderContext;
+			for (int i = 0; i < QueuedRenderContexts.Length; i++)
+				QueuedRenderContexts[i].EndQueue(true);
+
+			ThreadMode = MaterialThreadMode.SingleThreaded;
+			ForcedSingleThreaded = true;
+		}
+	}
+
+	internal void ExecuteJob(MatQueueJob job) {
+		switch (job.Kind) {
+			case MatQueueJob.JobKind.AcquireThreadOwnership:
+				ShaderAPI.AcquireThreadOwnership();
+				break;
+			case MatQueueJob.JobKind.ReleaseThreadOwnership:
+				ShaderAPI.ReleaseThreadOwnership();
+				break;
+			case MatQueueJob.JobKind.ExecuteQueuedContext:
+				ThreadExecuteQueuedContext(job.Context!);
+				break;
+		}
+	}
+
+	void ThreadExecuteQueuedContext(MatQueuedRenderContext context) {
+		RenderThreadID = (uint)ThreadGetCurrentId();
+		IMatRenderContextInternal? savedRenderContext = CurrentThreadRenderContext;
+		CurrentThreadRenderContext = HardwareRenderContext;
+		context.EndQueue(true);
+		CurrentThreadRenderContext = savedRenderContext;
+		RenderThreadID = 0xFFFFFFFF;
+	}
+
+	void ThreadRelease() {
+		if (!ThreadHasOwnership)
+			return;
+
+		double startTime = mat_queue_report.GetInt() != 0 ? Platform.Time : 0;
+
+		MatQueueJob job = new(MatQueueJob.JobKind.ReleaseThreadOwnership);
+		MatQueueThread.AddJob(job);
+		job.WaitForFinish();
+
+		double endThreadRelease = mat_queue_report.GetInt() != 0 ? Platform.Time : 0;
+
+		ShaderAPI.AcquireThreadOwnership();
+
+		ThreadHasOwnership = false;
+		ThreadOwnershipID = 0;
+
+		if (mat_queue_report.GetInt() != 0) {
+			double endTime = Platform.Time;
+			double result = (endTime - startTime) * 1000.0;
+			if (mat_queue_report.GetInt() == -1 || result > mat_queue_report.GetFloat())
+				ConColorMsg(new Color(200, 20, 20, 255), $"CMaterialSystem::ThreadRelease: {result:0.00}ms = Release:{(endThreadRelease - startTime) * 1000.0:0.00}ms + Acquire:{(endTime - endThreadRelease) * 1000.0:0.00}ms\n");
+		}
+	}
+
+	void ThreadAcquire(bool force) {
+		if (!force)
+			return;
+
+		double startTime = mat_queue_report.GetInt() != 0 ? Platform.Time : 0;
+
+		ShaderAPI.ReleaseThreadOwnership();
+		MatQueueThread.AddJob(new MatQueueJob(MatQueueJob.JobKind.AcquireThreadOwnership));
+
+		ThreadHasOwnership = true;
+		ThreadOwnershipID = ThreadGetCurrentId();
+
+		if (mat_queue_report.GetInt() != 0) {
+			double result = (Platform.Time - startTime) * 1000.0;
+			if (mat_queue_report.GetInt() == -1 || result > mat_queue_report.GetFloat())
+				ConColorMsg(new Color(200, 20, 20, 255), $"CMaterialSystem::ThreadAcquire: {result:0.00}ms\n");
+		}
 	}
 
 	ulong FrameNum;
@@ -473,15 +676,12 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 	public MaterialSystem_Config GetCurrentConfigForVideoCard() => Config;
 
-	readonly ThreadLocal<IMatRenderContextInternal> RenderContext = new();
+	[ThreadStatic] static IMatRenderContextInternal? CurrentThreadRenderContext;
 	readonly MatRenderContext HardwareRenderContext;
 
 	public IMatRenderContext GetRenderContext() {
-		IMatRenderContext? result = RenderContext.Value;
-		if (result == null) {
-			result = HardwareRenderContext;
-			RenderContext.Value = HardwareRenderContext;
-		}
+		ref IMatRenderContextInternal? result = ref CurrentThreadRenderContext;
+		result ??= HardwareRenderContext;
 		return result;
 	}
 
@@ -505,14 +705,12 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		TextureManager.FreeStandardRenderTargets();
 		TextureManager.AllocateStandardRenderTargets();
 		if (!previouslyUsingGraphics) {
-			if (IsPC()) {
-				TextureManager.RestoreRenderTargets();
-				TextureManager.RestoreNonRenderTargetTextures();
-				if (MaterialSystem.CanUseEditorMaterials())
-					MathLib.Init(2.2f, 2.2f, 0.0f, (int)IMaterialSystem.OVERBRIGHT);
+			TextureManager.RestoreRenderTargets();
+			TextureManager.RestoreNonRenderTargetTextures();
+			if (MaterialSystem.CanUseEditorMaterials())
+				MathLib.Init(2.2f, 2.2f, 0.0f, (int)IMaterialSystem.OVERBRIGHT);
 
-				AllocateStandardTextures();
-			}
+			AllocateStandardTextures();
 		}
 
 		// Copy over that state which isn't stored currently in convars
@@ -700,12 +898,10 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 	public void ReleaseStandardTextures() {
 		if (StandardTexturesAllocated) {
-			if (IsPC()) {
-				ShaderAPI.DeleteTexture(BlackTextureHandle);
-				ShaderAPI.DeleteTexture(WhiteTextureHandle);
-				ShaderAPI.DeleteTexture(GreyTextureHandle);
-				ShaderAPI.DeleteTexture(GreyAlphaZeroTextureHandle);
-			}
+			ShaderAPI.DeleteTexture(BlackTextureHandle);
+			ShaderAPI.DeleteTexture(WhiteTextureHandle);
+			ShaderAPI.DeleteTexture(GreyTextureHandle);
+			ShaderAPI.DeleteTexture(GreyAlphaZeroTextureHandle);
 			ShaderAPI.DeleteTexture(FullbrightLightmapTextureHandle);
 			ShaderAPI.DeleteTexture(FlatNormalTextureHandle);
 			ShaderAPI.DeleteTexture(FullbrightBumpedLightmapTextureHandle);
@@ -750,9 +946,11 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		=> CreateMaterial(materialName, MaterialDefines.TEXTURE_GROUP_OTHER, keyValues);
 	public IMaterialInternal CreateMaterial(ReadOnlySpan<char> materialName, ReadOnlySpan<char> textureGroup, KeyValues? keyValues) {
 		IMaterialInternal material;
+		MaterialLock hMaterialLock = Lock();
 		lock (this) {
 			material = new Material(this, materialName, textureGroup, keyValues);
 		}
+		Unlock(hMaterialLock);
 
 		MaterialDict.AddMaterialToMaterialList(material);
 		return material;
@@ -777,7 +975,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	public void ForceDepthFuncEquals(bool enable) => GetRenderContextInternal().ForceDepthFuncEquals(enable);
 	public MaterialHeightClipMode GetHeightClipMode() => GetRenderContextInternal().GetHeightClipMode();
 
-	public MatCallQueue GetRenderCallQueue() => GetRenderContextInternal().GetCallQueueInternal();
+	public MatCallQueue? GetRenderCallQueue() => CurrentThreadRenderContext?.GetCallQueueInternal();
 
 	public void UnbindMaterial(IMaterial? material) {
 		Assert(material == null || ((IMaterialInternal)material).IsRealTimeVersion());
@@ -802,7 +1000,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public IMatRenderContextInternal GetRenderContextInternal() {
-		IMatRenderContextInternal? renderContext = RenderContext.Value;
+		IMatRenderContextInternal? renderContext = CurrentThreadRenderContext;
 		return renderContext ?? HardwareRenderContext;
 	}
 
@@ -814,9 +1012,17 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		return GetRenderContextInternal().OnSetPrimitiveType(mesh, type);
 	}
 
-	public bool OnFlushBufferedPrimitives() {
-		throw new NotImplementedException();
+	public bool OnFlushBufferedPrimitives() => GetRenderContextInternal().OnFlushBufferedPrimitives();
+
+	public unsafe bool OnDrawMesh(IMesh mesh, PrimList* lists, int numLists) {
+		if (IsInStubMode())
+			return false;
+
+		return GetRenderContextInternal().OnDrawMesh(mesh, lists, numLists);
 	}
+
+	public bool OnSetFlexMesh(IMesh staticMesh, IMesh? mesh, int vertexOffsetInBytes) => GetRenderContextInternal().OnSetFlexMesh(staticMesh, mesh, vertexOffsetInBytes);
+	public bool OnSetColorMesh(IMesh staticMesh, IMesh? mesh, int vertexOffsetInBytes) => GetRenderContextInternal().OnSetColorMesh(staticMesh, mesh, vertexOffsetInBytes);
 
 	public void SyncMatrices() => GetRenderContextInternal().SyncMatrices();
 	public void SyncMatrix(MaterialMatrixMode mode) => GetRenderContextInternal().SyncMatrix(mode);
@@ -952,6 +1158,8 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 	void ReleaseShaderObjects() {
 		// todo
+		OcclusionQueryMgr.FreeOcclusionQueryObjects();
+		ReleaseStandardTextures();
 		for (int i = 0; i < ReleaseFunc.Count; i++)
 			ReleaseFunc[i]();
 	}
@@ -967,6 +1175,8 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		}
 
 		TextureSystem.RestoreRenderTargets();
+		AllocateStandardTextures();
+		OcclusionQueryMgr.AllocOcclusionQueryObjects();
 		Restore?.Invoke();
 		for (int i = 0; i < RestoreFunc.Count; i++)
 			RestoreFunc[i]((RestoreChangeFlags)changeFlags);
@@ -979,12 +1189,18 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		AllocatingRenderTargets = true;
 	}
 
+	static readonly ConVar mat_requires_rt_alloc_first = new("mat_requires_rt_alloc_first", "0", FCvar.Hidden);
+	static bool FirstRenderTargetAllocation = true;
+
 	public void EndRenderTargetAllocation() {
+		bool requiresRenderTargetAllocationFirst = mat_requires_rt_alloc_first.GetBool() || FirstRenderTargetAllocation;
+		FirstRenderTargetAllocation = false;
+
 		ShaderAPI.FlushBufferedPrimitives();
 		AllocatingRenderTargets = false;
 
 		// I believe this step is unnecessary (and breaks how textures work rn)
-		if (ShaderAPI.CanDownloadTextures()) {
+		if (requiresRenderTargetAllocationFirst && ShaderAPI.CanDownloadTextures()) {
 			ShaderDevice.ReleaseResources();
 			ShaderDevice.ReacquireResources();
 		}
@@ -1098,7 +1314,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 		while (!findFileName.IsEmpty) {
 			if (FileSystem.FindIsDirectory(findHandle)) {
-				if (!findFileName.SequenceEqual(".") && !findFileName.SequenceEqual(".."))
+				if (strcmp(findFileName, ".") != 0 && strcmp(findFileName, "..") != 0)
 					ScanDirForReplacements($"{pathName}/{findFileName}");
 			}
 
@@ -1108,10 +1324,47 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		FileSystem.FindClose(findHandle);
 	}
 
+	void LoadReplacementMaterials() {
+		const string location = "materials";
+
+		if (CommandLine.FindParm("-matscan") != 0)
+			ScanDirForReplacements(location);
+		else
+			InitReplacementsFromFile(location);
+	}
+
+	void InitReplacementsFromFile(ReadOnlySpan<char> pathName) {
+		List<string> replacementFiles = [];
+
+		ReadListFromFile(replacementFiles, $"{pathName}/replacements.txt");
+		foreach (string file in replacementFiles) {
+			string baseName = $"{pathName}/{file}/replacements.vmt";
+			if (FileSystem.FileExists(baseName)) {
+				KeyValues? kv = FileSystem.LoadKeyValues(IFileSystem.KeyValuesPreloadType.VMT, baseName);
+				if (kv != null)
+					Replacements.TryAdd($"{pathName}/{file}/", kv);
+			}
+		}
+	}
+
+	int ReadListFromFile(List<string> outReplacementMaterials, string pathName) {
+		long size = FileSystem.Size(pathName);
+		if (size <= 0)
+			return 0;
+
+		char[] fileContents = new char[size];
+		if (!FileSystem.ReadFile(pathName, null, fileContents, 0))
+			return 0;
+
+		outReplacementMaterials.AddRange(new string(fileContents).Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries));
+
+		return outReplacementMaterials.Count;
+	}
+
 	void PreloadReplacements() {
 		Replacements.Clear();
 
-		ScanDirForReplacements("materials");
+		LoadReplacementMaterials();
 
 		ReplacementFilesValid = true;
 	}
@@ -1234,9 +1487,14 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 	public void UncacheAllMaterials() {
 		// todo: finish me!!
+		MaterialLock hLock = Lock();
+		Flush(true);
+
 		foreach (var material in MaterialDict) {
 			material.Uncache();
 		}
+
+		Unlock(hLock);
 	}
 
 	public void ReloadTextures() {
@@ -1244,7 +1502,55 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public void ReloadMaterials(ReadOnlySpan<char> subString = default) {
-		// todo
+		bool vertexFormatChanged = false;
+		if (subString.IsEmpty) {
+			vertexFormatChanged = true;
+			UncacheAllMaterials();
+			CacheUsedMaterials();
+		}
+		else {
+			const char multiDelim = '*';
+			List<string> searchItems = [];
+			if (subString.Contains(multiDelim))
+				searchItems.AddRange(new string(subString).Split(multiDelim));
+
+			foreach (IMaterialInternal material in (IMaterialInternal[])[.. MaterialDict]) {
+				if (material.GetReferenceCount() <= 0)
+					continue;
+
+				ReadOnlySpan<char> matName = material.GetName();
+
+				if (searchItems.Count > 1) {
+					bool matched = false;
+					for (int k = 0; !matched && k < searchItems.Count; ++k)
+						if (matName.Contains(searchItems[k], StringComparison.OrdinalIgnoreCase))
+							matched = true;
+
+					if (!matched)
+						continue;
+				}
+				else if (!matName.Contains(subString, StringComparison.OrdinalIgnoreCase))
+					continue;
+
+				if (!material.IsPrecached()) {
+					if (material.IsPrecachedVars())
+						material.Uncache();
+				}
+				else {
+					VertexFormat oldVertexFormat = material.GetVertexFormat();
+					material.Uncache();
+					material.Precache();
+					material.ReloadTextures();
+					if (material.GetVertexFormat() != oldVertexFormat)
+						vertexFormatChanged = true;
+				}
+			}
+		}
+
+		if (vertexFormatChanged) {
+			ReleaseShaderObjects();
+			RestoreShaderObjects(null, (int)RestoreChangeFlags.VertexFormatChanged);
+		}
 	}
 
 	void RecomputeAllStateSnapshots() {
@@ -1287,6 +1593,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 	public IMaterialInternal errorMaterial;
 	public readonly MatLightmaps MatLightmaps;
+	public readonly OcclusionQueryMgr OcclusionQueryMgr;
 
 	public bool AddTextureCompositorTemplate(ReadOnlySpan<char> name, KeyValues tmplDesc, int texCompositeTemplateFlags = 0) {
 		throw new NotImplementedException("Incomplete port of IMaterialSystem");
@@ -1301,7 +1608,30 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public bool AllowThreading(bool allow, int serviceThread) {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		if (CommandLine.ParmValue("-threads", 2) < 2)
+			allow = false;
+
+		bool oldAllow = AllowQueuedRendering;
+
+		if (Environment.ProcessorCount >= 2) {
+			AllowQueuedRendering = allow;
+			bool queued = IdealThreadMode != MaterialThreadMode.SingleThreaded;
+			if (allow && !queued) {
+				DevMsg("Queued Material System: ENABLED!\n");
+				SetThreadMode(MaterialThreadMode.QueuedThreaded, serviceThread);
+			}
+			else if (!allow && queued) {
+				DevMsg("Queued Material System: DISABLED!\n");
+				ForceSingleThreaded();
+				MaterialLock hMaterialLock = Lock();
+				SetThreadMode(MaterialThreadMode.SingleThreaded, -1);
+				Unlock(hMaterialLock);
+			}
+		}
+		else
+			AllowQueuedRendering = false;
+
+		return oldAllow;
 	}
 
 	public void AsyncFindTexture<T>(ReadOnlySpan<char> pFilename, ReadOnlySpan<char> textureGroupName, IAsyncTextureOperationReceiver<T> recipient, ref T extraArgs, bool complain = true, CreateTextureFlags additionalCreationFlags = 0) {
@@ -1309,7 +1639,11 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public void CacheUsedMaterials() {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		foreach (IMaterialInternal material in (IMaterialInternal[])[.. MaterialDict]) {
+			Assert(material.GetReferenceCount() >= 0);
+			if (material.GetReferenceCount() > 0)
+				material.Precache();
+		}
 	}
 
 	public void ClearBuffers(bool clearColor, bool clearDepth, bool clearStencil = false) {
@@ -1317,7 +1651,8 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public void CompactMemory() {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		for (int i = 0; i < QueuedRenderContexts.Length; i++)
+			QueuedRenderContexts[i].CompactMemory();
 	}
 
 	public ITexture? CreateNamedRenderTargetTexture(ReadOnlySpan<char> rtName, int w, int h, RenderTargetSizeMode sizeMode, ImageFormat format, MaterialRenderTargetDepth depth = MaterialRenderTargetDepth.Shared, bool clampTexCoords = true, bool autoMipMap = false) {
@@ -1364,24 +1699,26 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		throw new NotImplementedException("Incomplete port of IMaterialSystem");
 	}
 
-	public void ExecuteQueued() {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
-	}
+	public void ExecuteQueued() { }
 
 	public MaterialHandle_t FirstMaterial() {
 		throw new NotImplementedException("Incomplete port of IMaterialSystem");
 	}
 
-	public void Flush(bool flushHardware = false) {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
-	}
+	public void Flush(bool flushHardware = false) => GetRenderContextInternal().Flush(flushHardware);
 
 	public void GMOD_ClearMissing(bool unknown) {
 		throw new NotImplementedException("Incomplete port of IMaterialSystem");
 	}
 
 	public void GMOD_FlushQueue() {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		IMatRenderContextInternal renderContext = GetRenderContextInternal();
+		if (ThreadMode != MaterialThreadMode.SingleThreaded && renderContext.GetCallQueueInternal() != null && renderContext.GMOD_IsLowOnMemory()) {
+			DevWarning("Render queue too large, flushing! (This is super slow you shouldn't render so much stuff.)\n");
+			ActiveAsyncJob?.WaitForFinish();
+			ActiveAsyncJob = null;
+			renderContext.GMOD_FlushQueue();
+		}
 	}
 
 	public IMaterial? GMOD_GetErrorMaterial() {
@@ -1472,11 +1809,33 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public bool IsRenderThreadSafe() {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		return (ThreadMode != MaterialThreadMode.QueuedThreaded && ThreadInMainThread()) ||
+			(ThreadMode == MaterialThreadMode.QueuedThreaded && RenderThreadID == (uint)ThreadGetCurrentId());
 	}
 
+	[ThreadStatic] static List<IMatRenderContextInternal>? LockedContexts;
+
 	public MaterialLock Lock() {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		IMatRenderContextInternal curContext = GetRenderContextInternal();
+
+		if (curContext != HardwareRenderContext && ActiveAsyncJob != null) {
+			ActiveAsyncJob.WaitForFinish();
+			ActiveAsyncJob = null;
+		}
+
+		Monitor.Enter(MatSysMutex);
+
+		LockedContexts ??= [];
+		LockedContexts.Add(curContext);
+		MaterialLock hMaterialLock = new(LockedContexts.Count);
+		CurrentThreadRenderContext = HardwareRenderContext;
+
+		if (ThreadMode != MaterialThreadMode.SingleThreaded) {
+			if (curContext.GetCallQueueInternal() != null)
+				ThreadRelease();
+		}
+
+		return hMaterialLock;
 	}
 
 	public ITextureCompositor? NewTextureCompositor(int w, int h, ReadOnlySpan<char> compositeName, int teamNum, ulong randomSeed, KeyValues stageDesc, CreateTextureFlags texCompositeCreateFlags = 0) {
@@ -1492,11 +1851,12 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public void ReacquireResources() {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		ShaderDevice.ReacquireResources();
 	}
 
 	public void ReleaseResources() {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		ShaderAPI.FlushBufferedPrimitives();
+		ShaderDevice.ReleaseResources();
 	}
 
 	public void ReloadFilesInList(IFileList filesToReload) {
@@ -1536,7 +1896,8 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public void SetThreadMode(MaterialThreadMode mode, int nServiceThread = -1) {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		IdealThreadMode = mode;
+		ServiceThread = nServiceThread;
 	}
 
 	public void SetView(IWindow hwnd) {
@@ -1572,7 +1933,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public bool SupportsHDRMode(HDRType hdrMode) {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		return HardwareConfig.SupportsHDRMode(hdrMode);
 	}
 
 	public bool SupportsMSAAMode(int nMSAAMode) {
@@ -1592,7 +1953,11 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	}
 
 	public void Unlock(MaterialLock l) {
-		throw new NotImplementedException("Incomplete port of IMaterialSystem");
+		Assert(LockedContexts != null && LockedContexts.Count == (int)l.Value);
+		IMatRenderContextInternal renderContext = LockedContexts![^1];
+		LockedContexts.RemoveAt(LockedContexts.Count - 1);
+		CurrentThreadRenderContext = renderContext;
+		Monitor.Exit(MatSysMutex);
 	}
 
 	public void UpdateExcludedTextures() {
@@ -1625,13 +1990,23 @@ public struct RenderTargetStackElement
 	public ITexture? RenderTarget2;
 	public ITexture? RenderTarget3;
 
-	public readonly ITexture? this[int index] => index switch {
-		0 => RenderTarget0,
-		1 => RenderTarget1,
-		2 => RenderTarget2,
-		3 => RenderTarget3,
-		_ => null
-	};
+	public ITexture? this[int index] {
+		readonly get => index switch {
+			0 => RenderTarget0,
+			1 => RenderTarget1,
+			2 => RenderTarget2,
+			3 => RenderTarget3,
+			_ => null
+		};
+		set {
+			switch (index) {
+				case 0: RenderTarget0 = value; break;
+				case 1: RenderTarget1 = value; break;
+				case 2: RenderTarget2 = value; break;
+				case 3: RenderTarget3 = value; break;
+			}
+		}
+	}
 
 	public ITexture? DepthTexture;
 

@@ -2,6 +2,7 @@ using Source.Common.Bitmap;
 using Source.Common.Engine;
 using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
+using Source.Common.Utilities;
 
 using System.Numerics;
 
@@ -100,14 +101,15 @@ public interface IStudioRender {
 	bool LoadModel(StudioHeader studioHDR, Memory<byte> vtxData, StudioHWData hardwareData);
 	void UnloadModel(StudioHWData hardwareData);
 
-	int GetMaterialList(StudioHeader studioHDR, Span<IMaterial> materials);
-	int GetMaterialListFromBodyAndSkin(MDLHandle_t studio, int skin, int body, Span<IMaterial> outputMaterials);
+	void GetMaterialList(StudioHeader studioHDR, ref SpanList<IMaterial> materials);
+	void GetMaterialListFromBodyAndSkin(MDLHandle_t studio, int skin, int body, ref SpanList<IMaterial> outputMaterials);
 	Span<Matrix3x4> LockBoneMatrices(int boneCount);
 	void UnlockBoneMatrices();
 	void LockFlexWeights(int weightCount, out Span<float> flexWeights);
 	void LockFlexWeights(int weightCount, out Span<float> flexWeights, out Span<float> flexDelayedWeights);
 	void UnlockFlexWeights();
 	void DrawModel(ref DrawModelResults results, ref DrawModelInfo info, Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights, in Vector3 modelOrigin, StudioRenderFlags flags = StudioRenderFlags.DrawEntireModel);
+	void DrawModelStaticProp(ref DrawModelInfo drawInfo, in Matrix3x4 modelToWorld, StudioRenderFlags flags = StudioRenderFlags.DrawEntireModel);
 	void SetViewState(in Vector3 currentViewOrigin, in Vector3 currentViewRight, in Vector3 currentViewUp, in Vector3 currentViewForward);
 	void SetColorModulation(Vector3 r_colormod);
 	void SetAlphaModulation(float r_blend);

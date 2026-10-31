@@ -32,11 +32,11 @@ public static class BSPFileCommon
 	public const int MAX_DISP_CORNER_NEIGHBORS = 4;
 
 	public const int MAX_MAP_MODELS = 4096;
-	public const int MAX_MAP_BRUSHES = 16384;
+	public const int MAX_MAP_BRUSHES = 65535;
 	public const int MAX_MAP_ENTITIES = 8192;
 	public const int MAX_MAP_TEXINFO = 32768;
 	public const int MAX_MAP_TEXDATA = 8192;
-	public const int MAX_MAP_DISPINFO = 2048;
+	public const int MAX_MAP_DISPINFO = 16384;
 	public const int MAX_MAP_DISP_VERTS = (MAX_MAP_DISPINFO * ((1 << MAX_MAP_DISP_POWER) + 1) * ((1 << MAX_MAP_DISP_POWER) + 1));
 	public const int MAX_MAP_DISP_TRIS = ((1 << MAX_MAP_DISP_POWER) * (1 << MAX_MAP_DISP_POWER) * 2);
 	public const int MAX_DISPVERTS = ((1 << MAX_MAP_DISP_POWER) + 1) * ((1 << MAX_MAP_DISP_POWER) + 1);
@@ -46,7 +46,7 @@ public static class BSPFileCommon
 	public const int MAX_MAP_AREAPORTALS = 1024;
 	public const int MAX_MAP_PLANES = 65536;
 	public const int MAX_MAP_NODES = 65536;
-	public const int MAX_MAP_BRUSHSIDES = 163840;
+	public const int MAX_MAP_BRUSHSIDES = 655350;
 	public const int MAX_MAP_LEAFS = 65536;
 	public const int MAX_MAP_VERTS = 65536;
 	public const int MAX_MAP_VERTNORMALS = 256000;
@@ -62,7 +62,7 @@ public static class BSPFileCommon
 	public const int MAX_MAP_SURFEDGES = 512000;
 	public const int MAX_MAP_LIGHTING = 0x1000000;
 	public const int MAX_MAP_VISIBILITY = 0x1000000;
-	public const int MAX_MAP_TEXTURES = 1024;
+	public const int MAX_MAP_TEXTURES = 8192;
 	public const int MAX_MAP_WORLDLIGHTS = 8192;
 	public const int MAX_MAP_CUBEMAPSAMPLES = 1024;
 	public const int MAX_MAP_OVERLAYS = 8192;
@@ -304,7 +304,14 @@ public struct BSPDHeader
 /// </summary>
 public struct BSPDFlagsLump
 {
-	public uint LevelFlags;
+	public LevelFlags LevelFlags;
+}
+
+[Flags]
+public enum LevelFlags : uint
+{
+	BakedStaticPropLightingNonHDR = 0x00000001,
+	BakedStaticPropLightingHDR = 0x00000002,
 }
 
 /// <summary>
@@ -521,10 +528,14 @@ public struct BSPMSurfaceLighting
 	public nint SurfNum;
 
 	public Span<ColorRGBExp32> AvgLightColor(int lightStyleIndex) {
-		if (lightStyleIndex < 0 || lightStyleIndex >= (Samples.Length))
+		if (!MemoryMarshal.TryGetArray<ColorRGBExp32>(Samples, out ArraySegment<ColorRGBExp32> segment))
+			throw new InvalidOperationException();
+
+		int index = segment.Offset - (lightStyleIndex + 1);
+		if (index < 0)
 			throw new IndexOutOfRangeException();
 
-		return Samples.Span![(Samples.Length - 1 - lightStyleIndex)..];
+		return segment.Array.AsSpan(index);
 	}
 
 	// Lightmap info

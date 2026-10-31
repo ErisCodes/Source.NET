@@ -20,6 +20,8 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
 
+using static Source.Engine.StaticPropMgrGlobals;
+
 namespace Game.Server;
 
 [EngineComponent]
@@ -31,6 +33,13 @@ public static class PhysicsHookGlobals {
 	public static readonly ConcurrentQueue<Action> g_PostSimulationQueue = new();
 
 	public const float VPHYSICS_LARGE_OBJECT_MASS = 500.0f;
+
+	public static readonly ConVar phys_timescale = new("phys_timescale", "1", FCvar.Replicated, "Scale time for physics", callback: TimescaleChanged);
+	public static float g_GMOD_PhysTimeScale = 1.0f;
+
+	static void TimescaleChanged(IConVar var, in ConVarChangeContext ctx) => physenv?.ResetSimulationClock();
+
+	public static float GMOD_PhysicsGetTotalTimeScale() => phys_timescale.GetFloat() * g_GMOD_PhysTimeScale;
 
 	static PhysicsHookGlobals(){
 		SetPhysicsGameSystem(g_PhysicsHook);
@@ -45,6 +54,79 @@ public static class PhysicsHookGlobals {
 
 		System.Buffers.ArrayPool<IPhysicsObject>.Shared.Return(list);
 		return otherMass;
+	}
+
+	class SkipKeys : IVPhysicsKeyHandler
+	{
+		public void ParseKeyValue<T>(ref T data, ReadOnlySpan<char> key, ReadOnlySpan<char> value) { }
+		public void SetDefaults<T>(ref T data) { }
+	}
+
+	public static void PhysSolidOverride(ref Solid solid, string? overrideScript) {
+		if (overrideScript != null) {
+			bool collisions = solid.Params.EnableCollisions;
+
+			StringBuilder tmpString = new("solid { ");
+
+			nexttoken(out ReadOnlySpan<char> token, overrideScript, ',', out ReadOnlySpan<char> str);
+			while (!token.IsEmpty) {
+				tmpString.Append('"');
+				tmpString.Append(token);
+				tmpString.Append("\" ");
+				nexttoken(out token, str, ',', out str);
+			}
+			tmpString.Append('}');
+
+			IVPhysicsKeyParser parse = physcollision.VPhysicsKeyParserCreate(Encoding.ASCII.GetBytes(tmpString.ToString()));
+			parse.ParseSolid(ref solid, new SkipKeys());
+			physcollision.VPhysicsKeyParserDestroy(parse);
+
+			solid.Params.EnableCollisions = collisions;
+		}
+	}
+
+	public static void PhysSetMassCenterOverride(in MassCenterOverride massOverride) {
+		if (massOverride.EntityName != null)
+			g_PhysicsHook.MassCenterOverrides.Add(massOverride);
+	}
+
+	public static int PhysGetMassCenterOverrideIndex(string? name) {
+		if (name != null && g_PhysicsHook.MassCenterOverrides.Count != 0) {
+			for (int i = 0; i < g_PhysicsHook.MassCenterOverrides.Count; i++) {
+				if (g_PhysicsHook.MassCenterOverrides[i].EntityName == name)
+					return i;
+			}
+		}
+		return -1;
+	}
+
+	public static void PhysGetMassCenterOverride(BaseEntity entity, VCollide? collide, ref Solid solidOut) {
+		int index = PhysGetMassCenterOverrideIndex(entity.GetEntityName());
+
+		if (index >= 0) {
+			MassCenterOverride massOverride = g_PhysicsHook.MassCenterOverrides[index];
+			Vector3 massCenterWS = massOverride.Center;
+			switch (massOverride.AlignType) {
+				case MassCenterOverride.Align.Point:
+					MathLib.VectorITransform(massCenterWS, entity.EntityToWorldTransform(), out solidOut.MassCenterOverride);
+					break;
+				case MassCenterOverride.Align.Axis: {
+						physcollision.CollideGetMassCenter(collide!.Solids![solidOut.Index], out Vector3 massCenterLocal);
+						MathLib.VectorTransform(massCenterLocal, entity.EntityToWorldTransform(), out Vector3 defaultMassCenterWS);
+						massCenterWS += massOverride.Axis *
+							(Vector3.Dot(defaultMassCenterWS, massOverride.Axis) - Vector3.Dot(massOverride.Axis, massOverride.Center));
+						MathLib.VectorITransform(massCenterWS, entity.EntityToWorldTransform(), out solidOut.MassCenterOverride);
+					}
+					break;
+			}
+			g_PhysicsHook.MassCenterOverrides[index] = g_PhysicsHook.MassCenterOverrides[^1];
+			g_PhysicsHook.MassCenterOverrides.RemoveAt(g_PhysicsHook.MassCenterOverrides.Count - 1);
+
+			if (solidOut.MassCenterOverride.Length() > DIST_EPSILON) {
+				Vector3[] massCenter = [solidOut.MassCenterOverride];
+				solidOut.Params.MassCenterOverrideFn = () => ref massCenter[0];
+			}
+		}
 	}
 
 	public static void PhysicsImpactSound(BaseEntity entity, IPhysicsObject physObject, SoundEntityChannel channel, int surfaceProps, int surfacePropsHit, float volume, float impactSpeed) {
@@ -176,6 +258,8 @@ public static class PhysicsHookGlobals {
 
 	public static void PhysAddShadow(BaseEntity entity) => g_ShadowEntities!.AddEntity(entity);
 	public static void PhysRemoveShadow(BaseEntity entity) => g_ShadowEntities!.DeleteEntity(entity);
+	public static bool PhysIsFinalTick() => g_PhysicsHook.IsFinalTick;
+	public static void PhysGetListOfPenetratingEntities(BaseEntity search, List<BaseEntity> list) => g_Collisions.GetListOfPenetratingEntities(search, list);
 
 	public static void PhysOnCleanupDeleteList() {
 		g_Collisions.FlushQueuedOperations();
@@ -200,6 +284,38 @@ public static class PhysicsHookGlobals {
 		else 
 			entity.TakeDamage(info);
 	}
+}
+
+public struct MassCenterOverride
+{
+	public enum Align
+	{
+		Point = 0,
+		Axis = 1,
+	}
+
+	public void Defaults() {
+		EntityName = null;
+	}
+
+	public void SnapToPoint(string? name, in Vector3 pointWS) {
+		EntityName = name;
+		Center = pointWS;
+		Axis = default;
+		AlignType = Align.Point;
+	}
+
+	public void SnapToAxis(string? name, in Vector3 axisStartWS, in Vector3 unitAxisDirWS) {
+		EntityName = name;
+		Center = axisStartWS;
+		Axis = unitAxisDirWS;
+		AlignType = Align.Axis;
+	}
+
+	public Vector3 Center;
+	public Vector3 Axis;
+	public Align AlignType;
+	public string? EntityName;
 }
 
 public class PhysicsHook : BaseGameSystemPerFrame
@@ -275,7 +391,7 @@ public class PhysicsHook : BaseGameSystemPerFrame
 	}
 
 	public static IPhysicsObject? PhysCreateWorld(BaseEntity world){
-		// todo staticpropmgr
+		g_StaticPropMgr.CreateVPhysicsRepresentations(physenv, g_SolidSetup, world);
 		VCollide? worldCollide = modelinfo.GetVCollide(1);
 		return PhysCreateWorld_Shared(world, worldCollide, g_PhysDefaultObjectParams);
 	}
@@ -333,6 +449,18 @@ public class PhysicsHook : BaseGameSystemPerFrame
 			ArrayPool<IPhysicsObject>.Shared.Return(activeList, true);
 		}
 
+		for (EntItem? item = g_ShadowEntities!.ItemList; item != null; item = item.Next) {
+			BaseEntity? entity = item.Ent.Get();
+			if (entity == null) {
+				Msg("Dangling pointer to physics entity!!!\n");
+				continue;
+			}
+
+			IPhysicsObject? physics = entity.VPhysicsGetObject();
+			if (physics != null && !physics.IsAsleep())
+				entity.VPhysicsShadowUpdate(physics);
+		}
+
 		g_Collisions.BufferTouchEvents(false);
 		g_Collisions.FrameUpdate();
 	}
@@ -341,11 +469,22 @@ public class PhysicsHook : BaseGameSystemPerFrame
 	}
 	public override void LevelShutdownPostEntity() {
 		base.LevelShutdownPostEntity();
+		MassCenterOverrides.Clear();
 	}
 	public override void FrameUpdatePostEntityThink() {
 		base.FrameUpdatePostEntityThink();
-		PhysFrame(gpGlobals.FrameTime);
+
+		TimeUnit_t interval = gpGlobals.FrameTime > 0.0 ? TICK_INTERVAL : 0.0;
+
+		if (BaseEntity.IsSimulatingOnAlternateTicks()) {
+			IsFinalTick = false;
+			PhysFrame(interval);
+		}
+		IsFinalTick = true;
+		PhysFrame(interval);
 	}
+
+	public bool IsFinalTick = true;
 	public override void PreClientUpdate() {
 		ImpactSoundTime += gpGlobals.FrameTime;
 		if (ImpactSoundTime > 0.05) {
@@ -358,4 +497,5 @@ public class PhysicsHook : BaseGameSystemPerFrame
 	TimeUnit_t ImpactSoundTime;
 	public readonly List<ImpactSound> ImpactSounds = [];
 	public readonly List<BreakSound> BreakSounds = [];
+	public readonly List<MassCenterOverride> MassCenterOverrides = [];
 }

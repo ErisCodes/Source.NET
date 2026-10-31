@@ -1,13 +1,12 @@
 using Game.Shared;
 
-using Microsoft.Extensions.DependencyInjection;
-
 using Source;
 using Source.Common;
 using Source.Common.Commands;
 using Source.Common.DataCache;
 using Source.Common.Engine;
 using Source.Common.Filesystem;
+using Source.Common.MaterialSystem;
 using Source.Common.SceneFileCache;
 using Source.Common.Server;
 using Source.Common.SoundEmitterSystem;
@@ -17,10 +16,6 @@ namespace Game.Server;
 
 public static class SourceDllMain
 {
-	public static void Link(IServiceCollection services) {
-		ClassMap.Init();
-	}
-
 	[Dependency] public static IEngineServer engine { get; private set; } = null!;
 	[Dependency] public static IFileSystem filesystem { get; private set; } = null!;
 	[Dependency] public static ServerGlobalVariables gpGlobals { get; private set; } = null!;
@@ -35,6 +30,7 @@ public static class SourceDllMain
 	[Dependency] public static IVoiceServer g_pVoiceServer { get; private set; } = null!;
 	[Dependency] public static UserMessages usermessages { get; private set; } = null!;
 	[Dependency] public static IMDLCache mdlcache { get; private set; } = null!;
+	[Dependency] public static IMaterialSystem materials { get; private set; } = null!;
 	[Dependency] public static ISceneFileCache scenefilecache { get; private set; } = null!;
 	[KeyedDependency(Key = Realm.Server)] public static IVModelInfo modelinfo { get; private set; } = null!;
 	[Dependency] public static GlobalEntityList gEntList { get; private set; } = null!;

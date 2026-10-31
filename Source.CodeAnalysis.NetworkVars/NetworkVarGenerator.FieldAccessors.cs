@@ -37,7 +37,7 @@ namespace Source.CodeAnalysis.NetworkVars
 			List
 		}
 
-		private static void InitializeFieldAccessors(IncrementalGeneratorInitializationContext context, IncrementalValueProvider<ImmutableArray<PropertyModel?>> properties) {
+		private static void InitializeFieldAccessors(IncrementalGeneratorInitializationContext context, IncrementalValueProvider<ImmutableArray<PropertyModel?>> properties, IncrementalValueProvider<ImmutableArray<TableModel?>> tables) {
 			IncrementalValueProvider<ImmutableArray<FieldAccessorModel?>> accessors = context.SyntaxProvider
 				.CreateSyntaxProvider(
 					predicate: static (node, _) => IsInvocationNamed(node, FieldMethods),
@@ -59,8 +59,8 @@ namespace Source.CodeAnalysis.NetworkVars
 				.Where(static m => m != null)
 				.Collect();
 
-			context.RegisterSourceOutput(accessors.Combine(conversions).Combine(properties).Combine(predictionMaps),
-				static (spc, data) => EmitFieldAccessors(spc, data.Left.Left.Left, data.Left.Left.Right, data.Left.Right, data.Right));
+			context.RegisterSourceOutput(accessors.Combine(conversions).Combine(properties).Combine(predictionMaps).Combine(tables),
+				static (spc, data) => EmitFieldAccessors(spc, data.Left.Left.Left.Left, data.Left.Left.Left.Right, data.Left.Left.Right, data.Left.Right, data.Right));
 		}
 
 		private static bool IsInvocationNamed(SyntaxNode node, HashSet<string> names) {
@@ -101,29 +101,41 @@ namespace Source.CodeAnalysis.NetworkVars
 				return null;
 
 			Compilation compilation = ctx.SemanticModel.Compilation;
+			var failure = new AccessFailure();
+			FieldAccessorModel? model;
 			if (container.Name == "DEFINE") {
 				if (method.Parameters.Length == 0 || method.Parameters[0].Name != "name")
 					return null;
 				INamedTypeSymbol? declaring = FindDataMapField(owner, expression)?.ContainingType ?? FindNetworkVarProperty(owner, expression)?.ContainingType;
-				return declaring == null ? null : BuildScalar(compilation, declaring, expression, null);
+				model = declaring == null ? null : BuildScalar(compilation, declaring, expression, null, failure);
+			}
+			else {
+				switch (method.Name) {
+					case "OF":
+						model = BuildScalar(compilation, owner, expression, null, failure);
+						break;
+					case "OF_NAMED":
+						if (args.Count < 2 || !(ctx.SemanticModel.GetConstantValue(args[1].Expression, ct).Value is string name))
+							return null;
+						model = BuildScalar(compilation, owner, expression, name, failure);
+						break;
+					case "OF_LIST":
+						model = BuildArray(compilation, owner, expression, true, failure);
+						break;
+					default:
+						model = BuildArray(compilation, owner, expression, false, failure);
+						break;
+				}
 			}
 
-			switch (method.Name) {
-				case "OF":
-					return BuildScalar(compilation, owner, expression, null);
-				case "OF_NAMED":
-					if (args.Count < 2 || !(ctx.SemanticModel.GetConstantValue(args[1].Expression, ct).Value is string name))
-						return null;
-					return BuildScalar(compilation, owner, expression, name);
-				case "OF_LIST":
-					return BuildArray(compilation, owner, expression, true);
-				default:
-					return BuildArray(compilation, owner, expression, false);
-			}
+			if (model == null && failure.Type != null)
+				return FieldAccessorModel.Inaccessible(args[0].Expression.GetLocation(), expression, owner.ToDisplayString(), failure.Type.ToDisplayString());
+
+			return model;
 		}
 
-		private static FieldAccessorModel? BuildScalar(Compilation compilation, INamedTypeSymbol owner, string expression, string? name) {
-			ResolvedPath? path = Resolve(compilation, owner, expression);
+		private static FieldAccessorModel? BuildScalar(Compilation compilation, INamedTypeSymbol owner, string expression, string? name, AccessFailure failure) {
+			ResolvedPath? path = Resolve(compilation, owner, expression, failure);
 			if (path == null)
 				return null;
 
@@ -153,14 +165,16 @@ namespace Source.CodeAnalysis.NetworkVars
 			return new FieldAccessorModel("S|" + ownerDisplay + "|" + expression + "|" + (name ?? "\0"), registration, body.ToString(), string.Join("\n", conversions));
 		}
 
-		private static FieldAccessorModel? BuildArray(Compilation compilation, INamedTypeSymbol owner, string expression, bool isList) {
-			ResolvedPath? path = Resolve(compilation, owner, expression);
+		private static FieldAccessorModel? BuildArray(Compilation compilation, INamedTypeSymbol owner, string expression, bool isList, AccessFailure failure) {
+			ResolvedPath? path = Resolve(compilation, owner, expression, failure);
 			if (path == null)
 				return null;
 
 			ContainerKind kind = GetContainer(compilation, path.Type, out ITypeSymbol? element, out int length);
-			if (kind == ContainerKind.None || element == null || !IsAccessible(compilation, element))
+			if (kind == ContainerKind.None || element == null)
 				return null;
+			if (!IsAccessible(compilation, element))
+				return failure.Fail<FieldAccessorModel>(element);
 
 			bool listFlag = false;
 			if (kind != ContainerKind.InlineArray) {
@@ -209,9 +223,9 @@ namespace Source.CodeAnalysis.NetworkVars
 			return new FieldAccessorModel("A|" + ownerDisplay + "|" + expression, registration, body.ToString(), string.Join("\n", conversions));
 		}
 
-		private static ResolvedPath? Resolve(Compilation compilation, INamedTypeSymbol owner, string expression) {
+		private static ResolvedPath? Resolve(Compilation compilation, INamedTypeSymbol owner, string expression, AccessFailure failure) {
 			if (!IsAccessible(compilation, owner))
-				return null;
+				return failure.Fail<ResolvedPath>(owner);
 
 			List<Segment>? segments = Tokenize(expression);
 			if (segments == null || segments.Count == 0)
@@ -228,8 +242,10 @@ namespace Source.CodeAnalysis.NetworkVars
 				Segment segment = segments[i];
 				if (segment.Name == null) {
 					ContainerKind kind = GetContainer(compilation, current, out ITypeSymbol? element, out _);
-					if (kind == ContainerKind.None || element == null || !IsAccessible(compilation, element))
+					if (kind == ContainerKind.None || element == null)
 						return null;
+					if (!IsAccessible(compilation, element))
+						return failure.Fail<ResolvedPath>(element);
 
 					path.Expression = IndexExpression(kind, current, element, path.Expression, segment.Index.ToString(CultureInfo.InvariantCulture));
 					path.Parts.Add(NamePart.ConstantIndex(segment.Index));
@@ -238,7 +254,7 @@ namespace Source.CodeAnalysis.NetworkVars
 					continue;
 				}
 
-				ITypeSymbol? next = ApplyMember(compilation, path, current, segment.Name, i == segments.Count - 1);
+				ITypeSymbol? next = ApplyMember(compilation, path, current, segment.Name, i == segments.Count - 1, failure);
 				if (next == null)
 					return null;
 				current = next;
@@ -248,7 +264,7 @@ namespace Source.CodeAnalysis.NetworkVars
 			return path;
 		}
 
-		private static ITypeSymbol? ApplyMember(Compilation compilation, ResolvedPath path, ITypeSymbol current, string name, bool last) {
+		private static ITypeSymbol? ApplyMember(Compilation compilation, ResolvedPath path, ITypeSymbol current, string name, bool last, AccessFailure failure) {
 			ISymbol? member = FindMember(current, name) ?? FindNetworkVarProperty(current, name);
 			string fieldName;
 			ITypeSymbol memberType;
@@ -273,13 +289,15 @@ namespace Source.CodeAnalysis.NetworkVars
 				return null;
 
 			if (!IsAccessible(compilation, memberType))
-				return null;
+				return failure.Fail<ITypeSymbol>(memberType);
 
 			if (direct)
 				path.Expression = path.Expression + "." + Identifier(fieldName);
 			else {
-				if (declaring.IsGenericType || !IsAccessible(compilation, declaring))
+				if (declaring.IsGenericType)
 					return null;
+				if (!IsAccessible(compilation, declaring))
+					return failure.Fail<ITypeSymbol>(declaring);
 
 				string accessorName = "__F" + path.Accessors.Count.ToString(CultureInfo.InvariantCulture);
 				string byRef = declaring.IsValueType ? "ref " : "";
@@ -311,9 +329,8 @@ namespace Source.CodeAnalysis.NetworkVars
 		}
 
 		private static IPropertySymbol? FindNetworkVarProperty(ITypeSymbol type, string backingName) {
-			if (!backingName.StartsWith("__nv_", StringComparison.Ordinal))
-				return null;
-			return FindMember(type, backingName.Substring(5)) is IPropertySymbol prop && HasAttribute(prop, AttributeMetadataName) ? prop : null;
+			string name = backingName.StartsWith("__nv_", StringComparison.Ordinal) ? backingName.Substring(5) : backingName;
+			return FindMember(type, name) is IPropertySymbol prop && HasAttribute(prop, AttributeMetadataName) ? prop : null;
 		}
 
 		private static IFieldSymbol? FindDataMapField(ITypeSymbol type, string name) {
@@ -515,6 +532,10 @@ namespace Source.CodeAnalysis.NetworkVars
 			=> symbol.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == attributeName);
 
 		private static string? GetNetworkNameAttribute(ISymbol symbol) {
+			AttributeData? networkVar = symbol.GetAttributes().FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == AttributeMetadataName);
+			if (networkVar != null && networkVar.ConstructorArguments.Length == 1 && networkVar.ConstructorArguments[0].Value is string networkVarName)
+				return networkVarName;
+
 			AttributeData? attribute = symbol.GetAttributes().FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == NetworkNameAttributeName);
 			if (attribute == null || attribute.ConstructorArguments.Length != 1)
 				return null;
@@ -532,13 +553,25 @@ namespace Source.CodeAnalysis.NetworkVars
 
 		private static string EscapeFormat(string value) => value.Replace("{", "{{").Replace("}", "}}");
 
-		private static void EmitFieldAccessors(SourceProductionContext spc, ImmutableArray<FieldAccessorModel?> models, ImmutableArray<string?> valueConversions, ImmutableArray<PropertyModel?> properties, ImmutableArray<PredictionMapModel?> predictionMaps) {
+		private static void EmitFieldAccessors(SourceProductionContext spc, ImmutableArray<FieldAccessorModel?> models, ImmutableArray<string?> valueConversions, ImmutableArray<PropertyModel?> properties, ImmutableArray<PredictionMapModel?> predictionMaps, ImmutableArray<TableModel?> tables) {
+			foreach (TableModel? table in tables) {
+				if (table == null)
+					continue;
+				models = models.AddRange(table.Accessors);
+				if (table.Map != null)
+					predictionMaps = predictionMaps.Add(table.Map);
+			}
+
 			var unique = new SortedDictionary<string, FieldAccessorModel>(StringComparer.Ordinal);
 			var conversions = new SortedSet<string>(StringComparer.Ordinal);
 
 			foreach (FieldAccessorModel? model in models) {
 				if (model == null)
 					continue;
+				if (model.ErrorLocation != null) {
+					spc.ReportDiagnostic(Diagnostic.Create(InaccessibleFieldType, model.ErrorLocation, model.ErrorArgs));
+					continue;
+				}
 				if (!unique.ContainsKey(model.Key))
 					unique.Add(model.Key, model);
 				AddLines(conversions, model.Conversions);
@@ -626,6 +659,17 @@ namespace Source.CodeAnalysis.NetworkVars
 			public static NamePart SymbolicIndex() => new NamePart { IsIndex = true, Symbolic = true };
 		}
 
+		private sealed class AccessFailure
+		{
+			public ITypeSymbol? Type;
+
+			public T? Fail<T>(ITypeSymbol type) where T : class {
+				if (Type == null)
+					Type = type;
+				return null;
+			}
+		}
+
 		private sealed class ResolvedPath
 		{
 			public string Expression = "";
@@ -645,13 +689,18 @@ namespace Source.CodeAnalysis.NetworkVars
 				Conversions = conversions;
 			}
 
+			public static FieldAccessorModel Inaccessible(Location location, string member, string owner, string type)
+				=> new FieldAccessorModel("E|" + owner + "|" + member, "", "", "") { ErrorLocation = location, ErrorArgs = new object[] { member, owner, type } };
+
 			public string Key { get; }
 			public string Registration { get; }
 			public string Body { get; }
 			public string Conversions { get; }
+			public Location? ErrorLocation { get; private set; }
+			public object[]? ErrorArgs { get; private set; }
 
 			public bool Equals(FieldAccessorModel? other)
-				=> other != null && Key == other.Key && Registration == other.Registration && Body == other.Body && Conversions == other.Conversions;
+				=> other != null && Key == other.Key && Registration == other.Registration && Body == other.Body && Conversions == other.Conversions && Equals(ErrorLocation, other.ErrorLocation);
 
 			public override bool Equals(object? obj) => Equals(obj as FieldAccessorModel);
 			public override int GetHashCode() => Key.GetHashCode();

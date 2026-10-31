@@ -26,6 +26,7 @@ public static class MathLibConsts
 	public static readonly Vector3 vec3_origin = new(0, 0, 0);
 	public static readonly QAngle vec3_angle = new(0, 0, 0);
 	public static readonly Vector3 vec3_invalid = new(float.MaxValue, float.MaxValue, float.MaxValue);
+	public static readonly Vector2 vec2_invalid = new(float.MaxValue, float.MaxValue);
 
 	public static Vector3 RandomAngularImpulse(float minVal, float maxVal) {
 		Vector3 angImp = default;
@@ -366,6 +367,18 @@ public static class MathLib
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static int TruncateOrMinValue(float f) => f >= -2147483648f && f < 2147483648f ? (int)f : int.MinValue;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static int AbsWrapping(int n) => n < 0 ? unchecked(-n) : n;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool NotGreater(float a, double b) => !(a > b);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool NotLess(float a, double b) => !(a < b);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static float SimpleSplineRemapValClamped(float val, float A, float B, float C, float D) {
 		if (A == B)
 			return val >= B ? D : C;
@@ -673,6 +686,32 @@ public static class MathLib
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static float Lerp(float f1, float f2, float i1, float i2, float x) {
 		return f1 + (f2 - f1) * (x - i1) / (i2 - i1);
+	}
+	public static bool SolveQuadratic(float a, float b, float c, out float root1, out float root2) {
+		if (a == 0) {
+			if (b != 0) {
+				root1 = root2 = -c / b;
+				return true;
+			}
+			if (c == 0) {
+				root1 = root2 = 0;
+				return true;
+			}
+			root1 = root2 = 0;
+			return false;
+		}
+
+		float tmp = b * b - 4.0f * a * c;
+
+		if (tmp < 0) {
+			root1 = root2 = 0;
+			return false;
+		}
+
+		tmp = MathF.Sqrt(tmp);
+		root1 = (-b + tmp) / (2.0f * a);
+		root2 = (-b - tmp) / (2.0f * a);
+		return true;
 	}
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static double Fmod(double x, double y) {
@@ -1092,8 +1131,35 @@ public static class MathLib
 	}
 
 	public static void QuaternionMult(in Quaternion p, in Quaternion q, out Quaternion qt) {
-		qt = Quaternion.Multiply(p, q);
+		Unsafe.SkipInit(out qt);
+		if (Unsafe.AreSame(in p, in qt)) {
+			Quaternion p2 = p;
+			QuaternionMult(p2, q, out qt);
+			return;
+		}
+
+		QuaternionAlign(p, q, out Quaternion q2);
+		qt.X = p.X * q2.W + p.Y * q2.Z - p.Z * q2.Y + p.W * q2.X;
+		qt.Y = -p.X * q2.Z + p.Y * q2.W + p.Z * q2.X + p.W * q2.Y;
+		qt.Z = p.X * q2.Y - p.Y * q2.X + p.Z * q2.W + p.W * q2.Z;
+		qt.W = -p.X * q2.X - p.Y * q2.Y - p.Z * q2.Z + p.W * q2.W;
 	}
+	public static float QuaternionNormalize(ref Quaternion q) {
+		float radius, iradius;
+
+		radius = q.X * q.X + q.Y * q.Y + q.Z * q.Z + q.W * q.W;
+
+		if (radius != 0) {
+			radius = MathF.Sqrt(radius);
+			iradius = 1.0f / radius;
+			q.W *= iradius;
+			q.Z *= iradius;
+			q.Y *= iradius;
+			q.X *= iradius;
+		}
+		return radius;
+	}
+
 	public static void QuaternionScale(in Quaternion p, float t, out Quaternion q) {
 		float r;
 		float sinom = MathF.Sqrt(DotProduct(in p, in p));
@@ -1362,6 +1428,36 @@ public static class MathLib
 		Assert(MathlibInitialized);
 		CalcClosestPointOnLine(P, vLineA, vLineB, out Vector3 vClosest, out outT);
 		return P.DistToSqr(vClosest);
+	}
+
+	public static float CalcClosestPointToLineT2D(in Vector2 P, in Vector2 vLineA, in Vector2 vLineB, out Vector2 vDir) {
+		Assert(MathlibInitialized);
+		vDir = vLineB - vLineA;
+
+		float div = Vector2.Dot(vDir, vDir);
+		if (div < 0.00001f)
+			return 0;
+		else
+			return (Vector2.Dot(vDir, P) - Vector2.Dot(vDir, vLineA)) / div;
+	}
+
+	public static void CalcClosestPointOnLine2D(in Vector2 P, in Vector2 vLineA, in Vector2 vLineB, out Vector2 vClosest, out float outT) {
+		Assert(MathlibInitialized);
+		float t = CalcClosestPointToLineT2D(P, vLineA, vLineB, out Vector2 vDir);
+		outT = t;
+		vClosest = vLineA + vDir * t;
+	}
+
+	public static float CalcDistanceToLine2D(in Vector2 P, in Vector2 vLineA, in Vector2 vLineB, out float outT) {
+		Assert(MathlibInitialized);
+		CalcClosestPointOnLine2D(P, vLineA, vLineB, out Vector2 vClosest, out outT);
+		return Vector2.Distance(P, vClosest);
+	}
+
+	public static float CalcDistanceSqrToLine2D(in Vector2 P, in Vector2 vLineA, in Vector2 vLineB, out float outT) {
+		Assert(MathlibInitialized);
+		CalcClosestPointOnLine2D(P, vLineA, vLineB, out Vector2 vClosest, out outT);
+		return Vector2.DistanceSquared(P, vClosest);
 	}
 
 
@@ -1798,10 +1894,87 @@ public static class MathLib
 		AngleQuaternion(in angles, out q);
 	}
 
+	public static QAngle TransformAnglesToLocalSpace(in QAngle angles, in Matrix3x4 parentMatrix) {
+		MatrixInvert(parentMatrix, out Matrix3x4 worldToParent);
+		AngleMatrix(angles, out Matrix3x4 angToWorld);
+		ConcatTransforms(worldToParent, angToWorld, out Matrix3x4 localMatrix);
+
+		MatrixAngles(localMatrix, out QAngle outAngles);
+		return outAngles;
+	}
+
+	// transform a set of angles in the input space of parentMatrix to the output space
+	public static QAngle TransformAnglesToWorldSpace(in QAngle angles, in Matrix3x4 parentMatrix) {
+		AngleMatrix(angles, out Matrix3x4 angToParent);
+		ConcatTransforms(parentMatrix, angToParent, out Matrix3x4 angToWorld);
+		MatrixAngles(angToWorld, out QAngle outAngles);
+		return outAngles;
+	}
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static void MatrixAngles(in Matrix3x4 matrix, out QAngle angles, out Vector3 position) {
 		MatrixAngles(matrix, out angles);
 		MatrixPosition(matrix, out position);
+	}
+
+	public static void MatrixAngles(in Matrix3x4 matrix, out Quaternion q, out Vector3 pos) {
+		float trace;
+		trace = matrix[0, 0] + matrix[1, 1] + matrix[2, 2] + 1.0f;
+		if (trace > 1.0f + FLT_EPSILON) {
+			q.X = matrix[2, 1] - matrix[1, 2];
+			q.Y = matrix[0, 2] - matrix[2, 0];
+			q.Z = matrix[1, 0] - matrix[0, 1];
+			q.W = trace;
+		}
+		else if (matrix[0, 0] > matrix[1, 1] && matrix[0, 0] > matrix[2, 2]) {
+			trace = 1.0f + matrix[0, 0] - matrix[1, 1] - matrix[2, 2];
+			q.X = trace;
+			q.Y = matrix[1, 0] + matrix[0, 1];
+			q.Z = matrix[0, 2] + matrix[2, 0];
+			q.W = matrix[2, 1] - matrix[1, 2];
+		}
+		else if (matrix[1, 1] > matrix[2, 2]) {
+			trace = 1.0f + matrix[1, 1] - matrix[0, 0] - matrix[2, 2];
+			q.X = matrix[0, 1] + matrix[1, 0];
+			q.Y = trace;
+			q.Z = matrix[2, 1] + matrix[1, 2];
+			q.W = matrix[0, 2] - matrix[2, 0];
+		}
+		else {
+			trace = 1.0f + matrix[2, 2] - matrix[0, 0] - matrix[1, 1];
+			q.X = matrix[0, 2] + matrix[2, 0];
+			q.Y = matrix[2, 1] + matrix[1, 2];
+			q.Z = trace;
+			q.W = matrix[1, 0] - matrix[0, 1];
+		}
+
+		QuaternionNormalize2(ref q);
+
+		MatrixGetColumn(matrix, 3, out pos);
+	}
+
+	public static void MatrixAngles(in Matrix3x4 matrix, out RadianEuler angles) {
+		MatrixAngles(matrix, out QAngle degrees);
+
+		angles.X = DEG2RAD(degrees.Z);
+		angles.Y = DEG2RAD(degrees.X);
+		angles.Z = DEG2RAD(degrees.Y);
+	}
+
+	public static void QuaternionAngles(in Quaternion q, out RadianEuler angles) {
+		QuaternionMatrix(q, out Matrix3x4 matrix);
+		MatrixAngles(matrix, out angles);
+	}
+
+	public static void AngleMatrix(in RadianEuler angles, out Matrix3x4 matrix) {
+		QAngle quakeEuler = new(RAD2DEG(angles.Y), RAD2DEG(angles.Z), RAD2DEG(angles.X));
+
+		AngleMatrix(quakeEuler, out matrix);
+	}
+
+	public static void AngleMatrix(in RadianEuler angles, in Vector3 position, out Matrix3x4 matrix) {
+		AngleMatrix(angles, out matrix);
+		MatrixSetColumn(position, 3, ref matrix);
 	}
 
 	public static void MatrixAngles(in Matrix3x4 matrix, out QAngle angles) {
@@ -2126,6 +2299,16 @@ public static class MathLib
 		return random;
 	}
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static float Vector2DNormalize(ref Vector2 v) {
+		float l = v.Length();
+		if (l != 0.0f)
+			v /= l;
+		else
+			v.X = v.Y = 0.0f;
+		return l;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static float VectorNormalize(ref Vector3 vec) {
 		float radius = MathF.Sqrt(vec.X * vec.X + vec.Y * vec.Y + vec.Z * vec.Z);
 
@@ -2228,6 +2411,21 @@ public static class MathLib
 
 		minsOut = worldCenter - worldExtents;
 		maxsOut = worldCenter + worldExtents;
+	}
+
+	public static void IRotateAABB(in Matrix3x4 transform, in Vector3 minsIn, in Vector3 maxsIn, out Vector3 minsOut, out Vector3 maxsOut) {
+		Vector3 oldCenter = (minsIn + maxsIn) * 0.5f;
+		Vector3 oldExtents = maxsIn - oldCenter;
+
+		VectorIRotate(oldCenter, transform, out Vector3 newCenter);
+
+		Vector3 newExtents;
+		newExtents.X = MathF.Abs(oldExtents.X * transform[0][0]) + MathF.Abs(oldExtents.Y * transform[1][0]) + MathF.Abs(oldExtents.Z * transform[2][0]);
+		newExtents.Y = MathF.Abs(oldExtents.X * transform[0][1]) + MathF.Abs(oldExtents.Y * transform[1][1]) + MathF.Abs(oldExtents.Z * transform[2][1]);
+		newExtents.Z = MathF.Abs(oldExtents.X * transform[0][2]) + MathF.Abs(oldExtents.Y * transform[1][2]) + MathF.Abs(oldExtents.Z * transform[2][2]);
+
+		minsOut = newCenter - newExtents;
+		maxsOut = newCenter + newExtents;
 	}
 
 	public static float VectorLength(in Vector3 delta) => delta.Length();
@@ -2959,6 +3157,25 @@ public static class MathLib
 			// Assume no roll in this case as one degree of freedom has been lost (i.e. yaw == roll)
 			angles[2] = 0;
 		}
+	}
+
+	public static void QuaternionAxisAngle(in Quaternion q, out Vector3 axis, out float angle) {
+		angle = RAD2DEG(2 * MathF.Acos(q.W));
+		if (angle > 180)
+			angle -= 360;
+
+		axis = new(q.X, q.Y, q.Z);
+		VectorNormalize(ref axis);
+	}
+
+	public static void RotationDeltaAxisAngle(in QAngle srcAngles, in QAngle destAngles, out Vector3 deltaAxis, out float deltaAngle) {
+		AngleQuaternion(srcAngles, out Quaternion srcQuat);
+		AngleQuaternion(destAngles, out Quaternion destQuat);
+		QuaternionScale(srcQuat, -1, out Quaternion srcQuatInv);
+		QuaternionMult(destQuat, srcQuatInv, out Quaternion result);
+
+		QuaternionNormalize(ref result);
+		QuaternionAxisAngle(result, out deltaAxis, out deltaAngle);
 	}
 
 	public static void AxisAngleQuaternion(in Vector3 axis, float angle, out Quaternion q) {

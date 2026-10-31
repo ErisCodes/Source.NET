@@ -157,28 +157,26 @@ public partial class C_BaseFlex : C_BaseAnimatingOverlay, IHasLocalToGlobalFlexS
 	readonly Source.Common.Audio.MouthInfo mouth = new();
 	public override Source.Common.Audio.MouthInfo? GetMouth() => mouth;
 
-	public static readonly RecvTable DT_BaseFlex = new(DT_BaseAnimatingOverlay, [
-		RecvPropArray3  (FIELD.OF_ARRAY(nameof(FlexWeight)), RecvPropFloat(FIELD.OF_ARRAY(nameof(FlexWeight)))),
-		RecvPropInt     (FIELD.OF(nameof(BlinkToggle))),
-		RecvPropVector  (FIELD.OF(nameof(ViewTarget))),
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		nameof(FlexWeight),
+		nameof(BlinkToggle),
+		nameof(ViewTarget),
 
-		RecvPropFloat   ( FIELD.OF_VECTORELEM(nameof(ViewOffset), 0)),
-		RecvPropFloat   ( FIELD.OF_VECTORELEM(nameof(ViewOffset), 1)),
-		RecvPropFloat   ( FIELD.OF_VECTORELEM(nameof(ViewOffset), 2)),
+		new(nameof(ViewOffset)) { Encoding = NetEncoding.VectorElements },
 
-		RecvPropVector  ( FIELD.OF(nameof(Lean))),
-		RecvPropVector  ( FIELD.OF(nameof(Shift))),
-	]);
-	public static readonly new ClientClass ClientClass = new ClientClass(null, null, DT_BaseFlex);
-	[NetworkName("m_flexWeight")]
+		nameof(Lean),
+		nameof(Shift),
+	];
+	[NetworkVar("m_flexWeight")]
 	public InlineArray96<float> FlexWeight;
-	[NetworkName("m_blinktoggle")]
+	[NetworkVar("m_blinktoggle")]
 	public int BlinkToggle;
-	[NetworkName("m_viewtarget")]
+	[NetworkVar("m_viewtarget")]
 	public Vector3 ViewTarget;
-	[NetworkName("m_vecLean")]
+	[NetworkVar("m_vecLean")]
 	public Vector3 Lean;
-	[NetworkName("m_vecShift")]
+	[NetworkVar("m_vecShift")]
 	public Vector3 Shift;
 
 	static readonly DynamicAccessor DA_ViewTarget = FIELD.OF(nameof(ViewTarget));
@@ -932,6 +930,26 @@ public partial class C_BaseFlex : C_BaseAnimatingOverlay, IHasLocalToGlobalFlexS
 	}
 
 	public virtual bool CheckSceneEventCompletion(SceneEventInfo info, TimeUnit_t currenttime, ChoreoScene scene, ChoreoEvent ev) => true;
+
+#if GMOD_DLL
+	public void SetFlexWeight(LocalFlexController index, float value, bool clamp) {
+		if (index >= 0 && index < GetNumFlexControllers() && (int)index < 96) {
+			StudioHdr? studioHdr = GetModelPtr();
+			if (studioHdr == null)
+				return;
+
+			MStudioFlexController flexcontroller = studioHdr.FlexController(index);
+
+			if (flexcontroller.Max != flexcontroller.Min) {
+				value = (value - flexcontroller.Min) / (flexcontroller.Max - flexcontroller.Min);
+				if (clamp)
+					value = Math.Clamp(value, 0.0f, 1.0f);
+			}
+
+			FlexWeight[(int)index] = value;
+		}
+	}
+#endif
 
 	public void SetFlexWeight(LocalFlexController index, float value) {
 		if (index >= 0 && index < GetNumFlexControllers()) {

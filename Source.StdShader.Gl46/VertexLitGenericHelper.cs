@@ -234,9 +234,7 @@ public partial class BaseVSShader
 
 				// bool hasEnvmap = (!hasFlashlight) && (info.Envmap != -1) && parms[info.Envmap].IsTexture();
 				bool hasLegacyEnvSphereMap = hasEnvmap && IsFlagSet(parms, MaterialVarFlags.EnvMapSphere);
-				bool hasNormal = vertexLitGeneric || hasEnvmap || hasFlashlight || seamlessBase || seamlessDetail;
-				if (IsPC())
-					hasNormal = true;
+				bool hasNormal = true;
 
 				bool halfLambert = IsFlagSet(parms, MaterialVarFlags.HalfLambert);
 				shaderShadow!.EnableAlphaTest(isAlphaTested);
@@ -280,7 +278,7 @@ public partial class BaseVSShader
 					else
 						shaderShadow.EnableSRGBRead(Sampler.Sampler0, true);
 
-					if (IsOSX() && !HardwareConfig.CanDoSRGBReadFromRTs()) {
+					if (IsOSX && !HardwareConfig.CanDoSRGBReadFromRTs()) {
 						ITexture? baseTexture = parms[info.BaseTexture].GetTextureValue();
 						if (baseTexture != null && baseTexture.IsRenderTarget())
 							bSRGBInputAdapter = true;
@@ -540,11 +538,10 @@ public partial class BaseVSShader
 					}
 				}
 
-				// todo
-				// if (hasFlashlight)
-				// 	shader.FogToBlack();
-				// else
-				// 	shader.DefaultFog();
+				if (hasFlashlight)
+					shader.FogToBlack();
+				else
+					shader.DefaultFog();
 
 				shaderShadow.EnableAlphaWrites(fullyOpaque);
 			}
@@ -795,6 +792,7 @@ public partial class BaseVSShader
 						pshIndex.Set("NUM_LIGHTS", lightState.NumLights);
 						pshIndex.Set("AMBIENT_LIGHT", lightState.AmbientLight ? 1 : 0);
 						pshIndex.Set("FLASHLIGHTSHADOWS", bFlashlightShadows);
+						pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo1(true));
 						dynamicCmdsOut.SetPixelShaderIndex(pshIndex.GetIndex());
 					}
 					else {
@@ -820,6 +818,7 @@ public partial class BaseVSShader
 					pshIndex.Set("NUM_LIGHTS", lightState.NumLights);
 					pshIndex.Set("AMBIENT_LIGHT", lightState.AmbientLight ? 1 : 0);
 					pshIndex.Set("FLASHLIGHTSHADOWS", bFlashlightShadows);
+					pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo1(true));
 					dynamicCmdsOut.SetPixelShaderIndex(pshIndex.GetIndex());
 
 					Span<bool> unusedTexCoords = [false, false, !shaderAPI.IsHWMorphingEnabled() || !isDecal];
@@ -849,6 +848,7 @@ public partial class BaseVSShader
 					if (HardwareConfig.SupportsPixelShaders_2_b() || HardwareConfig.ShouldAlwaysUseShaderModel2bShaders()) {
 						DynamicShaderIndex pshIndex = new(shaderAPI, ShaderType.Pixel);
 						pshIndex.Set("FLASHLIGHTSHADOWS", bFlashlightShadows);
+						pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo1(true));
 						pshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting));
 						dynamicCmdsOut.SetPixelShaderIndex(pshIndex.GetIndex());
 					}
@@ -874,6 +874,7 @@ public partial class BaseVSShader
 
 					DynamicShaderIndex pshIndex = new(shaderAPI, ShaderType.Pixel);
 					pshIndex.Set("FLASHLIGHTSHADOWS", bFlashlightShadows);
+					pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo1(true));
 					pshIndex.Set("LIGHTING_PREVIEW", shaderAPI.GetIntRenderingParameter((int)RenderParamInt.EnableFixedLighting));
 					dynamicCmdsOut.SetPixelShaderIndex(pshIndex.GetIndex());
 
@@ -895,7 +896,7 @@ public partial class BaseVSShader
 				dynamicCmdsOut.SetDepthFeatheringPixelShaderConstant(13, GetFloatParam(info.DepthBlendScale, parms, 50.0f));
 
 			float pixelFogType = shaderAPI.GetPixelFogCombo() == 1 ? 1.0f : 0.0f;
-			float fWriteDepthToAlpha = writeDepthToAlpha && IsPC() ? 1.0f : 0.0f;
+			float fWriteDepthToAlpha = writeDepthToAlpha ? 1.0f : 0.0f;
 			float fWriteWaterFogToDestAlpha = (shaderAPI.GetPixelFogCombo() == 1 && writeWaterFogToAlpha) ? 1.0f : 0.0f;
 			float vertexAlpha = hasVertexAlpha ? 1.0f : 0.0f;
 

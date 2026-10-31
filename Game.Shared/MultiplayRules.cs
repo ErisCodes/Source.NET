@@ -242,7 +242,19 @@ GameRules
 
 	}
 	public override void ClientDisconnected(Edict client) {
-		// todo
+		if (client != null) {
+			BasePlayer? player = (BasePlayer?)BaseEntity.Instance(client);
+
+			if (player != null) {
+				FireTargets("game_playerleave", player, player, UseType.Toggle, 0);
+
+				player.RemoveAllItems(true);
+
+				player.DestroyViewModels();
+
+				player.SetConnected(PlayerConnectedState.Disconnected);
+			}
+		}
 	}
 	public override float FlPlayerFallDamage(BasePlayer player) {
 		throw new NotImplementedException();
@@ -305,7 +317,7 @@ GameRules
 		return weapon.GetAbsOrigin();
 	}
 	public override GameRulesRespawnReturnCode WeaponShouldRespawn(BaseCombatWeapon weapon) {
-		return weapon.HasSpawnFlags(BasePlayer.SF_NORESPAWN) ? GameRulesRespawnReturnCode.WeaponRespawnNo : GameRulesRespawnReturnCode.WeaponRespawnYes;
+		return weapon.HasSpawnFlags(BasePlayer.SF.NoRespawn) ? GameRulesRespawnReturnCode.WeaponRespawnNo : GameRulesRespawnReturnCode.WeaponRespawnYes;
 	}
 	public override bool CanHavePlayerItem(BasePlayer player, BaseCombatWeapon item) {
 		if (weaponstay.GetInt() > 0) {
@@ -327,7 +339,7 @@ GameRules
 
 	}
 	public override GameRulesRespawnReturnCode ItemShouldRespawn(Item item) {
-		return item.HasSpawnFlags(BasePlayer.SF_NORESPAWN) ? GameRulesRespawnReturnCode.ItemRespawnNo : GameRulesRespawnReturnCode.ItemRespawnYes;
+		return item.HasSpawnFlags(BasePlayer.SF.NoRespawn) ? GameRulesRespawnReturnCode.ItemRespawnNo : GameRulesRespawnReturnCode.ItemRespawnYes;
 	}
 	public override TimeUnit_t FlItemRespawnTime(Item item) {
 		return gpGlobals.CurTime + ITEM_RESPAWN_TIME;

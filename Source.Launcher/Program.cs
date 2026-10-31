@@ -87,6 +87,8 @@ public class Bootloader : IDisposable
 				#if GMOD_DLL
 				.WithComponent<ILuaShared, LuaSharedImpl>()
 				.WithComponent<IMenuSystem, MenuSystem>()
+				.WithKeyedComponent<IHtmlSystem>("html_chromium", HTML.CEF.CefSystem.g_pHtmlSystem)
+				.WithKeyedComponent<IHtmlSystem>("html_stub", HTML.Stub.StubSystem.g_pHtmlSystem)
 				#endif
 				.WithComponent<IStudioRender, StudioRenderContext>()
 				// Our game DLL's. Server/game impl, client impl, UI impl.
@@ -129,7 +131,7 @@ public class Bootloader : IDisposable
 		Panel.InitializeControls();
 	}
 
-	const string defaultHalfLife2GameDirectory = "hl2";
+	const string defaultHalfLife2GameDirectory = "sdn";
 
 	private string DetermineInitialMod() {
 		return !isEditMode ? commandLine.ParmValue("-game", defaultHalfLife2GameDirectory) : throw new NotImplementedException("No editmode support");

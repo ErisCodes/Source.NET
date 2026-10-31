@@ -22,8 +22,9 @@ using System.Numerics;
 
 namespace Game.Server;
 
-public static class GameInterfaceGlobals {
-	public static readonly ConVar sv_unlockedchapters = new( "sv_unlockedchapters", "1", FCvar.Archive | FCvar.ArchiveXbox);
+public static class GameInterfaceGlobals
+{
+	public static readonly ConVar sv_unlockedchapters = new("sv_unlockedchapters", "1", FCvar.Archive | FCvar.ArchiveXbox);
 }
 
 [EngineComponent]
@@ -40,9 +41,24 @@ public static class GameInterface
 	public static INetworkStringTable? g_pStringTableClientSideChoreoScenes;
 	public static INetworkStringTable? g_pStringTableMaterials;
 
-	public static void PrecacheMaterial(ReadOnlySpan<char> materialName){
+	public static void PrecacheMaterial(ReadOnlySpan<char> materialName) {
 		g_pStringTableMaterials!.AddString(true, materialName);
 	}
+
+	public static int GetMaterialIndex(ReadOnlySpan<char> materialName) {
+		if (!materialName.IsEmpty) {
+			int index = g_pStringTableMaterials!.FindStringIndex(materialName);
+			if (index != INetworkStringTable.INVALID_STRING_INDEX)
+				return index;
+			else {
+				DevMsg($"Warning! GetMaterialIndex: couldn't find material {materialName}\n ");
+				return 0;
+			}
+		}
+		return 0;
+	}
+
+	public static ReadOnlySpan<char> GetMaterialNameFromIndex(int materialIndex) => g_pStringTableMaterials!.GetString(materialIndex);
 
 	public static bf_write? g_pMsgBuffer;
 	public static void UserMessageBegin(in IRecipientFilter filter, ReadOnlySpan<char> messagename) {
@@ -55,6 +71,12 @@ public static class GameInterface
 			Error($"UserMessageBegin: Unregistered message '{messagename}'\n");
 
 		g_pMsgBuffer = engine.UserMessageBegin(in filter, msg_type);
+	}
+
+	public static void EntityMessageBegin(BaseEntity entity, bool reliable) {
+		Assert(g_pMsgBuffer == null);
+		Assert(entity != null);
+		g_pMsgBuffer = engine.EntityMessageBegin(entity.EntIndex(), entity.NetworkProp().GetServerClass(), reliable);
 	}
 
 	public static void MessageEnd() {
@@ -265,6 +287,8 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(AI_SystemHook).TypeHandle);
 		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(FlexSceneFileManager).TypeHandle);
 		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(LagCompensationGlobals).TypeHandle);
+		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(Templates).TypeHandle);
+		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(PointTemplatePrecacher).TypeHandle);
 
 #if GMOD_DLL
 		if (CommandLine.FindParm("-noaddons") == 0)
@@ -501,7 +525,7 @@ public class ServerGameDLL(IFileSystem filesystem, ICommandLine CommandLine) : I
 
 		// Now that all of the active entities have been loaded in, precache any entities who need point_template parameters
 		//  to be parsed (the above code has loaded all point_template entities)
-		// PrecachePointTemplates();
+		PointTemplatePrecacher.PrecachePointTemplates();
 
 		// load MOTD from file into stringtable
 		// LoadMessageOfTheDay();
@@ -774,7 +798,7 @@ public class ServerGameClients : IServerGameClients
 		maxPlayers = Constants.MAX_PLAYERS;
 	}
 
-	public PlayerState? GetPlayerState(Edict player) {
+	public PlayerEngineState? GetPlayerState(Edict player) {
 		if (player == null || player.GetUnknown() == null)
 			return null;
 
@@ -786,12 +810,13 @@ public class ServerGameClients : IServerGameClients
 		throw new NotImplementedException();
 	}
 
+	static readonly UserCmd[] ProcessUsercmdsBuffer = new UserCmd[CMD_MAXBACKUP];
 	public TimeUnit_t ProcessUsercmds(Edict player, bf_read buf, int numCmds, int totalCmds, int droppedPackets, bool ignore, bool paused) {
 		int i;
 
 		UserCmd from, to;
 
-		UserCmd[] cmds = new UserCmd[CMD_MAXBACKUP];
+		UserCmd[] cmds = ProcessUsercmdsBuffer;
 
 		UserCmd cmdNull = new();
 

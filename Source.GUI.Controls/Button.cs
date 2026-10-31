@@ -41,28 +41,6 @@ public class Button : Label
 	string? DepressedSoundName;
 	string? ReleasedSoundName;
 
-	public override void OnMessage(KeyValues message, IPanel? from) {
-		switch (message.Name) {
-			case "PressButton":
-				DoClick();
-				return;
-			case "Hotkey":
-				DoClick();
-				return;
-			case "SetAsDefaultButton":
-				SetAsDefaultButton(message.GetBool("state", false));
-				return;
-			case "SetAsCurrentDefaultButton":
-				SetAsCurrentDefaultButton(message.GetBool("state", false));
-				return;
-			case "SetState":
-				OnSetState(message.GetInt("state", 0));
-				return;
-			default:
-				base.OnMessage(message, from);
-				return;
-		}
-	}
 	public void Init() {
 		ButtonFlags |= ButtonFlags.UseCaptureMouse | ButtonFlags.ButtonBorderEnabled;
 		MouseClickMask = 0;
@@ -120,6 +98,8 @@ public class Button : Label
 		}
 	}
 
+	[UiMessage("PressButton")]
+	[UiMessage("Hotkey")]
 	public virtual void DoClick() {
 		SetSelected(true);
 		FireActionSignal();
@@ -254,6 +234,7 @@ public class Button : Label
 		}
 	}
 
+	[UiMessage("SetState")]
 	public virtual void OnSetState(int state) {
 		SetSelected(state != 0);
 		Repaint();
@@ -337,11 +318,13 @@ public class Button : Label
 	public override void OnCursorEntered() {
 		if (IsEnabled() && !IsSelected())
 			SetArmed(true);
+		base.OnCursorEntered();
 	}
 
 	public override void OnCursorExited() {
 		if ((ButtonFlags & ButtonFlags.ButtonKeyDown) == 0 && !IsSelected())
 			SetArmed(false);
+		base.OnCursorExited();
 	}
 
 	public virtual void SetSelected(bool state) {
@@ -545,6 +528,7 @@ public class Button : Label
 		return true;
 	}
 
+	[UiMessage("SetAsDefaultButton")]
 	public void SetAsDefaultButton(bool state) {
 		if ((ButtonFlags & ButtonFlags.DefaultButton) != 0 != state) {
 			ButtonFlags ^= ButtonFlags.DefaultButton;
@@ -575,6 +559,7 @@ public class Button : Label
 		InvalidateLayout(false);
 	}
 
+	[UiMessage("SetAsCurrentDefaultButton")]
 	private void SetAsCurrentDefaultButton(bool state) {
 		if ((ButtonFlags & ButtonFlags.DefaultButton) != 0 != state) {
 			ButtonFlags ^= ButtonFlags.DefaultButton;

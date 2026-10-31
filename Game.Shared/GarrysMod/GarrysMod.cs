@@ -2,6 +2,9 @@
 global using static Game.Client.GarrysMod.GarrysModSingletons;
 
 using Game.Shared;
+#if GAME_DLL
+using Game.Server.GarrysMod;
+#endif
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,7 +16,10 @@ using Source.Common.Filesystem;
 using Source.Common.Formats.Keyvalues;
 using Source.Common.GarrysMod;
 using Source.Common.MaterialSystem;
+using Source.Common.Mathematics;
 using Source.Common.Networking;
+
+using System.Numerics;
 
 using Steamworks;
 
@@ -80,6 +86,11 @@ public class GarrysMod : IGarrysMod
 #endif
 
 	public void InitializeMod(IServiceProvider services) {
+#if GAME_DLL
+		engine.ServerCommand("sv_timeout 180\n");
+		engine.ServerCommand("sv_allow_voice_from_file 0\n");
+		engine.ServerCommand("sv_client_predict 1\n");
+#endif
 #if !SWDS
 		get.IntroScreen()?.Update("Adding Custom Fonts", true);
 		// todo: AddCustomFonts
@@ -101,11 +112,16 @@ public class GarrysMod : IGarrysMod
 			AddLanguageFiles(uiLanguage.SliceNullTerminatedString());
 #endif
 		get.IntroScreen()!.Update("Setup Menu System", true);
-		// todo: menu system init
+#if CLIENT_DLL
+		if (get.MenuSystem()!.Init(services, get, this, gpGlobals) == 0)
+			Error("Error initializing Menu System");
+		get.MenuSystem()!.SetupNetworkString(networkstringtable);
+#endif
 		get.IntroScreen()!.Update("Setting Convar Defaults", true);
 		// todo: convar defaults
 #endif
 #if CLIENT_DLL
+		MaterialProxyFactory.Init();
 		string absPath = $"{engine.GetGameDirectory()}/cache";
 #else // TODO: This is really stupid. Why is server different here in the interface. This deserves deviation.
 		Span<char> path = stackalloc char[MAX_PATH];
@@ -124,7 +140,14 @@ public class GarrysMod : IGarrysMod
 		filesystem.MarkPathIDByRequestOnly("DATA", true);
 	}
 
+	public void Update() {
 #if CLIENT_DLL
+		get.HTML()?.Update();
+#endif
+	}
+
+#if CLIENT_DLL
+
 	public void LevelInit(ReadOnlySpan<char> mapName) {
 		get.Audio()?.StopAllPlayback();
 
@@ -252,6 +275,60 @@ public class GarrysMod : IGarrysMod
 #endif
 	}
 
+	static readonly string[] SacredEntities = [
+		"worldspawn", "player", "gm_bot", "gmod_gamerules", "soundent", "ai_ally_speech_manager", "ai_network_build_helper",
+		"scene_manager", "ai_network", "player_manager", "instanced_scripted_scene", "npc_barnacle_tongue_tip"
+	];
+
+	public static bool IsSacredEntity(ReadOnlySpan<char> className) {
+		foreach (string sacred in SacredEntities)
+			if (stricmp(className, sacred) == 0)
+				return true;
+		return false;
+	}
+
+#if GAME_DLL
+	static readonly string[] OverridableWeapons = [
+		"weapon_crowbar", "weapon_stunstick", "weapon_357", "weapon_pistol", "weapon_smg1", "weapon_ar2", "weapon_crossbow",
+		"weapon_shotgun", "weapon_frag", "weapon_slam", "weapon_bugbait", "weapon_physcannon", "weapon_physgun", "weapon_alyxgun",
+		"weapon_annabelle", "weapon_rpg", "weapon_crowbar_hl1", "weapon_357_hl1", "weapon_glock_hl1", "weapon_egon",
+		"weapon_handgrenade", "weapon_hornetgun", "weapon_mp5_hl1", "weapon_crossbow_hl1", "weapon_rpg_hl1", "weapon_satchel",
+		"weapon_snark", "weapon_shotgun_hl1", "weapon_gauss", "weapon_tripmine"
+	];
+
+	static readonly string[] OverridableEntities = [
+		"point_servercommand", "point_teleport", "point_viewcontrol", "env_credits", "env_hudhint", "env_screenoverlay", "env_zoom",
+		"filter_activator_team", "filter_activator_context", "game_player_equip", "info_npc_spawn_destination", "logic_auto",
+		"player_loadsaved", "player_speedmod", "npc_template_maker", "npc_maker", "prop_physics_respawnable", "trigger_auto",
+		"trigger_changelevel", "trigger_hurt", "trigger_multiple", "trigger_once", "trigger_teleport", "trigger_transition",
+		"trigger_push", "ambient_generic", "func_pushable", "func_healthcharger", "func_recharge", "func_tankmortar",
+		"item_suitcharger", "item_healthcharger", "item_longjump", "item_suit", "item_healthkit", "item_battery", "weaponbox",
+		"speaker", "monster_satchel", "monster_tripmine", "info_player_teamspawn", "info_vehicle_groundspawn", "ammo_crossbow",
+		"ammo_egonclip", "ammo_gaussclip", "ammo_glockclip", "ammo_9mmclip", "ammo_mp5clip", "ammo_9mmar", "ammo_9mmbox",
+		"ammo_mp5grenades", "ammo_argrenades", "ammo_357", "ammo_rpgclip", "ammo_buckshot", "bounce_bomb", "combine_bouncemine",
+		"combine_mine", "prop_car_alarm", "prop_car_glass", "prop_health_cabinet", "asw_door", "dod_control_point",
+		"team_control_point", "prop_portal_stats_display", "npc_personality_core", "prop_tractor_beam", "prop_under_floor_button",
+		"prop_floor_ball_button", "prop_floor_cube_button", "prop_under_button", "prop_floor_button", "prop_button",
+		"prop_indicator_panel", "prop_testchamber_door", "prop_wall_projector", "npc_wheatley_boss", "prop_laser_relay",
+		"prop_dropper", "env_portal_laser", "prop_laser_catcher", "prop_weighted_cube", "prop_exploding_barrel", "prop_flare",
+		"item_crate"
+	];
+
+	public static bool IsAllowedToOverrideWeapon(ReadOnlySpan<char> className) {
+		foreach (string weapon in OverridableWeapons)
+			if (stricmp(weapon, className) == 0)
+				return true;
+		return false;
+	}
+
+	public static bool IsAllowedToOverrideEntity(ReadOnlySpan<char> className) {
+		foreach (string entity in OverridableEntities)
+			if (stricmp(entity, className) == 0)
+				return true;
+		return false;
+	}
+#endif
+
 	public class LuaManager
 	{
 		public bool RunScript(ReadOnlySpan<char> file, ReadOnlySpan<char> pathId, bool run, ReadOnlySpan<char> source) {
@@ -260,7 +337,33 @@ public class GarrysMod : IGarrysMod
 			return g_Lua.FindAndRunScript(file, run, true, source, true);
 		}
 
+#if CLIENT_DLL
+		public bool ScriptExists(ReadOnlySpan<char> file, ReadOnlySpan<char> pathId) => get.LuaShared()!.LoadFile(file, pathId, true, true) != null;
+#else
 		public bool ScriptExists(ReadOnlySpan<char> file, ReadOnlySpan<char> pathId) => get.LuaShared()!.LoadFile(file, pathId, false, true) != null;
+#endif
+
+#if CLIENT_DLL
+		public C_BaseEntity? CreateEntity(ReadOnlySpan<char> className) => LuaSENTManager.gSENTManager!.CreateEntity(className);
+#else
+		public IServerNetworkable? CreateEntity(ReadOnlySpan<char> className, bool hasFactory) {
+			if (hasFactory) {
+				if (IsAllowedToOverrideWeapon(className)) {
+					IServerNetworkable? weapon = LuaSWEPManager.gSWEPManager!.CreateEntity(className);
+					if (weapon != null)
+						return weapon;
+				}
+				if (!IsAllowedToOverrideEntity(className))
+					return null;
+			}
+			else {
+				IServerNetworkable? weapon = LuaSWEPManager.gSWEPManager!.CreateEntity(className);
+				if (weapon != null)
+					return weapon;
+			}
+			return LuaSENTManager.gSENTManager!.CreateEntity(className);
+		}
+#endif
 
 		public void Startup() {
 #if CLIENT_DLL
@@ -486,6 +589,116 @@ public class GarrysMod : IGarrysMod
 		throw new NotImplementedException();
 	}
 
+	public static sbyte g_GModPrecaching;
+
+	public static void ResetLuaIteratorEntityCache(BaseEntity ent) {
+		if (g_Lua == null || g_Lua.Global() == null)
+			return;
+
+		LuaObject invalidate = new();
+		g_Lua.Global().GetMember("InvalidateInternalEntityCache", invalidate);
+		if (invalidate.isFunction()) {
+			invalidate.Push();
+			g_Lua.PushBool(ent.IsPlayer());
+			g_Lua.CallInternalNoReturns(1);
+		}
+		invalidate.UnReference();
+	}
+
+	public void EntityCreated(BaseEntity? ent) {
+		if (g_Lua == null || gGM == null || ent == null || g_GModPrecaching != 0)
+			return;
+
+		ResetLuaIteratorEntityCache(ent);
+		if (gGM == null || !gGM.CallWithArgs((int)LUA_POOLEDSTRING.OnEntityCreated))
+			return;
+
+#if CLIENT_DLL
+		LuaEntity.Push_Entity(ent);
+#else
+		Game.Server.GarrysMod.LuaEntity.Push_Entity(ent);
+#endif
+		gGM.CallNoReturns(1);
+	}
+
+#if CLIENT_DLL
+	static readonly ConVarRef volume = new("volume");
+	static readonly ConVarRef volume_sfx = new("volume_sfx");
+	static readonly ConVarRef snd_mute_losefocus = new("snd_mute_losefocus");
+
+	public void UpdateAudioVolume() {
+		if (snd_mute_losefocus.GetBool() && !engine.IsActiveApp()) {
+			get.Audio()!.SetGlobalVolume(0);
+			return;
+		}
+		get.Audio()!.SetGlobalVolume(volume_sfx.GetFloat() * volume.GetFloat());
+	}
+
+	public bool RenderScene(in ViewSetup view) {
+		if (get.Audio() != null) {
+			Vector3 origin = view.Origin;
+			Vector3 velocity = default;
+			MathLib.AngleVectors(view.Angles, out Vector3 forward, out Vector3 right, out Vector3 up);
+			get.Audio()!.SetEar(ref origin, ref velocity, ref forward, ref up);
+			UpdateAudioVolume();
+		}
+
+		LuaCam.CheckMissingEnds();
+		// todo: reset ShouldDrawLocalPlayer cache
+
+		using (MatRenderContextPtr renderContext = new(materials)) {
+			renderContext.GMOD_ForceFilterMode(true, 0);
+			renderContext.GMOD_ForceFilterMode(false, 0);
+			renderContext.OverrideBlend(false, true, -1, -1, -1);
+			renderContext.OverrideBlendSeparateAlpha(false, true, -1, -1, -1);
+		}
+
+		if (g_Lua == null || gGM == null)
+			return false;
+
+		C_BasePlayer? player = C_BasePlayer.GetLocalPlayer();
+		if (player != null && player.GetActiveWeapon() is C_WeaponSWEP swep)
+			swep.RenderScreen();
+
+		if (gGM.CallWithArgs((int)LUA_POOLEDSTRING.RenderScene)) {
+			LuaVector.Push_Vector(view.Origin);
+			LuaAngle.Push_Angle(view.Angles);
+			g_Lua.PushNumber(view.FOV);
+			return gGM.CallFinish(3);
+		}
+		return false;
+	}
+#endif
+
+	public void EntityRemoved(BaseEntity ent, bool fullUpdate) {
+#if CLIENT_DLL
+		LuaEntity.RemoveFromRemoveList(ent);
+#else
+		Game.Server.GarrysMod.LuaEntity.RemoveFromRemoveList(ent);
+#endif
+		SoundEnvelopeController.GetController().ShutdownSoundsForEntity(ent.EntIndex());
+		if (g_Lua == null || gGM == null)
+			return;
+
+		if (gGM.CallWithArgs((int)LUA_POOLEDSTRING.EntityRemoved)) {
+#if CLIENT_DLL
+			LuaEntity.Push_Entity(ent);
+#else
+			Game.Server.GarrysMod.LuaEntity.Push_Entity(ent);
+#endif
+			g_Lua.PushBool(fullUpdate);
+			gGM.CallNoReturns(2);
+		}
+		ResetLuaIteratorEntityCache(ent);
+#if !CLIENT_DLL
+		if (ent.IsPlayer()) {
+			ent.GetLuaTable()?.UnReference();
+			ent.GetLuaEntity()?.UnReference();
+		}
+		Game.Server.GarrysMod.LuaNetworkedVars.g_LuaNetworkedVars?.ClearEntity(ent.GetRefEHandle().Index);
+#endif
+	}
+
 	public void Think() {
 		if (g_Lua != null) {
 			// CheckForFilesystemChanges();
@@ -493,6 +706,7 @@ public class GarrysMod : IGarrysMod
 #if CLIENT_DLL
 			LuaTimer.Cycle();
 			LuaFileLibrary.AsyncCycle();
+			UGCDownloadManager.Think();
 #else
 			Game.Server.GarrysMod.LuaNetworkedVars.g_LuaNetworkedVars?.Cycle();
 			Game.Server.GarrysMod.LuaTimer.Cycle();

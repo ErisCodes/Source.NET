@@ -56,16 +56,8 @@ public partial class VirtualModel
 		private int LookupIndex;
 	}
 
-	void BeginTemporaryCopyList<T>(List<T> source, out List<T> dest) {
-		dest = ListPool<T>.Shared.Alloc();
-		dest.Clear();
-		dest.CountForEdit() = source.Count;
-		source.AsSpan().CopyTo(dest.AsSpan());
-	}
-	void EndTemporaryCopyList<T>(List<T> source, List<T> dest) {
-		source.Swap(dest);
-		ListPool<T>.Shared.Free(dest);
-	}
+	void BeginTemporaryCopyList<T>(List<T> source, out List<T> dest) => dest = new List<T>(source);
+	void EndTemporaryCopyList<T>(ref List<T> source, List<T> dest) => source = dest;
 
 	public void AppendSequences(int group, StudioHeader studioHdr) {
 		lock (Lock) {
@@ -123,7 +115,7 @@ public partial class VirtualModel
 						GetSeqTable()[s1.Hash(invariant: false)] = (short)j;
 					}
 				}
-				EndTemporaryCopyList(Seq, seq);
+				EndTemporaryCopyList(ref Seq, seq);
 			}
 		}
 	}
@@ -171,7 +163,7 @@ public partial class VirtualModel
 					}
 				}
 
-				EndTemporaryCopyList(Anim, anim);
+				EndTemporaryCopyList(ref Anim, anim);
 			}
 		}
 	}
@@ -224,7 +216,7 @@ public partial class VirtualModel
 				Group[group].MasterAttachment[j] = k;
 			}
 
-			EndTemporaryCopyList(Attachment, attachment);
+			EndTemporaryCopyList(ref Attachment, attachment);
 		}
 	}
 	public void AppendPoseParameters(int group, StudioHeader studioHdr) {
@@ -264,7 +256,7 @@ public partial class VirtualModel
 				Group[group].MasterPose[j] = k;
 			}
 
-			EndTemporaryCopyList(Pose, pose);
+			EndTemporaryCopyList(ref Pose, pose);
 		}
 	}
 	public void AppendBonemap(int group, StudioHeader studioHdr) {
@@ -339,12 +331,36 @@ public partial class VirtualModel
 				Group[group].MasterNode[j] = k;
 			}
 
-			EndTemporaryCopyList(Node, node);
+			EndTemporaryCopyList(ref Node, node);
 		}
 	}
 
 	public void AppendIKLocks(int group, StudioHeader studioHDR) {
-		// todo: IK studiomodel
+		lock (Lock) {
+			int numCheck = IKLock.Count;
+
+			BeginTemporaryCopyList(IKLock, out var iklock);
+
+			int j, k;
+
+			for (j = 0; j < studioHDR.NumLocalIKAutoplayLocks; j++) {
+				int chain1 = studioHDR.LocalIKAutoplayLock(j).Chain;
+				for (k = 0; k < numCheck; k++) {
+					int chain2 = Group[iklock[k].Group].GetStudioHdr()!.LocalIKAutoplayLock(iklock[k].Index).Chain;
+
+					if (chain1 == chain2)
+						break;
+				}
+				if (k == numCheck) {
+					VirtualGeneric tmp;
+					tmp.Group = group;
+					tmp.Index = j;
+					k = iklock.Count; iklock.Add(tmp);
+				}
+			}
+
+			EndTemporaryCopyList(ref IKLock, iklock);
+		}
 	}
 
 	struct HandleAndHeader_t
@@ -402,7 +418,8 @@ public partial class VirtualModel
 	}
 	public void UpdateAutoplaySequences(StudioHeader studioHdr) {
 		int autoplayCount = studioHdr.CountAutoplaySequences();
-		AutoplaySequences.SetCount(autoplayCount);
-		studioHdr.CopyAutoplaySequences(AutoplaySequences.Base().AsSpan(), autoplayCount);
+		if (AutoplaySequences.Length != autoplayCount)
+			AutoplaySequences = new short[autoplayCount];
+		studioHdr.CopyAutoplaySequences(AutoplaySequences, autoplayCount);
 	}
 }

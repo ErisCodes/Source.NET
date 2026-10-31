@@ -1,6 +1,8 @@
-﻿#if CLIENT_DLL || GAME_DLL
+﻿#if CLIENT_DLL || GAME_DLL || MENU_DLL
 #if CLIENT_DLL
 global using static Game.Client.GarrysMod.LuaGlobals;
+#elif MENU_DLL
+global using static Game.MenuSystem.GarrysMod.LuaGlobals;
 #else
 global using static Game.Server.GarrysMod.LuaGlobals;
 #endif
@@ -17,6 +19,8 @@ using System.Runtime.InteropServices;
 
 #if CLIENT_DLL
 namespace Game.Client.GarrysMod;
+#elif MENU_DLL
+namespace Game.MenuSystem.GarrysMod;
 #else
 namespace Game.Server.GarrysMod;
 #endif
@@ -25,6 +29,11 @@ public static class LuaGlobals
 {
 	public static ILuaInterface? g_Lua;
 	public static int g_LuaID;
+#if MENU_DLL
+	public static int g_LuaStarts => Game.MenuSystem.MenuSystem.g_MenuSystem.LuaStarts;
+#else
+	public static int g_LuaStarts => g_LuaID;
+#endif
 }
 
 public class LuaObject : ILuaObject
@@ -676,7 +685,17 @@ public class LuaObject : ILuaObject
 
 	public IHandleEntity? GetMemberEntity(ReadOnlySpan<char> name, IHandleEntity? def) => throw new NotImplementedException();
 	public IHandleEntity? GetMemberEntity(int key, IHandleEntity? def) => throw new NotImplementedException();
+#if MENU_DLL
 	public void SetMemberEntity(float key, IHandleEntity? ent) => throw new NotImplementedException();
+	public void SetMemberEntity(ReadOnlySpan<char> name, IHandleEntity? ent) => throw new NotImplementedException();
+	public IHandleEntity? GetEntity() => throw new NotImplementedException();
+#else
+	public void SetMemberEntity(float key, IHandleEntity? ent) {
+		if (!isTable())
+			return;
+		LuaEntity.Push_Entity(EntityFromEntityHandle(ent));
+		SetMember(key);
+	}
 	public void SetMemberEntity(ReadOnlySpan<char> name, IHandleEntity? ent) {
 		if (!isTable())
 			return;
@@ -692,8 +711,18 @@ public class LuaObject : ILuaObject
 		g_Lua!.Pop(1);
 		return ent;
 	}
+#endif
 	public void SetEntity(IHandleEntity? ent) => throw new NotImplementedException();
+#if MENU_DLL
 	public void SetMemberPhysObject(ReadOnlySpan<char> name, IPhysicsObject? obj) => throw new NotImplementedException();
+#else
+	public void SetMemberPhysObject(ReadOnlySpan<char> name, IPhysicsObject? obj) {
+		if (!isTable())
+			return;
+		LuaPhysObj.Push_PhysObj(obj);
+		SetMember(name);
+	}
+#endif
 }
 
 public class LuaTable : LuaObject

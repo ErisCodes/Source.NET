@@ -1,9 +1,11 @@
-#if CLIENT_DLL || GAME_DLL
+#if CLIENT_DLL || GAME_DLL || MENU_DLL
 using Source.Common.Commands;
 using Source.Common.GarrysMod.Lua;
 
 #if CLIENT_DLL
 namespace Game.Client.GarrysMod;
+#elif MENU_DLL
+namespace Game.MenuSystem.GarrysMod;
 #else
 namespace Game.Server.GarrysMod;
 #endif
@@ -90,6 +92,18 @@ public static partial class LuaConVar
 	}
 
 	[LuaMethod]
+	static int ConVar____tostring(ILuaInterface lua) {
+		if (LC_ConVar.Get(1) is not ConVar convar) {
+			lua.PushString("ConVar [NULL]");
+			return 1;
+		}
+
+		string str = $"ConVar [{convar.GetName()}]";
+		lua.PushString(str.Length > 0x1FF ? str[..0x1FF] : str);
+		return 1;
+	}
+
+	[LuaMethod]
 	static float ConVar__GetFloat(ConVar convar) => convar.GetFloat();
 
 	[LuaMethod]
@@ -133,6 +147,9 @@ public static partial class LuaConVar
 		return (float)min;
 	}
 
+#if CLIENT_DLL || MENU_DLL
+	[LuaGlobal("GetConVar")]
+#endif
 	[LuaGlobal]
 	static ConVar? GetConVar_Internal(string name) {
 		if (!IsAllowedToGetConvarInfo(name) || stricmp("con_logfile", name) == 0)
@@ -209,9 +226,8 @@ public static partial class LuaConVar
 		ConVar convar = g_Lua.CreateConVar(name, defaultValue, helpString, flags);
 		convar.SetMin(hasMin, min);
 		convar.SetMax(hasMax, max);
-		if ((flags & (int)FCvar.UserInfo) != 0) {
-			// todo: cvar.CallGlobalChangeCallbacks(convar, "", 0.0f);
-		}
+		if ((flags & (int)FCvar.UserInfo) != 0)
+			cvar.CallGlobalChangeCallbacks(convar, new ConVarChangeContext { Old = "" });
 
 		Push_ConVar(convar);
 		return 1;

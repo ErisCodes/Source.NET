@@ -486,13 +486,13 @@ IModelLoader modelloader, ICommandLine commandLine,
 
 	}
 	protected override bool ProcessPacketEntities(SVC_PacketEntities msg) {
+		CL.PreprocessEntities();
+
 		if (!msg.IsDelta)
 			ClientSidePrediction.OnReceivedUncompressedPacket();
 		else {
 			if (DeltaTick == -1)
 				return true;
-
-			CL.PreprocessEntities();
 		}
 
 		if (CL.LocalNetworkBackdoor != null) {
@@ -531,9 +531,13 @@ IModelLoader modelloader, ICommandLine commandLine,
 				NetChannel.SetTimeout(Source.Common.Networking.NetChannel.SIGNON_TIME_OUT);
 				NetChannel.SetMaxBufferSize(true, Protocol.MAX_PAYLOAD);
 
+#if GMOD_DLL
+				Host.GMOD_BuildConVarUpdateMessage(NetChannel, FCvar.UserInfo, false);
+#else
 				var convars = new NET_SetConVar();
 				Host.BuildConVarUpdateMessage(convars, FCvar.UserInfo, false);
 				NetChannel.SendNetMsg(convars);
+#endif
 				break;
 			case SignOnState.New:
 				EngineVGui?.UpdateProgressBar(LevelLoadingProgress.SignOnNew);
@@ -1093,6 +1097,28 @@ IModelLoader modelloader, ICommandLine commandLine,
 			p.SetModel(null);
 	}
 
+	protected override bool ProcessFixAngle(SVC_FixAngle msg) {
+		if (msg.Angle.X > 180)
+			msg.Angle.X -= 360;
+		if (msg.Angle.Y > 180)
+			msg.Angle.Y -= 360;
+		if (msg.Angle.Z > 180)
+			msg.Angle.Z -= 360;
+
+		if (msg.Relative) {
+			AddAngleTotal += msg.Angle.Y;
+
+			AddAngle.Add(new() {
+				Total = AddAngleTotal,
+				StartTime = LastServerTickTime
+			});
+		}
+		else
+			ViewAngles = msg.Angle;
+
+		return true;
+	}
+
 	protected override bool ProcessCrosshairAngle(SVC_CrosshairAngle msg) {
 		g_ClientDLL!.SetCrosshairAngle(msg.Angle);
 		return true;
@@ -1235,6 +1261,8 @@ IModelLoader modelloader, ICommandLine commandLine,
 		}
 	}
 
+	public static bool IsDedicated;
+
 	public override bool ProcessServerInfo(SVC_ServerInfo msg) {
 		// Reset client state
 		Clear();
@@ -1273,8 +1301,7 @@ IModelLoader modelloader, ICommandLine commandLine,
 			host_state.IntervalPerTick = msg.TickInterval;
 		}
 
-		// Gmod Specific - a global bool. Should we put this into the host state?
-		// g_bIsDedicated = msg->m_bIsDedicated;
+		IsDedicated = msg.IsDedicated;
 
 		g_ClientDLL?.HudVidInit();
 

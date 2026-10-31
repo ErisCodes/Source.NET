@@ -7,6 +7,7 @@ using Source.Common.Bitbuffers;
 using Source.Common.Client;
 using Source.Common.Commands;
 using Source.Common.GUI;
+using Source.Common.Hashing;
 using Source.Common.Input;
 using Source.Common.Mathematics;
 
@@ -189,7 +190,16 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 	[ConCommand(name: "+reload")] void IN_ReloadDown(in TokenizedCommand args) => KeyDown(ref in_reload, args[1]);
 	[ConCommand(name: "+alt1")] void IN_Alt1Down(in TokenizedCommand args) => KeyDown(ref in_alt1, args[1]);
 	[ConCommand(name: "+alt2")] void IN_Alt2Down(in TokenizedCommand args) => KeyDown(ref in_alt2, args[1]);
-	[ConCommand(name: "+score")] void IN_ScoreDown(in TokenizedCommand args) => KeyDown(ref in_score, args[1]);
+	[ConCommand(name: "+score")]
+	void IN_ScoreDown(in TokenizedCommand args) {
+		KeyDown(ref in_score, args[1]);
+#if GMOD_DLL
+		gGM?.Call((int)LUA_POOLEDSTRING.ScoreboardShow);
+#endif
+	}
+#if GMOD_DLL
+	[ConCommand(name: "+showscores")] void IN_ShowScoresDown(in TokenizedCommand args) => IN_ScoreDown(in args);
+#endif
 	[ConCommand(name: "+graph")] void IN_GraphDown(in TokenizedCommand args) => KeyDown(ref in_graph, args[1]);
 	[ConCommand(name: "+break")] void IN_BreakDown(in TokenizedCommand args) => KeyDown(ref in_break, args[1]);
 	[ConCommand(name: "+zoom")] void IN_ZoomDown(in TokenizedCommand args) => KeyDown(ref in_zoom, args[1]);
@@ -220,7 +230,16 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 	[ConCommand(name: "-reload")] void IN_ReloadUp(in TokenizedCommand args) => KeyUp(ref in_reload, args[1]);
 	[ConCommand(name: "-alt1")] void IN_Alt1Up(in TokenizedCommand args) => KeyUp(ref in_alt1, args[1]);
 	[ConCommand(name: "-alt2")] void IN_Alt2Up(in TokenizedCommand args) => KeyUp(ref in_alt2, args[1]);
-	[ConCommand(name: "-score")] void IN_ScoreUp(in TokenizedCommand args) => KeyUp(ref in_score, args[1]);
+	[ConCommand(name: "-score")]
+	void IN_ScoreUp(in TokenizedCommand args) {
+		KeyUp(ref in_score, args[1]);
+#if GMOD_DLL
+		gGM?.Call((int)LUA_POOLEDSTRING.ScoreboardHide);
+#endif
+	}
+#if GMOD_DLL
+	[ConCommand(name: "-showscores")] void IN_ShowScoresUp(in TokenizedCommand args) => IN_ScoreUp(in args);
+#endif
 	[ConCommand(name: "-graph")] void IN_GraphUp(in TokenizedCommand args) => KeyUp(ref in_graph, args[1]);
 	[ConCommand(name: "-break")] void IN_BreakUp(in TokenizedCommand args) => KeyUp(ref in_break, args[1]);
 	[ConCommand(name: "-zoom")] void IN_ZoomUp(in TokenizedCommand args) => KeyUp(ref in_zoom, args[1]);
@@ -273,6 +292,11 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 			cmd.Buttons |= InButtons.Forward;
 		else if (cmd.ForwardMove < 0)
 			cmd.Buttons |= InButtons.Back;
+
+		cmd.RandomSeed = (int)(MD5Value.PseudoRandom((uint)sequenceNumber) & 0x7fffffff);
+#if GMOD_DLL
+		MouseWheel = 0;
+#endif
 	}
 
 	private void ApplyExtras(ref UserCmd cmd) {
@@ -494,6 +518,7 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 
 	private void MouseMove(ref UserCmd cmd) {
 		engine.GetViewAngles(out QAngle viewangles);
+		QAngle originalViewangles = viewangles;
 		view.StopPitchDrift();
 
 		if (!CameraInterceptingMouse && !Surface.IsCursorVisible()) {
@@ -506,10 +531,18 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 			ResetMouse();
 		}
 
+#if GMOD_DLL
+		if (C_BasePlayer.GetLocalPlayer()?.GetActiveWeapon()?.ShouldFreezeViewAngles() == true)
+			viewangles = originalViewangles;
+#endif
+
 		engine.SetViewAngles(in viewangles);
 	}
 
 	private void ApplyMouse(ref QAngle viewangles, ref UserCmd cmd, float mouse_x, float mouse_y) {
+#if GMOD_DLL
+		cmd.ScrollWheelSpeed = (sbyte)MouseWheel;
+#endif
 		if ((in_strafe.State & KeyButtonStateFlags.Down) == 0 || lookstrafe.GetInt() != 0) {
 			if (CAM_IsThirdPerson() && thirdperson_platformer.GetInt() != 0) {
 				if (mouse_x != 0) {

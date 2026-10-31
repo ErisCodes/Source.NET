@@ -3,6 +3,7 @@ using Game.Shared;
 using Source;
 using Source.Common;
 using Source.Common.Commands;
+using Source.Common.Engine;
 using Source.Common.Formats.BSP;
 using Source.Common.Physics;
 
@@ -16,11 +17,17 @@ public partial class BaseCombatWeapon : BaseAnimating
 {
 	public static readonly ConVar weapon_showproficiency = new("weapon_showproficiency", "0");
 
+	public bool Dropped;
+	public virtual bool WasDropped() => Dropped;
+	public virtual void SetDropped() => Dropped = true;
+
+	public OutputEvent OnPlayerUse = new();
 	public OutputEvent OnPlayerPickup = new();
 	public OutputEvent OnNPCPickup = new();
 	public OutputEvent OnCacheInteraction = new();
 
 	public static readonly new DataMap DataDesc = new(typeof(BaseCombatWeapon), BaseEntity.DataDesc, [
+		DEFINE.OUTPUT(nameof(OnPlayerUse), "OnPlayerUse", eventFuncs),
 		DEFINE.OUTPUT(nameof(OnPlayerPickup), "OnPlayerPickup", eventFuncs),
 		DEFINE.OUTPUT(nameof(OnNPCPickup), "OnNPCPickup", eventFuncs),
 		DEFINE.OUTPUT(nameof(OnCacheInteraction), "OnCacheInteraction", eventFuncs),
@@ -28,7 +35,15 @@ public partial class BaseCombatWeapon : BaseAnimating
 	public override DataMap? GetDataDescMap() => DataDesc;
 
 	public BaseCombatWeapon() {
+		Owner = new();
 		OnBaseCombatWeaponCreated(this);
+	}
+
+	public override EdictFlags UpdateTransmitState() {
+		if (GetOwner() != null)
+			return SetTransmitState(EdictFlags.PVSCheck);
+
+		return base.UpdateTransmitState();
 	}
 
 	public override void UpdateOnRemove() {
@@ -67,12 +82,36 @@ public partial class BaseCombatWeapon : BaseAnimating
 		return count;
 	}
 
+	public override EntityCapabilities ObjectCaps() {
+		EntityCapabilities caps = base.ObjectCaps();
+		if (!IsFollowingEntity() && !HasSpawnFlags(BaseCombatWeapon.SF.NoPlayerPickup))
+			caps |= EntityCapabilities.ImpulseUse;
+
+		return caps;
+	}
+
+	public override void Use(BaseEntity? activator, BaseEntity? caller, UseType useType, float value) {
+		BasePlayer? player = ToBasePlayer(activator);
+
+		if (player != null) {
+			OnPlayerUse.FireOutput(activator, caller);
+
+			// Bump the weapon to try equipping it before picking it up physically. This is
+			// important in a few spots in the game where the player could potentially +use pickup
+			// and then THROW AWAY a vital weapon, rendering them unable to continue the game.
+			if (player.BumpWeapon(this))
+				OnPickedUp(player);
+			else
+				player.PickupObject(this);
+		}
+	}
+
 	public bool IsConstrained() => false;
 
 	public override bool IsWeapon() => true;
 	public override GarrysMod.LuaClass Lua_GetLuaClass() => GarrysMod.LuaEntity.LC_Weapon;
 
-	public static void W_Precache(){
+	public static void W_Precache() {
 
 	}
 
@@ -106,12 +145,12 @@ public partial class BaseCombatWeapon : BaseAnimating
 
 	public virtual void Operator_HandleAnimEvent(ref AnimEvent animEvent, BaseCombatCharacter op) {
 		if ((animEvent.Type & AnimEventType.NewEventSystem) != 0 && (animEvent.Type & AnimEventType.Server) != 0) {
-			if (animEvent.Event == (int)Animevent.AE_NPC_WEAPON_FIRE) {
+			if (animEvent.Event == (int)AnimEventId.AE_NPC_WEAPON_FIRE) {
 				bool secondary = int.TryParse(animEvent.Options, out int value) && value != 0;
 				Operator_ForceNPCFire(op, secondary);
 				return;
 			}
-			else if (animEvent.Event == (int)Animevent.AE_WPN_PLAYWPNSOUND) {
+			else if (animEvent.Event == (int)AnimEventId.AE_WPN_PLAYWPNSOUND) {
 				int snd = WeaponParse.GetWeaponSoundFromString(animEvent.Options);
 				if (snd != -1)
 					WeaponSound((WeaponSound)snd);
@@ -146,6 +185,12 @@ public partial class BaseCombatWeapon : BaseAnimating
 	public virtual SCOND_t WeaponRangeAttack2Condition(float dot, float dist) => SCOND_t.COND_NONE;
 	public virtual SCOND_t WeaponMeleeAttack1Condition(float dot, float dist) => SCOND_t.COND_NONE;
 	public virtual SCOND_t WeaponMeleeAttack2Condition(float dot, float dist) => SCOND_t.COND_NONE;
+
+	public virtual void Delete() {
+		SetTouch(null);
+		SetThink(SUB_Remove);
+		SetNextThink(gpGlobals.CurTime + 0.1f);
+	}
 
 	public BaseEntity? Respawn() {
 		BaseEntity? newWeapon = Create(GetClassname(), g_pGameRules.VecWeaponRespawnSpot(this), GetLocalAngles(), GetOwnerEntity());
@@ -208,7 +253,7 @@ public partial class BaseCombatWeapon : BaseAnimating
 			DoMuzzleFlash();
 		}
 
-		if (HasSpawnFlags(BasePlayer.SF_NORESPAWN) == false) {
+		if (HasSpawnFlags(BasePlayer.SF.NoRespawn) == false) {
 			VPhysicsInitNormal(SolidType.BBox, GetSolidFlags() | SolidFlags.Trigger, false);
 			SetMoveType(Source.MoveType.VPhysics);
 		}
@@ -238,4 +283,6 @@ public partial class BaseCombatWeapon : BaseAnimating
 				return;
 		}
 	}
+
+	public override bool IsBaseCombatWeapon() => true;
 }

@@ -10,9 +10,7 @@ namespace Game.UI;
 
 public class LoadingDialog : Frame
 {
-	readonly public IGameUI GameUI = Singleton<IGameUI>();
 	readonly public ModInfo ModInfo = Singleton<ModInfo>();
-	readonly IEngineClient engine = Singleton<IEngineClient>();
 
 	ProgressBar Progress;
 	ProgressBar Progress2;
@@ -72,19 +70,16 @@ public class LoadingDialog : Frame
 		HideOtherDialogs(false);
 		base.OnClose();
 	}
-	public override void OnCommand(ReadOnlySpan<char> command) {
-		if (command.Equals("Cancel", StringComparison.OrdinalIgnoreCase)) {
-			engine.ClientCmd_Unrestricted("disconnect\n");
-			Close();
-		}
-		else
-			base.OnCommand(command);
+	[UiCommand("Cancel")]
+	private void OnCancel() {
+		engine.ClientCmd_Unrestricted("disconnect\n");
+		Close();
 	}
 
 	public LoadingDialog(Panel? parent) : base(parent, "LoadingDialog") {
 		SetDeleteSelfOnClose(true);
 
-		ConsoleStyle = GameUI.IsConsoleUI();
+		ConsoleStyle = gameUI.IsConsoleUI();
 
 		if (!ConsoleStyle) {
 			SetSize(416, 100);
@@ -94,7 +89,7 @@ public class LoadingDialog : Frame
 #if GMOD_DLL
 		Center = false;
 #else
-		Center = !GameUI.HasLoadingBackgroundDialog();
+		Center = !gameUI.HasLoadingBackgroundDialog();
 #endif
 
 		ShowingSecondaryProgress = false;
@@ -146,7 +141,7 @@ public class LoadingDialog : Frame
 	private void SetupControlSettings(bool forceShowProgressText) {
 		ShowingVACInfo = false;
 
-		if (GameUI.IsConsoleUI()) {
+		if (gameUI.IsConsoleUI()) {
 			// KeyValues controlSettings = BasePanel.GetConsoleControlSettings().FindKey("LoadingDialogNoBanner.res");
 			// LoadControlSettings("null", null, controlSettings);
 			// return;
@@ -250,8 +245,8 @@ public class LoadingDialog : Frame
 
 	private void HideOtherDialogs(bool hide) {
 		if (hide) {
-			if (GameUI.HasLoadingBackgroundDialog()) {
-				GameUI.ShowLoadingBackgroundDialog();
+			if (gameUI.HasLoadingBackgroundDialog()) {
+				gameUI.ShowLoadingBackgroundDialog();
 				MoveToFront();
 				Input.SetAppModalSurface(this);
 			}
@@ -259,8 +254,8 @@ public class LoadingDialog : Frame
 				Surface.RestrictPaintToSinglePanel(this);
 		}
 		else {
-			if (GameUI.HasLoadingBackgroundDialog()) {
-				GameUI.HideLoadingBackgroundDialog();
+			if (gameUI.HasLoadingBackgroundDialog()) {
+				gameUI.HideLoadingBackgroundDialog();
 				Input.SetAppModalSurface(null);
 			}
 			else

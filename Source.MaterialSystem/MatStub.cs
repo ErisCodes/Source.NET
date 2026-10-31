@@ -499,6 +499,9 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public bool HasShaderAPI() => true;
 	public bool InFlashlightMode() => false;
 	public bool OnDrawMesh(IMesh mesh, int firstIndex, int indexCount) => false;
+	public unsafe bool OnDrawMesh(IMesh mesh, PrimList* lists, int numLists) => false;
+	public bool OnSetFlexMesh(IMesh staticMesh, IMesh? mesh, int vertexOffsetInBytes) => false;
+	public bool OnSetColorMesh(IMesh staticMesh, IMesh? mesh, int vertexOffsetInBytes) => false;
 	public bool OnSetPrimitiveType(IMesh mesh, MaterialPrimitiveType type) => false;
 	public bool OnFlushBufferedPrimitives() => false;
 	public void SyncMatrices() { }
@@ -552,6 +555,8 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public void FogEnd(float fEnd) { }
 	public void SetFogZ(float fogZ) { }
 	public MaterialFogMode GetFogMode() => MaterialFogMode.None;
+	public void FogRadial(bool radial) { }
+	public bool GetFogRadial() => false;
 	public void FogColor3f(float r, float g, float b) { }
 	public void FogColor3fv(ReadOnlySpan<float> rgb) { }
 	public void FogColor3ub(byte r, byte g, byte b) { }

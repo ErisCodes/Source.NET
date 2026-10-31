@@ -6,13 +6,12 @@ using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
 using Source.Common.Mathematics;
+using Source.Common.Physics;
 
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace Game.Server;
-
-using FIELD = Source.FIELD<BaseCombatCharacter>;
 
 [Flags]
 public enum Capability
@@ -69,6 +68,12 @@ public class Relationship
 [NetworkName("CBaseCombatCharacter")]
 public partial class BaseCombatCharacter : BaseFlex
 {
+	public BaseCombatCharacter() {
+		MyWeaponsForModify() = new();
+		LastWeapon = new();
+		ActiveWeapon = new();
+	}
+
 	public bool ForceServerRagdoll;
 
 	public virtual Source.Common.Mathematics.QAngle BodyAngles() => GetAbsAngles();
@@ -98,6 +103,101 @@ public partial class BaseCombatCharacter : BaseFlex
 	public virtual Vector3 EyeDirection3D() => HeadDirection3D(); // No eye motion so just return head dir
 
 
+	public HitGroup LastHitGroupValue;
+	public HitGroup LastHitGroup() => LastHitGroupValue;
+
+	public virtual Activity GetDeathActivity() {
+		Activity deathActivity;
+		bool triedDirection;
+		float dot;
+		Vector3 src;
+
+		if (IsPlayer()) {
+			switch (random.RandomInt(0, 7)) {
+				case 0: return Activity.ACT_DIESIMPLE;
+				case 1: return Activity.ACT_DIEBACKWARD;
+				case 2: return Activity.ACT_DIEFORWARD;
+				case 3: return Activity.ACT_DIEVIOLENT;
+				case 4: return Activity.ACT_DIE_HEADSHOT;
+				case 5: return Activity.ACT_DIE_CHESTSHOT;
+				case 6: return Activity.ACT_DIE_GUTSHOT;
+				case 7: return Activity.ACT_DIE_BACKSHOT;
+			}
+		}
+
+		src = WorldSpaceCenter();
+
+		triedDirection = false;
+		deathActivity = Activity.ACT_DIESIMPLE;
+
+		MathLib.AngleVectors(GetLocalAngles(), out Vector3 forward);
+		dot = -Vector3.Dot(forward, g_vecAttackDir);
+
+		switch (LastHitGroupValue) {
+			case HitGroup.Head:
+				deathActivity = Activity.ACT_DIE_HEADSHOT;
+				break;
+
+			case HitGroup.Stomach:
+				deathActivity = Activity.ACT_DIE_GUTSHOT;
+				break;
+
+			case HitGroup.Generic:
+				triedDirection = true;
+
+				if (dot > 0.3)
+					deathActivity = Activity.ACT_DIEFORWARD;
+				else if (dot <= -0.3)
+					deathActivity = Activity.ACT_DIEBACKWARD;
+				break;
+
+			default:
+				triedDirection = true;
+
+				if (dot > 0.3)
+					deathActivity = Activity.ACT_DIEFORWARD;
+				else if (dot <= -0.3)
+					deathActivity = Activity.ACT_DIEBACKWARD;
+				break;
+		}
+
+		if (SelectWeightedSequence(deathActivity) == StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+			if (triedDirection)
+				deathActivity = Activity.ACT_DIESIMPLE;
+			else {
+				if (dot > 0.3)
+					deathActivity = Activity.ACT_DIEFORWARD;
+				else if (dot <= -0.3)
+					deathActivity = Activity.ACT_DIEBACKWARD;
+			}
+		}
+
+		if (SelectWeightedSequence(deathActivity) == StudioHdr.ACTIVITY_NOT_AVAILABLE) {
+			deathActivity = Activity.ACT_DIESIMPLE;
+
+			if (SelectWeightedSequence(deathActivity) == StudioHdr.ACTIVITY_NOT_AVAILABLE)
+				Msg($"ERROR! {GetModelName()} missing ACT_DIESIMPLE\n");
+		}
+
+		if (deathActivity == Activity.ACT_DIEFORWARD) {
+			Util.TraceHull(src, src + forward * 64, new Vector3(-16, -16, -18),
+				new Vector3(16, 16, 18), Mask.Solid, this, Source.CollisionGroup.None, out Trace tr);
+
+			if (tr.Fraction != 1.0)
+				deathActivity = Activity.ACT_DIESIMPLE;
+		}
+
+		if (deathActivity == Activity.ACT_DIEBACKWARD) {
+			Util.TraceHull(src, src - forward * 64, new Vector3(-16, -16, -18),
+				new Vector3(16, 16, 18), Mask.Solid, this, Source.CollisionGroup.None, out Trace tr);
+
+			if (tr.Fraction != 1.0)
+				deathActivity = Activity.ACT_DIESIMPLE;
+		}
+
+		return deathActivity;
+	}
+
 	public virtual bool FInViewCone(BaseEntity entity) => FInViewCone(entity.WorldSpaceCenter());
 
 	public virtual bool FInViewCone(in Vector3 spot) {
@@ -123,53 +223,80 @@ public partial class BaseCombatCharacter : BaseFlex
 	public virtual bool IsInAVehicle() => false;
 	public virtual bool ExitVehicle() => false;
 
-	public static readonly SendTable DT_BCCLocalPlayerExclusive = new(nameof(DT_BCCLocalPlayerExclusive), [
-		SendPropTime64(FIELD.OF(nameof(NextAttack))),
-	]);
+	[NetworkTable("DT_BCCLocalPlayerExclusive")]
+	public static readonly NetworkProp[] BCCLocalPlayerExclusiveProps = [
+		nameof(NextAttack),
+	];
 
-	public static readonly SendTable DT_BaseCombatCharacter = new(DT_BaseFlex, [
-		SendPropDataTable( "bcc_localdata", DT_BCCLocalPlayerExclusive, SendProxy_SendBaseCombatCharacterLocalDataTable ),
-		SendPropEHandle(FIELD.OF(nameof(ActiveWeapon))),
-		SendPropArray3(FIELD.OF_ARRAY(nameof(MyWeapons)), SendPropEHandle( FIELD.OF_ARRAY(nameof(MyWeapons)))),
-		SendPropInt(FIELD.OF(nameof(BloodColor)), 5, 0)
-	]);
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(BCCLocalPlayerExclusiveProps)) { Name = "bcc_localdata", Proxy = typeof(BCCLocalDataProxy) },
+		nameof(ActiveWeapon),
+		nameof(MyWeapons),
+		new(nameof(BloodColor)) { Bits = 5 },
+	];
 
 	public TimeUnit_t GetNextAttack() => NextAttack;
 	public void SetNextAttack(TimeUnit_t wait) => NextAttack = wait;
 
-	[NetworkName("m_flNextAttack")]
-	public TimeUnit_t NextAttack;
+	[NetworkVar("m_flNextAttack")]
+	public partial TimeUnit_t NextAttack { get; set; }
 	public float ImpactEnergyScale;
-	[NetworkName("m_hLastWeapon")]
-	public Handle<BaseCombatWeapon> LastWeapon = new();
-	[NetworkName("m_hActiveWeapon")]
-	public Handle<BaseCombatWeapon> ActiveWeapon = new();
-	[NetworkName("m_hMyWeapons")]
-	public InlineArrayNewMaxWeapons<Handle<BaseCombatWeapon>> MyWeapons = new();
-	[NetworkName("m_iAmmo")]
-	[NetworkArraySize(MAX_AMMO_TYPES)] public readonly NetworkArray<int> Ammo = new(MAX_AMMO_TYPES);
-	[NetworkName("m_bloodColor")]
-	public BloodColor BloodColor;
+	[NetworkVar("m_hLastWeapon")]
+	public partial Handle<BaseCombatWeapon> LastWeapon { get; set; }
+	[NetworkVar("m_hActiveWeapon")]
+	public partial Handle<BaseCombatWeapon> ActiveWeapon { get; set; }
+	[NetworkVar("m_hMyWeapons")]
+	public partial ref readonly InlineArrayNewMaxWeapons<Handle<BaseCombatWeapon>> MyWeapons { get; }
+	[NetworkVar("m_iAmmo")]
+	public partial ref readonly InlineArray256<int> Ammo { get; }
+	[NetworkVar("m_bloodColor")]
+	public partial BloodColor BloodColor { get; set; }
 
-	private static object? SendProxy_SendBaseCombatCharacterLocalDataTable(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {
-		recipients.ClearAllRecipients();
+	public static class BCCLocalDataProxy
+	{
+		public static object? Send(SendProp prop, object instance, IFieldAccessor data, SendProxyRecipients recipients, int objectID) {
+			recipients.ClearAllRecipients();
 
-		BaseCombatCharacter character = (BaseCombatCharacter)instance;
-		if (character != null) {
-			if (character.IsPlayer())
-				recipients.SetOnly(character.EntIndex() - 1);
-			else {
-				IServerVehicle vehicle = character.GetServerVehicle();
-				if (vehicle != null) {
-					BaseCombatCharacter driver = vehicle.GetPassenger();
-					if (driver != null)
-						recipients.SetOnly(driver.EntIndex() - 1);
+			BaseCombatCharacter character = (BaseCombatCharacter)instance;
+			if (character != null) {
+				if (character.IsPlayer())
+					recipients.SetOnly(character.EntIndex() - 1);
+				else {
+					IServerVehicle vehicle = character.GetServerVehicle();
+					if (vehicle != null) {
+						BaseCombatCharacter driver = vehicle.GetPassenger();
+						if (driver != null)
+							recipients.SetOnly(driver.EntIndex() - 1);
+					}
 				}
 			}
-		}
 
-		return instance;
+			return instance;
+		}
 	}
+	public override void SetTransmit(CheckTransmitInfo info, bool always) {
+		if (info.TransmitEdict.Get(EntIndex()) != 0)
+			return;
+
+		base.SetTransmit(info, always);
+
+		if (info.ClientEnt == Edict()) {
+			for (int i = 0; i < MAX_WEAPONS; i++) {
+				BaseCombatWeapon? weapon = MyWeapons[i].Get();
+				if (weapon == null)
+					continue;
+
+				weapon.SetTransmit(info, always);
+			}
+		}
+		else {
+			BaseCombatWeapon? activeWeapon = ActiveWeapon.Get();
+			if (activeWeapon != null && !activeWeapon.IsEffectActive(EntityEffects.NoDraw))
+				activeWeapon.SetTransmit(info, always);
+		}
+	}
+
 	public void ClearLastKnownArea() {
 		// TODO
 	}
@@ -258,6 +385,63 @@ public partial class BaseCombatCharacter : BaseFlex
 	}
 
 	public void SetImpactEnergyScale(float scale) => ImpactEnergyScale = scale;
+
+	static readonly ConVar phys_stressbodyweights = new("phys_stressbodyweights", "5.0");
+
+	static readonly float MaxStressDamageForce = BitConverter.Int32BitsToSingle(0x5f0ede49);
+
+	public override void VPhysicsUpdate(IPhysicsObject physics) {
+		ApplyStressDamage(physics, false);
+		base.VPhysicsUpdate(physics);
+	}
+
+	public virtual float CalculatePhysicsStressDamage(out VPhysicsObjectStress stressOut, IPhysicsObject physics) {
+		float mass = physics.GetMass();
+		CalculateObjectStress(physics, this, out stressOut);
+		float stress = (stressOut.ReceivedStress * ImpactEnergyScale) / mass;
+
+		if (stressOut.HasNonStaticStress && stress > phys_stressbodyweights.GetFloat()) {
+			if ((physics.GetGameFlags() & PhysicsFlags.Penetrating) == 0)
+				return 200;
+		}
+
+		return 0;
+	}
+
+	public virtual void ApplyStressDamage(IPhysicsObject physics, bool requireLargeObject) {
+		if (Classify() == Class_T.PlayerAlly || Classify() == Class_T.PlayerAllyVital) {
+			if (hl2_episodic.GetBool())
+				return;
+		}
+
+		float damage = CalculatePhysicsStressDamage(out VPhysicsObjectStress stressOut, physics);
+		if (damage > 0) {
+			if (requireLargeObject && !stressOut.HasLargeObjectContact)
+				return;
+
+			TakeDamageInfo dmgInfo = new(GetWorldEntity(), GetWorldEntity(), vec3_origin, vec3_origin, damage, DamageType.Crush);
+			float force = -stressOut.ReceivedStress * GetCurrentGravity() * (float)gpGlobals.FrameTime;
+			if (force > -MaxStressDamageForce && force < MaxStressDamageForce)
+				dmgInfo.SetDamageForce(new Vector3(0, 0, force));
+			dmgInfo.SetDamagePosition(GetAbsOrigin());
+
+			if (stressOut.StressObject?.GetGameData() is BaseEntity stressEntity) {
+				dmgInfo.SetInflictor(stressEntity);
+				dmgInfo.SetAttacker(stressEntity);
+
+				BaseEntity? owner = stressEntity.GetOwnerEntity();
+				if (owner != null)
+					dmgInfo.SetAttacker(owner);
+				else {
+					BasePlayer? physicsAttacker = stressEntity.HasPhysicsAttacker(1.0);
+					if (physicsAttacker != null)
+						dmgInfo.SetAttacker(physicsAttacker);
+				}
+			}
+
+			TakeDamage(dmgInfo);
+		}
+	}
 
 	public AI_HullType GetHullType() => Hull;
 	public void SetHullType(AI_HullType hullType) => Hull = hullType;
@@ -397,7 +581,7 @@ public partial class BaseCombatCharacter : BaseFlex
 
 			float curDist = (weapon.GetLocalOrigin() - GetLocalOrigin()).Length();
 
-			if (weapon.HasSpawnFlags(BaseCombatWeapon.SF_WEAPON_NO_PLAYER_PICKUP))
+			if (weapon.HasSpawnFlags(BaseCombatWeapon.SF.NoPlayerPickup))
 				curDist *= 0.5f;
 
 			if (bestWeapon != null) {
@@ -432,33 +616,55 @@ public partial class BaseCombatCharacter : BaseFlex
 		return bestWeapon;
 	}
 
+	public override void UpdateOnRemove() {
+		int i;
+		for (i = 0; i < MAX_WEAPONS; i++) {
+			if (MyWeapons[i].Get() != null)
+				Util.Remove(MyWeapons[i].Get());
+		}
+
+		BaseEntity? owner = GetOwnerEntity();
+		if (owner != null) {
+			owner.DeathNotice(this);
+			SetOwnerEntity(null);
+		}
+
+		base.UpdateOnRemove();
+	}
+
 	public BaseCombatWeapon? Weapon_Create(ReadOnlySpan<char> weaponName) {
 		BaseCombatWeapon? weapon = (BaseCombatWeapon?)Create(weaponName, GetLocalOrigin(), GetLocalAngles(), this);
 
 		return weapon;
 	}
+	public bool NoAmmo;
+
+	public override BaseCombatCharacter? MyCombatCharacterPointer() => this;
+
 	public virtual void Weapon_Equip(BaseCombatWeapon weapon) {
 		for (int i = 0; i < MAX_WEAPONS; i++) {
 			if (MyWeapons[i].Get() == null) {
-				MyWeapons[i].Set(weapon);
+				MyWeaponsForModify()[i].Set(weapon);
 				break;
 			}
 		}
 
 		weapon.ChangeTeam(GetTeamNumber());
 
-		if (weapon.GetMaxClip1() == -1)
-			GiveAmmo(weapon.GetDefaultClip1(), weapon.PrimaryAmmoType);
-		else if (weapon.GetDefaultClip1() > weapon.GetMaxClip1()) {
-			weapon.iClip1 = weapon.GetMaxClip1();
-			GiveAmmo(weapon.GetDefaultClip1() - weapon.GetMaxClip1(), weapon.PrimaryAmmoType);
-		}
+		if (!NoAmmo && !weapon.WasDropped()) {
+			if (weapon.GetMaxClip1() == -1)
+				GiveAmmo(weapon.GetDefaultClip1(), weapon.PrimaryAmmoType);
+			else if (weapon.GetDefaultClip1() > weapon.GetMaxClip1()) {
+				weapon.iClip1 = weapon.GetMaxClip1();
+				GiveAmmo(weapon.GetDefaultClip1() - weapon.GetMaxClip1(), weapon.PrimaryAmmoType);
+			}
 
-		if (weapon.GetMaxClip2() == -1)
-			GiveAmmo(weapon.GetDefaultClip2(), weapon.SecondaryAmmoType);
-		else if (weapon.GetDefaultClip2() > weapon.GetMaxClip2()) {
-			weapon.iClip2 = weapon.GetMaxClip2();
-			GiveAmmo(weapon.GetDefaultClip2() - weapon.GetMaxClip2(), weapon.SecondaryAmmoType);
+			if (weapon.GetMaxClip2() == -1)
+				GiveAmmo(weapon.GetDefaultClip2(), weapon.SecondaryAmmoType);
+			else if (weapon.GetDefaultClip2() > weapon.GetMaxClip2()) {
+				weapon.iClip2 = weapon.GetMaxClip2();
+				GiveAmmo(weapon.GetDefaultClip2() - weapon.GetMaxClip2(), weapon.SecondaryAmmoType);
+			}
 		}
 
 		weapon.Equip(this);
@@ -473,7 +679,7 @@ public partial class BaseCombatCharacter : BaseFlex
 		}
 
 		if (IsPlayer() == false) {
-			if (HasSpawnFlags(AI_BaseNPCGlobals.SF_NPC_LONG_RANGE)) {
+			if (HasSpawnFlags(AI_BaseNPC.SF.LongRange)) {
 				ActiveWeapon.Get()!.MaxRange1 = 999999999;
 				ActiveWeapon.Get()!.MaxRange2 = 999999999;
 			}
@@ -555,7 +761,7 @@ public partial class BaseCombatCharacter : BaseFlex
 		if (!suppressSound)
 			EmitSound("BaseCombatCharacter.AmmoPickup");
 
-		Ammo.Set(ammoIndex, Ammo[ammoIndex] + add);
+		AmmoForModify()[ammoIndex] = Ammo[ammoIndex] + add;
 
 		return add;
 	}
@@ -569,10 +775,22 @@ public partial class BaseCombatCharacter : BaseFlex
 		return GiveAmmo(count, ammoType, suppressSound);
 	}
 
+	public void ClearActiveWeapon() => SetActiveWeapon(null);
+
+	public void RemoveAllWeapons() {
+		ClearActiveWeapon();
+		for (int i = 0; i < MAX_WEAPONS; i++) {
+			if (MyWeapons[i].Get() != null) {
+				MyWeapons[i].Get()!.Delete();
+				MyWeaponsForModify()[i].Set(null);
+			}
+		}
+	}
+
 	public void SetActiveWeapon(BaseCombatWeapon? newWeapon) {
 		BaseCombatWeapon? oldWeapon = ActiveWeapon.Get();
 		if (newWeapon != oldWeapon) {
-			ActiveWeapon.Set(newWeapon);
+			ActiveWeapon = Handle<BaseCombatWeapon>.FromEntity(newWeapon);
 			OnChangeActiveWeapon(oldWeapon, newWeapon);
 		}
 	}
@@ -585,6 +803,10 @@ public partial class BaseCombatCharacter : BaseFlex
 	public void SetCurrentWeaponProficiency(WeaponProficiency proficiency) => CurrentWeaponProficiency = proficiency;
 	public virtual WeaponProficiency CalcWeaponProficiency(BaseCombatWeapon? weapon) => WeaponProficiency.Average;
 
+	public bool DispatchInteraction(AI_Interaction interactionType, object? data, BaseCombatCharacter? sourceEnt) => (interactionType > AI_Interaction.None) ? HandleInteraction(interactionType, data, sourceEnt) : false;
+
+	public virtual bool HandleInteraction(AI_Interaction interactionType, object? data, BaseCombatCharacter? sourceEnt) => false;
+
 	public override void SetLightingOriginRelative(BaseEntity? lightingOrigin) {
 		base.SetLightingOriginRelative(lightingOrigin);
 		if (GetActiveWeapon() != null)
@@ -593,8 +815,6 @@ public partial class BaseCombatCharacter : BaseFlex
 
 	public int WeaponCount() => MAX_WEAPONS;
 	public BaseCombatWeapon? GetWeapon(int i) => MyWeapons[i].Get();
-
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_BaseCombatCharacter);
 
 	public override void DoMuzzleFlash() {
 		BaseCombatWeapon? weapon = GetActiveWeapon();

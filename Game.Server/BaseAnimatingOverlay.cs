@@ -7,24 +7,24 @@ using System.Numerics;
 
 namespace Game.Server;
 
-using FIELD = Source.FIELD<BaseAnimatingOverlay>;
-
 [NetworkName("CBaseAnimatingOverlay")]
-public class BaseAnimatingOverlay : BaseAnimating
+public partial class BaseAnimatingOverlay : BaseAnimating
 {
 	public const int MAX_OVERLAYS = 15;
 
 	internal static readonly ConVar ai_sequence_debug = new("ai_sequence_debug", "0");
 
-	public static readonly SendTable DT_OverlayVars = new(nameof(DT_OverlayVars), [
-		SendPropList<AnimationLayerRef>(FIELD.OF(nameof(AnimOverlay)), MAX_OVERLAYS, SendPropDataTable(null, AnimationLayerRef.DT_Animationlayer))
-	]);
+	[NetworkTable("DT_OverlayVars")]
+	public static readonly NetworkProp[] OverlayVarsProps = [
+		new(nameof(AnimOverlay)) { Encoding = NetEncoding.List, Count = MAX_OVERLAYS, DataTable = "DT_Animationlayer" },
+	];
 
-	public static readonly SendTable DT_BaseAnimatingOverlay = new(DT_BaseAnimating, [
-		SendPropDataTable("overlay_vars", 0, DT_OverlayVars)
-	]); public static readonly new ServerClass ServerClass = new ServerClass(DT_BaseAnimatingOverlay);
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(OverlayVarsProps)) { Name = "overlay_vars" },
+	];
 
-	[NetworkName("m_AnimOverlay")]
+	[NetworkVar("m_AnimOverlay")]
 	readonly List<AnimationLayerRef> AnimOverlay = [];
 
 	public AnimationLayerRef GetAnimOverlay(int i) {
@@ -55,7 +55,7 @@ public class BaseAnimatingOverlay : BaseAnimating
 		BoneSetup boneSetup = new(studioHdr, boneMask, PoseParameter);
 		boneSetup.InitPose(pos, q);
 
-		boneSetup.AccumulatePose(pos, q, GetSequence(), GetCycle(), 1.0f, gpGlobals.CurTime, null);
+		boneSetup.AccumulatePose(pos, q, GetSequence(), GetCycle(), 1.0f, gpGlobals.CurTime, Ik);
 
 		Span<int> layer = stackalloc int[MAX_OVERLAYS];
 		int i;
@@ -71,11 +71,11 @@ public class BaseAnimatingOverlay : BaseAnimating
 		for (i = 0; i < AnimOverlay.Count; i++) {
 			if (layer[i] >= 0 && layer[i] < AnimOverlay.Count) {
 				AnimationLayerRef pLayer = AnimOverlay[layer[i]];
-				boneSetup.AccumulatePose(pos, q, pLayer.Sequence, pLayer.Cycle, pLayer.Weight, gpGlobals.CurTime, null);
+				boneSetup.AccumulatePose(pos, q, pLayer.Sequence, pLayer.Cycle, pLayer.Weight, gpGlobals.CurTime, Ik);
 			}
 		}
 
-		boneSetup.CalcAutoplaySequences(pos, q, gpGlobals.CurTime, null);
+		boneSetup.CalcAutoplaySequences(pos, q, gpGlobals.CurTime, CreateAutoplayIK(studioHdr, gpGlobals.CurTime, boneMask));
 	}
 
 	public void VerifyOrder() {
@@ -215,6 +215,19 @@ public class BaseAnimatingOverlay : BaseAnimating
 	}
 
 	public bool IsPlayingGesture(Activity activity) => FindGestureLayer(activity) != -1;
+
+	public void RestartGesture(Activity activity, bool addIfMissing = true, bool autokill = true) {
+		int idx = FindGestureLayer(activity);
+		if (idx == -1) {
+			if (addIfMissing)
+				AddGesture(activity, autokill);
+			return;
+		}
+
+		AnimOverlay[idx].Cycle = 0.0f;
+		AnimOverlay[idx].PrevCycle = 0.0f;
+		AnimOverlay[idx].LastEventCheck = 0.0f;
+	}
 
 	public int AddLayeredSequence(int sequence, int priority) {
 		int i = AllocateLayer(priority);

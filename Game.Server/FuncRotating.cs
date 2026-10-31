@@ -11,61 +11,56 @@ using System.Xml.Linq;
 namespace Game.Server;
 
 
-using FIELD = FIELD<FuncRotating>;
 using DEFINE = Source.DEFINE<FuncRotating>;
 
 [LinkEntityToClass("func_rotating")]
 [NetworkName("CFuncRotating")]
-public class FuncRotating : BaseEntity
+public partial class FuncRotating : BaseEntity
 {
-	public const int SF_BRUSH_ROTATE_Y_AXIS = 0;
-	public const int SF_BRUSH_ROTATE_START_ON = 1;
-	public const int SF_BRUSH_ROTATE_BACKWARDS = 2;
-	public const int SF_BRUSH_ROTATE_Z_AXIS = 4;
-	public const int SF_BRUSH_ROTATE_X_AXIS = 8;
-	public const int SF_BRUSH_ROTATE_CLIENTSIDE = 16;
-	public const int SF_BRUSH_ROTATE_SMALLRADIUS = 128;
-	public const int SF_BRUSH_ROTATE_MEDIUMRADIUS = 256;
-	public const int SF_BRUSH_ROTATE_LARGERADIUS = 512;
+	[Flags]
+	public enum SF
+	{
+		YAxis = 0,
+		StartOn = 1,
+		Backwards = 2,
+		ZAxis = 4,
+		XAxis = 8,
+		ClientSide = 16,
+		SmallRadius = 128,
+		MediumRadius = 256,
+		LargeRadius = 512,
 
-	public const int SF_BRUSH_ACCDCC = 16;
-	public const int SF_BRUSH_HURT = 32;
-	public const int SF_ROTATING_NOT_SOLID = 64;
+		AccDcc = 16,
+		Hurt = 32,
+		NotSolid = 64,
+	}
 
 	const int FANPITCHMIN = 30;
 	const int FANPITCHMAX = 100;
 
-	public static readonly SendTable DT_FuncRotating = new(DT_BaseEntity, [
-		SendPropExclude(nameof(DT_BaseEntity), "m_angRotation"),
-		SendPropExclude(nameof(DT_BaseEntity), "m_vecOrigin"),
-		SendPropExclude(nameof(DT_BaseEntity), "m_flSimulationTime"),
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(Rotation)) { Exclude = true },
+		new(nameof(Origin)) { Exclude = true },
+		new(nameof(SimulationTime)) { Exclude = true },
 
-		SendPropVector(NetworkVarFields.Origin, 0, PropFlags.Coord | PropFlags.ChangesOften, 0, Constants.HIGH_DEFAULT, SendProxy_FuncRotatingOrigin),
-		SendPropAngle(FIELD.OF_VECTORELEM(nameof(Rotation), 0), 13, PropFlags.RoundDown | PropFlags.ChangesOften, proxyFn: SendProxy_FuncRotatingAngle),
-		SendPropAngle(FIELD.OF_VECTORELEM(nameof(Rotation), 1), 13, PropFlags.RoundDown | PropFlags.ChangesOften, proxyFn: SendProxy_FuncRotatingAngle),
-		SendPropAngle(FIELD.OF_VECTORELEM(nameof(Rotation), 2), 13, PropFlags.RoundDown | PropFlags.ChangesOften, proxyFn: SendProxy_FuncRotatingAngle),
-		SendPropInt(FIELD.OF(nameof(SimulationTime)), SIMULATION_TIME_WINDOW_BITS, PropFlags.Unsigned | PropFlags.ChangesOften | PropFlags.EncodedAgainstTickCount, SendProxy_FuncRotatingSimulationTime)
-	]);
+		new(nameof(Origin)) { Bits = 0, Flags = PropFlags.Coord | PropFlags.ChangesOften, Low = 0.0f, High = Constants.HIGH_DEFAULT, Proxy = typeof(OriginProxy) },
+		new(nameof(Rotation)) { Encoding = NetEncoding.VectorElements, Bits = 13, Flags = PropFlags.RoundDown | PropFlags.ChangesOften, Proxy = typeof(RotationAngleProxy) },
+		new(nameof(SimulationTime)) { Encoding = NetEncoding.Int, Bits = SIMULATION_TIME_WINDOW_BITS, Flags = PropFlags.Unsigned | PropFlags.ChangesOften | PropFlags.EncodedAgainstTickCount, Proxy = typeof(SimulationTimeProxy) },
+	];
 
-	private static void SendProxy_FuncRotatingOrigin(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		SendProxy_Origin(prop, instance, field, ref outData, element, objectID);
+	public static class RotationAngleProxy
+	{
+		public static void Send(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
+			FuncRotating? entity = (FuncRotating?)instance;
+			Assert(entity != null);
+
+			float qa = field.GetValue<float>(instance);
+
+			outData.Float = MathLib.anglemod(qa);
+			Assert(float.IsFinite(outData.Float));
+		}
 	}
-
-	private static void SendProxy_FuncRotatingAngle(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		FuncRotating? entity = (FuncRotating?)instance;
-		Assert(entity != null);
-
-		float qa = field.GetValue<float>(instance);
-
-		outData.Float = MathLib.anglemod(qa);
-		Assert(float.IsFinite(outData.Float));
-	}
-
-	private static void SendProxy_FuncRotatingSimulationTime(SendProp prop, object instance, IFieldAccessor field, ref DVariant outData, int element, int objectID) {
-		SendProxy_SimulationTime(prop, instance, field, ref outData, element, objectID);
-	}
-
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_FuncRotating);
 
 	public static readonly new DataMap DataDesc = new(typeof(FuncRotating), BaseEntity.DataDesc, [
 		DEFINE.FIELD(nameof(MoveAng), FieldType.Vector),
@@ -132,11 +127,11 @@ public class FuncRotating : BaseEntity
 		if (Volume == 0.0)
 			Volume = 1.0f;
 
-		if (HasSpawnFlags(SF_BRUSH_ROTATE_SMALLRADIUS))
+		if (HasSpawnFlags(SF.SmallRadius))
 			Attenuation = ATTN_IDLE;
-		else if (HasSpawnFlags(SF_BRUSH_ROTATE_MEDIUMRADIUS))
+		else if (HasSpawnFlags(SF.MediumRadius))
 			Attenuation = ATTN_STATIC;
-		else if (HasSpawnFlags(SF_BRUSH_ROTATE_LARGERADIUS))
+		else if (HasSpawnFlags(SF.LargeRadius))
 			Attenuation = ATTN_NORM;
 		else
 			Attenuation = ATTN_NORM;
@@ -144,19 +139,19 @@ public class FuncRotating : BaseEntity
 		if (FanFriction == 0)
 			FanFriction = 1;
 
-		if (HasSpawnFlags(SF_BRUSH_ROTATE_Z_AXIS))
+		if (HasSpawnFlags(SF.ZAxis))
 			MoveAng = new(0, 0, 1);
-		else if (HasSpawnFlags(SF_BRUSH_ROTATE_X_AXIS))
+		else if (HasSpawnFlags(SF.XAxis))
 			MoveAng = new(1, 0, 0);
 		else
 			MoveAng = new(0, 1, 0);
 
-		if (HasSpawnFlags(SF_BRUSH_ROTATE_BACKWARDS))
+		if (HasSpawnFlags(SF.Backwards))
 			MoveAng = MoveAng * -1;
 
 		SetSolid(SolidType.VPhysics);
 
-		if (HasSpawnFlags(SF_ROTATING_NOT_SOLID)) {
+		if (HasSpawnFlags(SF.NotSolid)) {
 			AddSolidFlags(SolidFlags.NotSolid);
 			SetMoveType(Source.MoveType.Push);
 		}
@@ -173,12 +168,12 @@ public class FuncRotating : BaseEntity
 		if (MaxSpeed == 0)
 			MaxSpeed = 100;
 
-		if (HasSpawnFlags(SF_BRUSH_ROTATE_START_ON)) {
+		if (HasSpawnFlags(SF.StartOn)) {
 			SetThink(SUB_CallUseToggle);
 			SetNextThink(gpGlobals.CurTime + .2);
 		}
 
-		if (HasSpawnFlags(SF_BRUSH_HURT))
+		if (HasSpawnFlags(SF.Hurt))
 			SetTouch(HurtTouch);
 
 		Speed = 0;
@@ -408,7 +403,7 @@ public class FuncRotating : BaseEntity
 
 		TargetSpeed = speed;
 
-		if (!HasSpawnFlags(SF_BRUSH_ACCDCC)) {
+		if (!HasSpawnFlags(SF.AccDcc)) {
 			UpdateSpeed(TargetSpeed);
 			SetMoveDone(RotateMove);
 		}

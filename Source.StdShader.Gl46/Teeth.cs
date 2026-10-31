@@ -8,7 +8,7 @@ namespace Source.StdShader.Gl46;
 public class Teeth : BaseVSShader
 {
 	public static string HelpString = "Help for Teeth_DX9";
-	public static int Flags = 0;
+	public static ShaderFlags Flags = ShaderFlags.None;
 	public static List<ShaderParam> ShaderParams = [];
 	public static ShaderParam[] ShaderParamOverrides = new ShaderParam[(int)ShaderMaterialVars.Count];
 
@@ -16,12 +16,12 @@ public class Teeth : BaseVSShader
 	{
 		public readonly ShaderParamInfo Info;
 		public readonly int Index;
-		public ShaderParam(ShaderMaterialVars var, ShaderParamType type, ReadOnlySpan<char> defaultParam, ReadOnlySpan<char> help, int flags) {
+		public ShaderParam(ShaderMaterialVars var, ShaderParamType type, ReadOnlySpan<char> defaultParam, ReadOnlySpan<char> help, ShaderParamFlags flags) {
 			Info.Name = "override";
 			Info.Type = type;
 			Info.DefaultValue = new(defaultParam);
 			Info.Help = new(help);
-			Info.Flags = (ShaderParamFlags)flags;
+			Info.Flags = flags;
 
 			if (ShaderParamOverrides[(int)var] == null) {
 
@@ -33,12 +33,12 @@ public class Teeth : BaseVSShader
 			ShaderParamOverrides[(int)var] = this;
 			Index = (int)var;
 		}
-		public ShaderParam(string name, ShaderParamType type, ReadOnlySpan<char> defaultParam, ReadOnlySpan<char> help, int flags = 0) {
+		public ShaderParam(string name, ShaderParamType type, ReadOnlySpan<char> defaultParam, ReadOnlySpan<char> help, ShaderParamFlags flags = 0) {
 			Info.Name = name;
 			Info.Type = type;
 			Info.DefaultValue = new(defaultParam);
 			Info.Help = new(help);
-			Info.Flags = (ShaderParamFlags)flags;
+			Info.Flags = flags;
 			Index = (int)ShaderMaterialVars.Count + ShaderParams.Count;
 			ShaderParams.Add(this);
 		}
@@ -46,7 +46,7 @@ public class Teeth : BaseVSShader
 		public ReadOnlySpan<char> GetName() => Info.Name;
 		public ShaderParamType GetType() => Info.Type;
 		public ReadOnlySpan<char> GetDefaultValue() => Info.DefaultValue;
-		public int GetFlags() => (int)Info.Flags;
+		public ShaderParamFlags GetFlags() => Info.Flags;
 		public ReadOnlySpan<char> GetHelp() => Info.Help;
 	}
 
@@ -71,7 +71,7 @@ public class Teeth : BaseVSShader
 	}
 
 	public override string? GetFallbackShader(IMaterialVar[] vars) => null;
-	public override int GetFlags() => Flags;
+	public override ShaderFlags GetFlags() => Flags;
 	public override int GetNumParams() => base.GetNumParams() + ShaderParams.Count;
 	public override ReadOnlySpan<char> GetParamName(int paramIndex) {
 		int baseClassParamCount = base.GetNumParams();
@@ -183,6 +183,8 @@ public class Teeth : BaseVSShader
 			shaderShadow.EnableSRGBRead(Sampler.Sampler0, true);
 			shaderShadow.EnableSRGBWrite(true);
 
+			FogToFogColor();
+
 			shaderShadow.EnableAlphaWrites(fullyOpaque);
 		}
 		else if (shaderAPI != null) {
@@ -200,6 +202,8 @@ public class Teeth : BaseVSShader
 			shaderAPI.SetVertexShaderConstant(VertexShaderConst.ShaderSpecificConst0, lighting);
 
 			shaderAPI.GetDX9LightState(out LightState lightState);
+
+			shaderAPI.SetPixelShaderFogParams((int)PixelShaderConst.FogParams);
 
 			Span<float> eyePos_SpecExponent = [0, 0, 0, 0];
 			shaderAPI.GetWorldSpaceCameraPosition(eyePos_SpecExponent);
@@ -223,7 +227,7 @@ public class Teeth : BaseVSShader
 						shaderAPI.SetPixelShaderConstant((int)PixelShaderConst.EyePosSpecExponent, specExponent);
 
 						DynamicShaderIndex pshIndex = new(shaderAPI, ShaderType.Pixel);
-						pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo());
+						pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo1(true));
 						pshIndex.Set("NUM_LIGHTS", lightState.NumLights);
 						pshIndex.Set("AMBIENT_LIGHT", lightState.AmbientLight ? 1 : 0);
 						pshIndex.Set("WRITE_DEPTH_TO_DESTALPHA", fullyOpaque && shaderAPI.ShouldWriteDepthToDestAlpha());
@@ -250,7 +254,7 @@ public class Teeth : BaseVSShader
 					shaderAPI.SetPixelShaderConstant((int)PixelShaderConst.EyePosSpecExponent, specExponent);
 
 					DynamicShaderIndex pshIndex = new(shaderAPI, ShaderType.Pixel);
-					pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo());
+					pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo1(true));
 					pshIndex.Set("NUM_LIGHTS", lightState.NumLights);
 					pshIndex.Set("AMBIENT_LIGHT", lightState.AmbientLight ? 1 : 0);
 					pshIndex.Set("WRITE_DEPTH_TO_DESTALPHA", fullyOpaque && shaderAPI.ShouldWriteDepthToDestAlpha());
@@ -274,7 +278,7 @@ public class Teeth : BaseVSShader
 
 					if (HardwareConfig.SupportsPixelShaders_2_b()) {
 						DynamicShaderIndex pshIndex = new(shaderAPI, ShaderType.Pixel);
-						pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo());
+						pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo1(true));
 						pshIndex.Set("WRITE_DEPTH_TO_DESTALPHA", fullyOpaque && shaderAPI.ShouldWriteDepthToDestAlpha());
 						shaderAPI.SetPixelShaderIndex(pshIndex.GetIndex());
 					}
@@ -295,7 +299,7 @@ public class Teeth : BaseVSShader
 					shaderAPI.SetVertexShaderIndex(vshIndex.GetIndex());
 
 					DynamicShaderIndex pshIndex = new(shaderAPI, ShaderType.Pixel);
-					pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo());
+					pshIndex.Set("PIXELFOGTYPE", shaderAPI.GetPixelFogCombo1(true));
 					pshIndex.Set("WRITE_DEPTH_TO_DESTALPHA", fullyOpaque && shaderAPI.ShouldWriteDepthToDestAlpha());
 					shaderAPI.SetPixelShaderIndex(pshIndex.GetIndex());
 				}

@@ -47,6 +47,7 @@ public static class MatSysVars
 	public static readonly ConVar r_waterforcereflectentities = new("r_waterforcereflectentities", "0");
 	public static readonly ConVar mat_depthbias_normal = new("mat_depthbias_normal", "0.0", FCvar.Cheat);
 	public static readonly ConVar mat_show_ab_hdr = new("mat_show_ab_hdr", "0");
+	public static readonly ConVar mat_hdr_level = new("mat_hdr_level", "2", FCvar.Archive, "Set to 0 for no HDR, 1 for LDR+bloom on HDR maps, and 2 for full HDR on HDR maps.");
 }
 
 public struct MaterialList
@@ -225,10 +226,12 @@ public class MSurfaceSortList
 	public List<SurfaceSortGroup> GetSortList(int sortGroup) => SortGroupLists[sortGroup];
 
 	public void GetSurfaceListForGroup(List<SurfaceHandle_t> list, in SurfaceSortGroup group) {
-		for (short blockIndex = group.ListHead; blockIndex != -1; blockIndex = GetSurfaceBlock(blockIndex).NextBlock) {
-			ref MaterialList matList = ref GetSurfaceBlock(blockIndex);
+		Span<MaterialList> blocks = List.AsSpan();
+		for (short blockIndex = group.ListHead; blockIndex != -1;) {
+			ref MaterialList matList = ref blocks[blockIndex];
 			for (int index = 0; index < matList.Count; ++index)
 				list.Add((SurfaceHandle_t)matList.Surfaces[index]);
+			blockIndex = matList.NextBlock;
 		}
 	}
 
@@ -299,9 +302,6 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 	}
 
 	private ITexture? CreatePowerOfTwoFBTexture() {
-		if (IsX360())
-			return null;
-
 		return materials.CreateNamedRenderTargetTextureEx2(
 			"_rt_PowerOfTwoFB",
 			1024, 1024, RenderTargetSizeMode.Default,
@@ -315,7 +315,7 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 	private ITexture? CreateWaterReflectionTexture() {
 		return materials.CreateNamedRenderTargetTextureEx2(
 			"_rt_WaterReflection",
-			1024, 1024, RenderTargetSizeMode.Picmip,
+			512, 512, RenderTargetSizeMode.FullFrameBuffer,
 			materials.GetBackBufferFormat(),
 			MaterialRenderTargetDepth.Shared,
 			TextureFlags.ClampS | TextureFlags.ClampT,
@@ -325,7 +325,7 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 	private ITexture? CreateWaterRefractionTexture() {
 		return materials.CreateNamedRenderTargetTextureEx2(
 			"_rt_WaterRefraction",
-			1024, 1024, RenderTargetSizeMode.Picmip,
+			512, 512, RenderTargetSizeMode.FullFrameBuffer,
 			// This is different than reflection because it has to have alpha for fog factor.
 			ImageFormat.RGBA8888,
 			MaterialRenderTargetDepth.Shared,
@@ -387,10 +387,6 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 			strcpy(textureName, MaterialDefines.FULL_FRAME_FRAMEBUFFER);
 
 		CreateRenderTargetFlags rtFlags = extraFlags | CreateRenderTargetFlags.HDR;
-		if (IsX360()) {
-			// just make the system memory texture only
-			rtFlags |= CreateRenderTargetFlags.NoEDRAM;
-		}
 		return materials.CreateNamedRenderTargetTextureEx2(
 			textureName.SliceNullTerminatedString(),
 			1, 1, RenderTargetSizeMode.FullFrameBuffer, materials.GetBackBufferFormat(),
@@ -400,27 +396,16 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 	}
 
 	private ITexture? CreateFullFrameDepthTexture() {
-		if (IsX360()) {
-			return materials.CreateNamedRenderTargetTextureEx2("_rt_FullFrameDepth", 1, 1,
-				RenderTargetSizeMode.FullFrameBuffer, materials.GetShadowDepthTextureFormat(), MaterialRenderTargetDepth.None,
-				TextureFlags.ClampS | TextureFlags.ClampT | TextureFlags.PointSample,
-				CreateRenderTargetFlags.NoEDRAM);
-		}
-		else
-			materials.AddTextureAlias("_rt_FullFrameDepth", "_rt_PowerOfTwoFB");
+		materials.AddTextureAlias("_rt_FullFrameDepth", "_rt_PowerOfTwoFB");
 
 		return null;
 	}
 
 	private ITexture? CreateResolvedFullFrameDepthTexture() {
-		if (IsPC()) {
-			return materials.CreateNamedRenderTargetTextureEx2("_rt_ResolvedFullFrameDepth", 1, 1,
-				RenderTargetSizeMode.FullFrameBuffer, ImageFormat.RGBA8888, MaterialRenderTargetDepth.Separate,
-				TextureFlags.ClampS | TextureFlags.ClampT | TextureFlags.PointSample,
-				CreateRenderTargetFlags.NoEDRAM);
-		}
-
-		return null;
+		return materials.CreateNamedRenderTargetTextureEx2("_rt_ResolvedFullFrameDepth", 1, 1,
+			RenderTargetSizeMode.FullFrameBuffer, ImageFormat.RGBA8888, MaterialRenderTargetDepth.Separate,
+			TextureFlags.ClampS | TextureFlags.ClampT | TextureFlags.PointSample,
+			CreateRenderTargetFlags.NoEDRAM);
 	}
 
 	/// <summary>
@@ -449,13 +434,12 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 
 		// Create the render targets upon which mods may rely
 
-		if (IsPC())
-			// Create for all mods as vgui2 uses it for 3D painting
-			g_PowerOfTwoFBTexture.Init(CreatePowerOfTwoFBTexture());
+		// Create for all mods as vgui2 uses it for 3D painting
+		g_PowerOfTwoFBTexture.Init(CreatePowerOfTwoFBTexture());
 
 		// Create these for all mods because the engine references them
 		if (HardwareConfig.GetDXSupportLevel() >= 80) {
-			if (IsPC() && HardwareConfig.GetDXSupportLevel() >= 90 && HardwareConfig.GetHDRType() == HDRType.Float)
+			if (HardwareConfig.GetDXSupportLevel() >= 90 && HardwareConfig.GetHDRType() == HDRType.Float)
 				// Used for building HDR Cubemaps
 				g_BuildCubemaps16BitTexture.Init(CreateBuildCubemaps16BitTexture());
 
@@ -467,11 +451,9 @@ public class MatSysInterface(IMaterialSystem materials, IServiceProvider service
 				g_QuarterSizedFBTexture1.Init(CreateQuarterSizedFBTexture(1, 0));
 		}
 
-		if (IsPC()) {
-			g_TeenyFBTexture0.Init(CreateTeenyFBTexture(0));
-			g_TeenyFBTexture1.Init(CreateTeenyFBTexture(1));
-			g_TeenyFBTexture2.Init(CreateTeenyFBTexture(2));
-		}
+		g_TeenyFBTexture0.Init(CreateTeenyFBTexture(0));
+		g_TeenyFBTexture1.Init(CreateTeenyFBTexture(1));
+		g_TeenyFBTexture2.Init(CreateTeenyFBTexture(2));
 
 		g_FullFrameFBTexture0.Init(CreateFullFrameFBTexture(0));
 		g_FullFrameFBTexture1.Init(CreateFullFrameFBTexture(1));

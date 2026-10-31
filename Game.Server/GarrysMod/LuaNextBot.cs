@@ -1,18 +1,33 @@
 using Game.Server;
+using Game.Server.GarrysMod;
 using Game.Shared;
 
 using Source.Common;
 
-using FIELD = Source.FIELD<Game.Server.NextBot.LuaNextBot>;
 namespace Game.Server.NextBot;
 
 [LinkEntityToClass("sent_nextbot")]
 [NetworkName("CLuaNextBot")]
-public class LuaNextBot : NextBotCombatCharacter
+public partial class LuaNextBot : NextBotCombatCharacter
 {
-	public static readonly SendTable DT_LuaNextBot = new(DT_NextBot, [
-		SendPropDataTable("m_ScriptedEntity", DT_ScriptedEntity),
-		SendPropInt(FIELD.OF(nameof(LifeState)), 3, PropFlags.Unsigned)
-	]);
-	public static readonly new ServerClass ServerClass = new ServerClass(DT_LuaNextBot);
+	[NetworkTable]
+	public static readonly new NetworkProp[] Props = [
+		new(nameof(ScriptedEntity)) { Encoding = NetEncoding.DataTable, DataTable = "DT_ScriptedEntity" },
+		new(nameof(LifeState)) { Bits = 3, Flags = PropFlags.Unsigned },
+	];
+
+	[NetworkVar("m_ScriptedEntity")]
+	public readonly ScriptedEntity ScriptedEntity = new();
+
+	public LuaNextBot() {
+		ScriptedEntity.Init(this, 1);
+	}
+
+	public override ReadOnlySpan<char> GetLuaScriptName() => ScriptedEntity.GetScriptName();
+
+	public override void InitializeScriptedEntity(ReadOnlySpan<char> name) {
+		ScriptedEntity.SetScriptName(name);
+		SetClassname(name);
+		ScriptedEntity.StartLua();
+	}
 }

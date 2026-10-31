@@ -11,6 +11,8 @@ using Source.Common.Commands;
 using Source.Common.Engine;
 using Source.Common.Formats.BSP;
 using Source.Common.Mathematics;
+using Source.Common.Networking;
+using Source.Common.Physics;
 using Source.Engine.Server;
 
 using System;
@@ -29,23 +31,6 @@ using Color = Source.Color;
 
 namespace Game;
 
-
-public static class ClassMap
-{
-	static bool Initialized;
-	public static void Init() {
-		if (Initialized) return;
-		Initialized = true;
-		// Here is where we start initializing things based on LinkEntityToClassAttribute's
-		var typePairs = Assembly.GetExecutingAssembly().GetTypesWithAttributeMulti<LinkEntityToClassAttribute>();
-		foreach (var type in typePairs) {
-			var attr = type.Value;
-
-			var factoryType = typeof(CEntityFactory<>).MakeGenericType(type.Key);
-			Activator.CreateInstance(factoryType, [type.Value.LocalName]);
-		}
-	}
-}
 
 public interface IEntityFactory
 {
@@ -88,6 +73,16 @@ public class CEntityFactoryDictionary : IEntityFactoryDictionary
 	public IServerNetworkable? Create(ReadOnlySpan<char> className) {
 		className = className.SliceNullTerminatedString();
 		IEntityFactory? factory = FindFactory(className);
+#if GMOD_DLL
+		if (Game.Client.GarrysMod.GarrysMod.g_LuaManager != null) {
+			Span<char> lowered = stackalloc char[512];
+			strcpy(lowered, className);
+			strlower(lowered);
+			IServerNetworkable? luaEnt = Game.Client.GarrysMod.GarrysMod.g_LuaManager.CreateEntity(((ReadOnlySpan<char>)lowered).SliceNullTerminatedString(), factory != null);
+			if (luaEnt != null)
+				return luaEnt;
+		}
+#endif
 		if (factory == null) {
 			Warning($"Attempted to create unknown entity type {className}!\n");
 			return null;
@@ -227,10 +222,40 @@ public static partial class Util
 		trace.FractionLeftSolid = 0;
 	}
 
-	public static int DropToFloor(BaseEntity entity, Mask mask) {
+	public static bool PointAtEntity(BaseEntity? dest, BaseEntity? target) {
+		if (dest == null || target == null)
+			return false;
+
+		Vector3 dir = target.GetAbsOrigin() - dest.GetAbsOrigin();
+
+		MathLib.VectorNormalize(ref dir);
+
+		MathLib.VectorAngles(dir, out QAngle angles);
+		dest.SetLocalAngles(angles);
+		dest.SetAbsAngles(angles);
+
+#if GMOD_DLL
+		IPhysicsObject? physicsObject = dest.VPhysicsGetObject();
+		if (physicsObject != null) {
+			physicsObject.GetPosition(out Vector3 worldPos, out _);
+			physicsObject.SetPosition(worldPos, angles, true);
+		}
+#endif
+
+		return true;
+	}
+
+	public static void PointAtNamedEntity(BaseEntity dest, string? target) {
+		if (!PointAtEntity(dest, gEntList.FindEntityByName(null, target)))
+			DevMsg(1, $"{dest.GetClassname()} ({dest.GetDebugName()}) was unable to point at an entity named: {target}\n");
+	}
+
+	public static int DropToFloor(BaseEntity entity, Mask mask) => DropToFloor(entity, mask, null);
+
+	public static int DropToFloor(BaseEntity entity, Mask mask, BaseEntity? ignore) {
 		entity.SetGroundEntity(null);
 
-		TraceEntity(entity, entity.GetAbsOrigin(), entity.GetAbsOrigin() - new Vector3(0, 0, 256), mask, out Trace trace);
+		TraceEntity(entity, entity.GetAbsOrigin(), entity.GetAbsOrigin() - new Vector3(0, 0, 256), mask, ignore, entity.GetCollisionGroup(), out Trace trace);
 
 		if (trace.AllSolid)
 			return -1;
@@ -305,6 +330,21 @@ public static partial class Util
 		ent.SetCollisionBounds(mins, maxs);
 	}
 
+	public static float DistApprox(in Vector3 vec1, in Vector3 vec2) {
+		float dx = vec1.X - vec2.X;
+		float dy = vec1.Y - vec2.Y;
+		float dz = vec1.Z - vec2.Z;
+
+		return MathF.Abs(dx) + MathF.Abs(dy) + MathF.Abs(dz);
+	}
+
+	public static float DistApprox2D(in Vector3 vec1, in Vector3 vec2) {
+		float dx = vec1.X - vec2.X;
+		float dy = vec1.Y - vec2.Y;
+
+		return MathF.Abs(dx) + MathF.Abs(dy);
+	}
+
 	public static BasePlayer? GetLocalPlayer() {
 		if (gpGlobals.MaxClients > 1) {
 			if (developer.GetBool()) {
@@ -325,6 +365,16 @@ public static partial class Util
 
 	public static void SetSize(BaseEntity ent, in Vector3 min, in Vector3 max) {
 		SetMinMaxSize(ent, min, max);
+	}
+
+	public static int EntitiesInBox(Span<BaseEntity> list, in Vector3 mins, in Vector3 maxs, EntityFlags flagMask) {
+		FlaggedEntitiesEnum boxEnum = new(list, flagMask);
+		return EntitiesInBox(mins, maxs, ref boxEnum);
+	}
+
+	public static int EntitiesInBox(in Vector3 mins, in Vector3 maxs, scoped ref FlaggedEntitiesEnum enumerator) {
+		partition.EnumerateElementsInBox((SpatialPartitionListMask_t)PartitionListMask.EngineNonStaticEdicts, mins, maxs, false, ref enumerator);
+		return enumerator.GetCount();
 	}
 
 	public static int EntitiesInSphere(Span<BaseEntity> list, in Vector3 center, float radius, EntityFlags flagMask) {
@@ -471,18 +521,26 @@ public static partial class Util
 	}
 
 	public static void PrecacheOther(ReadOnlySpan<char> className, ReadOnlySpan<char> modelName = default) {
+		bool precaching = s_RemoveImmediateSemaphore == 0;
+		if (precaching)
+			Game.Client.GarrysMod.GarrysMod.g_GModPrecaching++;
+		if (Game.Client.GarrysMod.GarrysMod.g_GModPrecaching > 0x20)
+			Error("Something seems to have gone wroong");
+
 		BaseEntity? entity = CreateEntityByName(className);
-		if (entity == null) {
+		if (entity == null)
 			Warning("NULL Ent in Util.PrecacheOther\n");
-			return;
+		else {
+			// If we have a specified model, set it before calling precache
+			if (!modelName.IsStringEmpty)
+				entity.SetModelName(modelName);
+
+			entity.Precache();
+			Util.RemoveImmediate(entity);
 		}
 
-		// If we have a specified model, set it before calling precache
-		if (!modelName.IsStringEmpty)
-			entity.SetModelName(modelName);
-
-		entity.Precache();
-		Util.RemoveImmediate(entity);
+		if (precaching)
+			Game.Client.GarrysMod.GarrysMod.g_GModPrecaching--;
 	}
 
 	public static void ClientPrintFilter<Filter>(scoped in Filter filter, HudPrint dest, ReadOnlySpan<char> msgName, ReadOnlySpan<char> param1 = default, ReadOnlySpan<char> param2 = default, ReadOnlySpan<char> param3 = default, ReadOnlySpan<char> param4 = default) where Filter : IRecipientFilter {
@@ -534,6 +592,46 @@ public static partial class Util
 		}
 
 		return player;
+	}
+
+	public static void GetPlayerConnectionInfo(int playerIndex, out int ping, out int packetloss) {
+		BasePlayer? player = PlayerByIndex(playerIndex);
+
+		INetChannelInfo? nci = engine.GetPlayerNetInfo(playerIndex);
+
+		if (nci != null && player != null && !player.IsBot()) {
+			double latency = nci.GetAverageLatency(NetFlow.FLOW_OUTGOING);
+
+			ReadOnlySpan<char> cmdRateStr = engine.GetClientConVarValue(playerIndex, "cl_cmdrate");
+
+			int cmdRate = Math.Max(1, atoi(cmdRateStr));
+			latency -= (0.5f / cmdRate) + TICKS_TO_TIME(1);
+
+			latency -= TICK_INTERVAL * 0.5f;
+
+			ping = (int)(latency * 1000.0f);
+			ping = Math.Clamp(ping, 5, 1000);
+
+			packetloss = (int)(100.0f * nci.GetAverageLoss(NetFlow.FLOW_INCOMING));
+			packetloss = Math.Clamp(packetloss, 0, 100);
+		}
+		else {
+			ping = 0;
+			packetloss = 0;
+		}
+	}
+
+	public static BasePlayer? PlayerByUserId(int userID) {
+		for (int i = 1; i <= gpGlobals.MaxClients; i++) {
+			BasePlayer? player = PlayerByIndex(i);
+			if (player == null || !player.IsConnected())
+				continue;
+
+			if (engine.GetPlayerUserId(player.Edict()) == userID)
+				return player;
+		}
+
+		return null;
 	}
 
 	public static BaseEntity? EntityByIndex(int entityIndex) {
@@ -608,6 +706,18 @@ public static partial class Util
 
 		return 0;
 	}
+
+#if GMOD_DLL
+	public static void RemoveSafe(BaseEntity? entity) {
+		if (entity == null)
+			return;
+		if (Game.Client.GarrysMod.GarrysMod.IsSacredEntity(entity.Classname ?? "")) {
+			Warning($"Refusing to delete entity '{entity.Classname ?? ""}'!\n");
+			return;
+		}
+		Remove(entity.NetworkProp());
+	}
+#endif
 
 	public static void Remove(BaseEntity? entity) {
 		if (entity == null)
@@ -695,8 +805,16 @@ public static partial class Util
 
 	internal static void SetModel(BaseEntity baseEntity, ReadOnlySpan<char> modelName) {
 		int i = modelinfo.GetModelIndex(modelName);
+#if GMOD_DLL
+		if (i == -1) {
+			i = BaseEntity.PrecacheModel(modelName, true);
+			if (i < 0)
+				return;
+		}
+#else
 		if (i == -1)
 			Error($"{baseEntity.EntIndex()}/{baseEntity/*.GetEntityName()*/} - {baseEntity.GetClassname()}:  Util.SetModel:  not precached: {modelName}\n");
+#endif
 
 		BaseAnimating? animating = baseEntity.GetBaseAnimating();
 		animating?.ForceBone = 0;

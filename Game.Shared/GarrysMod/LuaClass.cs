@@ -1,8 +1,10 @@
-#if CLIENT_DLL || GAME_DLL
+#if CLIENT_DLL || GAME_DLL || MENU_DLL
 using Source.Common.GarrysMod.Lua;
 
 #if CLIENT_DLL
 namespace Game.Client.GarrysMod;
+#elif MENU_DLL
+namespace Game.MenuSystem.GarrysMod;
 #else
 namespace Game.Server.GarrysMod;
 #endif
@@ -44,11 +46,12 @@ public class LuaClass
 	}
 
 	public object? Get(int stackPos) {
-		if (!g_Lua!.IsType(stackPos, Type)) {
+		object? obj = g_Lua!.GetObjectUserType<object>(stackPos, Type);
+		if (obj == null && !g_Lua.IsType(stackPos, Type)) {
 			g_Lua.TypeError(Name, stackPos);
 			return null;
 		}
-		return g_Lua.GetObjectUserType<object>(stackPos, Type);
+		return obj;
 	}
 
 	public ref T GetValue<T>(int stackPos) where T : unmanaged {

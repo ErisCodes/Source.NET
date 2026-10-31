@@ -16,11 +16,17 @@ public struct ShaderParamInfo
 	public ShaderParamFlags Flags;
 }
 
+[Flags]
+public enum ShaderFlags
+{
+	None = 0,
+	NotEditable = 0x1
+}
 
 public interface IShader
 {
 	string? GetName();
-	int GetFlags();
+	ShaderFlags GetFlags();
 	int GetNumParams();
 	ReadOnlySpan<char> GetParamName(int paramIndex);
 	ReadOnlySpan<char> GetParamHelp(int paramIndex);
@@ -242,6 +248,7 @@ public interface IShaderDynamicAPI
 
 	void GetDX9LightState(out LightState state);
 	int GetPixelFogCombo(); //0 is either range fog, or no fog simulated with rigged range fog values. 1 is height fog
+	int GetPixelFogCombo1(bool supportsRadial);
 
 	void BindStandardVertexTexture(VertexTextureSampler sampler, StandardTextureId id);
 
